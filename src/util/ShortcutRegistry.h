@@ -1,0 +1,156 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <vector>
+
+#include "CrossPointSettings.h"
+#include "I18n.h"
+#include "components/themes/BaseTheme.h"
+
+enum class ShortcutId {
+  BrowseFiles = 0,
+  Stats,
+  SyncDay,
+  Settings,
+  ReadingStats,
+  ReadingHeatmap,
+  ReadingTimeline,
+  RecentBooks,
+  Bookmarks,
+  FileTransfer,
+  Sleep,
+};
+
+struct ShortcutDefinition {
+  ShortcutId id;
+  StrId nameId;
+  StrId descriptionId;
+  UIIcon icon;
+  uint8_t CrossPointSettings::* locationPtr;
+  uint8_t CrossPointSettings::* orderPtr;
+};
+
+inline const std::array<ShortcutDefinition, 11>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, 11> definitions = {
+      ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
+                         &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder},
+      ShortcutDefinition{ShortcutId::Stats, StrId::STR_STATS_SHORTCUT, StrId::STR_NONE_OPT, UIIcon::Book,
+                         &CrossPointSettings::statsShortcut, &CrossPointSettings::statsShortcutOrder},
+      ShortcutDefinition{ShortcutId::SyncDay, StrId::STR_SYNC_DAY, StrId::STR_SYNC_DAY_DESC, UIIcon::Wifi,
+                         &CrossPointSettings::syncDayShortcut, &CrossPointSettings::syncDayShortcutOrder},
+      ShortcutDefinition{ShortcutId::Settings, StrId::STR_SETTINGS_TITLE, StrId::STR_SETTINGS_APP_DESC,
+                         UIIcon::Settings, &CrossPointSettings::settingsShortcut, &CrossPointSettings::settingsShortcutOrder},
+      ShortcutDefinition{ShortcutId::ReadingStats, StrId::STR_READING_STATS, StrId::STR_READING_STATS_DESC,
+                         UIIcon::Book, &CrossPointSettings::readingStatsShortcut,
+                         &CrossPointSettings::readingStatsShortcutOrder},
+      ShortcutDefinition{ShortcutId::ReadingHeatmap, StrId::STR_READING_HEATMAP, StrId::STR_READING_HEATMAP_DESC,
+                         UIIcon::Library, &CrossPointSettings::readingHeatmapShortcut,
+                         &CrossPointSettings::readingHeatmapShortcutOrder},
+      ShortcutDefinition{ShortcutId::ReadingTimeline, StrId::STR_READING_TIMELINE, StrId::STR_READING_TIMELINE_DESC,
+                         UIIcon::Recent, &CrossPointSettings::readingTimelineShortcut,
+                         &CrossPointSettings::readingTimelineShortcutOrder},
+      ShortcutDefinition{ShortcutId::RecentBooks, StrId::STR_MENU_RECENT_BOOKS, StrId::STR_RECENT_BOOKS_APP_DESC,
+                         UIIcon::Recent, &CrossPointSettings::recentBooksShortcut,
+                         &CrossPointSettings::recentBooksShortcutOrder},
+      ShortcutDefinition{ShortcutId::Bookmarks, StrId::STR_BOOKMARKS, StrId::STR_BOOKMARKS_APP_DESC, UIIcon::Book,
+                         &CrossPointSettings::bookmarksShortcut, &CrossPointSettings::bookmarksShortcutOrder},
+      ShortcutDefinition{ShortcutId::FileTransfer, StrId::STR_FILE_TRANSFER, StrId::STR_FILE_TRANSFER_APP_DESC,
+                         UIIcon::Transfer, &CrossPointSettings::fileTransferShortcut,
+                         &CrossPointSettings::fileTransferShortcutOrder},
+      ShortcutDefinition{ShortcutId::Sleep, StrId::STR_SLEEP, StrId::STR_SLEEP_APP_DESC, UIIcon::Folder,
+                         &CrossPointSettings::sleepShortcut, &CrossPointSettings::sleepShortcutOrder},
+  };
+
+  return definitions;
+}
+
+enum class ShortcutOrderGroup { Home = 0, Apps };
+
+struct ShortcutOrderEntry {
+  const ShortcutDefinition* definition = nullptr;
+  bool isAppsHub = false;
+};
+
+inline const ShortcutDefinition* findShortcutDefinition(const ShortcutId id) {
+  for (const auto& definition : getShortcutDefinitions()) {
+    if (definition.id == id) {
+      return &definition;
+    }
+  }
+  return nullptr;
+}
+
+inline uint8_t getShortcutOrder(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
+  return settings.*(definition.orderPtr);
+}
+
+inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const ShortcutDefinition& definition) {
+  return settings.*(definition.orderPtr);
+}
+
+inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const ShortcutOrderEntry& entry) {
+  return entry.isAppsHub ? settings.appsHubShortcutOrder : settings.*(entry.definition->orderPtr);
+}
+
+inline void normalizeShortcutOrderSettings(CrossPointSettings& settings) {
+  struct OrderSlot {
+    int stableIndex;
+    uint8_t* value;
+  };
+
+  std::vector<OrderSlot> slots;
+  slots.reserve(getShortcutDefinitions().size() + 1);
+  slots.push_back(OrderSlot{0, &settings.appsHubShortcutOrder});
+
+  int stableIndex = 1;
+  for (const auto& definition : getShortcutDefinitions()) {
+    slots.push_back(OrderSlot{stableIndex++, &(settings.*(definition.orderPtr))});
+  }
+
+  std::stable_sort(slots.begin(), slots.end(), [](const OrderSlot& lhs, const OrderSlot& rhs) {
+    if (*lhs.value != *rhs.value) {
+      return *lhs.value < *rhs.value;
+    }
+    return lhs.stableIndex < rhs.stableIndex;
+  });
+
+  for (size_t index = 0; index < slots.size(); ++index) {
+    *slots[index].value = static_cast<uint8_t>(index);
+  }
+}
+
+inline std::vector<const ShortcutDefinition*> getConfiguredShortcuts(const CrossPointSettings::SHORTCUT_LOCATION location) {
+  std::vector<const ShortcutDefinition*> shortcuts;
+  for (const auto& definition : getShortcutDefinitions()) {
+    if (static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr)) == location) {
+      shortcuts.push_back(&definition);
+    }
+  }
+  std::stable_sort(shortcuts.begin(), shortcuts.end(), [](const ShortcutDefinition* lhs, const ShortcutDefinition* rhs) {
+    return getShortcutOrder(*lhs) < getShortcutOrder(*rhs);
+  });
+  return shortcuts;
+}
+
+inline std::vector<ShortcutOrderEntry> getShortcutOrderEntries(const ShortcutOrderGroup group) {
+  std::vector<ShortcutOrderEntry> entries;
+  if (group == ShortcutOrderGroup::Home) {
+    entries.push_back(ShortcutOrderEntry{nullptr, true});
+  }
+
+  for (const auto& definition : getShortcutDefinitions()) {
+    const auto location = static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr));
+    if ((group == ShortcutOrderGroup::Home && location == CrossPointSettings::SHORTCUT_HOME) ||
+        (group == ShortcutOrderGroup::Apps && location == CrossPointSettings::SHORTCUT_APPS)) {
+      entries.push_back(ShortcutOrderEntry{&definition, false});
+    }
+  }
+
+  std::stable_sort(entries.begin(), entries.end(), [](const ShortcutOrderEntry& lhs, const ShortcutOrderEntry& rhs) {
+    const uint8_t lhsOrder = lhs.isAppsHub ? SETTINGS.appsHubShortcutOrder : getShortcutOrder(*lhs.definition);
+    const uint8_t rhsOrder = rhs.isAppsHub ? SETTINGS.appsHubShortcutOrder : getShortcutOrder(*rhs.definition);
+    return lhsOrder < rhsOrder;
+  });
+  return entries;
+}

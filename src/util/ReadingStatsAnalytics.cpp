@@ -54,15 +54,11 @@ std::string formatDayOrdinalLabel(const uint32_t dayOrdinal) {
     return "";
   }
 
-  char buffer[24];
-  snprintf(buffer, sizeof(buffer), "%02u/%02u/%04d", day, month, year);
-  return buffer;
+  return TimeUtils::formatDateParts(year, month, day);
 }
 
 std::string formatMonthLabel(const int year, const unsigned month) {
-  char buffer[16];
-  snprintf(buffer, sizeof(buffer), "%02u/%04d", month, year);
-  return buffer;
+  return TimeUtils::formatMonthYear(year, month);
 }
 
 int getReferenceYear() {

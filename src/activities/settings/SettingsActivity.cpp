@@ -18,6 +18,7 @@
 #include "OtaUpdateActivity.h"
 #include "ReadingStatsStore.h"
 #include "SettingsList.h"
+#include "ShortcutOrderActivity.h"
 #include "StatusBarSettingsActivity.h"
 #include "TimeZoneSelectActivity.h"
 #include "activities/util/ConfirmationActivity.h"
@@ -159,6 +160,11 @@ void SettingsActivity::onEnter() {
       SettingInfo::Toggle(StrId::STR_DISPLAY_DAY, &CrossPointSettings::displayDay, "displayDay", StrId::STR_APPS));
   appSettings.push_back(SettingInfo::Toggle(StrId::STR_AUTO_SYNC_DAY, &CrossPointSettings::autoSyncDay, "autoSyncDay",
                                             StrId::STR_APPS));
+  appSettings.push_back(
+      SettingInfo::Enum(StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
+                        {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
+                         StrId::STR_DATE_FORMAT_YYYY_MM_DD},
+                        "dateFormat", StrId::STR_APPS));
   appSettings.push_back(SettingInfo::Action(StrId::STR_TIME_ZONE, SettingAction::TimeZone));
   appSettings.push_back(SettingInfo::Section(StrId::STR_READING_STATS));
   appSettings.push_back(SettingInfo::Toggle(StrId::STR_SHOW_AFTER_READING, &CrossPointSettings::showStatsAfterReading,
@@ -166,6 +172,42 @@ void SettingsActivity::onEnter() {
   appSettings.push_back(SettingInfo::Action(StrId::STR_RESET, SettingAction::ResetReadingStats));
   appSettings.push_back(SettingInfo::Action(StrId::STR_EXPORT, SettingAction::ExportReadingStats));
   appSettings.push_back(SettingInfo::Action(StrId::STR_IMPORT, SettingAction::ImportReadingStats));
+  appSettings.push_back(SettingInfo::Section(StrId::STR_SHORTCUTS_SECTION));
+  appSettings.push_back(SettingInfo::Action(StrId::STR_ORDER_HOME_SHORTCUTS, SettingAction::OrderHomeShortcuts));
+  appSettings.push_back(SettingInfo::Action(StrId::STR_ORDER_APPS_SHORTCUTS, SettingAction::OrderAppsShortcuts));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_BROWSE_FILES, &CrossPointSettings::browseFilesShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "browseFilesShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_STATS_SHORTCUT, &CrossPointSettings::statsShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "statsShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_SYNC_DAY, &CrossPointSettings::syncDayShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "syncDayShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_SETTINGS_TITLE, &CrossPointSettings::settingsShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "settingsShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_READING_STATS, &CrossPointSettings::readingStatsShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "readingStatsShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_READING_HEATMAP, &CrossPointSettings::readingHeatmapShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "readingHeatmapShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_READING_TIMELINE, &CrossPointSettings::readingTimelineShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "readingTimelineShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_MENU_RECENT_BOOKS, &CrossPointSettings::recentBooksShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "recentBooksShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_BOOKMARKS, &CrossPointSettings::bookmarksShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "bookmarksShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_FILE_TRANSFER, &CrossPointSettings::fileTransferShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "fileTransferShortcut",
+                                          StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(StrId::STR_SLEEP, &CrossPointSettings::sleepShortcut,
+                                          {StrId::STR_HOME_LOCATION, StrId::STR_APPS}, "sleepShortcut",
+                                          StrId::STR_APPS));
 
   // Reset selection to first category
   selectedCategoryIndex = 0;
@@ -365,6 +407,14 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::TimeZone:
         startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput), resultHandler);
         break;
+      case SettingAction::OrderHomeShortcuts:
+        startActivityForResult(std::make_unique<ShortcutOrderActivity>(renderer, mappedInput, ShortcutOrderGroup::Home),
+                               resultHandler);
+        break;
+      case SettingAction::OrderAppsShortcuts:
+        startActivityForResult(std::make_unique<ShortcutOrderActivity>(renderer, mappedInput, ShortcutOrderGroup::Apps),
+                               resultHandler);
+        break;
       case SettingAction::ResetReadingStats:
         startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
                                                                       tr(STR_RESET_READING_STATS_CONFIRM), ""),
@@ -425,25 +475,72 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto& settings = *currentSettings;
-  const int rowHeight = metrics.listRowHeight;
-  const int sectionHeight = 34;
-  const int sidePadding = metrics.contentSidePadding;
-  const int rowX = rect.x + sidePadding;
-  const int rowWidth = rect.width - sidePadding * 2 - 8;
-  int currentY = rect.y;
+  if (settings.empty() || rect.height <= 0) {
+    return;
+  }
 
+  const int rowHeight = metrics.listRowHeight;
+  const int sectionHeight = 40;
+  const int sidePadding = metrics.contentSidePadding;
+  constexpr int scrollBarWidth = 4;
+  constexpr int scrollBarGap = 6;
+  const int rowX = rect.x + sidePadding;
+  const int rowWidth = rect.width - sidePadding * 2 - scrollBarWidth - scrollBarGap;
+  const int viewportHeight = rect.height;
+
+  auto getItemHeight = [rowHeight, sectionHeight](const SettingInfo& setting) {
+    return setting.type == SettingType::SECTION ? sectionHeight : rowHeight;
+  };
+
+  std::vector<int> itemOffsets(settingsCount, 0);
+  int totalHeight = 0;
   for (int index = 0; index < settingsCount; ++index) {
+    itemOffsets[index] = totalHeight;
+    totalHeight += getItemHeight(settings[index]);
+  }
+
+  int firstVisibleIndex = 0;
+  int visibleWindowHeight = 0;
+  if (selectedSettingIndex > 0) {
+    const int selectedIndex = std::clamp(selectedSettingIndex - 1, 0, settingsCount - 1);
+    for (int index = 0; index <= selectedIndex; ++index) {
+      visibleWindowHeight += getItemHeight(settings[index]);
+      while (visibleWindowHeight > viewportHeight && firstVisibleIndex <= index) {
+        visibleWindowHeight -= getItemHeight(settings[firstVisibleIndex]);
+        ++firstVisibleIndex;
+      }
+    }
+
+    if (firstVisibleIndex > 0 && settings[firstVisibleIndex - 1].type == SettingType::SECTION) {
+      const int headerHeight = getItemHeight(settings[firstVisibleIndex - 1]);
+      if (visibleWindowHeight + headerHeight <= viewportHeight) {
+        --firstVisibleIndex;
+        visibleWindowHeight += headerHeight;
+      }
+    }
+  }
+
+  int currentY = rect.y;
+  int renderedHeight = 0;
+
+  for (int index = firstVisibleIndex; index < settingsCount; ++index) {
     const auto& setting = settings[index];
+    const int itemHeight = getItemHeight(setting);
+    if (renderedHeight + itemHeight > viewportHeight) {
+      break;
+    }
+
     if (setting.type == SettingType::SECTION) {
       const char* label = I18N.get(setting.nameId);
-      renderer.drawText(UI_10_FONT_ID, rowX, currentY + 2, label, true, EpdFontFamily::BOLD);
-      renderer.drawLine(rowX, currentY + sectionHeight - 3, rowX + rowWidth, currentY + sectionHeight - 3);
-      currentY += sectionHeight;
+      renderer.drawText(UI_10_FONT_ID, rowX, currentY + 4, label, true, EpdFontFamily::BOLD);
+      renderer.drawLine(rowX, currentY + itemHeight - 5, rowX + rowWidth, currentY + itemHeight - 5);
+      currentY += itemHeight;
+      renderedHeight += itemHeight;
       continue;
     }
 
     const bool selected = selectedSettingIndex == index + 1;
-    const Rect rowRect{rowX, currentY, rowWidth, rowHeight - 4};
+    const Rect rowRect{rowX, currentY, rowWidth, itemHeight - 4};
     if (selected) {
       renderer.fillRectDither(rowRect.x, rowRect.y, rowRect.width, rowRect.height, Color::LightGray);
       renderer.drawRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
@@ -465,7 +562,20 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
                         valueText.c_str(), true, EpdFontFamily::REGULAR);
     }
 
-    currentY += rowHeight;
+    currentY += itemHeight;
+    renderedHeight += itemHeight;
+  }
+
+  if (totalHeight > viewportHeight) {
+    const int scrollTrackX = rect.x + rect.width - sidePadding;
+    const int scrollOffset = itemOffsets[firstVisibleIndex];
+    const int scrollBarHeight = std::max(18, (viewportHeight * viewportHeight) / totalHeight);
+    const int maxScrollOffset = std::max(1, totalHeight - viewportHeight);
+    const int scrollBarY =
+        rect.y + ((viewportHeight - scrollBarHeight) * std::min(scrollOffset, maxScrollOffset)) / maxScrollOffset;
+
+    renderer.drawLine(scrollTrackX, rect.y, scrollTrackX, rect.y + viewportHeight, true);
+    renderer.fillRect(scrollTrackX - scrollBarWidth + 1, scrollBarY, scrollBarWidth, scrollBarHeight, true);
   }
 }
 
@@ -488,10 +598,11 @@ void SettingsActivity::render(RenderLock&&) {
   GUI.drawTabBar(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight}, tabs,
                  selectedSettingIndex == 0);
 
+  constexpr int listBottomGap = 10;
   const Rect listRect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing,
                       pageWidth,
                       pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight +
-                                    metrics.buttonHintsHeight + metrics.verticalSpacing * 2)};
+                                    metrics.buttonHintsHeight + metrics.verticalSpacing * 2 + listBottomGap)};
 
   if (selectedCategoryIndex == 4) {
     renderAppSettingsList(listRect);

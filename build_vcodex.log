@@ -1,0 +1,240 @@
+Processing vcodex_release (platform: https://github.com/pioarduino/platform-espressif32/releases/download/55.03.37/platform-espressif32.zip; board: esp32-c3-devkitm-1; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+Generated: src\network\html\FilesPageHtml.generated.h
+  Original: 44616 bytes
+  Minified: 43980 bytes (98.6%)
+  Compressed: 10037 bytes (22.5%)
+Generated: src\network\html\HomePageHtml.generated.h
+  Original: 4278 bytes
+  Minified: 4029 bytes (94.2%)
+  Compressed: 1414 bytes (33.1%)
+Generated: src\network\html\SettingsPageHtml.generated.h
+  Original: 11460 bytes
+  Minified: 11356 bytes (99.1%)
+  Compressed: 3272 bytes (28.6%)
+Running i18n generation script from PlatformIO...
+Reading translations from: lib/I18n/translations
+Output directory: lib/I18n/
+
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in FR, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in DE, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in CS, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in PT, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in RU, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in SV, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in RO, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in CA, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in UK, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in BE, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in IT, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in PL, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in FI, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in DA, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in NL, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in TR, using English fallback
+  INFO: 'STR_ORDER_HOME_SHORTCUTS' missing in KK, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in FR, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in DE, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in CS, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in PT, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in RU, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in SV, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in RO, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in CA, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in UK, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in BE, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in IT, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in PL, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in FI, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in DA, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in NL, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in TR, using English fallback
+  INFO: 'STR_ORDER_APPS_SHORTCUTS' missing in KK, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in FR, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in DE, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in CS, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in PT, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in RU, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in SV, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in RO, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in CA, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in UK, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in BE, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in IT, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in PL, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in FI, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in DA, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in NL, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in TR, using English fallback
+  INFO: 'STR_RECENT_BOOKS_APP_DESC' missing in KK, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in FR, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in DE, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in CS, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in PT, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in RU, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in SV, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in RO, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in CA, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in UK, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in BE, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in IT, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in PL, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in FI, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in DA, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in NL, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in TR, using English fallback
+  INFO: 'STR_SETTINGS_APP_DESC' missing in KK, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in FR, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in DE, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in CS, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in PT, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in RU, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in SV, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in RO, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in CA, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in UK, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in BE, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in IT, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in PL, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in FI, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in DA, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in NL, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in TR, using English fallback
+  INFO: 'STR_BOOKMARKS' missing in KK, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in FR, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in DE, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in CS, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in PT, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in RU, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in SV, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in RO, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in CA, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in UK, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in BE, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in IT, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in PL, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in FI, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in DA, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in NL, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in TR, using English fallback
+  INFO: 'STR_BOOKMARKS_APP_DESC' missing in KK, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in FR, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in DE, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in CS, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in PT, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in RU, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in SV, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in RO, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in CA, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in UK, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in BE, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in IT, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in PL, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in FI, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in DA, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in NL, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in TR, using English fallback
+  INFO: 'STR_NO_BOOKMARKS' missing in KK, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in FR, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in DE, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in CS, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in PT, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in RU, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in SV, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in RO, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in CA, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in UK, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in BE, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in IT, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in PL, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in FI, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in DA, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in NL, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in TR, using English fallback
+  INFO: 'STR_BOOKMARK_ADDED' missing in KK, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in FR, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in DE, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in CS, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in PT, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in RU, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in SV, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in RO, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in CA, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in UK, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in BE, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in IT, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in PL, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in FI, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in DA, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in NL, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in TR, using English fallback
+  INFO: 'STR_BOOKMARK_REMOVED' missing in KK, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in FR, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in DE, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in CS, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in PT, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in RU, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in SV, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in RO, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in CA, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in UK, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in BE, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in IT, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in PL, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in FI, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in DA, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in NL, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in TR, using English fallback
+  INFO: 'STR_DELETE_BOOKMARK' missing in KK, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in FR, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in DE, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in CS, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in PT, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in RU, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in SV, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in RO, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in CA, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in UK, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in BE, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in IT, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in PL, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in FI, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in DA, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in NL, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in TR, using English fallback
+  INFO: 'STR_DELETE_ALL_BOOKMARKS' missing in KK, using English fallback
+Loaded 19 languages, 411 string keys
+Generated: lib\I18n\I18nKeys.h
+Generated: lib\I18n\I18nStrings.h
+Generated: lib\I18n\I18nStrings.cpp
+
+Exception in thread Thread-15 (run):
+Traceback (most recent call last):
+  File "C:\Users\franssjz\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1038, in _bootstrap_inner
+    self.run()
+  File "C:\Users\franssjz\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 975, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\proc.py", line 48, in run
+    self.do_reading()
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\proc.py", line 103, in do_reading
+    self.line_callback(line)
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\platform\_run.py", line 137, in _on_stdout_line
+    self._echo_line(line, level=1)
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\platform\_run.py", line 158, in _echo_line
+    click.secho(line, fg=fg, err=level > 1, nl=False)
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\__main__.py", line 90, in <lambda>
+    click.secho = lambda *args, **kwargs: _safe_echo(1, *args, **kwargs)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\platformio\__main__.py", line 83, in _safe_echo
+    click_echo_origin[origin](*args, **kwargs)
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\click\termui.py", line 690, in secho
+    return echo(message, file=file, nl=nl, err=err, color=color)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\franssjz\AppData\Roaming\Python\Python311\site-packages\click\utils.py", line 321, in echo
+    file.write(out)  # type: ignore
+    ^^^^^^^^^^^^^^^
+  File "C:\Users\franssjz\AppData\Local\Programs\Python\Python311\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 0: character maps to <undefined>

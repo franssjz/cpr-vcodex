@@ -10,7 +10,9 @@
 #include <Utf8.h>
 #include <Xtc.h>
 
+#include <algorithm>
 #include <cstring>
+#include <memory>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -18,13 +20,26 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "activities/apps/BookmarksAppActivity.h"
+#include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
+#include "activities/apps/ReadingTimelineActivity.h"
+#include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ShortcutRegistry.h"
 
 namespace {
+constexpr int HOME_SHORTCUT_PAGE_SIZE = 4;
+
+struct HomeShortcutEntry {
+  const ShortcutDefinition* definition = nullptr;
+  bool isAppsHub = false;
+  bool isOpds = false;
+};
+
 void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth, const std::string& dateText) {
   if (dateText.empty()) {
     return;
@@ -61,17 +76,59 @@ std::string getReadingStatsShortcutSubtitle() {
   const std::string goalValue = formatDurationHmCompact(DAILY_READING_GOAL_MS);
   return todayValue + " / " + goalValue + " | " + std::to_string(READING_STATS.getCurrentStreakDays());
 }
+
+std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsUrl) {
+  std::vector<HomeShortcutEntry> entries;
+  for (const auto& shortcut : getShortcutOrderEntries(ShortcutOrderGroup::Home)) {
+    if (shortcut.isAppsHub) {
+      entries.push_back(HomeShortcutEntry{nullptr, true, false});
+    } else {
+      entries.push_back(HomeShortcutEntry{shortcut.definition});
+    }
+  }
+
+  if (hasOpdsUrl) {
+    entries.push_back(HomeShortcutEntry{nullptr, false, true});
+  }
+
+  return entries;
+}
+
+std::string getHomeShortcutTitle(const HomeShortcutEntry& entry) {
+  if (entry.isAppsHub) {
+    return tr(STR_APPS);
+  }
+  if (entry.isOpds) {
+    return tr(STR_OPDS_BROWSER);
+  }
+  if (!entry.definition) {
+    return "";
+  }
+  return I18N.get(entry.definition->nameId);
+}
+
+std::string getHomeShortcutSubtitle(const HomeShortcutEntry& entry) {
+  return (entry.definition && entry.definition->id == ShortcutId::Stats) ? getReadingStatsShortcutSubtitle() : "";
+}
+
+UIIcon getHomeShortcutIcon(const HomeShortcutEntry& entry) {
+  if (entry.isAppsHub) {
+    return UIIcon::Book;
+  }
+  if (entry.isOpds) {
+    return UIIcon::Library;
+  }
+  return entry.definition ? entry.definition->icon : UIIcon::Folder;
+}
+
+bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
+  return entry.definition && entry.definition->id == ShortcutId::Stats &&
+         READING_STATS.getTodayReadingMs() >= DAILY_READING_GOAL_MS;
+}
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
-  int count = 4;  // File Browser, Apps, Settings, Reading Stats
-  if (!recentBooks.empty()) {
-    count += recentBooks.size();
-  }
-  if (hasOpdsUrl) {
-    count++;
-  }
-  return count;
+  return static_cast<int>(recentBooks.size() + getHomeShortcutEntries(hasOpdsUrl).size());
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {
@@ -221,6 +278,7 @@ void HomeActivity::freeCoverBuffer() {
 
 void HomeActivity::loop() {
   const int menuCount = getMenuItemCount();
+  const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
 
   buttonNavigator.onNext([this, menuCount] {
     selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
@@ -233,27 +291,59 @@ void HomeActivity::loop() {
   });
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    // Calculate dynamic indices based on which options are available
-    int idx = 0;
-    int menuSelectedIndex = selectorIndex - static_cast<int>(recentBooks.size());
-    const int fileBrowserIdx = idx++;
-    const int appsIdx = idx++;
-    const int readingStatsIdx = idx++;
-    const int syncDayIdx = idx++;
-    const int opdsLibraryIdx = hasOpdsUrl ? idx : -1;
-
     if (selectorIndex < recentBooks.size()) {
       onSelectBook(recentBooks[selectorIndex].path);
-    } else if (menuSelectedIndex == fileBrowserIdx) {
-      onFileBrowserOpen();
-    } else if (menuSelectedIndex == appsIdx) {
+      return;
+    }
+
+    const int homeIndex = selectorIndex - static_cast<int>(recentBooks.size());
+    if (homeIndex < 0 || homeIndex >= static_cast<int>(homeEntries.size())) {
+      return;
+    }
+
+    const auto& selectedEntry = homeEntries[homeIndex];
+    if (selectedEntry.isAppsHub) {
       onAppsOpen();
-    } else if (menuSelectedIndex == readingStatsIdx) {
-      onReadingStatsOpen();
-    } else if (menuSelectedIndex == syncDayIdx) {
-      onSyncDayOpen();
-    } else if (menuSelectedIndex == opdsLibraryIdx) {
+    } else if (selectedEntry.isOpds) {
       onOpdsBrowserOpen();
+    } else if (selectedEntry.definition) {
+      switch (selectedEntry.definition->id) {
+        case ShortcutId::BrowseFiles:
+          onFileBrowserOpen();
+          break;
+        case ShortcutId::Stats:
+        case ShortcutId::ReadingStats:
+          onReadingStatsOpen();
+          break;
+        case ShortcutId::SyncDay:
+          onSyncDayOpen();
+          break;
+        case ShortcutId::Settings:
+          activityManager.goToSettings();
+          break;
+        case ShortcutId::ReadingHeatmap:
+          startActivityForResult(std::make_unique<ReadingHeatmapActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+        case ShortcutId::ReadingTimeline:
+          startActivityForResult(std::make_unique<ReadingTimelineActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+        case ShortcutId::RecentBooks:
+          activityManager.goToRecentBooks();
+          break;
+        case ShortcutId::Bookmarks:
+          startActivityForResult(std::make_unique<BookmarksAppActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+        case ShortcutId::FileTransfer:
+          activityManager.goToFileTransfer();
+          break;
+        case ShortcutId::Sleep:
+          startActivityForResult(std::make_unique<SleepAppActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+      }
     }
   }
 }
@@ -274,43 +364,50 @@ void HomeActivity::render(RenderLock&&) {
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
-  // Build menu items dynamically
-  constexpr int readingStatsMenuIndex = 2;
-  std::vector<const char*> menuItems = {
-      tr(STR_BROWSE_FILES),
-      tr(STR_APPS),
-      "Stats",
-      tr(STR_SYNC_DAY),
-  };
-  std::vector<UIIcon> menuIcons = {
-      Folder,
-      Book,
-      Book,
-      Wifi,
-  };
+  const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
+  const int selectedHomeIndex = selectorIndex - static_cast<int>(recentBooks.size());
+  const Rect shortcutsRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
+                           pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
+                                         metrics.buttonHintsHeight + metrics.verticalSpacing)};
 
-  if (hasOpdsUrl) {
-    menuItems.push_back(tr(STR_OPDS_BROWSER));
-    menuIcons.push_back(Library);
+  if (static_cast<int>(homeEntries.size()) <= HOME_SHORTCUT_PAGE_SIZE) {
+    GUI.drawButtonMenu(
+        renderer, shortcutsRect, static_cast<int>(homeEntries.size()), selectedHomeIndex,
+        [&homeEntries](const int index) { return getHomeShortcutTitle(homeEntries[index]); },
+        [&homeEntries](const int index) { return getHomeShortcutIcon(homeEntries[index]); },
+        [&homeEntries](const int index) { return getHomeShortcutSubtitle(homeEntries[index]); },
+        [&homeEntries](const int index) { return showHomeShortcutAccessory(homeEntries[index]); });
+  } else {
+    const int headerHeight = 34;
+    const int listTop = shortcutsRect.y + headerHeight + 12;
+    const int listHeight = std::max(0, shortcutsRect.height - headerHeight - 12);
+    const int currentPage =
+        std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
+    const int totalPages =
+        (static_cast<int>(homeEntries.size()) + HOME_SHORTCUT_PAGE_SIZE - 1) / HOME_SHORTCUT_PAGE_SIZE;
+    const int pageStart = currentPage * HOME_SHORTCUT_PAGE_SIZE;
+    const int pageItemCount =
+        std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
+    const int localSelectedIndex =
+        (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount) ? selectedHomeIndex - pageStart
+                                                                                            : -1;
+    const std::string sectionLabel =
+        std::string(tr(STR_SHORTCUTS_SECTION)) + " (" + std::to_string(homeEntries.size()) + ")";
+    const std::string pageLabel = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
+
+    GUI.drawSubHeader(renderer,
+                      Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2,
+                           headerHeight},
+                      sectionLabel.c_str(), pageLabel.c_str());
+    GUI.drawButtonMenu(
+        renderer, Rect{0, listTop, pageWidth, listHeight}, pageItemCount, localSelectedIndex,
+        [&homeEntries, pageStart](const int index) { return getHomeShortcutTitle(homeEntries[pageStart + index]); },
+        [&homeEntries, pageStart](const int index) { return getHomeShortcutIcon(homeEntries[pageStart + index]); },
+        [&homeEntries, pageStart](const int index) { return getHomeShortcutSubtitle(homeEntries[pageStart + index]); },
+        [&homeEntries, pageStart](const int index) {
+          return showHomeShortcutAccessory(homeEntries[pageStart + index]);
+        });
   }
-
-  GUI.drawButtonMenu(
-      renderer,
-      Rect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-           pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
-                         metrics.buttonHintsHeight + metrics.verticalSpacing)},
-      static_cast<int>(menuItems.size()), selectorIndex - recentBooks.size(),
-      [&menuItems](int index) { return std::string(menuItems[index]); },
-      [&menuIcons](int index) { return menuIcons[index]; },
-      [readingStatsMenuIndex](int index) {
-        if (index == readingStatsMenuIndex) {
-          return getReadingStatsShortcutSubtitle();
-        }
-        return std::string();
-      },
-      [readingStatsMenuIndex](int index) {
-        return index == readingStatsMenuIndex && READING_STATS.getTodayReadingMs() >= DAILY_READING_GOAL_MS;
-      });
 
   const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -329,12 +426,6 @@ void HomeActivity::render(RenderLock&&) {
 void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }
 
 void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
-
-void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
-
-void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
-
-void HomeActivity::onFileTransferOpen() { activityManager.goToFileTransfer(); }
 
 void HomeActivity::onAppsOpen() { activityManager.goToApps(); }
 

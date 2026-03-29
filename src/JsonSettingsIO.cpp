@@ -16,6 +16,7 @@
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
 #include "WifiCredentialStore.h"
+#include "util/ShortcutRegistry.h"
 #include "util/TimeZoneRegistry.h"
 
 namespace {
@@ -191,6 +192,18 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["timeZonePreset"] = TimeZoneRegistry::clampPresetIndex(s.timeZonePreset);
   doc["sleepDirectory"] = s.sleepDirectory;
   doc["sleepImageOrder"] = s.sleepImageOrder;
+  doc["appsHubShortcutOrder"] = s.appsHubShortcutOrder;
+  doc["browseFilesShortcutOrder"] = s.browseFilesShortcutOrder;
+  doc["statsShortcutOrder"] = s.statsShortcutOrder;
+  doc["syncDayShortcutOrder"] = s.syncDayShortcutOrder;
+  doc["settingsShortcutOrder"] = s.settingsShortcutOrder;
+  doc["readingStatsShortcutOrder"] = s.readingStatsShortcutOrder;
+  doc["readingHeatmapShortcutOrder"] = s.readingHeatmapShortcutOrder;
+  doc["readingTimelineShortcutOrder"] = s.readingTimelineShortcutOrder;
+  doc["recentBooksShortcutOrder"] = s.recentBooksShortcutOrder;
+  doc["bookmarksShortcutOrder"] = s.bookmarksShortcutOrder;
+  doc["fileTransferShortcutOrder"] = s.fileTransferShortcutOrder;
+  doc["sleepShortcutOrder"] = s.sleepShortcutOrder;
 
   String json;
   serializeJson(doc, json);
@@ -281,6 +294,34 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.sleepImageOrder = clamp(doc["sleepImageOrder"] | (uint8_t)CrossPointSettings::SLEEP_IMAGE_SHUFFLE,
                             CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT,
                             CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
+
+  constexpr uint8_t shortcutOrderCount = 12;
+  s.appsHubShortcutOrder = clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount,
+                                 s.appsHubShortcutOrder);
+  s.browseFilesShortcutOrder = clamp(doc["browseFilesShortcutOrder"] | s.browseFilesShortcutOrder, shortcutOrderCount,
+                                     s.browseFilesShortcutOrder);
+  s.statsShortcutOrder =
+      clamp(doc["statsShortcutOrder"] | s.statsShortcutOrder, shortcutOrderCount, s.statsShortcutOrder);
+  s.syncDayShortcutOrder =
+      clamp(doc["syncDayShortcutOrder"] | s.syncDayShortcutOrder, shortcutOrderCount, s.syncDayShortcutOrder);
+  s.settingsShortcutOrder =
+      clamp(doc["settingsShortcutOrder"] | s.settingsShortcutOrder, shortcutOrderCount, s.settingsShortcutOrder);
+  s.readingStatsShortcutOrder = clamp(doc["readingStatsShortcutOrder"] | s.readingStatsShortcutOrder,
+                                      shortcutOrderCount, s.readingStatsShortcutOrder);
+  s.readingHeatmapShortcutOrder = clamp(doc["readingHeatmapShortcutOrder"] | s.readingHeatmapShortcutOrder,
+                                        shortcutOrderCount, s.readingHeatmapShortcutOrder);
+  s.readingTimelineShortcutOrder = clamp(doc["readingTimelineShortcutOrder"] | s.readingTimelineShortcutOrder,
+                                         shortcutOrderCount, s.readingTimelineShortcutOrder);
+  s.recentBooksShortcutOrder = clamp(doc["recentBooksShortcutOrder"] | s.recentBooksShortcutOrder, shortcutOrderCount,
+                                     s.recentBooksShortcutOrder);
+  s.bookmarksShortcutOrder =
+      clamp(doc["bookmarksShortcutOrder"] | s.bookmarksShortcutOrder, shortcutOrderCount, s.bookmarksShortcutOrder);
+  s.fileTransferShortcutOrder = clamp(doc["fileTransferShortcutOrder"] | s.fileTransferShortcutOrder,
+                                      shortcutOrderCount, s.fileTransferShortcutOrder);
+  s.sleepShortcutOrder =
+      clamp(doc["sleepShortcutOrder"] | s.sleepShortcutOrder, shortcutOrderCount, s.sleepShortcutOrder);
+
+  normalizeShortcutOrderSettings(s);
 
   LOG_DBG("CPS", "Settings loaded from file");
 

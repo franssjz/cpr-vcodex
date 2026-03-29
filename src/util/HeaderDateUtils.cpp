@@ -35,20 +35,7 @@ void drawHeaderDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, co
 }
 
 std::string formatHeaderDateText(const uint32_t timestamp, const bool usedFallback) {
-  if (!TimeUtils::isClockValid(timestamp)) {
-    return "";
-  }
-
-  tm localTime = {};
-  time_t currentTime = static_cast<time_t>(timestamp);
-  if (localtime_r(&currentTime, &localTime) == nullptr) {
-    return "";
-  }
-
-  char buffer[24];
-  snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d%s", localTime.tm_mday, localTime.tm_mon + 1,
-           localTime.tm_year + 1900, usedFallback ? "!" : "");
-  return buffer;
+  return TimeUtils::formatDate(timestamp, usedFallback);
 }
 }  // namespace
 

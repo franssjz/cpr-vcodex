@@ -22,9 +22,6 @@ class HomeActivity final : public Activity {
   std::vector<RecentBook> recentBooks;
   void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
-  void onRecentsOpen();
-  void onSettingsOpen();
-  void onFileTransferOpen();
   void onAppsOpen();
   void onReadingStatsOpen();
   void onSyncDayOpen();

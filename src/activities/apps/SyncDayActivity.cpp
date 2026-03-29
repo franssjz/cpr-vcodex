@@ -58,45 +58,15 @@ void drawInfoCard(GfxRenderer& renderer, const Rect& rect, const char* title, co
 }
 
 std::string formatTimestampLabel(const uint32_t timestamp, const bool includeTime = false, const bool appendBang = false) {
-  if (!TimeUtils::isClockValid(timestamp)) {
-    return tr(STR_NOT_SET);
-  }
-
-  TimeUtils::configureTimezone();
-  tm localTime = {};
-  time_t currentTime = static_cast<time_t>(timestamp);
-  if (localtime_r(&currentTime, &localTime) == nullptr) {
-    return tr(STR_NOT_SET);
-  }
-
-  char buffer[32];
-  if (includeTime) {
-    snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d %02d:%02d%s", localTime.tm_mday, localTime.tm_mon + 1,
-             localTime.tm_year + 1900, localTime.tm_hour, localTime.tm_min, appendBang ? "!" : "");
-  } else {
-    snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d%s", localTime.tm_mday, localTime.tm_mon + 1,
-             localTime.tm_year + 1900, appendBang ? "!" : "");
-  }
-  return buffer;
+  const std::string formatted =
+      includeTime ? TimeUtils::formatDateTime(timestamp, appendBang) : TimeUtils::formatDate(timestamp, appendBang);
+  return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
 std::string getCurrentDateTimeLabel() {
   const uint32_t now = static_cast<uint32_t>(time(nullptr));
-  if (!TimeUtils::isClockValid(now)) {
-    return tr(STR_NOT_SET);
-  }
-
-  TimeUtils::configureTimezone();
-  tm localTime = {};
-  time_t currentTime = static_cast<time_t>(now);
-  if (localtime_r(&currentTime, &localTime) == nullptr) {
-    return tr(STR_NOT_SET);
-  }
-
-  char buffer[32];
-  snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d %02d:%02d", localTime.tm_mday, localTime.tm_mon + 1,
-           localTime.tm_year + 1900, localTime.tm_hour, localTime.tm_min);
-  return buffer;
+  const std::string formatted = TimeUtils::formatDateTime(now);
+  return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
 std::string getDeviceTimeLabel() {

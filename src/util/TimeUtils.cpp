@@ -14,6 +14,26 @@ constexpr uint32_t VALID_CLOCK_THRESHOLD = 1704067200UL;  // 2024-01-01 UTC
 bool syncedThisBoot = false;
 uint8_t configuredTimeZonePreset = UINT8_MAX;
 
+std::string formatDateBuffer(const int year, const unsigned month, const unsigned day, const bool appendBang) {
+  const char* bang = appendBang ? "!" : "";
+  char buffer[24];
+
+  switch (static_cast<CrossPointSettings::DATE_FORMAT>(SETTINGS.dateFormat)) {
+    case CrossPointSettings::DATE_MM_DD_YYYY:
+      snprintf(buffer, sizeof(buffer), "%02u/%02u/%04d%s", month, day, year, bang);
+      break;
+    case CrossPointSettings::DATE_YYYY_MM_DD:
+      snprintf(buffer, sizeof(buffer), "%04d-%02u-%02u%s", year, month, day, bang);
+      break;
+    case CrossPointSettings::DATE_DD_MM_YYYY:
+    default:
+      snprintf(buffer, sizeof(buffer), "%02u/%02u/%04d%s", day, month, year, bang);
+      break;
+  }
+
+  return buffer;
+}
+
 int32_t daysFromCivil(int year, const unsigned month, const unsigned day) {
   year -= month <= 2;
   const int era = (year >= 0 ? year : year - 399) / 400;
@@ -129,4 +149,52 @@ bool TimeUtils::wasTimeSyncedThisBoot() { return syncedThisBoot; }
 
 const char* TimeUtils::getCurrentTimeZoneLabel() {
   return TimeZoneRegistry::getPresetLabel(TimeZoneRegistry::clampPresetIndex(SETTINGS.timeZonePreset));
+}
+
+std::string TimeUtils::formatDate(const uint32_t epochSeconds, const bool appendBang) {
+  if (!isClockValid(epochSeconds)) {
+    return "";
+  }
+
+  configureTimezone();
+  time_t currentTime = static_cast<time_t>(epochSeconds);
+  tm localTime = {};
+  if (localtime_r(&currentTime, &localTime) == nullptr) {
+    return "";
+  }
+
+  return formatDateBuffer(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
+                          static_cast<unsigned>(localTime.tm_mday), appendBang);
+}
+
+std::string TimeUtils::formatDateTime(const uint32_t epochSeconds, const bool appendBang) {
+  if (!isClockValid(epochSeconds)) {
+    return "";
+  }
+
+  configureTimezone();
+  time_t currentTime = static_cast<time_t>(epochSeconds);
+  tm localTime = {};
+  if (localtime_r(&currentTime, &localTime) == nullptr) {
+    return "";
+  }
+
+  return formatDateBuffer(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
+                          static_cast<unsigned>(localTime.tm_mday), appendBang) +
+         " " + (localTime.tm_hour < 10 ? "0" : "") + std::to_string(localTime.tm_hour) + ":" +
+         (localTime.tm_min < 10 ? "0" : "") + std::to_string(localTime.tm_min);
+}
+
+std::string TimeUtils::formatDateParts(const int year, const unsigned month, const unsigned day, const bool appendBang) {
+  return formatDateBuffer(year, month, day, appendBang);
+}
+
+std::string TimeUtils::formatMonthYear(const int year, const unsigned month) {
+  char buffer[16];
+  if (static_cast<CrossPointSettings::DATE_FORMAT>(SETTINGS.dateFormat) == CrossPointSettings::DATE_YYYY_MM_DD) {
+    snprintf(buffer, sizeof(buffer), "%04d-%02u", year, month);
+  } else {
+    snprintf(buffer, sizeof(buffer), "%02u/%04d", month, year);
+  }
+  return buffer;
 }

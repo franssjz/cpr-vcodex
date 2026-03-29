@@ -6,9 +6,11 @@ The base firmware is still CrossPoint Reader: open-source firmware for the X4 bu
 This fork keeps that foundation and adds a more complete day-to-day reading experience:
 
 - better Home workflow
+- configurable Home and Apps shortcuts
 - richer reading analytics
 - practical apps
 - manual date sync for coherent stats
+- global date format options
 - customizable sleep screen browsing
 - EPUB bookmarks with a global app
 
@@ -36,10 +38,13 @@ Compared with standard CrossPoint Reader, this fork adds or improves:
 
 - `Lyra Custom` as the default UI theme
 - a Home shortcut to `Stats`
+- configurable shortcut placement between `Home` and `Apps`
+- reorderable Home and Apps shortcut lists
 - `Reading Stats` with started books, per-book detail, and extended stats
 - `Reading Heatmap`
 - `Reading Timeline`
 - `Sync Day`
+- global date format selection
 - `Sleep` app with folder selection, preview, and sequential/shuffle browsing
 - EPUB `Bookmarks` plus a global `Bookmarks` app
 - `Settings > Apps` options for sync and stats workflows
@@ -123,12 +128,19 @@ The Home screen also keeps:
 - recent book covers at the top
 - per-book progress under recent covers in `Lyra Custom`
 - optional date in the header
+- a compact stats subtitle under `Stats`
+
+Home shortcuts are configurable:
+
+- shortcuts can be assigned to `Home` or `Apps` in `Settings > Apps > Shortcuts`
+- `Apps` always stays available in `Home`, but its position can be changed
+- if more than 4 shortcuts are assigned to `Home`, the firmware switches to a paged `Shortcuts (x)` view
 
 ### Apps
 
 `Apps` is the place for everything that does not need to stay in the main Home menu.
 
-Current app list includes:
+Default app list includes:
 
 - `Settings`
 - `Reading Stats`
@@ -136,9 +148,10 @@ Current app list includes:
 - `Reading Timeline`
 - `Recent Books`
 - `Bookmarks`
-- `Sync Day`
 - `File Transfer`
 - `Sleep`
+
+This list is also configurable from `Settings > Apps > Shortcuts`, and its order can be changed separately from Home.
 
 ## How date and time work
 
@@ -356,7 +369,7 @@ This is controlled in:
 
 If enabled:
 
-- when you exit a book, the firmware opens that book's stats detail automatically
+- when you exit a book, the firmware opens that book's stats detail automatically only if the reading session was long enough to count as a real session
 
 This is useful if you want a lightweight post-reading summary without a separate recap screen.
 
@@ -442,11 +455,47 @@ There you will find:
 
 - `Display Day`
 - `Auto Sync Day`
+- `Date Format`
 - `Time Zone`
 - `Show after reading`
+- `Shortcuts`
+- `Order Home shortcuts`
+- `Order Apps shortcuts`
 - `Reset Reading Stats`
 - `Export Reading Stats`
 - `Import Reading Stats`
+
+### 13. Shortcuts
+
+Shortcut management lives in:
+
+- `Settings > Apps > Shortcuts`
+
+Each shortcut can be assigned to:
+
+- `Home`
+- `Apps`
+
+Default layout:
+
+- `Browse Files`, `Stats`, `Sync Day` in `Home`
+- `Settings`, `Reading Stats`, `Reading Heatmap`, `Reading Timeline`, `Recent Books`, `Bookmarks`, `File Transfer`, `Sleep` in `Apps`
+
+Reordering lives in:
+
+- `Settings > Apps > Order Home shortcuts`
+- `Settings > Apps > Order Apps shortcuts`
+
+Use it like this:
+
+1. Open `Settings > Apps`
+2. Decide which shortcuts belong in `Home` or `Apps`
+3. Open the order screen for the group you want
+4. Press `Select` to enter move mode
+5. Use `Up/Down` to move the selected shortcut
+6. Press `Select` again to finish
+
+`Apps` always stays available in `Home`, but it can still be moved to a different position.
 
 ## What requires Sync Day
 

@@ -206,19 +206,8 @@ int findBookIndex(const std::string& bookPath) {
 }
 
 std::string formatDate(const uint32_t timestamp) {
-  if (!TimeUtils::isClockValid(timestamp)) {
-    return tr(STR_NOT_SET);
-  }
-
-  time_t currentTime = static_cast<time_t>(timestamp);
-  tm localTime = {};
-  if (localtime_r(&currentTime, &localTime) == nullptr) {
-    return tr(STR_NOT_SET);
-  }
-
-  char buffer[24];
-  snprintf(buffer, sizeof(buffer), "%02d/%02d/%04d", localTime.tm_mday, localTime.tm_mon + 1, localTime.tm_year + 1900);
-  return buffer;
+  const std::string formatted = TimeUtils::formatDate(timestamp);
+  return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {

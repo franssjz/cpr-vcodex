@@ -24,6 +24,8 @@ enum class SettingAction {
   CheckForUpdates,
   Language,
   TimeZone,
+  OrderHomeShortcuts,
+  OrderAppsShortcuts,
   ResetReadingStats,
   ExportReadingStats,
   ImportReadingStats,
