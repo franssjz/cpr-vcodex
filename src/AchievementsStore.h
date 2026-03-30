@@ -55,6 +55,7 @@ enum class AchievementId : uint8_t {
   SevenGoalDays,
   ThirtyGoalDays,
   SixtyGoalDays,
+  EightyGoalDays,
   ThreeGoalStreak,
   SevenGoalStreak,
   FourteenGoalStreak,

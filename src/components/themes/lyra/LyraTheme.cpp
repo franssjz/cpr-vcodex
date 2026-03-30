@@ -82,6 +82,20 @@ const uint8_t* iconForName(UIIcon icon, int size) {
   }
   return nullptr;
 }
+
+int fallbackIconSize(UIIcon icon, int requestedSize) {
+  if (requestedSize == 32) {
+    switch (icon) {
+      case UIIcon::Text:
+      case UIIcon::File:
+      case UIIcon::Image:
+        return 24;
+      default:
+        return 0;
+    }
+  }
+  return 0;
+}
 }  // namespace
 
 void LyraTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
@@ -310,10 +324,20 @@ void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
 
     if (rowIcon != nullptr) {
       UIIcon icon = rowIcon(i);
-      const uint8_t* iconBitmap = iconForName(icon, iconSize);
+      int drawSize = iconSize;
+      const uint8_t* iconBitmap = iconForName(icon, drawSize);
+      if (iconBitmap == nullptr) {
+        const int fallbackSize = fallbackIconSize(icon, iconSize);
+        if (fallbackSize > 0) {
+          drawSize = fallbackSize;
+          iconBitmap = iconForName(icon, drawSize);
+        }
+      }
       if (iconBitmap != nullptr) {
-        renderer.drawIcon(iconBitmap, rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection,
-                          itemY + iconY, iconSize, iconSize);
+        const int iconX = rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection +
+                          std::max(0, (iconSize - drawSize) / 2);
+        const int adjustedIconY = itemY + iconY + std::max(0, (iconSize - drawSize) / 2);
+        renderer.drawIcon(iconBitmap, iconX, adjustedIconY, drawSize, drawSize);
       }
     }
 
@@ -544,10 +568,19 @@ void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
 
     if (rowIcon != nullptr) {
       UIIcon icon = rowIcon(i);
-      const uint8_t* iconBitmap = iconForName(icon, mainMenuIconSize);
+      int drawSize = mainMenuIconSize;
+      const uint8_t* iconBitmap = iconForName(icon, drawSize);
+      if (iconBitmap == nullptr) {
+        const int fallbackSize = fallbackIconSize(icon, mainMenuIconSize);
+        if (fallbackSize > 0) {
+          drawSize = fallbackSize;
+          iconBitmap = iconForName(icon, drawSize);
+        }
+      }
       if (iconBitmap != nullptr) {
-        const int iconY = tileRect.y + (tileRect.height - mainMenuIconSize) / 2 + 1;
-        renderer.drawIcon(iconBitmap, textX, iconY, mainMenuIconSize, mainMenuIconSize);
+        const int iconX = textX + std::max(0, (mainMenuIconSize - drawSize) / 2);
+        const int iconY = tileRect.y + (tileRect.height - drawSize) / 2 + 1;
+        renderer.drawIcon(iconBitmap, iconX, iconY, drawSize, drawSize);
         textX += mainMenuIconSize + hPaddingInSelection + 2;
       }
     }

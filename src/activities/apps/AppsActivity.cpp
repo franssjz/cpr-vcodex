@@ -7,6 +7,8 @@
 #include <algorithm>
 #include "ReadingStatsStore.h"
 #include "BookmarksAppActivity.h"
+#include "IfFoundActivity.h"
+#include "ReadMeActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingStatsActivity.h"
 #include "ReadingTimelineActivity.h"
@@ -136,6 +138,12 @@ void AppsActivity::openSelectedApp() {
       break;
     case ShortcutId::Achievements:
       activity = std::make_unique<AchievementsActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::IfFound:
+      activity = std::make_unique<IfFoundActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::ReadMe:
+      activity = std::make_unique<ReadMeActivity>(renderer, mappedInput);
       break;
     case ShortcutId::RecentBooks:
       activityManager.goToRecentBooks();

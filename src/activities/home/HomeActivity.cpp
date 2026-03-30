@@ -22,6 +22,8 @@
 #include "RecentBooksStore.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
+#include "activities/apps/IfFoundActivity.h"
+#include "activities/apps/ReadMeActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
 #include "activities/apps/ReadingTimelineActivity.h"
@@ -332,6 +334,14 @@ void HomeActivity::loop() {
           break;
         case ShortcutId::Achievements:
           startActivityForResult(std::make_unique<AchievementsActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+        case ShortcutId::IfFound:
+          startActivityForResult(std::make_unique<IfFoundActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestUpdate(); });
+          break;
+        case ShortcutId::ReadMe:
+          startActivityForResult(std::make_unique<ReadMeActivity>(renderer, mappedInput),
                                  [this](const ActivityResult&) { requestUpdate(); });
           break;
         case ShortcutId::RecentBooks:

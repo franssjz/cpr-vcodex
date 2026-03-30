@@ -202,6 +202,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["readingHeatmapShortcutOrder"] = s.readingHeatmapShortcutOrder;
   doc["readingTimelineShortcutOrder"] = s.readingTimelineShortcutOrder;
   doc["achievementsShortcutOrder"] = s.achievementsShortcutOrder;
+  doc["ifFoundShortcutOrder"] = s.ifFoundShortcutOrder;
+  doc["readMeShortcutOrder"] = s.readMeShortcutOrder;
   doc["recentBooksShortcutOrder"] = s.recentBooksShortcutOrder;
   doc["bookmarksShortcutOrder"] = s.bookmarksShortcutOrder;
   doc["fileTransferShortcutOrder"] = s.fileTransferShortcutOrder;
@@ -297,7 +299,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                             CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT,
                             CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
 
-  constexpr uint8_t shortcutOrderCount = 13;
+  constexpr uint8_t shortcutOrderCount = 15;
   s.appsHubShortcutOrder = clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount,
                                  s.appsHubShortcutOrder);
   s.browseFilesShortcutOrder = clamp(doc["browseFilesShortcutOrder"] | s.browseFilesShortcutOrder, shortcutOrderCount,
@@ -316,6 +318,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                          shortcutOrderCount, s.readingTimelineShortcutOrder);
   s.achievementsShortcutOrder = clamp(doc["achievementsShortcutOrder"] | s.achievementsShortcutOrder,
                                       shortcutOrderCount, s.achievementsShortcutOrder);
+  s.ifFoundShortcutOrder =
+      clamp(doc["ifFoundShortcutOrder"] | s.ifFoundShortcutOrder, shortcutOrderCount, s.ifFoundShortcutOrder);
+  s.readMeShortcutOrder =
+      clamp(doc["readMeShortcutOrder"] | s.readMeShortcutOrder, shortcutOrderCount, s.readMeShortcutOrder);
   s.recentBooksShortcutOrder = clamp(doc["recentBooksShortcutOrder"] | s.recentBooksShortcutOrder, shortcutOrderCount,
                                      s.recentBooksShortcutOrder);
   s.bookmarksShortcutOrder =

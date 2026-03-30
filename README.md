@@ -9,6 +9,7 @@ It keeps the strong CrossPoint base and adds a more polished day-to-day reading 
 - coherent date-based reading stats
 - heatmap and timeline views
 - achievements
+- built-in ReadMe guide on device
 - EPUB bookmarks with a global app
 - visible firmware version code on boot
 
@@ -20,8 +21,8 @@ This project is **not affiliated with Xteink**.
 |---|---|
 | Base firmware | CrossPoint Reader |
 | Device | Xteink X4 |
-| Current release | `1.1.8-vcodex` |
-| Version code | `2026032908` |
+| Current release | `1.1.9-vcodex` |
+| Version code | `2026033001` |
 | Release notes | [CHANGELOG.md](./CHANGELOG.md) |
 | Recommended install | browser OTA fast flash |
 
@@ -69,6 +70,8 @@ For most users, this is the easiest way to install the firmware:
 | `Reading Day` | drill-down into one specific reading day | [Reading analytics suite](#reading-analytics-suite) |
 | `Reading Timeline` | recent-history view by day | [Reading analytics suite](#reading-analytics-suite) |
 | `Achievements` | console-style milestones and optional popups | [Achievements](#achievements) |
+| `ReadMe` | on-device quick guide for the main vCodex features | [ReadMe](#readme) |
+| `If found, please return me` | lost-device contact screen fed by `/if_found.txt` on the SD card | [If found, please return me](#if-found-please-return-me) |
 | `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
 | `Sleep tools` | folder selection, preview and sequential/shuffle behavior | [Sleep](#sleep) |
 | `Date controls` | global date format and time zone settings | [Settings](#settings) |
@@ -107,7 +110,7 @@ Shortcuts can be managed from:
 Default shortcut placement:
 
 - `Home`: `Browse Files`, `Stats`, `Sync Day`
-- `Apps`: `Settings`, `Reading Stats`, `Reading Heatmap`, `Reading Timeline`, `Achievements`, `Recent Books`, `Bookmarks`, `File Transfer`, `Sleep`
+- `Apps`: `Settings`, `Reading Stats`, `Reading Heatmap`, `Reading Timeline`, `Achievements`, `If found, please return me`, `ReadMe`, `Recent Books`, `Bookmarks`, `File Transfer`, `Sleep`
 
 `Apps` always remains available in `Home`, but it can be moved to a different position.
 
@@ -128,6 +131,9 @@ Practical meaning:
 - one sync per day before reading is usually enough
 - after that, stats continue using the last valid saved day
 - if the real day changes, you should sync again
+
+By default the time zone is `Spain / Madrid`.
+You can select your own `Time Zone` and `Date Format` from `Settings > Apps`.
 
 `Sync Day` also shows diagnostics such as:
 
@@ -202,7 +208,7 @@ It provides:
 
 Current achievement list:
 
-Current catalog: `61 achievements`
+Current catalog: `62 achievements`
 
 ### Started books
 
@@ -211,19 +217,19 @@ Current catalog: `61 achievements`
 | `Open Sesame` | start your first book |
 | `My Precious` | start 5 different books |
 | `I Volunteer as Tribute` | start 10 different books |
-| `Into the Wardrobe` | start 25 different books |
-| `You Shall Not Pass... Yet` | start 50 different books |
+| `Through the Wardrobe` | start 25 different books |
+| `So Many Beginnings` | start 50 different books |
 
 ### Counted sessions
 
 | Title | Unlock condition |
 |---|---|
-| `The First Page` | complete your first counted session |
+| `Once Upon a Time` | complete your first counted session |
 | `Just One More Page` | complete 10 counted sessions |
 | `Hold the Book!` | complete 25 counted sessions |
-| `I Can Do This All Day` | complete 50 counted sessions |
-| `A Reader Has No Limits` | complete 100 counted sessions |
-| `Master of Readmonies` | complete 200 counted sessions |
+| `Mischief Managed` | complete 50 counted sessions |
+| `The Reading Stone` | complete 100 counted sessions |
+| `The NeverEnding Story` | complete 200 counted sessions |
 
 ### Finished books
 
@@ -232,26 +238,26 @@ Current catalog: `61 achievements`
 | `It's leviOsa, not levioSA!` | finish your first book |
 | `The Two Towers` | finish 2 books |
 | `Trilogy` | finish 3 books |
-| `Matilda` | finish 5 books |
+| `Hermione Granger` | finish 5 books |
 | `Jane Eyre` | finish 7 books |
 | `Lizzy Bennet` | finish 10 books |
-| `Belle of the Library` | finish 15 books |
-| `Hermione Granger` | finish 20 books |
+| `Belle's Library` | finish 15 books |
+| `Matilda` | finish 20 books |
 | `The NeverEnding Story` | finish 25 books |
 | `The Book Was Better` | finish 30 books |
-| `The Reader` | finish 35 books |
+| `One More Chapter` | finish 35 books |
 | `Gandalf the White` | finish 40 books |
-| `Rory Gilmore` | finish 45 books |
-| `The Book Thief` | finish 50 books |
+| `The Book Thief` | finish 45 books |
+| `Read, Set, Go!` | finish 50 books |
 | `One Read to Rule Them All` | finish 55 books |
 | `The Library of Alexandria` | finish 60 books |
 | `Dorian Read` | finish 65 books |
-| `The Name of the Reader` | finish 70 books |
+| `The Name of the Page` | finish 70 books |
 | `Moony, Wormtail, Padfoot & Read` | finish 75 books |
-| `Bibliophile Supreme` | finish 80 books |
+| `The Shining` | finish 80 books |
 | `The Ultimate Plot Twist` | finish 85 books |
-| `Guardian of Stories` | finish 90 books |
-| `Master of Tomes` | finish 95 books |
+| `I, Reader` | finish 90 books |
+| `Robot Dreams` | finish 95 books |
 | `The Pagemaster` | finish 100 books |
 
 ### Total reading time
@@ -259,26 +265,27 @@ Current catalog: `61 achievements`
 | Title | Unlock condition |
 |---|---|
 | `One Hour Later` | read for 1 hour in total |
-| `After All This Time?` | read for 5 hours in total |
-| `Always` | read for 10 hours in total |
-| `24 Hours Later` | read for 24 hours in total |
+| `An Unexpected Journey` | read for 5 hours in total |
+| `The Fellowship of the Read` | read for 10 hours in total |
+| `A Day in Pages` | read for 24 hours in total |
 | `Halfway to Narnia` | read for 50 hours in total |
-| `Centurion of Chapters` | read for 100 hours in total |
-| `Readzilla` | read for 200 hours in total |
+| `Read and Prejudice` | read for 100 hours in total |
+| `Wonderland` | read for 200 hours in total |
 
 ### Goal days and streaks
 
 | Title | Unlock condition |
 |---|---|
 | `Mission Accomplished` | reach the daily goal once |
-| `Seven, Seven, Seven!` | reach the daily goal on 7 different days |
+| `Seven Kingdoms` | reach the daily goal on 7 different days |
 | `The Month of Living Bookishly` | reach the daily goal on 30 different days |
-| `The Daily Prophet` | reach the daily goal on 60 different days |
+| `Still Not a Muggle` | reach the daily goal on 60 different days |
+| `Willy Fog` | reach the daily goal on 80 different days |
 | `Not Today` | reach a 3-day goal streak |
-| `Week of the Reader` | reach a 7-day goal streak |
-| `Fortnight Knight` | reach a 14-day goal streak |
-| `The Streak Strikes Back` | reach a 30-day goal streak |
-| `The Return of the Read` | reach a 60-day goal streak |
+| `White Rabbit` | reach a 7-day goal streak |
+| `Windrunner` | reach a 14-day goal streak |
+| `Stormblessed` | reach a 30-day goal streak |
+| `Radiant` | reach a 60-day goal streak |
 
 ### Bookmarks
 
@@ -306,6 +313,42 @@ Important behavior:
 - on first use, existing stats can unlock achievements retroactively
 - `Sync with prev. stats` can run that retroactive check again later
 - `Reset achievements` clears achievement progress only, not reading stats
+
+## ReadMe
+
+`ReadMe` is a built-in on-device guide for the main vCodex features.
+
+It includes quick pages for:
+
+- `Sync Day`
+- `Reading Stats`
+- `Bookmarks`
+- `Sleep`
+- `Customize Home and Apps`
+- `Achievements`
+- `If found, please return me`
+
+How it works:
+
+- open `Apps > ReadMe`
+- choose a topic from the list
+- press `Open` to view the full explanation
+- use `Up / Down` to scroll long pages
+- press `Back` to return to the topic list
+
+This is meant to give device-side help without needing to re-open GitHub every time.
+
+## If found, please return me
+
+This app is a simple lost-device return screen.
+
+How it works:
+
+- open `Apps > If found, please return me`
+- the screen always shows a fixed intro message
+- if `/if_found.txt` exists on the SD root, its content is shown below in bold
+- if the file does not exist, the app shows a bold fallback message explaining how to create it
+- long content can be scrolled with `Up / Down`
 
 ## Bookmarks
 
@@ -402,8 +445,8 @@ Important files include:
 
 Each firmware build exposes two identifiers:
 
-- `version`: the human-readable release line, currently `1.1.8-vcodex`
-- `version code`: a numeric build identifier, currently `2026032908`
+- `version`: the human-readable release line, currently `1.1.9-vcodex`
+- `version code`: a numeric build identifier, currently `2026033001`
 
 The boot screen shows both values, so you can identify exactly which firmware is installed on the device.
 For a brief release history, see [CHANGELOG.md](./CHANGELOG.md).

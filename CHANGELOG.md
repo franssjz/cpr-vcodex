@@ -2,6 +2,13 @@
 
 Brief firmware history for `crosspoint-vcodex`.
 
+## 1.1.9-vcodex
+
+- promoted the current firmware line to `1.1.9-vcodex`
+- refreshed bundled documentation and release metadata to match the current firmware state
+
+Version code: `2026033001`
+
 ## 1.1.8-vcodex
 
 - rebuilt the achievements catalog with the new title set and many more finished-book milestones up to `100 books`

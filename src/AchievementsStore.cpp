@@ -177,6 +177,8 @@ const std::array<AchievementDefinition, static_cast<size_t>(AchievementId::_COUN
                             StrId::STR_ACH_TITLE_THIRTY_GOAL_DAYS},
       AchievementDefinition{AchievementId::SixtyGoalDays, AchievementMetric::GoalDays, 60,
                             StrId::STR_ACH_TITLE_SIXTY_GOAL_DAYS},
+      AchievementDefinition{AchievementId::EightyGoalDays, AchievementMetric::GoalDays, 80,
+                            StrId::STR_ACH_TITLE_EIGHTY_GOAL_DAYS},
       AchievementDefinition{AchievementId::ThreeGoalStreak, AchievementMetric::MaxGoalStreak, 3,
                             StrId::STR_ACH_TITLE_THREE_GOAL_STREAK},
       AchievementDefinition{AchievementId::SevenGoalStreak, AchievementMetric::MaxGoalStreak, 7,
