@@ -28,8 +28,8 @@ This project is **not affiliated with Xteink**.
 |---|---|
 | Base firmware | CrossPoint Reader |
 | Device | Xteink X4 |
-| Current release | `1.1.14-vcodex` |
-| Version code | `2026033102` |
+| Current release | `1.1.15-vcodex` |
+| Version code | `2026040101` |
 | Release notes | [CHANGELOG.md](./CHANGELOG.md) |
 | Recommended install | browser OTA fast flash |
 
@@ -433,8 +433,8 @@ Important files include:
 
 Each firmware build exposes two identifiers:
 
-- `version`: the human-readable release line, currently `1.1.14-vcodex`
-- `version code`: a numeric build identifier, currently `2026033102`
+- `version`: the human-readable release line, currently `1.1.15-vcodex`
+- `version code`: a numeric build identifier, currently `2026040101`
 
 The boot screen shows both values, so you can identify exactly which firmware is installed on the device.
 For a brief release history, see [CHANGELOG.md](./CHANGELOG.md).

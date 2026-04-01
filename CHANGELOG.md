@@ -2,6 +2,14 @@
 
 Brief firmware history for `cpr-vcodex`.
 
+## 1.1.15-vcodex
+
+- improved `Reading Heatmap` month navigation so day selection can cross month boundaries naturally
+- added direct month switching with the side `Up/Down` buttons in `Reading Heatmap`
+- added goal-completion check marks inside heatmap day cells and refined their placement/size
+
+Version code: `2026040101`
+
 ## 1.1.14-vcodex
 
 - added `X Small` as a new reader font size with safe settings migration for existing installs

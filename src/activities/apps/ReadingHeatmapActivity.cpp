@@ -57,6 +57,14 @@ unsigned getDaysInMonth(const int year, const unsigned month) {
   return DAYS_PER_MONTH[month - 1];
 }
 
+unsigned clampDayToMonth(const int year, const unsigned month, const unsigned preferredDay) {
+  const unsigned daysInMonth = getDaysInMonth(year, month);
+  if (preferredDay == 0) {
+    return 1;
+  }
+  return std::min(preferredDay, daysInMonth);
+}
+
 uint32_t getReferenceDisplayTimestamp() {
   const uint32_t now = static_cast<uint32_t>(time(nullptr));
   if (TimeUtils::isClockValid(now)) {
@@ -131,6 +139,20 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
+void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
+  constexpr int checkWidth = 20;
+  constexpr int checkHeight = 16;
+  constexpr int paddingRight = 7;
+  constexpr int paddingBottom = 7;
+
+  const int checkX = rect.x + rect.width - checkWidth - paddingRight;
+  const int checkY = rect.y + rect.height - checkHeight - paddingBottom;
+  const bool checkColor = darkBackground ? false : true;
+
+  renderer.drawLine(checkX, checkY + 8, checkX + 5, checkY + 13, 4, checkColor);
+  renderer.drawLine(checkX + 5, checkY + 13, checkX + 17, checkY + 1, 4, checkColor);
+}
+
 void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& cell) {
   const int level = cell.inViewedMonth ? getHeatLevel(cell.readingMs) : 0;
   const Rect fillRect{rect.x + 1, rect.y + 1, std::max(0, rect.width - 2), std::max(0, rect.height - 2)};
@@ -163,6 +185,10 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
   if (!dayText.empty()) {
     renderer.drawText(SMALL_FONT_ID, dayTextX, dayTextY, dayText.c_str(), textBlack,
                       cell.inViewedMonth ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+  }
+
+  if (cell.inViewedMonth && cell.readingMs >= getDailyReadingGoalMs()) {
+    drawGoalCheckBadge(renderer, rect, level == 4);
   }
 
   if (cell.isReferenceDay) {
@@ -292,6 +318,13 @@ void ReadingHeatmapActivity::onEnter() {
 }
 
 void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
+  int currentYear = 0;
+  unsigned currentMonth = 0;
+  unsigned currentDay = 1;
+  if (selectedDayOrdinal != 0) {
+    TimeUtils::getDateFromDayOrdinal(selectedDayOrdinal, currentYear, currentMonth, currentDay);
+  }
+
   int month = static_cast<int>(viewedMonth) + delta;
   int year = viewedYear;
   while (month < 1) {
@@ -304,7 +337,8 @@ void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
   }
   viewedYear = year;
   viewedMonth = static_cast<unsigned>(month);
-  resetSelectedDay();
+  const unsigned targetDay = clampDayToMonth(viewedYear, viewedMonth, currentDay);
+  selectedDayOrdinal = TimeUtils::getDayOrdinalForDate(viewedYear, viewedMonth, targetDay);
   requestUpdate();
 }
 
@@ -371,11 +405,18 @@ void ReadingHeatmapActivity::moveSelection(const int delta) {
   const uint32_t lastDayOrdinal =
       TimeUtils::getDayOrdinalForDate(viewedYear, viewedMonth, getDaysInMonth(viewedYear, viewedMonth));
   int32_t nextOrdinal = static_cast<int32_t>(selectedDayOrdinal) + delta;
-  if (nextOrdinal < static_cast<int32_t>(firstDayOrdinal)) {
-    nextOrdinal = static_cast<int32_t>(firstDayOrdinal);
+  if (nextOrdinal < 1) {
+    nextOrdinal = 1;
   }
-  if (nextOrdinal > static_cast<int32_t>(lastDayOrdinal)) {
-    nextOrdinal = static_cast<int32_t>(lastDayOrdinal);
+
+  if (nextOrdinal < static_cast<int32_t>(firstDayOrdinal) || nextOrdinal > static_cast<int32_t>(lastDayOrdinal)) {
+    int nextYear = 0;
+    unsigned nextMonth = 0;
+    unsigned nextDay = 0;
+    if (TimeUtils::getDateFromDayOrdinal(static_cast<uint32_t>(nextOrdinal), nextYear, nextMonth, nextDay)) {
+      viewedYear = nextYear;
+      viewedMonth = nextMonth;
+    }
   }
 
   selectedDayOrdinal = static_cast<uint32_t>(nextOrdinal);
@@ -401,10 +442,10 @@ void ReadingHeatmapActivity::loop() {
     return;
   }
 
-  buttonNavigator.onPreviousRelease([this] { moveSelection(-1); });
-  buttonNavigator.onNextRelease([this] { moveSelection(1); });
-  buttonNavigator.onPreviousContinuous([this] { goToAdjacentMonth(-1); });
-  buttonNavigator.onNextContinuous([this] { goToAdjacentMonth(1); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Left}, [this] { moveSelection(-1); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Right}, [this] { moveSelection(1); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up}, [this] { goToAdjacentMonth(-1); });
+  buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down}, [this] { goToAdjacentMonth(1); });
 }
 
 void ReadingHeatmapActivity::render(RenderLock&&) {
