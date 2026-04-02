@@ -129,6 +129,8 @@ Practical meaning:
 - after that, stats continue using the last valid saved day
 - if the real day changes, you should sync again
 
+This fork also supports automatic time sync while a book is open. Enable `Settings > Apps > Auto Time Sync` and choose a 1–48 hour interval for periodic NTP sync when Wi-Fi is connected and the reader is active.
+
 By default the time zone is `Spain / Madrid`.
 You can select your own `Time Zone` and `Date Format` from `Settings > Apps`.
 

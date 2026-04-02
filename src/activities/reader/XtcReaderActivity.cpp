@@ -25,6 +25,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/AutoTimeSync.h"
 
 namespace {
 constexpr unsigned long skipPageMs = 700;
@@ -120,6 +121,8 @@ void XtcReaderActivity::onExit() {
 
 void XtcReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  AutoTimeSync::noteReaderInteraction(mappedInput);
+  AutoTimeSync::pollReaderSync();
 
   // Enter chapter selection activity
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {

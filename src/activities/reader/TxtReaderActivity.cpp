@@ -17,6 +17,7 @@
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
+#include "util/AutoTimeSync.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
@@ -84,6 +85,8 @@ void TxtReaderActivity::onExit() {
 
 void TxtReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  AutoTimeSync::noteReaderInteraction(mappedInput);
+  AutoTimeSync::pollReaderSync();
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {

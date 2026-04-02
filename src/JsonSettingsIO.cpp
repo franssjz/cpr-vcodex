@@ -143,6 +143,7 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["readerActivityLoadCount"] = s.readerActivityLoadCount;
   doc["lastSleepFromReader"] = s.lastSleepFromReader;
   doc["lastKnownValidTimestamp"] = s.lastKnownValidTimestamp;
+  doc["lastAutoTimeSync"] = s.lastAutoTimeSync;
 
   return saveJsonDocumentToFile("CPS", path, doc);
 }
@@ -160,6 +161,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | (uint8_t)0;
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
   s.lastKnownValidTimestamp = doc["lastKnownValidTimestamp"] | static_cast<uint32_t>(0);
+  s.lastAutoTimeSync = doc["lastAutoTimeSync"] | static_cast<uint32_t>(0);
   return true;
 }
 

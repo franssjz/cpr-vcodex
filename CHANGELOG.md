@@ -2,6 +2,18 @@
 
 Brief firmware history for `cpr-vcodex`.
 
+## 1.1.18-vcodex
+
+- added automatic reader time sync while a book is open
+- auto time sync uses the existing NTP infrastructure and only runs when a reader activity is active, the reader has had recent input, and Wi-Fi is already connected
+- introduced `Settings > Apps > Auto Time Sync` toggle and a configurable sync interval from `1` to `48` hours
+- minimized Wi-Fi usage by only attempting sync when the reader is not idle and the configured interval has elapsed
+- failed sync attempts are deferred for at least one hour before retrying
+- persisted the last successful auto sync timestamp in `/.crosspoint/state.json` so sync state survives reboot
+- retains manual `Sync Day` behavior and the existing day/fallback date model
+
+Version code: `2026040202`
+
 ## 1.1.17-vcodex
 
 - added long-press removal with confirmation for recent books in both `Home` and `Apps > Recent Books`

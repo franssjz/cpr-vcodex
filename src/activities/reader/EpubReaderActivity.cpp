@@ -29,6 +29,7 @@
 #include "fontIds.h"
 #include "util/ScreenshotUtil.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/AutoTimeSync.h"
 
 namespace {
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
@@ -207,6 +208,8 @@ void EpubReaderActivity::loop() {
   }
 
   READING_STATS.tickActiveSession();
+  AutoTimeSync::noteReaderInteraction(mappedInput);
+  AutoTimeSync::pollReaderSync();
 
   if (automaticPageTurnActive) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||

@@ -213,6 +213,8 @@ class CrossPointSettings {
   // Home/apps helpers
   uint8_t displayDay = 1;
   uint8_t autoSyncDay = 1;
+  uint8_t autoTimeSyncEnabled = 1;
+  uint8_t autoTimeSyncIntervalHours = 20;
   uint8_t timeZonePreset = 0;
   uint8_t dateFormat = DATE_DD_MM_YYYY;
   uint8_t dailyGoalTarget = DAILY_GOAL_30_MIN;
