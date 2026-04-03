@@ -14,9 +14,9 @@
 
 #include <algorithm>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
@@ -67,9 +67,9 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   showPendingAchievementPopups(renderer);
-  const bool countedSession =
-      READING_STATS.getLastSessionSnapshot().valid && READING_STATS.getLastSessionSnapshot().counted &&
-      READING_STATS.getLastSessionSnapshot().path == bookPath;
+  const bool countedSession = READING_STATS.getLastSessionSnapshot().valid &&
+                              READING_STATS.getLastSessionSnapshot().counted &&
+                              READING_STATS.getLastSessionSnapshot().path == bookPath;
 
   if (SETTINGS.showStatsAfterReading && countedSession && !bookPath.empty()) {
     activityManager.replaceActivity(
@@ -399,7 +399,8 @@ void XtcReaderActivity::renderPage() {
 
 void XtcReaderActivity::saveProgress() const {
   READING_STATS.updateProgress(xtc->calculateProgress(currentPage), currentPage + 1 >= xtc->getPageCount(),
-                               getChapterTitleForStats(*xtc, currentPage), getChapterProgressForStats(*xtc, currentPage));
+                               getChapterTitleForStats(*xtc, currentPage),
+                               getChapterProgressForStats(*xtc, currentPage));
   FsFile f;
   if (Storage.openFileForWrite("XTR", xtc->getCachePath() + "/progress.bin", f)) {
     uint8_t data[4];

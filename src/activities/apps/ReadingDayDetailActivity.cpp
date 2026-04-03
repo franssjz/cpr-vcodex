@@ -20,16 +20,15 @@ void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* l
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
+  const int valueFontId = renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24
+                              ? UI_12_FONT_ID
+                              : UI_10_FONT_ID;
   const std::string truncatedValue =
       renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + 12, rect.y + (valueFontId == UI_12_FONT_ID ? 14 : 18), truncatedValue.c_str(),
                     true, EpdFontFamily::BOLD);
 
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
+  const auto labelLines = renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
   int labelY = rect.y + 40;
   for (const auto& line : labelLines) {
     renderer.drawText(UI_10_FONT_ID, rect.x + 12, labelY, line.c_str());
@@ -46,7 +45,8 @@ void ReadingDayDetailActivity::refreshEntries() {
 }
 
 void ReadingDayDetailActivity::openSelectedBook() {
-  if (selectedIndex < 0 || selectedIndex >= static_cast<int>(entries.size()) || entries[selectedIndex].book == nullptr) {
+  if (selectedIndex < 0 || selectedIndex >= static_cast<int>(entries.size()) ||
+      entries[selectedIndex].book == nullptr) {
     return;
   }
 
@@ -121,8 +121,9 @@ void ReadingDayDetailActivity::render(RenderLock&&) {
                  tr(STR_BOOKS_READ), std::to_string(entries.size()));
 
   const char* topBookLabel = tr(STR_TOP_BOOK);
-  const std::string topBookTitle =
-      !entries.empty() && entries.front().book != nullptr ? getBookTitle(*entries.front().book) : std::string(tr(STR_NOT_SET));
+  const std::string topBookTitle = !entries.empty() && entries.front().book != nullptr
+                                       ? getBookTitle(*entries.front().book)
+                                       : std::string(tr(STR_NOT_SET));
   const int listTop = contentTop + SUMMARY_CARD_HEIGHT + metrics.verticalSpacing;
   GUI.drawSubHeader(renderer, Rect{0, listTop, pageWidth, 34}, topBookLabel, topBookTitle.c_str());
 
@@ -131,22 +132,23 @@ void ReadingDayDetailActivity::render(RenderLock&&) {
   if (entries.empty()) {
     renderer.drawText(UI_10_FONT_ID, sidePadding, listContentTop + 20, tr(STR_NO_READING_DAY));
   } else {
-    GUI.drawList(renderer, Rect{0, listContentTop, pageWidth, listHeight}, static_cast<int>(entries.size()), selectedIndex,
-                 [this](const int index) {
-                   return entries[index].book ? getBookTitle(*entries[index].book) : std::string(tr(STR_NOT_SET));
-                 },
-                 [this](const int index) {
-                   if (!entries[index].book) {
-                     return std::string(tr(STR_NOT_SET));
-                   }
-                   return entries[index].book->author.empty() ? std::string(tr(STR_IN_PROGRESS)) : entries[index].book->author;
-                 },
-                 [](const int) { return UIIcon::Book; },
-                 [this](const int index) { return ReadingStatsAnalytics::formatDurationHm(entries[index].readingMs); });
+    GUI.drawList(
+        renderer, Rect{0, listContentTop, pageWidth, listHeight}, static_cast<int>(entries.size()), selectedIndex,
+        [this](const int index) {
+          return entries[index].book ? getBookTitle(*entries[index].book) : std::string(tr(STR_NOT_SET));
+        },
+        [this](const int index) {
+          if (!entries[index].book) {
+            return std::string(tr(STR_NOT_SET));
+          }
+          return entries[index].book->author.empty() ? std::string(tr(STR_IN_PROGRESS)) : entries[index].book->author;
+        },
+        [](const int) { return UIIcon::Book; },
+        [this](const int index) { return ReadingStatsAnalytics::formatDurationHm(entries[index].readingMs); });
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), entries.empty() ? "" : tr(STR_OPEN), tr(STR_DIR_UP),
-                                            tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BACK), entries.empty() ? "" : tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }

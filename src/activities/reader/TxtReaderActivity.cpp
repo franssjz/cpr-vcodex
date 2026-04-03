@@ -9,18 +9,18 @@
 
 #include <algorithm>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "MappedInputManager.h"
-#include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
-#include "util/AutoTimeSync.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/AutoTimeSync.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -32,9 +32,9 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   showPendingAchievementPopups(renderer);
-  const bool countedSession =
-      READING_STATS.getLastSessionSnapshot().valid && READING_STATS.getLastSessionSnapshot().counted &&
-      READING_STATS.getLastSessionSnapshot().path == bookPath;
+  const bool countedSession = READING_STATS.getLastSessionSnapshot().valid &&
+                              READING_STATS.getLastSessionSnapshot().counted &&
+                              READING_STATS.getLastSessionSnapshot().path == bookPath;
 
   if (SETTINGS.showStatsAfterReading && countedSession && !bookPath.empty()) {
     activityManager.replaceActivity(

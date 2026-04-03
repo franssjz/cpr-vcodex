@@ -1,10 +1,11 @@
 
 #include "AutoTimeSync.h"
 
-#include <algorithm>
+#include <WiFi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <WiFi.h>
+
+#include <algorithm>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -31,9 +32,7 @@ uint32_t getConfiguredIntervalHours() {
   return rawHours;
 }
 
-bool hasRecentActivity() {
-  return lastInteractionMs != 0 && (millis() - lastInteractionMs) <= IDLE_THRESHOLD_MS;
-}
+bool hasRecentActivity() { return lastInteractionMs != 0 && (millis() - lastInteractionMs) <= IDLE_THRESHOLD_MS; }
 
 bool isSyncDue() {
   if (APP_STATE.lastAutoTimeSync == 0) {
@@ -98,7 +97,7 @@ void pollReaderSync() {
  * The 5-second NTP timeout would otherwise cause unacceptable lag during reading.
  */
 static void ntpSyncTask(void* pvParameters) {
-  (void)pvParameters; // Unused parameter
+  (void)pvParameters;  // Unused parameter
 
   LOG_DBG("ATS", "Background NTP sync task started");
   const bool synced = TimeUtils::syncTimeWithNtp(5000);

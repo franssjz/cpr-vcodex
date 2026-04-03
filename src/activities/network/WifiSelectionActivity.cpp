@@ -4,10 +4,12 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <algorithm>
-#include <map>
 #include <ctime>
+#include <map>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -17,9 +19,6 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/TimeUtils.h"
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
@@ -274,8 +273,7 @@ void WifiSelectionActivity::checkConnectionStatus() {
             if (synced) {
               const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
               if (currentValidTimestamp > 0) {
-                APP_STATE.lastKnownValidTimestamp =
-                    std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
+                APP_STATE.lastKnownValidTimestamp = std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
                 APP_STATE.saveToFile();
                 LOG_DBG("WIFI", "Background Wi-Fi NTP sync succeeded");
               }

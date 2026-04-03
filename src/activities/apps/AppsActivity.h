@@ -3,8 +3,8 @@
 #include <vector>
 
 #include "../Activity.h"
-#include "util/ShortcutRegistry.h"
 #include "util/ButtonNavigator.h"
+#include "util/ShortcutRegistry.h"
 
 class AppsActivity final : public Activity {
   ButtonNavigator buttonNavigator;

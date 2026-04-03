@@ -31,8 +31,7 @@ void SleepAppActivity::loop() {
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     if (selectedIndex == 0) {
-      SETTINGS.sleepImageOrder =
-          (SETTINGS.sleepImageOrder + 1) % CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT;
+      SETTINGS.sleepImageOrder = (SETTINGS.sleepImageOrder + 1) % CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT;
       SETTINGS.saveToFile();
       requestUpdate();
     } else {
@@ -74,10 +73,8 @@ void SleepAppActivity::render(RenderLock&&) {
   if (directories.empty()) {
     GUI.drawList(
         renderer, Rect{0, contentTop, pageWidth, contentHeight}, 1, selectedIndex,
-        [](int) { return std::string(tr(STR_SLEEP_ORDER)); }, nullptr,
-        [](int) { return UIIcon::Recent; },
-        [sleepOrderLabel](int) { return std::string(sleepOrderLabel); },
-        true);
+        [](int) { return std::string(tr(STR_SLEEP_ORDER)); }, nullptr, [](int) { return UIIcon::Recent; },
+        [sleepOrderLabel](int) { return std::string(sleepOrderLabel); }, true);
 
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + 56, tr(STR_NO_SLEEP_DIRECTORIES));
   } else {
@@ -88,8 +85,7 @@ void SleepAppActivity::render(RenderLock&&) {
           if (index == 0) return std::string(tr(STR_SLEEP_ORDER));
           return SleepImageUtils::getDirectoryLabel(directories[index - 1]);
         },
-        nullptr,
-        [](int index) { return index == 0 ? UIIcon::Recent : UIIcon::Folder; },
+        nullptr, [](int index) { return index == 0 ? UIIcon::Recent : UIIcon::Folder; },
         [&selectedDirectory, sleepOrderLabel, this](int index) {
           if (index == 0) {
             return std::string(sleepOrderLabel);

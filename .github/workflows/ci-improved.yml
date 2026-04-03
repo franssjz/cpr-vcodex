@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -275,3 +275,58 @@ jobs:
           else
             echo "✅ All CI checks passed"
           fi
+
+  # Create GitHub Release with firmware binary on successful master builds
+  release:
+    name: Create Release
+    needs: [ci-status, build-vcodex-release]
+    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vcodex_release firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: cpr-vcodex-vcodex-release-build
+          path: release-artifacts/
+
+      - name: Get version info
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version' platformio.ini | head -1 | sed 's/.*= *//')
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          tag_name: latest
+          name: "Latest Build \u2014 v${{ steps.version.outputs.version }} (${{ steps.version.outputs.short_sha }})"
+          body: |
+            ## CrossPoint Reader v${{ steps.version.outputs.version }}
+
+            Automated release from the latest successful CI build on `master`.
+
+            | Field | Value |
+            |-------|-------|
+            | **Version** | ${{ steps.version.outputs.version }} |
+            | **Commit** | [`${{ steps.version.outputs.short_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+            | **Build date** | ${{ github.event.head_commit.timestamp }} |
+            | **Platform** | ESP32-C3 (RISC-V, 160 MHz, 380 KB RAM) |
+
+            ### Installation
+            Download `firmware.bin` and flash to your Xteink X4 device:
+            ```bash
+            esptool.py --chip esp32c3 -p /dev/ttyUSB0 write_flash 0x10000 firmware.bin
+            ```
+          files: release-artifacts/firmware.bin
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
