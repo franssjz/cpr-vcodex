@@ -2,6 +2,29 @@
 
 Brief firmware history for `cpr-vcodex`.
 
+## [1.1.21] - 2026-04-03
+
+### Added
+- Added `release-improved.yml` GitHub Actions workflow that triggers on version tags (`v*.*.*`) and manual dispatch, builds the `gh_release` PlatformIO environment, extracts the matching changelog section, and publishes a fully annotated GitHub Release
+- Added versioned artifact naming convention (`cpr-vcodex_v{VERSION}_esp32c3.bin`) so every release binary is uniquely identified and human-readable
+- Added flashing instructions section to all GitHub Release notes pointing to the online web flash tool at `https://xteink.dve.al`
+- Added `release` job to `ci-improved.yml` that auto-publishes a `latest` rolling release on every successful push to `master`
+
+### Changed
+- Release workflow now extracts changelog content directly from `CHANGELOG.md` and uses it as the GitHub Release description, keeping notes and changelog in sync
+- Artifact upload steps updated to use `if-no-files-found: error` so the workflow fails clearly when a firmware binary is missing instead of silently continuing
+
+### Fixed
+- Applied `clang-format-21` across all C/C++ source files to resolve CI formatting failures
+- Fixed `ci-improved.yml` permissions block (`contents: write`) required for the release creation step
+- Fixed ArduinoJson v7 API incompatibilities that were causing CI build errors
+
+### Improved
+- CI workflow (`ci-improved.yml`) now includes a dedicated `release` job gated behind `ci-status` so releases only publish after all checks pass
+- Release notes template enriched with build metadata table (version, commit SHA, build date, platform)
+
+Version code: `2026040311`
+
 ## 1.1.20-vcodex (Performance & Resilience Hardening - Phase 2 & 3)
 
 ### Performance: UI Responsiveness
