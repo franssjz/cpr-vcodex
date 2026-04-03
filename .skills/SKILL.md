@@ -58,6 +58,7 @@ find src -name "*.cpp" -o -name "*.h" | xargs clang-format -i
 6. `constexpr` First: Compile-time constants and lookup tables must be `constexpr`, not just `static const`. This moves computation to compile time, enables dead-branch elimination, and guarantees flash placement. Use `static constexpr` for class-level constants.
 7. `std::vector` Pre-allocation: Always call `.reserve(N)` before any `push_back()` loop. Each growth event allocates a new block (2×), copies all elements, then frees the old one — three heap operations that fragment DRAM. When the final size is unknown, estimate conservatively.
 8. SPIFFS Write Throttling: Never write a settings file on every user interaction. Guard all writes with a value-change check (`if (newVal == _current) return;`). Progress saves during reading must be debounced — write on activity exit or every N page turns, not on every turn. SPIFFS sectors have a finite erase cycle limit.
+9. Reading Statistics Persistence: Reading statistics (time, progress, activity metrics) are persisted to storage no more frequently than once per minute during active reading sessions to optimize battery life. Final session state is always saved immediately on session end to prevent data loss.
 
 ---
 
@@ -866,6 +867,39 @@ struct PageLine {
   uint16_t newField;  // New field added
 };
 ```
+
+---
+
+## Reading Statistics Lifecycle
+
+### Persistence Triggers and Flush Conditions
+
+**Reading Statistics Store** (`ReadingStatsStore`) tracks reading time, progress, and activity metrics for all books.
+
+**Persistence Intervals**:
+- **Active Reading**: Stats are persisted to SD card no more frequently than once per minute during active reading sessions
+- **Session End**: Final session state is always saved immediately when a reading session ends
+- **App Termination**: All pending stats are flushed on app shutdown
+
+**Deferred Save Mechanism**:
+- `DEFERRED_SAVE_INTERVAL_MS = 60UL * 1000UL` (60 seconds)
+- `shouldSaveDeferred()` checks if dirty data exists and interval has elapsed
+- `saveToFile()` writes to `/.crosspoint/reading_stats.json`
+
+**Session Heartbeat**:
+- `SESSION_HEARTBEAT_MS = 60UL * 1000UL` (60 seconds)
+- Reading time is credited in chunks when user activity is detected
+- Prevents idle time from being counted as reading time
+
+**Data Integrity**:
+- Stats are marked dirty on any change (`markDirty()`)
+- Session end forces immediate save (`endSession()` → `saveToFile()`)
+- No data loss on power failure (final state saved on session exit)
+
+**Battery Optimization**:
+- Reduced I/O frequency minimizes CPU wake-ups and flash wear
+- In-memory aggregation before persistence
+- Thread-safe with no blocking operations
 
 ---
 
