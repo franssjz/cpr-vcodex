@@ -5,6 +5,7 @@
 #include <ctime>
 #include <map>
 
+#include "util/DurationFormat.h"
 #include "util/TimeUtils.h"
 
 namespace ReadingStatsAnalytics {
@@ -36,15 +37,7 @@ unsigned resolveMonthFromDayOrdinal(const uint32_t dayOrdinal) {
 
 }  // namespace
 
-std::string formatDurationHm(const uint64_t totalMs) {
-  const uint64_t totalMinutes = totalMs / 60000ULL;
-  const uint64_t hours = totalMinutes / 60ULL;
-  const uint64_t minutes = totalMinutes % 60ULL;
-  if (hours == 0) {
-    return std::to_string(minutes) + "m";
-  }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
-}
+std::string formatDurationHm(const uint64_t totalMs) { return DurationFormat::formatHm(totalMs); }
 
 std::string formatDayOrdinalLabel(const uint32_t dayOrdinal) {
   int year = 0;

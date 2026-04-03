@@ -17,16 +17,17 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Find or install Unity test framework
+# Find or install Unity test framework (pinned to v2.6.1 for reproducibility)
+UNITY_VERSION="v2.6.1"
 UNITY_DIR=""
 if [ -d "$BUILD_DIR/Unity" ]; then
   UNITY_DIR="$BUILD_DIR/Unity"
 elif [ -d "/tmp/Unity" ]; then
   UNITY_DIR="/tmp/Unity"
 else
-  echo -e "${YELLOW}Downloading Unity test framework...${NC}"
+  echo -e "${YELLOW}Downloading Unity test framework (${UNITY_VERSION})...${NC}"
   mkdir -p "$BUILD_DIR"
-  git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git "$BUILD_DIR/Unity" 2>/dev/null
+  git clone --depth 1 --branch "$UNITY_VERSION" --single-branch https://github.com/ThrowTheSwitch/Unity.git "$BUILD_DIR/Unity" 2>/dev/null
   UNITY_DIR="$BUILD_DIR/Unity"
 fi
 
@@ -114,7 +115,7 @@ run_test_suite "test_date_math" \
 # Test 4: Duration formatting
 run_test_suite "test_format_duration" \
   "test/test_format_duration/test_format_duration.cpp" \
-  "-I$UNITY_SRC"
+  "-Isrc -I$UNITY_SRC"
 
 # Test 5: Settings helpers
 run_test_suite "test_settings_helpers" \

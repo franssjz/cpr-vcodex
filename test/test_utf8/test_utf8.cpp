@@ -254,13 +254,9 @@ void test_safe_truncate_incomplete_three_byte() {
   TEST_ASSERT_EQUAL(1, utf8SafeTruncateBuffer(buf, 3));
 }
 
-void test_safe_truncate_empty() {
-  TEST_ASSERT_EQUAL(0, utf8SafeTruncateBuffer("", 0));
-}
+void test_safe_truncate_empty() { TEST_ASSERT_EQUAL(0, utf8SafeTruncateBuffer("", 0)); }
 
-void test_safe_truncate_negative_length() {
-  TEST_ASSERT_EQUAL(0, utf8SafeTruncateBuffer("Hello", -1));
-}
+void test_safe_truncate_negative_length() { TEST_ASSERT_EQUAL(0, utf8SafeTruncateBuffer("Hello", -1)); }
 
 void test_safe_truncate_single_complete_char() {
   const char buf[] = {(char)0xE2, (char)0x82, (char)0xAC};  // €
@@ -311,9 +307,9 @@ void test_non_combining_outside_ranges() {
 }
 
 void test_non_combining_common_unicode() {
-  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x00E9));  // é (precomposed)
-  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x20AC));  // €
-  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x1D11E)); // 𝄞
+  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x00E9));   // é (precomposed)
+  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x20AC));   // €
+  TEST_ASSERT_FALSE(utf8IsCombiningMark(0x1D11E));  // 𝄞
 }
 
 void setUp() {}

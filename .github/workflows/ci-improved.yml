@@ -217,7 +217,12 @@ jobs:
           submodules: recursive
 
       - name: Install Unity test framework
-        run: git clone --depth 1 https://github.com/ThrowTheSwitch/Unity.git /tmp/Unity
+        run: |
+          set -euo pipefail
+          UNITY_REPO="https://github.com/ThrowTheSwitch/Unity.git"
+          UNITY_REF="cbcd08fa7de711053a3deec6339ee89cad5d2697"
+          git clone "${UNITY_REPO}" /tmp/Unity
+          git -C /tmp/Unity checkout --detach "${UNITY_REF}"
 
       - name: Run native unit tests
         run: ./test/run_tests.sh

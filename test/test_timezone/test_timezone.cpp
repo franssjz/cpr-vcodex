@@ -10,28 +10,20 @@
 #include <cstring>
 
 // Include the source directly (pure logic, no ESP32 dependencies)
-#include "../../src/util/TimeZoneRegistry.h"
 #include "../../src/util/TimeZoneRegistry.cpp"
+#include "../../src/util/TimeZoneRegistry.h"
 
 // ── Preset count ────────────────────────────────────────────────────
 
-void test_preset_count_is_29() {
-  TEST_ASSERT_EQUAL(29, TimeZoneRegistry::getPresetCount());
-}
+void test_preset_count_is_29() { TEST_ASSERT_EQUAL(29, TimeZoneRegistry::getPresetCount()); }
 
-void test_preset_count_is_nonzero() {
-  TEST_ASSERT_GREATER_THAN(0, TimeZoneRegistry::getPresetCount());
-}
+void test_preset_count_is_nonzero() { TEST_ASSERT_GREATER_THAN(0, TimeZoneRegistry::getPresetCount()); }
 
 // ── clampPresetIndex ────────────────────────────────────────────────
 
-void test_clamp_valid_index_zero() {
-  TEST_ASSERT_EQUAL(0, TimeZoneRegistry::clampPresetIndex(0));
-}
+void test_clamp_valid_index_zero() { TEST_ASSERT_EQUAL(0, TimeZoneRegistry::clampPresetIndex(0)); }
 
-void test_clamp_valid_index_middle() {
-  TEST_ASSERT_EQUAL(14, TimeZoneRegistry::clampPresetIndex(14));
-}
+void test_clamp_valid_index_middle() { TEST_ASSERT_EQUAL(14, TimeZoneRegistry::clampPresetIndex(14)); }
 
 void test_clamp_valid_index_last() {
   uint8_t lastIndex = static_cast<uint8_t>(TimeZoneRegistry::getPresetCount() - 1);
@@ -40,13 +32,11 @@ void test_clamp_valid_index_last() {
 
 void test_clamp_out_of_range_returns_default() {
   uint8_t outOfRange = static_cast<uint8_t>(TimeZoneRegistry::getPresetCount());
-  TEST_ASSERT_EQUAL(TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX,
-                    TimeZoneRegistry::clampPresetIndex(outOfRange));
+  TEST_ASSERT_EQUAL(TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX, TimeZoneRegistry::clampPresetIndex(outOfRange));
 }
 
 void test_clamp_max_uint8_returns_default() {
-  TEST_ASSERT_EQUAL(TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX,
-                    TimeZoneRegistry::clampPresetIndex(255));
+  TEST_ASSERT_EQUAL(TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX, TimeZoneRegistry::clampPresetIndex(255));
 }
 
 // ── getPresetLabel ──────────────────────────────────────────────────
@@ -126,9 +116,7 @@ void test_get_preset_out_of_range_returns_default() {
 
 // ── DEFAULT_TIME_ZONE_INDEX ─────────────────────────────────────────
 
-void test_default_timezone_index_is_zero() {
-  TEST_ASSERT_EQUAL(0, TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX);
-}
+void test_default_timezone_index_is_zero() { TEST_ASSERT_EQUAL(0, TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX); }
 
 void setUp() {}
 void tearDown() {}

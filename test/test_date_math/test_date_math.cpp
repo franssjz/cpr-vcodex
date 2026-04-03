@@ -12,8 +12,8 @@
 #include <string>
 
 // Include source files under test (mocks provide ESP32 stubs)
-#include "../../src/util/TimeZoneRegistry.cpp"
 #include "../../src/util/TimeUtils.cpp"
+#include "../../src/util/TimeZoneRegistry.cpp"
 
 // Provide the static instance required by CrossPointSettings
 CrossPointSettings CrossPointSettings::instance;
@@ -30,18 +30,14 @@ void test_clock_valid_exactly_at_threshold() {
   TEST_ASSERT_TRUE(TimeUtils::isClockValid(1704067200));
 }
 
-void test_clock_invalid_zero() {
-  TEST_ASSERT_FALSE(TimeUtils::isClockValid(0));
-}
+void test_clock_invalid_zero() { TEST_ASSERT_FALSE(TimeUtils::isClockValid(0)); }
 
 void test_clock_invalid_old_timestamp() {
   // 2020-01-01 = 1577836800 (before threshold)
   TEST_ASSERT_FALSE(TimeUtils::isClockValid(1577836800));
 }
 
-void test_clock_invalid_just_before_threshold() {
-  TEST_ASSERT_FALSE(TimeUtils::isClockValid(1704067199));
-}
+void test_clock_invalid_just_before_threshold() { TEST_ASSERT_FALSE(TimeUtils::isClockValid(1704067199)); }
 
 void test_clock_valid_far_future() {
   // 2030-01-01 = 1893456000
@@ -116,8 +112,8 @@ void test_day_ordinal_year_boundary() {
 void test_day_ordinal_month_lengths() {
   // Test various month lengths
   uint32_t jan31 = TimeUtils::getDayOrdinalForDate(2026, 1, 31);
-  uint32_t feb1 = TimeUtils::getDayOrdinalForDate(2026, 1, 1);
-  TEST_ASSERT_EQUAL_UINT32(30, jan31 - feb1);  // January has 31 days
+  uint32_t jan1 = TimeUtils::getDayOrdinalForDate(2026, 1, 1);
+  TEST_ASSERT_EQUAL_UINT32(30, jan31 - jan1);  // January has 31 days
 }
 
 void test_day_ordinal_full_year_365() {
@@ -154,7 +150,7 @@ void test_day_ordinal_round_trip_many_dates() {
   };
 
   TestDate dates[] = {
-      {1970, 1, 1}, {2000, 1, 1}, {2000, 12, 31}, {2020, 6, 15}, {2024, 2, 29},
+      {1970, 1, 1}, {2000, 1, 1}, {2000, 12, 31}, {2020, 6, 15},  {2024, 2, 29},
       {2024, 3, 1}, {2025, 7, 4}, {2026, 11, 30}, {2030, 12, 25}, {1999, 2, 28},
   };
 
