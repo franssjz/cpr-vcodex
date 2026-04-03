@@ -302,6 +302,19 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
+      - name: Rename firmware artifact
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          SRC="release-artifacts/firmware.bin"
+          DEST="release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.bin"
+          if [ ! -f "$SRC" ]; then
+            echo "❌ firmware.bin not found — build artifact missing"
+            exit 1
+          fi
+          mv "$SRC" "$DEST"
+          echo "✅ Renamed to $(basename $DEST)"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2.2.2
         with:
@@ -319,12 +332,18 @@ jobs:
             | **Build date** | ${{ github.event.head_commit.timestamp }} |
             | **Platform** | ESP32-C3 (RISC-V, 160 MHz, 380 KB RAM) |
 
-            ### Installation
-            Download `firmware.bin` and flash to your Xteink X4 device:
-            ```bash
-            esptool.py --chip esp32c3 -p /dev/ttyUSB0 write_flash 0x10000 firmware.bin
-            ```
-          files: release-artifacts/firmware.bin
+            ---
+
+            ## Flashing Instructions
+
+            You can flash the firmware using the online web tool:
+            https://xteink.dve.al
+
+            1. Open the link above in a compatible browser.
+            2. Connect your device via USB.
+            3. Select the downloaded `.bin` file.
+            4. Follow the on-screen instructions to complete the flashing process.
+          files: release-artifacts/cpr-vcodex_v${{ steps.version.outputs.version }}_esp32c3.bin
           draft: false
           prerelease: false
           make_latest: true

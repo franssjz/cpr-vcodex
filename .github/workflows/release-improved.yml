@@ -92,9 +92,13 @@ jobs:
             exit 0
           fi
           
-          # Extract section for current version (e.g., ## 1.1.20-vcodex)
-          # Pattern: from "## VERSION" to next "## " or EOF
-          section=$(sed -n "/^## .*${VERSION}/,/^## /p" "$CHANGELOG_FILE" | head -n -1)
+          # Try structured format first: ## [VERSION] or ## [VERSION] - date
+          section=$(sed -n "/^## \[${VERSION}\]/,/^## /p" "$CHANGELOG_FILE" | head -n -1)
+          
+          # Fall back to legacy format: ## VERSION or ## VERSION-vcodex
+          if [ -z "$section" ]; then
+            section=$(sed -n "/^## .*${VERSION}/,/^## /p" "$CHANGELOG_FILE" | head -n -1)
+          fi
           
           if [ -z "$section" ]; then
             echo "⚠️  No changelog section found for version ${VERSION}"
@@ -167,52 +171,60 @@ jobs:
             echo "- **Platform**: ESP32-C3 (RISC-V, 160MHz, 380KB RAM)"
             echo "- **Binary Target**: Xteink X4"
             echo ""
-            echo "## Installation"
-            echo "Download the \`firmware.bin\` artifact and flash to your device:"
-            echo "\`\`\`bash"
-            echo "esptool.py --chip esp32c3 -p /dev/ttyUSB0 write_flash 0x0 firmware.bin"
-            echo "\`\`\`"
+            echo "---"
             echo ""
-            echo "See [USER_GUIDE.md](../USER_GUIDE.md) for detailed setup instructions."
+            echo "## Flashing Instructions"
+            echo ""
+            echo "You can flash the firmware using the online web tool:"
+            echo "https://xteink.dve.al"
+            echo ""
+            echo "1. Open the link above in a compatible browser."
+            echo "2. Connect your device via USB."
+            echo "3. Select the downloaded \`.bin\` file."
+            echo "4. Follow the on-screen instructions to complete the flashing process."
             echo "RELEASE_EOF"
           } >> $GITHUB_OUTPUT
 
-      # Upload release artifacts
+      # Upload release artifacts with versioned naming
       - name: Collect Build Artifacts
         run: |
           set -euo pipefail
           mkdir -p release-artifacts
-          
-          # Copy main firmware binary
-          if [ -f ".pio/build/gh_release/firmware.bin" ]; then
-            cp .pio/build/gh_release/firmware.bin release-artifacts/
-            echo "✅ firmware.bin copied"
+
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Copy main firmware binary — required; fail if missing
+          if [ ! -f ".pio/build/gh_release/firmware.bin" ]; then
+            echo "❌ firmware.bin not found — build may have failed"
+            exit 1
           fi
-          
+          cp .pio/build/gh_release/firmware.bin "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.bin"
+          echo "✅ cpr-vcodex_v${VERSION}_esp32c3.bin copied"
+
           # Copy bootloader (if available)
           if [ -f ".pio/build/gh_release/bootloader.bin" ]; then
-            cp .pio/build/gh_release/bootloader.bin release-artifacts/
-            echo "✅ bootloader.bin copied"
+            cp .pio/build/gh_release/bootloader.bin "release-artifacts/cpr-vcodex_v${VERSION}_bootloader.bin"
+            echo "✅ bootloader copied"
           fi
-          
+
           # Copy ELF file (for debugging)
           if [ -f ".pio/build/gh_release/firmware.elf" ]; then
-            cp .pio/build/gh_release/firmware.elf release-artifacts/
-            echo "✅ firmware.elf copied"
+            cp .pio/build/gh_release/firmware.elf "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.elf"
+            echo "✅ ELF copied"
           fi
-          
+
           # Copy map file (for memory analysis)
           if [ -f ".pio/build/gh_release/firmware.map" ]; then
-            cp .pio/build/gh_release/firmware.map release-artifacts/
-            echo "✅ firmware.map copied"
+            cp .pio/build/gh_release/firmware.map "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.map"
+            echo "✅ map copied"
           fi
-          
+
           # Copy partitions
           if [ -f "partitions.csv" ]; then
             cp partitions.csv release-artifacts/
             echo "✅ partitions.csv copied"
           fi
-          
+
           ls -lah release-artifacts/
 
       # Create GitHub Release
@@ -234,6 +246,7 @@ jobs:
         with:
           name: cpr-vcodex-release-build-${{ steps.version.outputs.version }}
           path: release-artifacts/
+          if-no-files-found: error
           retention-days: 30
 
       - name: Verify Release
