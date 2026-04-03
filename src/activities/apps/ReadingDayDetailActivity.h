@@ -2,9 +2,8 @@
 
 #include <vector>
 
-#include "util/ButtonNavigator.h"
-
 #include "../Activity.h"
+#include "util/ButtonNavigator.h"
 #include "util/ReadingStatsAnalytics.h"
 
 class ReadingDayDetailActivity final : public Activity {

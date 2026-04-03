@@ -1,9 +1,10 @@
 
 #pragma once
 
-#include <cstdint>
 #include <Logging.h>
 #include <esp_heap_caps.h>
+
+#include <cstdint>
 
 /**
  * @brief Memory monitoring utilities for debugging heap fragmentation on RAM-constrained ESP32-C3
@@ -20,10 +21,10 @@ namespace MemoryMonitor {
  * @brief Snapshot of heap statistics
  */
 struct HeapStats {
-  uint32_t freeHeap;         /**< Total free heap in bytes */
-  uint32_t minFreeHeap;      /**< Minimum free heap since boot */
-  uint32_t largestBlock;     /**< Size of largest contiguous block available */
-  uint32_t allocatedHeap;    /**< Total allocated heap in bytes */
+  uint32_t freeHeap;      /**< Total free heap in bytes */
+  uint32_t minFreeHeap;   /**< Minimum free heap since boot */
+  uint32_t largestBlock;  /**< Size of largest contiguous block available */
+  uint32_t allocatedHeap; /**< Total allocated heap in bytes */
 
   /**
    * @brief Estimated fragmentation ratio (0.0-1.0)
@@ -41,12 +42,10 @@ struct HeapStats {
  * @note O(1) operation, safe to call frequently for monitoring
  */
 inline HeapStats captureHeap() {
-  return {
-    .freeHeap = ESP.getFreeHeap(),
-    .minFreeHeap = ESP.getMinFreeHeap(),
-    .largestBlock = ESP.getMaxAllocHeap(),
-    .allocatedHeap = heap_caps_get_allocated_size(MALLOC_CAP_DEFAULT)
-  };
+  return {.freeHeap = ESP.getFreeHeap(),
+          .minFreeHeap = ESP.getMinFreeHeap(),
+          .largestBlock = ESP.getMaxAllocHeap(),
+          .allocatedHeap = heap_caps_get_allocated_size(MALLOC_CAP_DEFAULT)};
 }
 
 /**
@@ -61,8 +60,8 @@ inline HeapStats captureHeap() {
 inline void logHeap(const char* label) {
   const auto stats = captureHeap();
   const float fragPct = stats.fragmentation() * 100.0f;
-  LOG_DBG("MEM", "%s: Free=%uB, Min=%uB, MaxBlock=%uB, Frag=%.1f%%",
-    label, stats.freeHeap, stats.minFreeHeap, stats.largestBlock, fragPct);
+  LOG_DBG("MEM", "%s: Free=%uB, Min=%uB, MaxBlock=%uB, Frag=%.1f%%", label, stats.freeHeap, stats.minFreeHeap,
+          stats.largestBlock, fragPct);
 }
 
 /**
@@ -100,11 +99,9 @@ inline bool checkCriticalHeap(uint32_t criticalThreshold = 50000, const char* la
   const auto stats = captureHeap();
   if (stats.freeHeap < criticalThreshold) {
     if (label) {
-      LOG_ERR("MEM", "CRITICAL LOW: %s, Free=%uB (below %uB threshold)",
-        label, stats.freeHeap, criticalThreshold);
+      LOG_ERR("MEM", "CRITICAL LOW: %s, Free=%uB (below %uB threshold)", label, stats.freeHeap, criticalThreshold);
     } else {
-      LOG_ERR("MEM", "CRITICAL LOW: Free=%uB (below %uB threshold)",
-        stats.freeHeap, criticalThreshold);
+      LOG_ERR("MEM", "CRITICAL LOW: Free=%uB (below %uB threshold)", stats.freeHeap, criticalThreshold);
     }
     return true;
   }

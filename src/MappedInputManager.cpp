@@ -1,8 +1,8 @@
 #include "MappedInputManager.h"
 
-#include "CrossPointSettings.h"
-
 #include <string>
+
+#include "CrossPointSettings.h"
 
 namespace {
 using ButtonIndex = uint8_t;
@@ -31,8 +31,7 @@ std::string sanitizeBackLabel(const char* label) {
   bool hadPrefix = false;
 
   // Handle the real UTF-8 left guillemet prefix first.
-  if (text.size() >= 2 && static_cast<unsigned char>(text[0]) == 0xC2 &&
-      static_cast<unsigned char>(text[1]) == 0xAB) {
+  if (text.size() >= 2 && static_cast<unsigned char>(text[0]) == 0xC2 && static_cast<unsigned char>(text[1]) == 0xAB) {
     text.erase(0, 2);
     hadPrefix = true;
   } else if (!text.empty() && static_cast<unsigned char>(text[0]) == 0xAB) {

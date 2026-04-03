@@ -340,12 +340,8 @@ void ReadingStatsDetailActivity::loop() {
     return;
   }
 
-  buttonNavigator.onPreviousRelease([&]() {
-    navigateBook(-1);
-  });
-  buttonNavigator.onNextRelease([&]() {
-    navigateBook(1);
-  });
+  buttonNavigator.onPreviousRelease([&]() { navigateBook(-1); });
+  buttonNavigator.onNextRelease([&]() { navigateBook(1); });
 
   if (coverLoadPending) {
     coverLoadPending = false;
@@ -370,9 +366,8 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const auto* book = findBook(bookPath);
   const bool hasBookNavigation = READING_STATS.getBooks().size() > 1;
   const auto& lastSessionSnapshot = READING_STATS.getLastSessionSnapshot();
-  const bool showCompletionBanner =
-      context.showSessionSummary && lastSessionSnapshot.valid && lastSessionSnapshot.path == bookPath &&
-      lastSessionSnapshot.completedThisSession;
+  const bool showCompletionBanner = context.showSessionSummary && lastSessionSnapshot.valid &&
+                                    lastSessionSnapshot.path == bookPath && lastSessionSnapshot.completedThisSession;
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
@@ -434,9 +429,9 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   renderer.drawText(UI_10_FONT_ID, textX, currentY, tr(STR_CURRENT_CHAPTER));
   currentY += renderer.getLineHeight(UI_10_FONT_ID) + 6;
 
-  const std::string currentChapter =
-      book->chapterTitle.empty() ? std::string(tr(STR_NOT_SET)) : book->chapterTitle;
-  const auto chapterLines = renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), textWidth, 2, EpdFontFamily::BOLD);
+  const std::string currentChapter = book->chapterTitle.empty() ? std::string(tr(STR_NOT_SET)) : book->chapterTitle;
+  const auto chapterLines =
+      renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), textWidth, 2, EpdFontFamily::BOLD);
   for (const auto& line : chapterLines) {
     renderer.drawText(UI_10_FONT_ID, textX, currentY, line.c_str(), true, EpdFontFamily::BOLD);
     currentY += renderer.getLineHeight(UI_10_FONT_ID);
@@ -444,34 +439,35 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
 
   int cardsTop = std::max(coverRect.y + coverRect.height, currentY) + metrics.verticalSpacing + 10;
   if (showCompletionBanner) {
-    drawSummaryBanner(renderer,
-                      Rect{metrics.contentSidePadding, cardsTop, pageWidth - metrics.contentSidePadding * 2,
-                           SUMMARY_BANNER_HEIGHT},
-                      tr(STR_BOOK_FINISHED), tr(STR_COMPLETED_THIS_SESSION), true);
+    drawSummaryBanner(
+        renderer,
+        Rect{metrics.contentSidePadding, cardsTop, pageWidth - metrics.contentSidePadding * 2, SUMMARY_BANNER_HEIGHT},
+        tr(STR_BOOK_FINISHED), tr(STR_COMPLETED_THIS_SESSION), true);
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
   }
 
   const int cardWidth = (pageWidth - metrics.contentSidePadding * 2 - METRIC_CARD_GAP) / 2;
 
-  drawMetricCard(renderer, Rect{metrics.contentSidePadding, cardsTop, cardWidth, METRIC_CARD_HEIGHT}, tr(STR_LAST_SESSION),
-                 formatDurationHm(book->lastSessionMs));
-  drawMetricCard(renderer, Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP, cardsTop, cardWidth,
-                                METRIC_CARD_HEIGHT},
-                 tr(STR_TOTAL_TIME), formatDurationHm(book->totalReadingMs));
+  drawMetricCard(renderer, Rect{metrics.contentSidePadding, cardsTop, cardWidth, METRIC_CARD_HEIGHT},
+                 tr(STR_LAST_SESSION), formatDurationHm(book->lastSessionMs));
+  drawMetricCard(
+      renderer, Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP, cardsTop, cardWidth, METRIC_CARD_HEIGHT},
+      tr(STR_TOTAL_TIME), formatDurationHm(book->totalReadingMs));
+  drawMetricCard(
+      renderer,
+      Rect{metrics.contentSidePadding, cardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth, METRIC_CARD_HEIGHT},
+      tr(STR_SESSIONS), std::to_string(book->sessions));
   drawMetricCard(renderer,
-                 Rect{metrics.contentSidePadding, cardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth,
-                      METRIC_CARD_HEIGHT},
-                 tr(STR_SESSIONS), std::to_string(book->sessions));
-  drawMetricCard(renderer, Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
-                                cardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth, METRIC_CARD_HEIGHT},
+                 Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
+                      cardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth, METRIC_CARD_HEIGHT},
                  tr(STR_STATUS), book->completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS)));
-  drawMetricCard(renderer, Rect{metrics.contentSidePadding,
-                                cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2,
-                                pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
+  drawMetricCard(renderer,
+                 Rect{metrics.contentSidePadding, cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2,
+                      pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
                  tr(STR_LAST_READ_DATE), formatDate(book->lastReadAt));
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "",
-                                            hasBookNavigation ? tr(STR_DIR_UP) : "",
-                                            hasBookNavigation ? tr(STR_DIR_DOWN) : "");
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BACK), Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "",
+                            hasBookNavigation ? tr(STR_DIR_UP) : "", hasBookNavigation ? tr(STR_DIR_DOWN) : "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

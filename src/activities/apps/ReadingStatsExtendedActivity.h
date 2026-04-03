@@ -1,8 +1,7 @@
 #pragma once
 
-#include "util/ButtonNavigator.h"
-
 #include "../Activity.h"
+#include "util/ButtonNavigator.h"
 
 class ReadingStatsExtendedActivity final : public Activity {
   ButtonNavigator buttonNavigator;

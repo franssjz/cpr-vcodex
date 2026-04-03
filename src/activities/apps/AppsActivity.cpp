@@ -1,16 +1,17 @@
 #include "AppsActivity.h"
 
-#include "AchievementsActivity.h"
 #include <GfxRenderer.h>
 #include <I18n.h>
 
 #include <algorithm>
-#include "ReadingStatsStore.h"
+
+#include "AchievementsActivity.h"
 #include "BookmarksAppActivity.h"
 #include "IfFoundActivity.h"
 #include "ReadMeActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingStatsActivity.h"
+#include "ReadingStatsStore.h"
 #include "SleepAppActivity.h"
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
@@ -96,11 +97,11 @@ void AppsActivity::render(RenderLock&&) {
   if (appShortcuts.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, contentTop + 24, tr(STR_NO_ENTRIES));
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(appShortcuts.size()),
-                 selectedIndex,
-                 [this](const int index) { return std::string(I18N.get(appShortcuts[index]->nameId)); },
-                 [this](const int index) { return getShortcutSubtitle(*appShortcuts[index]); },
-                 [this](const int index) { return appShortcuts[index]->icon; });
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(appShortcuts.size()), selectedIndex,
+        [this](const int index) { return std::string(I18N.get(appShortcuts[index]->nameId)); },
+        [this](const int index) { return getShortcutSubtitle(*appShortcuts[index]); },
+        [this](const int index) { return appShortcuts[index]->icon; });
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

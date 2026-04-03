@@ -106,9 +106,10 @@ void ShortcutLocationActivity::render(RenderLock&&) {
   if (entries.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, contentTop + 24, tr(STR_NO_ENTRIES));
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(entries.size()), selectedIndex,
-                 [this](const int index) { return std::string(I18N.get(entries[index]->nameId)); }, nullptr, nullptr,
-                 [this](const int index) { return std::string(getLocationLabel(*entries[index])); }, true);
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(entries.size()), selectedIndex,
+        [this](const int index) { return std::string(I18N.get(entries[index]->nameId)); }, nullptr, nullptr,
+        [this](const int index) { return std::string(getLocationLabel(*entries[index])); }, true);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

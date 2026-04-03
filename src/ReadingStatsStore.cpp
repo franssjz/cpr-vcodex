@@ -5,6 +5,7 @@
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
+
 #include <algorithm>
 #include <ctime>
 #include <numeric>
@@ -41,10 +42,9 @@ bool isIgnoredStatsPath(const std::string& path) {
 }
 
 void normalizeReadingDays(std::vector<ReadingDayStats>& readingDays) {
-  std::sort(readingDays.begin(), readingDays.end(),
-            [](const ReadingDayStats& left, const ReadingDayStats& right) {
-              return left.dayOrdinal < right.dayOrdinal;
-            });
+  std::sort(readingDays.begin(), readingDays.end(), [](const ReadingDayStats& left, const ReadingDayStats& right) {
+    return left.dayOrdinal < right.dayOrdinal;
+  });
 
   std::vector<ReadingDayStats> mergedDays;
   mergedDays.reserve(readingDays.size());
@@ -64,10 +64,9 @@ void addReadingToDays(std::vector<ReadingDayStats>& days, const uint32_t dayOrdi
     return;
   }
 
-  auto it = std::lower_bound(days.begin(), days.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) {
-                               return day.dayOrdinal < ordinal;
-                             });
+  auto it =
+      std::lower_bound(days.begin(), days.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == days.end() || it->dayOrdinal != dayOrdinal) {
     days.insert(it, ReadingDayStats{dayOrdinal, readingMs});
   } else {
@@ -108,10 +107,9 @@ const ReadingBookStats* ReadingStatsStore::findBook(const std::string& path) con
 
 ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
-  auto it = std::lower_bound(readingDays.begin(), readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) {
-                               return day.dayOrdinal < ordinal;
-                             });
+  auto it =
+      std::lower_bound(readingDays.begin(), readingDays.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }
@@ -120,10 +118,9 @@ ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSe
 
 ReadingDayStats& ReadingStatsStore::getOrCreateBookReadingDay(ReadingBookStats& book, const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
-  auto it = std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) {
-                               return day.dayOrdinal < ordinal;
-                             });
+  auto it =
+      std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == book.readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = book.readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }
@@ -143,7 +140,8 @@ uint32_t ReadingStatsStore::getLatestKnownTimestamp() const {
   return latestTimestamp;
 }
 
-uint32_t ReadingStatsStore::getReferenceTimestamp(const uint32_t preferredTimestamp, const uint32_t bookTimestamp) const {
+uint32_t ReadingStatsStore::getReferenceTimestamp(const uint32_t preferredTimestamp,
+                                                  const uint32_t bookTimestamp) const {
   if (isClockValid(preferredTimestamp)) {
     return preferredTimestamp;
   }
@@ -201,7 +199,8 @@ bool ReadingStatsStore::isClockValid(const uint32_t epochSeconds) { return TimeU
 
 bool ReadingStatsStore::shouldIgnorePath(const std::string& path) { return isIgnoredStatsPath(path); }
 
-void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t epochSeconds, const uint64_t readingMs) {
+void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t epochSeconds,
+                                          const uint64_t readingMs) {
   if (!isClockValid(epochSeconds) || readingMs == 0) {
     return;
   }
@@ -224,9 +223,7 @@ void ReadingStatsStore::rebuildAggregatedReadingDays() {
 bool ReadingStatsStore::removeIgnoredBooks() {
   const size_t originalCount = books.size();
   books.erase(std::remove_if(books.begin(), books.end(),
-                             [](const ReadingBookStats& book) {
-                               return shouldIgnorePath(book.path);
-                             }),
+                             [](const ReadingBookStats& book) { return shouldIgnorePath(book.path); }),
               books.end());
   return books.size() != originalCount;
 }
@@ -271,10 +268,8 @@ void ReadingStatsStore::rebuildSummaryCache() const {
   }
 
   if (cache.referenceDayOrdinal != 0) {
-    const uint32_t start7DayOrdinal =
-        (cache.referenceDayOrdinal >= 6) ? (cache.referenceDayOrdinal - 6) : 0;
-    const uint32_t start30DayOrdinal =
-        (cache.referenceDayOrdinal >= 29) ? (cache.referenceDayOrdinal - 29) : 0;
+    const uint32_t start7DayOrdinal = (cache.referenceDayOrdinal >= 6) ? (cache.referenceDayOrdinal - 6) : 0;
+    const uint32_t start30DayOrdinal = (cache.referenceDayOrdinal >= 29) ? (cache.referenceDayOrdinal - 29) : 0;
 
     std::vector<uint32_t> eligibleDays;
     eligibleDays.reserve(readingDays.size());
@@ -412,8 +407,8 @@ void ReadingStatsStore::resumeSession() {
   activeSession.lastInteractionMs = millis();
 }
 
-void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool completed, const std::string& chapterTitle,
-                                       const uint8_t chapterProgressPercent) {
+void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool completed,
+                                       const std::string& chapterTitle, const uint8_t chapterProgressPercent) {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
     return;
   }
@@ -516,9 +511,9 @@ void ReadingStatsStore::endSession() {
 
   auto& book = books[activeSession.bookIndex];
   const bool countedSession = activeSession.accumulatedMs >= MIN_SESSION_READING_MS;
-  const uint32_t sessionMs =
-      (activeSession.accumulatedMs > static_cast<uint64_t>(UINT32_MAX)) ? UINT32_MAX
-                                                                        : static_cast<uint32_t>(activeSession.accumulatedMs);
+  const uint32_t sessionMs = (activeSession.accumulatedMs > static_cast<uint64_t>(UINT32_MAX))
+                                 ? UINT32_MAX
+                                 : static_cast<uint32_t>(activeSession.accumulatedMs);
   if (countedSession) {
     book.sessions++;
     book.lastSessionMs = sessionMs;
@@ -581,14 +576,13 @@ uint64_t ReadingStatsStore::getRecentReadingMs(const uint32_t days) const {
 
   const uint32_t startDayOrdinal =
       (summaryCache.referenceDayOrdinal >= days - 1) ? (summaryCache.referenceDayOrdinal - (days - 1)) : 0;
-  uint64_t totalMs = std::accumulate(readingDays.begin(), readingDays.end(), uint64_t{0},
-                                     [&](uint64_t sum, const auto& day) {
-                                       if (day.dayOrdinal >= startDayOrdinal &&
-                                           day.dayOrdinal <= summaryCache.referenceDayOrdinal) {
-                                         return sum + day.readingMs;
-                                       }
-                                       return sum;
-                                     });
+  uint64_t totalMs =
+      std::accumulate(readingDays.begin(), readingDays.end(), uint64_t{0}, [&](uint64_t sum, const auto& day) {
+        if (day.dayOrdinal >= startDayOrdinal && day.dayOrdinal <= summaryCache.referenceDayOrdinal) {
+          return sum + day.readingMs;
+        }
+        return sum;
+      });
   return totalMs;
 }
 
