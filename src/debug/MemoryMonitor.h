@@ -19,10 +19,10 @@ namespace MemoryMonitor {
  * @brief Snapshot of heap statistics
  */
 struct HeapStats {
-  uint32_t freeHeap;        /**< Total free heap in bytes */
-  uint32_t minFreeHeap;     /**< Minimum free heap since boot */
-  uint32_t largestBlock;    /**< Size of largest contiguous block available */
-  uint32_t allocatedHeap;   /**< Total allocated heap in bytes */
+  uint32_t freeHeap;         /**< Total free heap in bytes */
+  uint32_t minFreeHeap;      /**< Minimum free heap since boot */
+  uint32_t largestBlock;     /**< Size of largest contiguous block available */
+  uint32_t allocatedHeap;    /**< Total allocated heap in bytes */
 
   /**
    * @brief Estimated fragmentation ratio (0.0-1.0)

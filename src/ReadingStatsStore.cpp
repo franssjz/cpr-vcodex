@@ -4,7 +4,6 @@
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
-
 #include <algorithm>
 #include <ctime>
 
@@ -41,7 +40,9 @@ bool isIgnoredStatsPath(const std::string& path) {
 
 void normalizeReadingDays(std::vector<ReadingDayStats>& readingDays) {
   std::sort(readingDays.begin(), readingDays.end(),
-            [](const ReadingDayStats& left, const ReadingDayStats& right) { return left.dayOrdinal < right.dayOrdinal; });
+            [](const ReadingDayStats& left, const ReadingDayStats& right) {
+              return left.dayOrdinal < right.dayOrdinal;
+            });
 
   std::vector<ReadingDayStats> mergedDays;
   mergedDays.reserve(readingDays.size());
@@ -62,7 +63,9 @@ void addReadingToDays(std::vector<ReadingDayStats>& days, const uint32_t dayOrdi
   }
 
   auto it = std::lower_bound(days.begin(), days.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+                             [](const ReadingDayStats& day, const uint32_t ordinal) {
+                               return day.dayOrdinal < ordinal;
+                             });
   if (it == days.end() || it->dayOrdinal != dayOrdinal) {
     days.insert(it, ReadingDayStats{dayOrdinal, readingMs});
   } else {
@@ -104,7 +107,9 @@ const ReadingBookStats* ReadingStatsStore::findBook(const std::string& path) con
 ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
   auto it = std::lower_bound(readingDays.begin(), readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+                             [](const ReadingDayStats& day, const uint32_t ordinal) {
+                               return day.dayOrdinal < ordinal;
+                             });
   if (it == readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }
@@ -114,7 +119,9 @@ ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSe
 ReadingDayStats& ReadingStatsStore::getOrCreateBookReadingDay(ReadingBookStats& book, const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
   auto it = std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+                             [](const ReadingDayStats& day, const uint32_t ordinal) {
+                               return day.dayOrdinal < ordinal;
+                             });
   if (it == book.readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = book.readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }

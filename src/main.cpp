@@ -12,12 +12,11 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
-
 #include <cstring>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "FirmwareVersion.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"

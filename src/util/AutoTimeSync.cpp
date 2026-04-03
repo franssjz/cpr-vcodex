@@ -1,16 +1,14 @@
 #include "AutoTimeSync.h"
 
 #include <algorithm>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <WiFi.h>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "Logging.h"
 #include "util/TimeUtils.h"
-
-// FreeRTOS includes for background task
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 namespace {
 constexpr uint32_t IDLE_THRESHOLD_MS = 10UL * 60UL * 1000UL;
