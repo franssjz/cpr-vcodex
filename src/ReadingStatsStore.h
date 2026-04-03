@@ -12,42 +12,42 @@ inline uint64_t getDailyReadingGoalMs() { return SETTINGS.getDailyGoalMs(); }
  * @brief Represents reading statistics for a single day
  */
 struct ReadingDayStats {
-  uint32_t dayOrdinal = 0;     /**< Day ordinal (days since epoch) */
-  uint64_t readingMs = 0;      /**< Total reading time in milliseconds for this day */
+  uint32_t dayOrdinal = 0;      /**< Day ordinal (days since epoch) */
+  uint64_t readingMs = 0;       /**< Total reading time in milliseconds for this day */
 };
 
 /**
  * @brief Represents reading statistics for a single book
  */
 struct ReadingBookStats {
-  std::string path;                       /**< File path of the book */
-  std::string title;                      /**< Book title */
-  std::string author;                     /**< Book author */
-  std::string coverBmpPath;               /**< Path to cover image */
-  std::string chapterTitle;               /**< Current chapter title */
+  std::string path;                        /**< File path of the book */
+  std::string title;                       /**< Book title */
+  std::string author;                      /**< Book author */
+  std::string coverBmpPath;                /**< Path to cover image */
+  std::string chapterTitle;                /**< Current chapter title */
   std::vector<ReadingDayStats> readingDays; /**< Reading time per day for this book */
-  uint64_t totalReadingMs = 0;            /**< Total reading time across all sessions */
-  uint32_t sessions = 0;                  /**< Number of reading sessions */
-  uint32_t lastSessionMs = 0;             /**< Duration of last session in milliseconds */
-  uint32_t firstReadAt = 0;               /**< Timestamp of first read (Unix epoch) */
-  uint32_t lastReadAt = 0;                /**< Timestamp of last read (Unix epoch) */
-  uint8_t lastProgressPercent = 0;        /**< Last reading progress percentage (0-100) */
-  uint8_t chapterProgressPercent = 0;     /**< Current chapter progress percentage (0-100) */
-  bool completed = false;                 /**< Whether the book has been completed */
+  uint64_t totalReadingMs = 0;             /**< Total reading time across all sessions */
+  uint32_t sessions = 0;                   /**< Number of reading sessions */
+  uint32_t lastSessionMs = 0;              /**< Duration of last session in milliseconds */
+  uint32_t firstReadAt = 0;                /**< Timestamp of first read (Unix epoch) */
+  uint32_t lastReadAt = 0;                 /**< Timestamp of last read (Unix epoch) */
+  uint8_t lastProgressPercent = 0;         /**< Last reading progress percentage (0-100) */
+  uint8_t chapterProgressPercent = 0;      /**< Current chapter progress percentage (0-100) */
+  bool completed = false;                  /**< Whether the book has been completed */
 };
 
 /**
  * @brief Snapshot of a reading session for analytics and achievements
  */
 struct ReadingSessionSnapshot {
-  bool valid = false;                       /**< Whether this snapshot is valid */
-  uint32_t serial = 0;                      /**< Unique session serial number */
-  std::string path;                         /**< Book path for this session */
-  uint32_t sessionMs = 0;                   /**< Session duration in milliseconds */
-  bool counted = false;                     /**< Whether this session counted toward statistics */
-  bool completedThisSession = false;        /**< Whether the book was completed in this session */
-  uint8_t startProgressPercent = 0;         /**< Progress at session start (0-100) */
-  uint8_t endProgressPercent = 0;           /**< Progress at session end (0-100) */
+  bool valid = false;                      /**< Whether this snapshot is valid */
+  uint32_t serial = 0;                     /**< Unique session serial number */
+  std::string path;                        /**< Book path for this session */
+  uint32_t sessionMs = 0;                  /**< Session duration in milliseconds */
+  bool counted = false;                    /**< Whether this session counted toward statistics */
+  bool completedThisSession = false;       /**< Whether the book was completed in this session */
+  uint8_t startProgressPercent = 0;        /**< Progress at session start (0-100) */
+  uint8_t endProgressPercent = 0;          /**< Progress at session end (0-100) */
 };
 };
 

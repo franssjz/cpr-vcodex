@@ -1,3 +1,4 @@
+
 #include "JsonSettingsIO.h"
 
 #include <ArduinoJson.h>
@@ -15,9 +16,9 @@
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
+#include "WifiCredentialStore.h"
 #include "util/ShortcutRegistry.h"
 #include "util/TimeZoneRegistry.h"
-#include "WifiCredentialStore.h"
 
 namespace {
 constexpr uint8_t FONT_SIZE_SCHEMA_VERSION = 2;
