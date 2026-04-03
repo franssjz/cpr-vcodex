@@ -1,0 +1,277 @@
+name: CI (Comprehensive Build & Test)
+
+# Triggers:
+# - On push to master and develop branches
+# - On pull requests to any branch
+# - Manual trigger (workflow_dispatch)
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Code formatting check using clang-format
+  clang-format:
+    name: Code Formatting (clang-format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install clang-format-21
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          sudo apt-get update
+          sudo apt-get install -y clang-format-21
+
+      - name: Run clang-format
+        run: |
+          PATH="/usr/lib/llvm-21/bin:$PATH" ./bin/clang-format-fix
+          git diff --exit-code || (echo "❌ Please run 'bin/clang-format-fix' to fix formatting issues" && exit 1)
+
+  # Static analysis using cppcheck
+  cppcheck:
+    name: Static Analysis (cppcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Run PlatformIO Check (cppcheck)
+        run: pio check --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+
+  # Build firmware (default development environment)
+  build:
+    name: Build Firmware (default)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Build Firmware (default environment)
+        run: |
+          set -euo pipefail
+          pio run -e default 2>&1 | tee pio-build.log
+
+      - name: Extract Firmware Build Stats
+        id: stats
+        run: |
+          set -euo pipefail
+          ram_line="$(grep -E "RAM:\s" -m1 pio-build.log || echo 'RAM: not found')"
+          flash_line="$(grep -E "Flash:\s" -m1 pio-build.log || echo 'Flash: not found')"
+          echo "ram=${ram_line}" >> $GITHUB_OUTPUT
+          echo "flash=${flash_line}" >> $GITHUB_OUTPUT
+          {
+            echo "## 📊 Firmware Build Stats"
+            echo "- ${ram_line}"
+            echo "- ${flash_line}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Firmware Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-default-build
+          path: .pio/build/default/firmware.bin
+          if-no-files-found: warn
+          retention-days: 10
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-build-logs
+          path: pio-build.log
+          if-no-files-found: warn
+          retention-days: 5
+
+  # Build vcodex_release environment
+  build-vcodex-release:
+    name: Build Firmware (vcodex_release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Build Firmware (vcodex_release environment)
+        run: |
+          set -euo pipefail
+          pio run -e vcodex_release 2>&1 | tee pio-vcodex-build.log
+
+      - name: Extract Firmware Build Stats
+        id: stats
+        run: |
+          set -euo pipefail
+          ram_line="$(grep -E "RAM:\s" -m1 pio-vcodex-build.log || echo 'RAM: not found')"
+          flash_line="$(grep -E "Flash:\s" -m1 pio-vcodex-build.log || echo 'Flash: not found')"
+          echo "ram=${ram_line}" >> $GITHUB_OUTPUT
+          echo "flash=${flash_line}" >> $GITHUB_OUTPUT
+          {
+            echo "## 📊 vcodex_release Build Stats"
+            echo "- ${ram_line}"
+            echo "- ${flash_line}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Firmware Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-vcodex-release-build
+          path: .pio/build/vcodex_release/firmware.bin
+          if-no-files-found: warn
+          retention-days: 10
+
+  # Placeholder for running unit/integration tests
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Check for test environment in platformio.ini
+        id: check-tests
+        run: |
+          if grep -q "^\[env:test\]" platformio.ini; then
+            echo "has-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run PlatformIO Tests (if available)
+        if: steps.check-tests.outputs.has-tests == 'true'
+        run: pio test --skip-default-envs
+
+      - name: Placeholder - No test environment defined
+        if: steps.check-tests.outputs.has-tests == 'false'
+        run: |
+          echo "⏭️  No [env:test] found in platformio.ini"
+          echo "To add tests, create a [env:test] environment in platformio.ini"
+          ls -la test/ 2>/dev/null || echo "No test/ directory found"
+
+  # CI status check gate - ensures all required jobs pass
+  ci-status:
+    name: CI Status Check
+    needs: [clang-format, cppcheck, build, build-vcodex-release, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI Status
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "❌ CI failed or was cancelled"
+            exit 1
+          else
+            echo "✅ All CI checks passed"
+          fi
