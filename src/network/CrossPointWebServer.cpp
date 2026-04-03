@@ -319,8 +319,7 @@ void CrossPointWebServer::handleStatus() const {
   // Get correct IP based on AP vs STA mode
   const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
 
-  // Fixed 4KB capacity prevents dynamic allocation and heap fragmentation
-  JsonDocument doc(4096);
+  JsonDocument doc;
   doc["version"] = CROSSPOINT_VERSION;
   doc["ip"] = ipAddr;
   doc["mode"] = apMode ? "AP" : "STA";
@@ -418,8 +417,7 @@ void CrossPointWebServer::handleFileListData() const {
   char output[512];
   constexpr size_t outputSize = sizeof(output);
   bool seenFirst = false;
-  // Fixed 4KB capacity for file list entries (prevents heap fragmentation during browsing)
-  JsonDocument doc(4096);
+  JsonDocument doc;
 
   scanFiles(currentPath.c_str(), [this, &output, &doc, seenFirst](const FileInfo& info) mutable {
     doc.clear();
@@ -926,8 +924,7 @@ void CrossPointWebServer::handleDelete() const {
 
   // Parse paths
   String pathsArg = server->arg("paths");
-  // Fixed 8KB capacity for path arrays (supports typical batch operations)
-  JsonDocument doc(8192);
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, pathsArg);
   if (error) {
     server->send(400, "text/plain", "Invalid paths format");
@@ -1040,8 +1037,7 @@ void CrossPointWebServer::handleGetSettings() const {
   char output[512];
   constexpr size_t outputSize = sizeof(output);
   bool seenFirst = false;
-  // Fixed 4KB capacity for settings list items
-  JsonDocument doc(4096);
+  JsonDocument doc;
 
   for (const auto& s : settings) {
     if (!s.key) continue;  // Skip ACTION-only entries
@@ -1121,8 +1117,7 @@ void CrossPointWebServer::handlePostSettings() {
   }
 
   const String body = server->arg("plain");
-  // Fixed 8KB capacity for incoming settings POST (accommodates all settings in one request)
-  JsonDocument doc(8192);
+  JsonDocument doc;
   const DeserializationError err = deserializeJson(doc, body);
   if (err) {
     server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
