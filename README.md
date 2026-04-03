@@ -34,8 +34,8 @@ This project is **not affiliated with Xteink**.
 |---|---|
 | Base firmware | CrossPoint Reader |
 | Device | Xteink X4 |
-| Current release | `1.1.17-vcodex` |
-| Version code | `2026040201` |
+| Current release | `1.1.20-vcodex` |
+| Version code | `2026040310` |
 | Release notes | [CHANGELOG.md](./CHANGELOG.md) |
 | Recommended install | browser OTA fast flash |
 

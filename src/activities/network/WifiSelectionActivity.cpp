@@ -18,6 +18,9 @@
 #include "fontIds.h"
 #include "util/TimeUtils.h"
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
 
@@ -260,13 +263,28 @@ void WifiSelectionActivity::checkConnectionStatus() {
     }
 
     if (SETTINGS.autoSyncDay) {
-      LOG_DBG("WIFI", "Auto-syncing date/time after Wi-Fi connection");
-      TimeUtils::syncTimeWithNtp();
-      const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
-      if (currentValidTimestamp > 0) {
-        APP_STATE.lastKnownValidTimestamp = std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
-        APP_STATE.saveToFile();
-      }
+      LOG_DBG("WIFI", "Queueing non-blocking NTP sync after Wi-Fi connection");
+      // Queue background NTP sync task to avoid blocking UI (was 5s synchronous call)
+      // This prevents WiFi UI freeze while time sync completes
+      xTaskCreate(
+          [](void* param) {
+            LOG_DBG("WIFI", "Background Wi-Fi NTP sync task started");
+            const bool synced = TimeUtils::syncTimeWithNtp(5000);
+            TimeUtils::stopNtp();
+            if (synced) {
+              const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
+              if (currentValidTimestamp > 0) {
+                APP_STATE.lastKnownValidTimestamp =
+                    std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
+                APP_STATE.saveToFile();
+                LOG_DBG("WIFI", "Background Wi-Fi NTP sync succeeded");
+              }
+            } else {
+              LOG_ERR("WIFI", "Background Wi-Fi NTP sync failed");
+            }
+            vTaskDelete(nullptr);
+          },
+          "wifi_ntp_sync", 4096, nullptr, 1, nullptr);
     }
 
     // If we entered a new password, ask if user wants to save it

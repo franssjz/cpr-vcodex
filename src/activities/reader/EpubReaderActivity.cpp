@@ -208,6 +208,7 @@ void EpubReaderActivity::loop() {
   }
 
   READING_STATS.tickActiveSession();
+  bookmarkStore.saveIfDeferredIntervalElapsed();  // Flush bookmarks if 60s since last save
   AutoTimeSync::noteReaderInteraction(mappedInput);
   AutoTimeSync::pollReaderSync();
 
@@ -245,7 +246,8 @@ void EpubReaderActivity::loop() {
       const bool wasBookmarked = bookmarkStore.has(spineIndex, pageNumber);
       const std::string snippet = wasBookmarked ? "" : extractBookmarkSnippet(*section);
       const bool addedBookmark = bookmarkStore.toggle(spineIndex, pageNumber, snippet);
-      bookmarkStore.save();
+      // Defer bookmark saves to reduce I/O jank (saves every 60s instead of every toggle)
+      // Loop will call saveIfDeferredIntervalElapsed() to flush when interval elapsed
       if (addedBookmark && epub && !READING_STATS.shouldIgnorePath(epub->getPath())) {
         ACHIEVEMENTS.recordBookmarkAdded();
       }
