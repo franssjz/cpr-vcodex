@@ -40,13 +40,13 @@ std::string formatDurationHm(const uint64_t totalMs) {
   return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
 }
 
-void drawCheckBadge(GfxRenderer& renderer, const int x, const int y) {
+void drawCheckBadge(const GfxRenderer& renderer, const int x, const int y) {
   renderer.fillRect(x, y, 18, 18, true);
   renderer.drawLine(x + 4, y + 10, x + 7, y + 13, 2, false);
   renderer.drawLine(x + 7, y + 13, x + 13, y + 5, 2, false);
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
                     const bool showCheck = false) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
@@ -72,7 +72,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawRecentWindowCard(GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
+void drawRecentWindowCard(const GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
   drawMetricCard(renderer, rect, periodLabel, value);
 }
 
@@ -179,12 +179,11 @@ std::vector<ChartBar> getRecentDailyReadingBars() {
                                     ? referenceDayOrdinal - static_cast<uint32_t>(6 - index)
                                     : 0;
     bars[index].bottomLabel = formatDayLabel(dayOrdinal);
-    for (const auto& day : readingDays) {
-      if (day.dayOrdinal == dayOrdinal) {
-        bars[index].readingMs = day.readingMs;
-        bars[index].topLabel = formatMinutesLabel(day.readingMs);
-        break;
-      }
+    const auto dayIt = std::find_if(readingDays.begin(), readingDays.end(),
+                                    [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+    if (dayIt != readingDays.end()) {
+      bars[index].readingMs = dayIt->readingMs;
+      bars[index].topLabel = formatMinutesLabel(dayIt->readingMs);
     }
   }
 
@@ -243,7 +242,7 @@ int getMaxScrollOffset(const GfxRenderer& renderer, const ThemeMetrics& metrics)
   return std::max(0, getScrollableContentBottom(renderer, metrics) - visibleHeight);
 }
 
-void drawReadingChart(GfxRenderer& renderer, const Rect& rect, const std::vector<ChartBar>& bars,
+void drawReadingChart(const GfxRenderer& renderer, const Rect& rect, const std::vector<ChartBar>& bars,
                       const bool rotateBottomLabels) {
   if (bars.empty()) {
     return;
@@ -264,10 +263,9 @@ void drawReadingChart(GfxRenderer& renderer, const Rect& rect, const std::vector
   const int barWidth = std::max(minBarWidth, (innerRight - innerLeft - barGap * (barCount - 1)) / barCount);
   const int usedWidth = barWidth * barCount + barGap * (barCount - 1);
   const int chartLeft = rect.x + (rect.width - usedWidth) / 2;
-  uint64_t maxValue = 1;
-  for (const auto& bar : bars) {
-    maxValue = std::max(maxValue, bar.readingMs);
-  }
+  const auto maxIt = std::max_element(bars.begin(), bars.end(),
+                                      [](const ChartBar& a, const ChartBar& b) { return a.readingMs < b.readingMs; });
+  const uint64_t maxValue = std::max(uint64_t{1}, maxIt != bars.end() ? maxIt->readingMs : uint64_t{0});
 
   renderer.drawLine(innerLeft - 2, baselineY, innerRight + 2, baselineY, 2, true);
 

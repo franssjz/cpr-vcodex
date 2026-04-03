@@ -49,7 +49,7 @@ const char* emptyStateLabel(const bool completed) {
   return completed ? tr(STR_NO_COMPLETED_ACHIEVEMENTS) : tr(STR_NO_PENDING_ACHIEVEMENTS);
 }
 
-void drawLockIcon(GfxRenderer& renderer, const int x, const int y, const bool inverted) {
+void drawLockIcon(const GfxRenderer& renderer, const int x, const int y, const bool inverted) {
   renderer.drawRect(x + 5, y + 9, 14, 11, inverted);
   renderer.drawLine(x + 8, y + 9, x + 8, y + 6, inverted);
   renderer.drawLine(x + 15, y + 9, x + 15, y + 6, inverted);
@@ -59,7 +59,7 @@ void drawLockIcon(GfxRenderer& renderer, const int x, const int y, const bool in
   renderer.fillRect(x + 11, y + 13, 2, 4, inverted);
 }
 
-void drawTrophyIcon(GfxRenderer& renderer, const int x, const int y, const bool inverted) {
+void drawTrophyIcon(const GfxRenderer& renderer, const int x, const int y, const bool inverted) {
   renderer.drawRect(x + 7, y + 4, 10, 8, inverted);
   renderer.drawLine(x + 7, y + 6, x + 5, y + 6, inverted);
   renderer.drawLine(x + 5, y + 6, x + 5, y + 10, inverted);

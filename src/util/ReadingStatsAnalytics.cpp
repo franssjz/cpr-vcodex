@@ -108,11 +108,11 @@ std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {
 TimelineDayEntry buildTimelineDayEntry(const uint32_t dayOrdinal) {
   TimelineDayEntry entry;
   entry.dayOrdinal = dayOrdinal;
-  for (const auto& day : READING_STATS.getReadingDays()) {
-    if (day.dayOrdinal == dayOrdinal) {
-      entry.totalReadingMs = day.readingMs;
-      break;
-    }
+  const auto& readingDays = READING_STATS.getReadingDays();
+  const auto dayIt = std::find_if(readingDays.begin(), readingDays.end(),
+                                  [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+  if (dayIt != readingDays.end()) {
+    entry.totalReadingMs = dayIt->readingMs;
   }
 
   const auto books = getBooksReadOnDay(dayOrdinal);

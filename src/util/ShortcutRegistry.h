@@ -88,12 +88,10 @@ struct ShortcutOrderEntry {
 };
 
 inline const ShortcutDefinition* findShortcutDefinition(const ShortcutId id) {
-  for (const auto& definition : getShortcutDefinitions()) {
-    if (definition.id == id) {
-      return &definition;
-    }
-  }
-  return nullptr;
+  const auto& defs = getShortcutDefinitions();
+  const auto it = std::find_if(defs.begin(), defs.end(),
+                               [id](const ShortcutDefinition& def) { return def.id == id; });
+  return it != defs.end() ? &(*it) : nullptr;
 }
 
 inline uint8_t getShortcutOrder(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
@@ -104,6 +102,7 @@ inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const Shortcut
   return settings.*(definition.orderPtr);
 }
 
+// cppcheck-suppress constParameterReference -- settings cannot be const: we return a mutable reference to its member
 inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const ShortcutOrderEntry& entry) {
   return entry.isAppsHub ? settings.appsHubShortcutOrder : settings.*(entry.definition->orderPtr);
 }
@@ -126,10 +125,12 @@ inline void normalizeShortcutOrderSettings(CrossPointSettings& settings) {
   slots.reserve(getShortcutDefinitions().size() + 1);
   slots.push_back(OrderSlot{0, &settings.appsHubShortcutOrder});
 
+  const auto& defs = getShortcutDefinitions();
   int stableIndex = 1;
-  for (const auto& definition : getShortcutDefinitions()) {
-    slots.push_back(OrderSlot{stableIndex++, &(settings.*(definition.orderPtr))});
-  }
+  std::transform(defs.begin(), defs.end(), std::back_inserter(slots),
+                 [&stableIndex, &settings](const ShortcutDefinition& definition) {
+                   return OrderSlot{stableIndex++, &(settings.*(definition.orderPtr))};
+                 });
 
   std::stable_sort(slots.begin(), slots.end(), [](const OrderSlot& lhs, const OrderSlot& rhs) {
     if (*lhs.value != *rhs.value) {

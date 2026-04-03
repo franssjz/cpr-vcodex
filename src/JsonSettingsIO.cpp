@@ -118,14 +118,13 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
 }
 
 /**
- * @brief Safely load JSON document with validation and fixed capacity
+ * @brief Safely load JSON document with validation
  * @param moduleName Module identifier for logging
  * @param path File path to load from
- * @param doc JsonDocument to populate (must have fixed capacity)
+ * @param doc JsonDocument to populate
  * @param requiredFields Array of required field names for validation
  * @return true if loaded and validated successfully
  *
- * Uses fixed capacity to prevent dynamic memory allocation and heap fragmentation.
  * Validates required fields to prevent crashes from corrupted JSON files.
  */
 bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument& doc,
@@ -229,9 +228,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
 // ---- CrossPointSettings ----
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
-  // Use fixed 16KB capacity to prevent dynamic memory allocation
-  // This prevents heap fragmentation when settings are saved frequently
-  JsonDocument doc(16384);
+  JsonDocument doc;
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
@@ -287,9 +284,9 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepShortcutVisible"] = s.sleepShortcutVisible;
   doc["fontSizeSchemaVersion"] = FONT_SIZE_SCHEMA_VERSION;
 
-  // Check for capacity overflow before writing
+  // Check for allocation failures
   if (doc.overflowed()) {
-    LOG_ERR("CPS", "Settings JSON document exceeded 16KB capacity, save aborted");
+    LOG_ERR("CPS", "Settings JSON document allocation failed, save aborted");
     return false;
   }
 
@@ -298,8 +295,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
 bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool* needsResave) {
   if (needsResave) *needsResave = false;
-  // Use fixed 16KB capacity for consistent memory behavior and to detect oversized payloads
-  JsonDocument doc(16384);
+  JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
@@ -307,7 +303,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   if (doc.overflowed()) {
-    LOG_ERR("CPS", "Settings JSON exceeded 16KB capacity (possible corruption or attack)");
+    LOG_ERR("CPS", "Settings JSON allocation failed (possible corruption or attack)");
     return false;
   }
 
@@ -691,7 +687,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
 }
 
 bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json) {
-  JsonDocument doc(8192); // Fixed 8KB capacity to prevent dynamic allocation and heap fragmentation
+  JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("RST", "JSON parse error: %s", error.c_str());
@@ -759,7 +755,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
 }
 
 bool JsonSettingsIO::loadReadingStatsFromFile(ReadingStatsStore& store, const char* path) {
-  JsonDocument doc(8192); // Fixed 8KB capacity for memory efficiency
+  JsonDocument doc;
   std::vector<const char*> requiredFields = {"formatVersion", "books"};
   if (!safeLoadJsonDocument("RST", path, doc, requiredFields)) {
     return false;

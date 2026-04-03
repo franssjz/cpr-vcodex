@@ -13,6 +13,6 @@ struct DisplayDateInfo {
 
 DisplayDateInfo getDisplayDateInfo();
 std::string getDisplayDateText();
-void drawHeaderWithDate(GfxRenderer& renderer, const char* title, const char* subtitle = nullptr);
+void drawHeaderWithDate(const GfxRenderer& renderer, const char* title, const char* subtitle = nullptr);
 
 }  // namespace HeaderDateUtils

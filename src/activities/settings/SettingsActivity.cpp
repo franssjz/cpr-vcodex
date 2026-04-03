@@ -522,8 +522,8 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
   }
 
   int firstVisibleIndex = 0;
-  int visibleWindowHeight = 0;
   if (selectedSettingIndex > 0) {
+    int visibleWindowHeight = 0;
     const int selectedIndex = std::clamp(selectedSettingIndex - 1, 0, settingsCount - 1);
     for (int index = 0; index <= selectedIndex; ++index) {
       visibleWindowHeight += getItemHeight(settings[index]);

@@ -24,15 +24,13 @@ constexpr int PROGRESS_BAR_HEIGHT = 8;
 constexpr int TITLE_TOP_GAP = 10;
 
 uint8_t getBookProgressPercent(const RecentBook& recentBook) {
-  for (const auto& book : READING_STATS.getBooks()) {
-    if (book.path == recentBook.path) {
-      return book.lastProgressPercent;
-    }
-  }
-  return 0;
+  const auto& books = READING_STATS.getBooks();
+  const auto it = std::find_if(books.begin(), books.end(),
+                               [&recentBook](const ReadingBookStats& book) { return book.path == recentBook.path; });
+  return it != books.end() ? it->lastProgressPercent : 0;
 }
 
-void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
+void drawMiniProgressBar(const GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
   const int fillWidth = std::max(0, (rect.width - 4) * std::min<int>(progressPercent, 100) / 100);
   if (fillWidth > 0) {

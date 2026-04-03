@@ -33,6 +33,7 @@ bool SleepImageUtils::isSleepDirectoryName(const std::string& name) {
   }
 
   std::string baseName = name;
+  // cppcheck-suppress knownConditionTrueFalse -- name is checked non-empty above, so baseName is non-empty here
   if (!baseName.empty() && baseName.front() == '/') {
     baseName.erase(baseName.begin());
   }

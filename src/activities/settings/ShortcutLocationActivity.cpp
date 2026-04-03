@@ -22,9 +22,9 @@ const char* getLocationLabel(const ShortcutDefinition& definition) {
 void ShortcutLocationActivity::reloadEntries() {
   entries.clear();
   entries.reserve(getShortcutDefinitions().size());
-  for (const auto& definition : getShortcutDefinitions()) {
-    entries.push_back(&definition);
-  }
+  const auto& defs = getShortcutDefinitions();
+  std::transform(defs.begin(), defs.end(), std::back_inserter(entries),
+                 [](const ShortcutDefinition& def) { return &def; });
 
   std::stable_sort(entries.begin(), entries.end(), [](const ShortcutDefinition* lhs, const ShortcutDefinition* rhs) {
     return getShortcutOrder(*lhs) < getShortcutOrder(*rhs);
