@@ -31,21 +31,19 @@ namespace {
 constexpr unsigned long skipPageMs = 700;
 constexpr unsigned long goHomeMs = 1000;
 
-const xtc::ChapterInfo* findCurrentChapter(Xtc& xtc, const uint32_t currentPage) {
+const xtc::ChapterInfo* findCurrentChapter(const Xtc& xtc, const uint32_t currentPage) {
   if (!xtc.hasChapters()) {
     return nullptr;
   }
 
   const auto& chapters = xtc.getChapters();
-  for (const auto& chapter : chapters) {
-    if (currentPage >= chapter.startPage && currentPage <= chapter.endPage) {
-      return &chapter;
-    }
-  }
-  return nullptr;
+  const auto it = std::find_if(chapters.begin(), chapters.end(), [currentPage](const xtc::ChapterInfo& chapter) {
+    return currentPage >= chapter.startPage && currentPage <= chapter.endPage;
+  });
+  return it != chapters.end() ? &(*it) : nullptr;
 }
 
-std::string getChapterTitleForStats(Xtc& xtc, const uint32_t currentPage) {
+std::string getChapterTitleForStats(const Xtc& xtc, const uint32_t currentPage) {
   const auto* chapter = findCurrentChapter(xtc, currentPage);
   if (!chapter) {
     return "";
@@ -53,16 +51,13 @@ std::string getChapterTitleForStats(Xtc& xtc, const uint32_t currentPage) {
   return chapter->name;
 }
 
-uint8_t getChapterProgressForStats(Xtc& xtc, const uint32_t currentPage) {
+uint8_t getChapterProgressForStats(const Xtc& xtc, const uint32_t currentPage) {
   const auto* chapter = findCurrentChapter(xtc, currentPage);
   if (!chapter || chapter->endPage < chapter->startPage) {
     return 0;
   }
 
   const uint32_t chapterLength = static_cast<uint32_t>(chapter->endPage - chapter->startPage + 1);
-  if (chapterLength == 0) {
-    return 0;
-  }
 
   const uint32_t pageOffset = static_cast<uint32_t>(currentPage - chapter->startPage + 1);
   return static_cast<uint8_t>(std::min<uint32_t>(100, (pageOffset * 100 + chapterLength / 2) / chapterLength));

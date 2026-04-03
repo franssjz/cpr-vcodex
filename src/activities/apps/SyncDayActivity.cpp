@@ -27,7 +27,7 @@ void wifiOff() {
   delay(100);
 }
 
-void drawInfoCard(GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& primaryLine,
+void drawInfoCard(const GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& primaryLine,
                   const std::string& secondaryLine = "", const std::string& tertiaryLine = "") {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
@@ -106,7 +106,7 @@ std::string getTimeSourceLabel(const bool clockValid, const bool syncedThisBoot,
   return tr(STR_TIME_SOURCE_UNAVAILABLE);
 }
 
-void drawDiagnosticCard(GfxRenderer& renderer, const Rect& rect) {
+void drawDiagnosticCard(const GfxRenderer& renderer, const Rect& rect) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
@@ -163,7 +163,6 @@ void drawDiagnosticCard(GfxRenderer& renderer, const Rect& rect) {
     top += 2;
     const std::string note = renderer.truncatedText(UI_10_FONT_ID, tr(STR_SYNC_DATE_STALE_NOTE), textWidth);
     renderer.drawText(UI_10_FONT_ID, left, top, note.c_str(), true, EpdFontFamily::BOLD);
-    top += lineHeight;
   }
 }
 }  // namespace

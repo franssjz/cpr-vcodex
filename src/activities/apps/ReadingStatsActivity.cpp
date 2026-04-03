@@ -43,13 +43,13 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
 }
 
-void drawCheckBadge(GfxRenderer& renderer, const int x, const int y) {
+void drawCheckBadge(const GfxRenderer& renderer, const int x, const int y) {
   renderer.fillRect(x, y, 18, 18, true);
   renderer.drawLine(x + 4, y + 10, x + 7, y + 13, 2, false);
   renderer.drawLine(x + 7, y + 13, x + 13, y + 5, 2, false);
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
                     const bool showCheck = false) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
@@ -75,7 +75,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawRecentWindowCard(GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
+void drawRecentWindowCard(const GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
@@ -89,7 +89,7 @@ void drawRecentWindowCard(GfxRenderer& renderer, const Rect& rect, const char* p
   renderer.drawText(valueFontId, rect.x + 12, rect.y + 24, truncatedValue.c_str(), true, EpdFontFamily::BOLD);
 }
 
-void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
+void drawMoreDetailsButton(const GfxRenderer& renderer, const Rect& rect, const bool selected) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   }
@@ -102,7 +102,7 @@ void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool s
   renderer.drawText(UI_12_FONT_ID, textX, textY, label, true, EpdFontFamily::BOLD);
 }
 
-void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
+void drawMiniProgressBar(const GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
   const int innerWidth = std::max(0, rect.width - 4);
   const int fillWidth = innerWidth * std::min<int>(percent, 100) / 100;
@@ -111,7 +111,7 @@ void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t 
   }
 }
 
-void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats& book, const bool selected) {
+void drawBookRow(const GfxRenderer& renderer, const Rect& rect, const ReadingBookStats& book, const bool selected) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
     renderer.drawRect(rect.x, rect.y, rect.width, rect.height);

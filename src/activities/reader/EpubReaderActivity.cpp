@@ -48,7 +48,7 @@ int clampPercent(int percent) {
   return percent;
 }
 
-std::string getStatsChapterTitle(Epub& epub, const int spineIndex) {
+std::string getStatsChapterTitle(const Epub& epub, const int spineIndex) {
   int tocIndex = epub.getTocIndexForSpineIndex(spineIndex);
   if (tocIndex < 0) {
     int nearestTocIndex = -1;

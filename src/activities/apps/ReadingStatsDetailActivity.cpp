@@ -93,12 +93,10 @@ std::string formatDurationHm(const uint64_t totalMs) {
 }
 
 const ReadingBookStats* findBook(const std::string& bookPath) {
-  for (const auto& book : READING_STATS.getBooks()) {
-    if (book.path == bookPath) {
-      return &book;
-    }
-  }
-  return nullptr;
+  const auto& books = READING_STATS.getBooks();
+  const auto it = std::find_if(books.begin(), books.end(),
+                               [&bookPath](const ReadingBookStats& book) { return book.path == bookPath; });
+  return it != books.end() ? &(*it) : nullptr;
 }
 
 std::string resolveStoredCoverPath(const std::string& coverBmpPath) {
@@ -210,7 +208,7 @@ std::string formatDate(const uint32_t timestamp) {
   return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
@@ -224,7 +222,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   renderer.drawText(UI_10_FONT_ID, rect.x + 12, rect.y + METRIC_CARD_LABEL_Y, truncatedLabel.c_str());
 }
 
-void drawSummaryBanner(GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& summary,
+void drawSummaryBanner(const GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& summary,
                        const bool inverted = false) {
   if (inverted) {
     renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, 6, Color::Black);
@@ -243,7 +241,7 @@ void drawSummaryBanner(GfxRenderer& renderer, const Rect& rect, const char* titl
   }
 }
 
-void drawProgressBlock(GfxRenderer& renderer, const Rect& rect, const char* label, const uint8_t percent) {
+void drawProgressBlock(const GfxRenderer& renderer, const Rect& rect, const char* label, const uint8_t percent) {
   const std::string percentText = std::to_string(std::min<int>(percent, 100)) + "%";
   const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percentText.c_str(), EpdFontFamily::BOLD);
 
@@ -259,7 +257,7 @@ void drawProgressBlock(GfxRenderer& renderer, const Rect& rect, const char* labe
   }
 }
 
-void drawCover(GfxRenderer& renderer, const Rect& rect, const std::string& coverPath) {
+void drawCover(const GfxRenderer& renderer, const Rect& rect, const std::string& coverPath) {
   const auto drawFallback = [&renderer, &rect]() {
     const char* label = tr(STR_BOOK);
     const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::BOLD);

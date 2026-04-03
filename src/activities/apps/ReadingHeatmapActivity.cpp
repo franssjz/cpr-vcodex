@@ -118,7 +118,7 @@ int getHeatLevel(const uint64_t readingMs) {
   return 4;
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
@@ -139,7 +139,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
+void drawGoalCheckBadge(const GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
   constexpr int checkWidth = 20;
   constexpr int checkHeight = 16;
   constexpr int paddingRight = 7;
@@ -153,7 +153,7 @@ void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool dark
   renderer.drawLine(checkX + 5, checkY + 13, checkX + 17, checkY + 1, 4, checkColor);
 }
 
-void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& cell) {
+void drawHeatCell(const GfxRenderer& renderer, const Rect& rect, const HeatmapCell& cell) {
   const int level = cell.inViewedMonth ? getHeatLevel(cell.readingMs) : 0;
   const Rect fillRect{rect.x + 1, rect.y + 1, std::max(0, rect.width - 2), std::max(0, rect.height - 2)};
   bool textBlack = true;
@@ -200,7 +200,7 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
   }
 }
 
-void drawLegendSwatch(GfxRenderer& renderer, const Rect& rect, const int level) {
+void drawLegendSwatch(const GfxRenderer& renderer, const Rect& rect, const int level) {
   const Rect heatRect{rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2};
 
   switch (level) {
@@ -253,7 +253,6 @@ std::array<HeatmapCell, 42> buildHeatmapCells(const int year, const unsigned mon
                                               const uint32_t selectedDayOrdinal) {
   std::array<HeatmapCell, 42> cells{};
   const uint32_t firstDayOrdinal = TimeUtils::getDayOrdinalForDate(year, month, 1);
-  const unsigned daysInMonth = getDaysInMonth(year, month);
   const int firstWeekday = static_cast<int>((firstDayOrdinal + 3U) % 7U);  // Monday = 0
   const uint32_t gridStartOrdinal = firstDayOrdinal - static_cast<uint32_t>(firstWeekday);
 
@@ -284,7 +283,7 @@ std::array<HeatmapCell, 42> buildHeatmapCells(const int year, const unsigned mon
   return cells;
 }
 
-void drawLegend(GfxRenderer& renderer, const Rect& rect) {
+void drawLegend(const GfxRenderer& renderer, const Rect& rect) {
   struct LegendLevel {
     int level;
     const char* label;
@@ -318,10 +317,10 @@ void ReadingHeatmapActivity::onEnter() {
 }
 
 void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
-  int currentYear = 0;
-  unsigned currentMonth = 0;
   unsigned currentDay = 1;
   if (selectedDayOrdinal != 0) {
+    int currentYear = 0;
+    unsigned currentMonth = 0;
     TimeUtils::getDateFromDayOrdinal(selectedDayOrdinal, currentYear, currentMonth, currentDay);
   }
 
@@ -342,19 +341,6 @@ void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
   requestUpdate();
 }
 
-void ReadingHeatmapActivity::goToReferenceMonth() {
-  uint32_t referenceDayOrdinal = 0;
-  int year = 0;
-  unsigned month = 0;
-  resolveReferenceMonth(year, month, referenceDayOrdinal);
-  if (year == viewedYear && month == viewedMonth) {
-    return;
-  }
-  viewedYear = year;
-  viewedMonth = month;
-  resetSelectedDay();
-  requestUpdate();
-}
 
 void ReadingHeatmapActivity::resetSelectedDay() {
   uint32_t referenceDayOrdinal = 0;

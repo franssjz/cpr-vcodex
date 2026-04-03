@@ -33,7 +33,7 @@ bool SleepImageUtils::isSleepDirectoryName(const std::string& name) {
   }
 
   std::string baseName = name;
-  if (!baseName.empty() && baseName.front() == '/') {
+  if (baseName.front() == '/') {
     baseName.erase(baseName.begin());
   }
   if (!baseName.empty() && baseName.front() == '.') {

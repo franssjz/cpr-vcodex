@@ -64,7 +64,7 @@ std::string HeaderDateUtils::getDisplayDateText() {
   return formatHeaderDateText(info.timestamp, info.usedFallback);
 }
 
-void HeaderDateUtils::drawHeaderWithDate(GfxRenderer& renderer, const char* title, const char* subtitle) {
+void HeaderDateUtils::drawHeaderWithDate(const GfxRenderer& renderer, const char* title, const char* subtitle) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, title, subtitle);
