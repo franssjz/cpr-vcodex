@@ -672,8 +672,15 @@ bool ReadingStatsStore::loadFromFile() {
 
   const bool loaded = JsonSettingsIO::loadReadingStatsFromFile(*this, READING_STATS_FILE_JSON);
   if (loaded) {
+    // Pre-reserve vector capacities to reduce heap fragmentation
+    // Reserve reasonable initial sizes based on typical usage
+    books.reserve(std::max<size_t>(books.size() + 10, 50));
+    readingDays.reserve(std::max<size_t>(readingDays.size() + 30, 365));
+    legacyReadingDays.reserve(std::max<size_t>(legacyReadingDays.size() + 30, 365));
+    
     normalizeReadingDays(readingDays);
     for (auto& book : books) {
+      book.readingDays.reserve(std::max<size_t>(book.readingDays.size() + 7, 30));
       normalizeReadingDays(book.readingDays);
     }
     removeIgnoredBooks();

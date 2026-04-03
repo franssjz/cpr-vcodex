@@ -83,6 +83,34 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
   }
   return true;
 }
+
+/**
+ * @brief Safely load JSON document with validation and fixed capacity
+ * @param moduleName Module identifier for logging
+ * @param path File path to load from
+ * @param doc JsonDocument to populate (must have fixed capacity)
+ * @param requiredFields Array of required field names for validation
+ * @return true if loaded and validated successfully
+ * 
+ * Uses fixed capacity to prevent dynamic memory allocation and heap fragmentation.
+ * Validates required fields to prevent crashes from corrupted JSON files.
+ */
+bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument& doc, 
+                         const std::vector<const char*>& requiredFields = {}) {
+  if (!loadJsonDocumentFromFile(moduleName, path, doc)) {
+    return false;
+  }
+  
+  // Validate required fields to prevent runtime crashes
+  for (const char* field : requiredFields) {
+    if (!doc.containsKey(field)) {
+      LOG_ERR(moduleName, "Invalid JSON: missing required field '%s'", field);
+      return false;
+    }
+  }
+  
+  return true;
+}
 }  // namespace
 
 // Convert legacy settings.
@@ -586,7 +614,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
 }
 
 bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json) {
-  JsonDocument doc;
+  JsonDocument doc(8192); // Fixed 8KB capacity to prevent dynamic allocation and heap fragmentation
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("RST", "JSON parse error: %s", error.c_str());
@@ -654,8 +682,9 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
 }
 
 bool JsonSettingsIO::loadReadingStatsFromFile(ReadingStatsStore& store, const char* path) {
-  JsonDocument doc;
-  if (!loadJsonDocumentFromFile("RST", path, doc)) {
+  JsonDocument doc(8192); // Fixed 8KB capacity for memory efficiency
+  std::vector<const char*> requiredFields = {"formatVersion", "books"};
+  if (!safeLoadJsonDocument("RST", path, doc, requiredFields)) {
     return false;
   }
 

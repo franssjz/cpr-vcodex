@@ -8,6 +8,10 @@
 #include "Logging.h"
 #include "util/TimeUtils.h"
 
+// FreeRTOS includes for background task
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
 namespace {
 constexpr uint32_t IDLE_THRESHOLD_MS = 10UL * 60UL * 1000UL;
 constexpr uint32_t RETRY_AFTER_FAILURE_MS = 60UL * 60UL * 1000UL;
@@ -78,23 +82,42 @@ void pollReaderSync() {
     return;
   }
 
-  LOG_DBG("ATS", "Reader auto time sync due, attempting NTP sync");
+  LOG_DBG("ATS", "Reader auto time sync due, starting background NTP sync task");
+  
+  // Create background task for NTP sync to avoid blocking the UI
+  // This prevents 5-second freezes during reading sessions
+  xTaskCreate(&ntpSyncTask, "ntp_sync", 4096, nullptr, 1, nullptr);
+}
+
+/**
+ * @brief Background task function for NTP synchronization
+ * @param pvParameters Unused parameter (required by FreeRTOS)
+ * 
+ * This task runs NTP sync in the background to avoid blocking the reader UI.
+ * The 5-second NTP timeout would otherwise cause unacceptable lag during reading.
+ */
+static void ntpSyncTask(void* pvParameters) {
+  (void)pvParameters; // Unused parameter
+  
+  LOG_DBG("ATS", "Background NTP sync task started");
   const bool synced = TimeUtils::syncTimeWithNtp(5000);
   TimeUtils::stopNtp();
 
   if (!synced) {
     LOG_ERR("ATS", "Reader auto time sync failed");
     lastFailedAttemptMs = millis();
-    return;
+  } else {
+    const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
+    if (currentValidTimestamp > 0) {
+      APP_STATE.lastAutoTimeSync = currentValidTimestamp;
+      APP_STATE.lastKnownValidTimestamp = std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
+      APP_STATE.saveToFile();
+      LOG_DBG("ATS", "Reader auto time sync succeeded");
+    }
   }
-
-  const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
-  if (currentValidTimestamp > 0) {
-    APP_STATE.lastAutoTimeSync = currentValidTimestamp;
-    APP_STATE.lastKnownValidTimestamp = std::max(APP_STATE.lastKnownValidTimestamp, currentValidTimestamp);
-    APP_STATE.saveToFile();
-    LOG_DBG("ATS", "Reader auto time sync succeeded");
-  }
+  
+  // Clean up the task
+  vTaskDelete(nullptr);
 }
 
 }  // namespace AutoTimeSync

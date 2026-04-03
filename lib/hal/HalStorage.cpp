@@ -88,10 +88,23 @@ bool HalStorage::rmdir(const char* path) { HAL_STORAGE_WRAPPED_CALL(rmdir, path)
 
 bool HalStorage::openFileForRead(const char* moduleName, const char* path, HalFile& file) {
   StorageLock lock;  // ensure thread safety for the duration of this function
+  
+  // Check if SD card is ready before attempting to open file
+  // This prevents crashes when SD card is removed or faulty
+  if (!ready()) {
+    LOG_ERR(moduleName, "SD card not ready, cannot open file: %s", path);
+    return false;
+  }
+  
   FsFile fsFile;
   bool ok = SDCard.openFileForRead(moduleName, path, fsFile);
+  if (!ok) {
+    LOG_ERR(moduleName, "Failed to open file for reading: %s", path);
+    return false;
+  }
+  
   file = HalFile(std::make_unique<HalFile::Impl>(std::move(fsFile)));
-  return ok;
+  return true;
 }
 
 bool HalStorage::openFileForRead(const char* moduleName, const std::string& path, HalFile& file) {
