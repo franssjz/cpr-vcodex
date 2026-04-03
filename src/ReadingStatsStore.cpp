@@ -7,6 +7,7 @@
 #include <JsonSettingsIO.h>
 #include <algorithm>
 #include <ctime>
+#include <numeric>
 
 #include "CrossPointState.h"
 #include "util/TimeUtils.h"
@@ -580,12 +581,14 @@ uint64_t ReadingStatsStore::getRecentReadingMs(const uint32_t days) const {
 
   const uint32_t startDayOrdinal =
       (summaryCache.referenceDayOrdinal >= days - 1) ? (summaryCache.referenceDayOrdinal - (days - 1)) : 0;
-  uint64_t totalMs = 0;
-  for (const auto& day : readingDays) {
-    if (day.dayOrdinal >= startDayOrdinal && day.dayOrdinal <= summaryCache.referenceDayOrdinal) {
-      totalMs += day.readingMs;
-    }
-  }
+  uint64_t totalMs = std::accumulate(readingDays.begin(), readingDays.end(), uint64_t{0},
+                                     [&](uint64_t sum, const auto& day) {
+                                       if (day.dayOrdinal >= startDayOrdinal &&
+                                           day.dayOrdinal <= summaryCache.referenceDayOrdinal) {
+                                         return sum + day.readingMs;
+                                       }
+                                       return sum;
+                                     });
   return totalMs;
 }
 
