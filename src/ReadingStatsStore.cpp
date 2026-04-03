@@ -223,7 +223,9 @@ void ReadingStatsStore::rebuildAggregatedReadingDays() {
 bool ReadingStatsStore::removeIgnoredBooks() {
   const size_t originalCount = books.size();
   books.erase(std::remove_if(books.begin(), books.end(),
-                             [](const ReadingBookStats& book) { return shouldIgnorePath(book.path); }),
+                             [](const ReadingBookStats& book) {
+                               return shouldIgnorePath(book.path);
+                             }),
               books.end());
   return books.size() != originalCount;
 }
