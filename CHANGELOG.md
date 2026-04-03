@@ -2,6 +2,29 @@
 
 Brief firmware history for `cpr-vcodex`.
 
+## [1.1.22] - 2026-04-03
+
+### Added
+- Comprehensive native unit test suite with 142 test cases across 5 test groups
+  - `test_utf8`: 43 tests covering UTF-8 codepoint parsing, string manipulation, boundary truncation, combining mark detection, and invalid sequence handling
+  - `test_timezone`: 18 tests for TimeZoneRegistry lookups, index clamping, POSIX timezone strings, and boundary validation
+  - `test_date_math`: 29 tests for day ordinal conversions, leap year handling, date formatting across all 3 date format modes, and clock validation
+  - `test_settings_helpers`: 33 tests for settings helper methods (getDailyGoalMs, getSleepTimeoutMs, getRefreshFrequency, getReaderLineCompression, getPowerButtonDuration, validateFrontButtonMapping)
+  - `test_format_duration`: 19 tests for duration formatting (milliseconds to human-readable "Xh Ym" format)
+- Mock headers for native compilation (`test/mocks/`) enabling ESP32-C3 source code to compile and run on desktop
+- Test runner script (`test/run_tests.sh`) that compiles and runs all test suites using g++ and the Unity test framework
+- `[env:test]` configuration in `platformio.ini` for native test environment
+
+### Changed
+- CI test job (`ci-improved.yml`) now runs actual native unit tests instead of showing a placeholder message
+- CI test job simplified to use g++ directly with Unity test framework (no PlatformIO native platform dependency)
+
+### Improved
+- Test coverage for critical pure-logic functions: UTF-8 processing, date/time calculations, settings conversions, and timezone handling
+- Edge case validation including overlong encodings, surrogate halves, leap year boundaries, and invalid enum values
+
+Version code: `2026040319`
+
 ## [1.1.21] - 2026-04-03
 
 ### Added

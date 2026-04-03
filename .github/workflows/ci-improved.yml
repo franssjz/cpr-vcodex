@@ -207,7 +207,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 10
 
-  # Placeholder for running unit/integration tests
+  # Native unit tests (compiled with g++ and Unity test framework)
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -216,49 +216,16 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio
-            ~/.cache/pip
-            .pio
-          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-platformio-
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          version: "latest"
-          enable-cache: false
-
-      - name: Install PlatformIO Core
-        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
-
-      - name: Check for test environment in platformio.ini
-        id: check-tests
+      - name: Install Unity test framework
         run: |
-          if grep -q "^\[env:test\]" platformio.ini; then
-            echo "has-tests=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-tests=false" >> $GITHUB_OUTPUT
-          fi
+          set -euo pipefail
+          UNITY_REPO="https://github.com/ThrowTheSwitch/Unity.git"
+          UNITY_REF="cbcd08fa7de711053a3deec6339ee89cad5d2697"
+          git clone "${UNITY_REPO}" /tmp/Unity
+          git -C /tmp/Unity checkout --detach "${UNITY_REF}"
 
-      - name: Run PlatformIO Tests (if available)
-        if: steps.check-tests.outputs.has-tests == 'true'
-        run: pio test --skip-default-envs
-
-      - name: Placeholder - No test environment defined
-        if: steps.check-tests.outputs.has-tests == 'false'
-        run: |
-          echo "⏭️  No [env:test] found in platformio.ini"
-          echo "To add tests, create a [env:test] environment in platformio.ini"
-          ls -la test/ 2>/dev/null || echo "No test/ directory found"
+      - name: Run native unit tests
+        run: ./test/run_tests.sh
 
   # CI status check gate - ensures all required jobs pass
   ci-status:
