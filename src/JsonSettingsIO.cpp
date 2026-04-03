@@ -61,7 +61,7 @@ class HalFileStream : public Stream {
  * @param path Destination file path
  * @param doc JsonDocument to serialize and write
  * @return true if atomic write succeeded
- * 
+ *
  * Pattern: Write to path.tmp → flush() → close() → rename to final path
  * If crash occurs during temp write, original file remains untouched
  * If crash during rename, temp file cleanup on next boot
@@ -81,7 +81,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   const size_t written = serializeJson(doc, file);
   file.flush();
   const bool closeOk = file.close();
-  
+
   if (written == 0 || !closeOk) {
     LOG_ERR(moduleName, "Failed to write JSON to temp file, removing: %s", tempPath);
     Storage.remove(tempPath);
@@ -124,16 +124,16 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
  * @param doc JsonDocument to populate (must have fixed capacity)
  * @param requiredFields Array of required field names for validation
  * @return true if loaded and validated successfully
- * 
+ *
  * Uses fixed capacity to prevent dynamic memory allocation and heap fragmentation.
  * Validates required fields to prevent crashes from corrupted JSON files.
  */
-bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument& doc, 
+bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument& doc,
                          const std::vector<const char*>& requiredFields = {}) {
   if (!loadJsonDocumentFromFile(moduleName, path, doc)) {
     return false;
   }
-  
+
   // Validate required fields to prevent runtime crashes
   for (const char* field : requiredFields) {
     if (!doc.containsKey(field)) {
@@ -141,7 +141,7 @@ bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument
       return false;
     }
   }
-  
+
   return true;
 }
 }  // namespace
@@ -330,7 +330,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       // Most settings fields are < 128 bytes; 256 provides 2x headroom
       char valBuf[256];
       const size_t maxLen = sizeof(valBuf) - 1;
-      
+
       // Read current default into fixed buffer (O(1) no allocation)
       strncpy(valBuf, strPtr, maxLen);
       valBuf[maxLen] = '\0';
@@ -349,11 +349,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         // Construct obfuscated key name in fixed buffer
         char obfuscatedKey[128];
         snprintf(obfuscatedKey, sizeof(obfuscatedKey), "%s_obf", info.key);
-        
+
         bool ok = false;
         const char* obfuscatedValue = doc[obfuscatedKey] | "";
         std::string deobfuscated = obfuscation::deobfuscateFromBase64(obfuscatedValue, &ok);
-        
+
         // Copy deobfuscated result into fixed buffer
         if (ok && !deobfuscated.empty()) {
           strncpy(valBuf, deobfuscated.c_str(), maxLen);
@@ -373,7 +373,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         strncpy(valBuf, jsonValue, maxLen);
         valBuf[maxLen] = '\0';
       }
-      
+
       // Copy final result to destination
       strncpy(destPtr, valBuf, info.stringMaxLen - 1);
       destPtr[info.stringMaxLen - 1] = '\0';

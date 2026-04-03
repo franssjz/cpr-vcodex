@@ -677,7 +677,7 @@ bool ReadingStatsStore::loadFromFile() {
     books.reserve(std::max<size_t>(books.size() + 10, 50));
     readingDays.reserve(std::max<size_t>(readingDays.size() + 30, 365));
     legacyReadingDays.reserve(std::max<size_t>(legacyReadingDays.size() + 30, 365));
-    
+
     normalizeReadingDays(readingDays);
     for (auto& book : books) {
       book.readingDays.reserve(std::max<size_t>(book.readingDays.size() + 7, 30));

@@ -83,7 +83,7 @@ void pollReaderSync() {
   }
 
   LOG_DBG("ATS", "Reader auto time sync due, starting background NTP sync task");
-  
+
   // Create background task for NTP sync to avoid blocking the UI
   // This prevents 5-second freezes during reading sessions
   xTaskCreate(&ntpSyncTask, "ntp_sync", 4096, nullptr, 1, nullptr);
@@ -92,13 +92,13 @@ void pollReaderSync() {
 /**
  * @brief Background task function for NTP synchronization
  * @param pvParameters Unused parameter (required by FreeRTOS)
- * 
+ *
  * This task runs NTP sync in the background to avoid blocking the reader UI.
  * The 5-second NTP timeout would otherwise cause unacceptable lag during reading.
  */
 static void ntpSyncTask(void* pvParameters) {
   (void)pvParameters; // Unused parameter
-  
+
   LOG_DBG("ATS", "Background NTP sync task started");
   const bool synced = TimeUtils::syncTimeWithNtp(5000);
   TimeUtils::stopNtp();
@@ -115,7 +115,7 @@ static void ntpSyncTask(void* pvParameters) {
       LOG_DBG("ATS", "Reader auto time sync succeeded");
     }
   }
-  
+
   // Clean up the task
   vTaskDelete(nullptr);
 }
