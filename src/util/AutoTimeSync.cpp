@@ -70,6 +70,8 @@ bool canAttemptSync() {
 
 namespace AutoTimeSync {
 
+static void ntpSyncTask(void* pvParameters);
+
 void noteReaderInteraction(const MappedInputManager& mappedInput) {
   if (mappedInput.wasAnyPressed() || mappedInput.wasAnyReleased()) {
     lastInteractionMs = millis();

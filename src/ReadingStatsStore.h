@@ -6,6 +6,14 @@
 
 #include "CrossPointSettings.h"
 
+class ReadingStatsStore;
+
+namespace JsonSettingsIO {
+bool saveReadingStats(const ReadingStatsStore& store, const char* path);
+bool loadReadingStats(ReadingStatsStore& store, const char* json);
+bool loadReadingStatsFromFile(ReadingStatsStore& store, const char* path);
+}  // namespace JsonSettingsIO
+
 inline uint64_t getDailyReadingGoalMs() { return SETTINGS.getDailyGoalMs(); }
 
 /**
@@ -48,7 +56,6 @@ struct ReadingSessionSnapshot {
   bool completedThisSession = false;       /**< Whether the book was completed in this session */
   uint8_t startProgressPercent = 0;        /**< Progress at session start (0-100) */
   uint8_t endProgressPercent = 0;          /**< Progress at session end (0-100) */
-};
 };
 
 /**
