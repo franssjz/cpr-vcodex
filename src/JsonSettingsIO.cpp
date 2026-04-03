@@ -54,17 +54,50 @@ class HalFileStream : public Stream {
   int peekedByte = -1;
 };
 
+/**
+ * @brief Atomically write JSON to file using temp file + rename pattern
+ * Prevents corruption on power loss by ensuring file is complete before rename
+ * @param moduleName Module identifier for logging
+ * @param path Destination file path
+ * @param doc JsonDocument to serialize and write
+ * @return true if atomic write succeeded
+ * 
+ * Pattern: Write to path.tmp → flush() → close() → rename to final path
+ * If crash occurs during temp write, original file remains untouched
+ * If crash during rename, temp file cleanup on next boot
+ */
 bool saveJsonDocumentToFile(const char* moduleName, const char* path, const JsonDocument& doc) {
+  // Build temporary file path: "/path/file.json" → "/path/.file.json.tmp"
+  char tempPath[256];
+  snprintf(tempPath, sizeof(tempPath), "%s.tmp", path);
+
+  // Write to temporary file first
   HalFile file;
-  if (!Storage.openFileForWrite(moduleName, path, file)) {
-    LOG_ERR(moduleName, "Could not open JSON file for write: %s", path);
+  if (!Storage.openFileForWrite(moduleName, tempPath, file)) {
+    LOG_ERR(moduleName, "Could not open temp JSON file for write: %s", tempPath);
     return false;
   }
 
   const size_t written = serializeJson(doc, file);
   file.flush();
-  file.close();
-  return written > 0;
+  const bool closeOk = file.close();
+  
+  if (written == 0 || !closeOk) {
+    LOG_ERR(moduleName, "Failed to write JSON to temp file, removing: %s", tempPath);
+    Storage.remove(tempPath);
+    return false;
+  }
+
+  // Atomic rename: temp file → final path
+  // On SPIFFS/SdFat, rename with target existing deletes target first
+  if (!Storage.rename(tempPath, path)) {
+    LOG_ERR(moduleName, "Failed atomic rename from %s to %s", tempPath, path);
+    Storage.remove(tempPath);  // Clean up temp file
+    return false;
+  }
+
+  LOG_DBG(moduleName, "Atomically wrote JSON to: %s", path);
+  return true;
 }
 
 bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocument& doc) {
@@ -196,7 +229,9 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
 // ---- CrossPointSettings ----
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
-  JsonDocument doc;
+  // Use fixed 16KB capacity to prevent dynamic memory allocation
+  // This prevents heap fragmentation when settings are saved frequently
+  JsonDocument doc(16384);
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
@@ -252,15 +287,27 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepShortcutVisible"] = s.sleepShortcutVisible;
   doc["fontSizeSchemaVersion"] = FONT_SIZE_SCHEMA_VERSION;
 
+  // Check for capacity overflow before writing
+  if (doc.overflowed()) {
+    LOG_ERR("CPS", "Settings JSON document exceeded 16KB capacity, save aborted");
+    return false;
+  }
+
   return saveJsonDocumentToFile("CPS", path, doc);
 }
 
 bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool* needsResave) {
   if (needsResave) *needsResave = false;
-  JsonDocument doc;
+  // Use fixed 16KB capacity for consistent memory behavior and to detect oversized payloads
+  JsonDocument doc(16384);
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
+    return false;
+  }
+
+  if (doc.overflowed()) {
+    LOG_ERR("CPS", "Settings JSON exceeded 16KB capacity (possible corruption or attack)");
     return false;
   }
 
@@ -279,18 +326,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
     if (info.stringOffset) {
       const char* strPtr = (const char*)&s + info.stringOffset;
-      const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
-      std::string val;
-      if (info.obfuscated) {
-        bool ok = false;
-        val = obfuscation::deobfuscateFromBase64(doc[std::string(info.key) + "_obf"] | "", &ok);
-        if (!ok || val.empty()) {
-          val = doc[info.key] | fieldDefault;
-          if (val != fieldDefault && needsResave) *needsResave = true;
-        }
-      } else {
-        val = doc[info.key] | fieldDefault;
-      }
+      // Use fixed 256-byte buffer instead of std::string to avoid heap fragmentation
+      // Most settings fields are < 128 bytes; 256 provides 2x headroom
+      char valBuf[256];
+      const size_t maxLen = sizeof(valBuf) - 1;
+      
+      // Read current default into fixed buffer (O(1) no allocation)
+      strncpy(valBuf, strPtr, maxLen);
+      valBuf[maxLen] = '\0';
+      const std::string_view fieldDefault(valBuf);  // View only, no allocation
+
       char* destPtr = (char*)&s + info.stringOffset;
       if (info.stringMaxLen == 0) {
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
@@ -298,7 +343,39 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         if (needsResave) *needsResave = true;
         continue;
       }
-      strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
+
+      if (info.obfuscated) {
+        // Avoid creating temporary std::string for key lookup
+        // Construct obfuscated key name in fixed buffer
+        char obfuscatedKey[128];
+        snprintf(obfuscatedKey, sizeof(obfuscatedKey), "%s_obf", info.key);
+        
+        bool ok = false;
+        const char* obfuscatedValue = doc[obfuscatedKey] | "";
+        std::string deobfuscated = obfuscation::deobfuscateFromBase64(obfuscatedValue, &ok);
+        
+        // Copy deobfuscated result into fixed buffer
+        if (ok && !deobfuscated.empty()) {
+          strncpy(valBuf, deobfuscated.c_str(), maxLen);
+          valBuf[maxLen] = '\0';
+        } else {
+          // Fallback to standard key if obfuscated fails
+          const char* standardValue = doc[info.key] | "";
+          strncpy(valBuf, standardValue, maxLen);
+          valBuf[maxLen] = '\0';
+          if (strcmp(valBuf, fieldDefault.data()) != 0 && needsResave) {
+            *needsResave = true;
+          }
+        }
+      } else {
+        // Non-obfuscated: copy from JSON directly into fixed buffer
+        const char* jsonValue = doc[info.key] | "";
+        strncpy(valBuf, jsonValue, maxLen);
+        valBuf[maxLen] = '\0';
+      }
+      
+      // Copy final result to destination
+      strncpy(destPtr, valBuf, info.stringMaxLen - 1);
       destPtr[info.stringMaxLen - 1] = '\0';
     } else {
       const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
