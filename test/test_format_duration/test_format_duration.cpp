@@ -3,8 +3,14 @@
  * @brief Unit tests for ReadingStatsAnalytics::formatDurationHm
  *
  * Tests duration formatting (milliseconds → human-readable "Xh Ym" format).
- * The formatDurationHm function is extracted here to test in isolation since
- * ReadingStatsAnalytics.cpp has deep dependency chains.
+ *
+ * NOTE: The formatDurationHm implementation is duplicated here because
+ * ReadingStatsAnalytics.cpp has a deep dependency chain
+ * (ReadingStatsStore → CrossPointSettings → HalStorage → ESP32 SDK)
+ * that would require extensive additional mocking. The function is a
+ * self-contained 6-line pure math algorithm with no external dependencies,
+ * so the risk of divergence is minimal. If the production implementation
+ * changes, this test copy must be updated to match.
  */
 
 #include <unity.h>

@@ -39,7 +39,7 @@ fi
 mkdir -p "$BUILD_DIR"
 
 CXX="${CXX:-g++}"
-CXXFLAGS="-std=c++20 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function"
+CXXFLAGS="-std=gnu++20 -Wall -Wextra -Wpedantic -Wno-unused-parameter -Wno-unused-function"
 
 TOTAL_TESTS=0
 TOTAL_FAILURES=0
