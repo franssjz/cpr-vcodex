@@ -102,7 +102,7 @@ inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const Shortcut
   return settings.*(definition.orderPtr);
 }
 
-// cppcheck-suppress constParameterReference
+// cppcheck-suppress constParameterReference -- settings cannot be const: we return a mutable reference to its member
 inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const ShortcutOrderEntry& entry) {
   return entry.isAppsHub ? settings.appsHubShortcutOrder : settings.*(entry.definition->orderPtr);
 }

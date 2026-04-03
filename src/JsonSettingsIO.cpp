@@ -228,7 +228,6 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
 // ---- CrossPointSettings ----
 
 bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path) {
-  // Use 16KB capacity to detect oversized payloads
   JsonDocument doc;
 
   for (const auto& info : getSettingsList()) {
@@ -688,7 +687,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
 }
 
 bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json) {
-  JsonDocument doc; // Fixed 8KB capacity to prevent dynamic allocation and heap fragmentation
+  JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("RST", "JSON parse error: %s", error.c_str());
@@ -756,7 +755,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
 }
 
 bool JsonSettingsIO::loadReadingStatsFromFile(ReadingStatsStore& store, const char* path) {
-  JsonDocument doc; // 8KB capacity for memory efficiency
+  JsonDocument doc;
   std::vector<const char*> requiredFields = {"formatVersion", "books"};
   if (!safeLoadJsonDocument("RST", path, doc, requiredFields)) {
     return false;
