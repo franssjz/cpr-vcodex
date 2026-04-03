@@ -11,7 +11,6 @@ class ReadingHeatmapActivity final : public Activity {
   bool waitForConfirmRelease = false;
 
   void goToAdjacentMonth(int delta);
-  void goToReferenceMonth();
   void resetSelectedDay();
   void moveSelection(int delta);
 

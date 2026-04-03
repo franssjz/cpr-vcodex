@@ -14,9 +14,9 @@
 
 #include <algorithm>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
@@ -25,26 +25,25 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/AutoTimeSync.h"
 
 namespace {
 constexpr unsigned long skipPageMs = 700;
 constexpr unsigned long goHomeMs = 1000;
 
-const xtc::ChapterInfo* findCurrentChapter(Xtc& xtc, const uint32_t currentPage) {
+const xtc::ChapterInfo* findCurrentChapter(const Xtc& xtc, const uint32_t currentPage) {
   if (!xtc.hasChapters()) {
     return nullptr;
   }
 
   const auto& chapters = xtc.getChapters();
-  for (const auto& chapter : chapters) {
-    if (currentPage >= chapter.startPage && currentPage <= chapter.endPage) {
-      return &chapter;
-    }
-  }
-  return nullptr;
+  const auto it = std::find_if(chapters.begin(), chapters.end(), [currentPage](const xtc::ChapterInfo& chapter) {
+    return currentPage >= chapter.startPage && currentPage <= chapter.endPage;
+  });
+  return it != chapters.end() ? &(*it) : nullptr;
 }
 
-std::string getChapterTitleForStats(Xtc& xtc, const uint32_t currentPage) {
+std::string getChapterTitleForStats(const Xtc& xtc, const uint32_t currentPage) {
   const auto* chapter = findCurrentChapter(xtc, currentPage);
   if (!chapter) {
     return "";
@@ -52,16 +51,13 @@ std::string getChapterTitleForStats(Xtc& xtc, const uint32_t currentPage) {
   return chapter->name;
 }
 
-uint8_t getChapterProgressForStats(Xtc& xtc, const uint32_t currentPage) {
+uint8_t getChapterProgressForStats(const Xtc& xtc, const uint32_t currentPage) {
   const auto* chapter = findCurrentChapter(xtc, currentPage);
   if (!chapter || chapter->endPage < chapter->startPage) {
     return 0;
   }
 
   const uint32_t chapterLength = static_cast<uint32_t>(chapter->endPage - chapter->startPage + 1);
-  if (chapterLength == 0) {
-    return 0;
-  }
 
   const uint32_t pageOffset = static_cast<uint32_t>(currentPage - chapter->startPage + 1);
   return static_cast<uint8_t>(std::min<uint32_t>(100, (pageOffset * 100 + chapterLength / 2) / chapterLength));
@@ -71,9 +67,9 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   showPendingAchievementPopups(renderer);
-  const bool countedSession =
-      READING_STATS.getLastSessionSnapshot().valid && READING_STATS.getLastSessionSnapshot().counted &&
-      READING_STATS.getLastSessionSnapshot().path == bookPath;
+  const bool countedSession = READING_STATS.getLastSessionSnapshot().valid &&
+                              READING_STATS.getLastSessionSnapshot().counted &&
+                              READING_STATS.getLastSessionSnapshot().path == bookPath;
 
   if (SETTINGS.showStatsAfterReading && countedSession && !bookPath.empty()) {
     activityManager.replaceActivity(
@@ -120,6 +116,8 @@ void XtcReaderActivity::onExit() {
 
 void XtcReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  AutoTimeSync::noteReaderInteraction(mappedInput);
+  AutoTimeSync::pollReaderSync();
 
   // Enter chapter selection activity
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -401,7 +399,8 @@ void XtcReaderActivity::renderPage() {
 
 void XtcReaderActivity::saveProgress() const {
   READING_STATS.updateProgress(xtc->calculateProgress(currentPage), currentPage + 1 >= xtc->getPageCount(),
-                               getChapterTitleForStats(*xtc, currentPage), getChapterProgressForStats(*xtc, currentPage));
+                               getChapterTitleForStats(*xtc, currentPage),
+                               getChapterProgressForStats(*xtc, currentPage));
   FsFile f;
   if (Storage.openFileForWrite("XTR", xtc->getCachePath() + "/progress.bin", f)) {
     uint8_t data[4];

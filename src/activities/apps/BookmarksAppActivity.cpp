@@ -9,8 +9,8 @@
 #include <algorithm>
 
 #include "../reader/BookmarksActivity.h"
-#include "activities/util/ConfirmationActivity.h"
 #include "ReadingStatsStore.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
@@ -66,18 +66,17 @@ void BookmarksAppActivity::openSelectedBook() {
 
   const BookEntry entry = entries[selectedIndex];
   startActivityForResult(
-      std::make_unique<BookmarksActivity>(
-          renderer, mappedInput, entry.bookmarks, nullptr, entry.title,
-          [path = entry.path](const BookmarkStore::Bookmark& bookmark) {
-            Epub epub(path, "/.crosspoint");
-            BookmarkStore store;
-            store.load(epub.getCachePath());
-            const bool removed = store.remove(bookmark.spineIndex, bookmark.pageNumber);
-            if (removed) {
-              store.save();
-            }
-            return removed;
-          }),
+      std::make_unique<BookmarksActivity>(renderer, mappedInput, entry.bookmarks, nullptr, entry.title,
+                                          [path = entry.path](const BookmarkStore::Bookmark& bookmark) {
+                                            Epub epub(path, "/.crosspoint");
+                                            BookmarkStore store;
+                                            store.load(epub.getCachePath());
+                                            const bool removed = store.remove(bookmark.spineIndex, bookmark.pageNumber);
+                                            if (removed) {
+                                              store.save();
+                                            }
+                                            return removed;
+                                          }),
       [this, path = entry.path](const ActivityResult& result) {
         if (!result.isCancelled) {
           const auto& bookmark = std::get<BookmarkResult>(result.data);
@@ -172,20 +171,21 @@ void BookmarksAppActivity::render(RenderLock&&) {
   if (entries.empty()) {
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + 20, tr(STR_NO_BOOKMARKS));
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, listHeight}, static_cast<int>(entries.size()), selectedIndex,
-                 [this](const int index) { return entries[index].title; },
-                 [this](const int index) {
-                   if (!entries[index].author.empty()) {
-                     return entries[index].author;
-                   }
-                   return entries[index].path;
-                 },
-                 [](const int) { return UIIcon::Book; },
-                 [this](const int index) { return std::to_string(entries[index].bookmarks.size()); });
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, listHeight}, static_cast<int>(entries.size()), selectedIndex,
+        [this](const int index) { return entries[index].title; },
+        [this](const int index) {
+          if (!entries[index].author.empty()) {
+            return entries[index].author;
+          }
+          return entries[index].path;
+        },
+        [](const int) { return UIIcon::Book; },
+        [this](const int index) { return std::to_string(entries[index].bookmarks.size()); });
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), entries.empty() ? "" : tr(STR_OPEN), tr(STR_DIR_UP),
-                                            tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BACK), entries.empty() ? "" : tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }

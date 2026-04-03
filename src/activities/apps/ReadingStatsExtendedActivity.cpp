@@ -40,27 +40,26 @@ std::string formatDurationHm(const uint64_t totalMs) {
   return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
 }
 
-void drawCheckBadge(GfxRenderer& renderer, const int x, const int y) {
+void drawCheckBadge(const GfxRenderer& renderer, const int x, const int y) {
   renderer.fillRect(x, y, 18, 18, true);
   renderer.drawLine(x + 4, y + 10, x + 7, y + 13, 2, false);
   renderer.drawLine(x + 7, y + 13, x + 13, y + 5, 2, false);
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
                     const bool showCheck = false) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
+  const int valueFontId = renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24
+                              ? UI_12_FONT_ID
+                              : UI_10_FONT_ID;
   const std::string truncatedValue =
       renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + 12, rect.y + (valueFontId == UI_12_FONT_ID ? 14 : 18), truncatedValue.c_str(),
                     true, EpdFontFamily::BOLD);
 
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
+  const auto labelLines = renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
   int labelY = rect.y + 42;
   for (const auto& line : labelLines) {
     renderer.drawText(UI_10_FONT_ID, rect.x + 12, labelY, line.c_str());
@@ -72,7 +71,8 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawRecentWindowCard(GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
+void drawRecentWindowCard(const GfxRenderer& renderer, const Rect& rect, const char* periodLabel,
+                          const std::string& value) {
   drawMetricCard(renderer, rect, periodLabel, value);
 }
 
@@ -179,12 +179,11 @@ std::vector<ChartBar> getRecentDailyReadingBars() {
                                     ? referenceDayOrdinal - static_cast<uint32_t>(6 - index)
                                     : 0;
     bars[index].bottomLabel = formatDayLabel(dayOrdinal);
-    for (const auto& day : readingDays) {
-      if (day.dayOrdinal == dayOrdinal) {
-        bars[index].readingMs = day.readingMs;
-        bars[index].topLabel = formatMinutesLabel(day.readingMs);
-        break;
-      }
+    const auto dayIt = std::find_if(readingDays.begin(), readingDays.end(),
+                                    [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+    if (dayIt != readingDays.end()) {
+      bars[index].readingMs = dayIt->readingMs;
+      bars[index].topLabel = formatMinutesLabel(dayIt->readingMs);
     }
   }
 
@@ -231,19 +230,20 @@ std::string formatAnnualReadingTitle(const int year) {
 int getScrollableContentBottom(const GfxRenderer& renderer, const ThemeMetrics& metrics) {
   (void)renderer;
   (void)metrics;
-  return CHART_HEADER_HEIGHT + CHART_TOP_GAP + CHART_HEIGHT + CHART_SECTION_GAP + CHART_HEADER_HEIGHT +
-         CHART_TOP_GAP + CHART_HEIGHT;
+  return CHART_HEADER_HEIGHT + CHART_TOP_GAP + CHART_HEIGHT + CHART_SECTION_GAP + CHART_HEADER_HEIGHT + CHART_TOP_GAP +
+         CHART_HEIGHT;
 }
 
 int getMaxScrollOffset(const GfxRenderer& renderer, const ThemeMetrics& metrics) {
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int recentTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
   const int chartViewportTop = recentTop + RECENT_CARD_HEIGHT + metrics.verticalSpacing;
-  const int visibleHeight = renderer.getScreenHeight() - metrics.buttonHintsHeight - CHART_BOTTOM_GAP - chartViewportTop;
+  const int visibleHeight =
+      renderer.getScreenHeight() - metrics.buttonHintsHeight - CHART_BOTTOM_GAP - chartViewportTop;
   return std::max(0, getScrollableContentBottom(renderer, metrics) - visibleHeight);
 }
 
-void drawReadingChart(GfxRenderer& renderer, const Rect& rect, const std::vector<ChartBar>& bars,
+void drawReadingChart(const GfxRenderer& renderer, const Rect& rect, const std::vector<ChartBar>& bars,
                       const bool rotateBottomLabels) {
   if (bars.empty()) {
     return;
@@ -264,10 +264,9 @@ void drawReadingChart(GfxRenderer& renderer, const Rect& rect, const std::vector
   const int barWidth = std::max(minBarWidth, (innerRight - innerLeft - barGap * (barCount - 1)) / barCount);
   const int usedWidth = barWidth * barCount + barGap * (barCount - 1);
   const int chartLeft = rect.x + (rect.width - usedWidth) / 2;
-  uint64_t maxValue = 1;
-  for (const auto& bar : bars) {
-    maxValue = std::max(maxValue, bar.readingMs);
-  }
+  const auto maxIt = std::max_element(bars.begin(), bars.end(),
+                                      [](const ChartBar& a, const ChartBar& b) { return a.readingMs < b.readingMs; });
+  const uint64_t maxValue = std::max(uint64_t{1}, maxIt != bars.end() ? maxIt->readingMs : uint64_t{0});
 
   renderer.drawLine(innerLeft - 2, baselineY, innerRight + 2, baselineY, 2, true);
 
@@ -275,8 +274,7 @@ void drawReadingChart(GfxRenderer& renderer, const Rect& rect, const std::vector
     const int barX = chartLeft + index * (barWidth + barGap);
     const uint64_t readingMs = bars[index].readingMs;
     if (!bars[index].topLabel.empty()) {
-      const int labelWidth =
-          renderer.getTextWidth(SMALL_FONT_ID, bars[index].topLabel.c_str(), EpdFontFamily::REGULAR);
+      const int labelWidth = renderer.getTextWidth(SMALL_FONT_ID, bars[index].topLabel.c_str(), EpdFontFamily::REGULAR);
       renderer.drawText(SMALL_FONT_ID, barX + (barWidth - labelWidth) / 2, topLabelY, bars[index].topLabel.c_str());
     }
 
@@ -394,16 +392,16 @@ void ReadingStatsExtendedActivity::render(RenderLock&&) {
                  std::to_string(READING_STATS.getCurrentStreakDays()));
   drawMetricCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_MAX_STREAK), std::to_string(READING_STATS.getMaxStreakDays()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
+  drawMetricCard(renderer,
+                 Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_DAILY_GOAL), dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
                       SUMMARY_CARD_HEIGHT},
                  tr(STR_READING_TIME), formatDurationHm(READING_STATS.getTotalReadingMs()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
-                 tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
+  drawMetricCard(
+      renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth, SUMMARY_CARD_HEIGHT},
+      tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2,
                       cardWidth, SUMMARY_CARD_HEIGHT},

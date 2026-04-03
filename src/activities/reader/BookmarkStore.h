@@ -9,6 +9,9 @@
 #include <vector>
 
 // Stores per-book bookmarks inside the reader cache directory.
+// Bookmarks are saved with deferred writes to reduce SD I/O jank (60-second interval).
+// This prevents bookmark toggle operations (30-50 ms each) from blocking the UI when
+// multiple bookmarks are toggled rapidly.
 class BookmarkStore {
  public:
   struct Bookmark {
@@ -70,8 +73,13 @@ class BookmarkStore {
     }
 
     file.close();
+    lastSaveTime = millis();
   }
 
+  /**
+   * @brief Immediately save all bookmarks to disk
+   * Used during activity exit to ensure no data loss
+   */
   void save() {
     if (!dirty || basePath.empty()) {
       return;
@@ -107,6 +115,27 @@ class BookmarkStore {
     }
 
     dirty = false;
+    lastSaveTime = millis();
+  }
+
+  /**
+   * @brief Deferred save: only write to disk if dirty AND 60+ seconds has elapsed
+   * Call this frequently from the reader loop (e.g., every frame).
+   * This eliminates I/O jank when bookmarks are toggled rapidly.
+   * @return true if a save occurred, false if deferred or not needed
+   */
+  bool saveIfDeferredIntervalElapsed() {
+    if (!dirty || basePath.empty()) {
+      return false;
+    }
+
+    const unsigned long now = millis();
+    if (now - lastSaveTime < DEFERRED_SAVE_INTERVAL_MS) {
+      return false;  // Too soon, defer this save
+    }
+
+    save();  // This will update lastSaveTime
+    return true;
   }
 
   bool toggle(const uint16_t spineIndex, const uint16_t pageNumber, const std::string& snippet = "") {
@@ -150,15 +179,20 @@ class BookmarkStore {
   [[nodiscard]] const std::vector<Bookmark>& getAll() const { return bookmarks; }
   [[nodiscard]] bool isEmpty() const { return bookmarks.empty(); }
   void markDirty() { dirty = true; }
+  [[nodiscard]] bool isDirty() const { return dirty; }
 
  private:
   static constexpr uint8_t FILE_VERSION = 2;
   static constexpr uint16_t MAX_BOOKMARKS = 1000;
   static constexpr uint8_t MAX_SNIPPET_LEN = 80;
+  /// Deferred save interval: only write to disk if 60+ seconds since last save and dirty
+  /// This prevents I/O jank when multiple bookmarks are toggled rapidly (<1 sec apart)
+  static constexpr unsigned long DEFERRED_SAVE_INTERVAL_MS = 60UL * 1000UL;
 
   std::vector<Bookmark> bookmarks;
   std::string basePath;
   bool dirty = false;
+  unsigned long lastSaveTime = 0;
 
   [[nodiscard]] std::string getFilePath() const { return basePath + "/bookmarks.bin"; }
 

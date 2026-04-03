@@ -13,6 +13,7 @@ class CrossPointState {
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
   uint32_t lastKnownValidTimestamp = 0;
+  uint32_t lastAutoTimeSync = 0;
   ~CrossPointState() = default;
 
   // Get singleton instance

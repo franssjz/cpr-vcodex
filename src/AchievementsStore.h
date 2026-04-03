@@ -1,11 +1,11 @@
 #pragma once
 
+#include <I18nKeys.h>
+
 #include <array>
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include <I18nKeys.h>
 
 #include "ReadingStatsStore.h"
 

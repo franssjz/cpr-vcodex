@@ -15,9 +15,9 @@
 
 #include <cstring>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "FirmwareVersion.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
@@ -101,8 +101,8 @@ EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, 
                                    &notosans18BoldItalicFont);
 
 EpdFont opendyslexic7RegularFont(&opendyslexic_7_regular);
-EpdFontFamily opendyslexic7FontFamily(&opendyslexic7RegularFont, &opendyslexic7RegularFont,
-                                      &opendyslexic7RegularFont, &opendyslexic7RegularFont);
+EpdFontFamily opendyslexic7FontFamily(&opendyslexic7RegularFont, &opendyslexic7RegularFont, &opendyslexic7RegularFont,
+                                      &opendyslexic7RegularFont);
 EpdFont opendyslexic8RegularFont(&opendyslexic_8_regular);
 EpdFont opendyslexic8BoldFont(&opendyslexic_8_bold);
 EpdFont opendyslexic8ItalicFont(&opendyslexic_8_italic);

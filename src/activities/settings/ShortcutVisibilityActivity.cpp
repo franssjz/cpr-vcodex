@@ -19,9 +19,9 @@ const char* getVisibilityLabel(const ShortcutDefinition& definition) {
 void ShortcutVisibilityActivity::reloadEntries() {
   entries.clear();
   entries.reserve(getShortcutDefinitions().size());
-  for (const auto& definition : getShortcutDefinitions()) {
-    entries.push_back(&definition);
-  }
+  const auto& defs = getShortcutDefinitions();
+  std::transform(defs.begin(), defs.end(), std::back_inserter(entries),
+                 [](const ShortcutDefinition& def) { return &def; });
 
   std::stable_sort(entries.begin(), entries.end(), [](const ShortcutDefinition* lhs, const ShortcutDefinition* rhs) {
     return getShortcutOrder(*lhs) < getShortcutOrder(*rhs);
@@ -101,9 +101,10 @@ void ShortcutVisibilityActivity::render(RenderLock&&) {
   if (entries.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, contentTop + 24, tr(STR_NO_ENTRIES));
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(entries.size()), selectedIndex,
-                 [this](const int index) { return std::string(I18N.get(entries[index]->nameId)); }, nullptr, nullptr,
-                 [this](const int index) { return std::string(getVisibilityLabel(*entries[index])); }, true);
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(entries.size()), selectedIndex,
+        [this](const int index) { return std::string(I18N.get(entries[index]->nameId)); }, nullptr, nullptr,
+        [this](const int index) { return std::string(getVisibilityLabel(*entries[index])); }, true);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

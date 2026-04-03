@@ -5,6 +5,7 @@
 #include <ctime>
 #include <map>
 
+#include "util/DurationFormat.h"
 #include "util/TimeUtils.h"
 
 namespace ReadingStatsAnalytics {
@@ -36,15 +37,7 @@ unsigned resolveMonthFromDayOrdinal(const uint32_t dayOrdinal) {
 
 }  // namespace
 
-std::string formatDurationHm(const uint64_t totalMs) {
-  const uint64_t totalMinutes = totalMs / 60000ULL;
-  const uint64_t hours = totalMinutes / 60ULL;
-  const uint64_t minutes = totalMinutes % 60ULL;
-  if (hours == 0) {
-    return std::to_string(minutes) + "m";
-  }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
-}
+std::string formatDurationHm(const uint64_t totalMs) { return DurationFormat::formatHm(totalMs); }
 
 std::string formatDayOrdinalLabel(const uint32_t dayOrdinal) {
   int year = 0;
@@ -57,9 +50,7 @@ std::string formatDayOrdinalLabel(const uint32_t dayOrdinal) {
   return TimeUtils::formatDateParts(year, month, day);
 }
 
-std::string formatMonthLabel(const int year, const unsigned month) {
-  return TimeUtils::formatMonthYear(year, month);
-}
+std::string formatMonthLabel(const int year, const unsigned month) { return TimeUtils::formatMonthYear(year, month); }
 
 int getReferenceYear() {
   const uint32_t timestamp = READING_STATS.getDisplayTimestamp();
@@ -82,10 +73,9 @@ int getReferenceYear() {
 std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {
   std::vector<DayBookEntry> entries;
   for (const auto& book : READING_STATS.getBooks()) {
-    auto it = std::find_if(book.readingDays.begin(), book.readingDays.end(),
-                           [&](const ReadingDayStats& day) {
-                             return day.dayOrdinal == dayOrdinal && day.readingMs >= MIN_READING_DAY_BOOK_MS;
-                           });
+    auto it = std::find_if(book.readingDays.begin(), book.readingDays.end(), [&](const ReadingDayStats& day) {
+      return day.dayOrdinal == dayOrdinal && day.readingMs >= MIN_READING_DAY_BOOK_MS;
+    });
     if (it == book.readingDays.end()) {
       continue;
     }
@@ -108,11 +98,11 @@ std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {
 TimelineDayEntry buildTimelineDayEntry(const uint32_t dayOrdinal) {
   TimelineDayEntry entry;
   entry.dayOrdinal = dayOrdinal;
-  for (const auto& day : READING_STATS.getReadingDays()) {
-    if (day.dayOrdinal == dayOrdinal) {
-      entry.totalReadingMs = day.readingMs;
-      break;
-    }
+  const auto& readingDays = READING_STATS.getReadingDays();
+  const auto dayIt = std::find_if(readingDays.begin(), readingDays.end(),
+                                  [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+  if (dayIt != readingDays.end()) {
+    entry.totalReadingMs = dayIt->readingMs;
   }
 
   const auto books = getBooksReadOnDay(dayOrdinal);

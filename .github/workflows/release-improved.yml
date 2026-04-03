@@ -1,0 +1,269 @@
+name: Release (GitHub Release Creation & Artifacts)
+
+# Triggers:
+# - On pushing a tag matching v* pattern (e.g., v1.1.20)
+# - Manual trigger with version input
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.1.20-vcodex)'
+        required: true
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  # Create GitHub Release with changelog integration and built artifacts
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0  # Full history for commit log
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Determine Version
+        id: version
+        run: |
+          set -euo pipefail
+          
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION_TAG="v${VERSION}"
+          else
+            # Extract version from tag (remove leading 'v')
+            VERSION_TAG="${{ github.ref_name }}"
+            VERSION="${VERSION_TAG#v}"
+          fi
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version-tag=${VERSION_TAG}" >> $GITHUB_OUTPUT
+          echo "📌 Release version: ${VERSION}"
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      # Build for gh_release environment (production)
+      - name: Build Firmware (gh_release environment)
+        run: |
+          set -euo pipefail
+          pio run -e gh_release 2>&1 | tee pio-release-build.log
+          echo "✅ Firmware built successfully"
+
+      # Extract changelog section for this version
+      - name: Extract Changelog
+        id: changelog
+        run: |
+          set -euo pipefail
+          
+          VERSION="${{ steps.version.outputs.version }}"
+          CHANGELOG_FILE="CHANGELOG.md"
+          
+          if [ ! -f "$CHANGELOG_FILE" ]; then
+            echo "⚠️  CHANGELOG.md not found"
+            echo "changelog_section=No changelog found" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Try structured format first: ## [VERSION] or ## [VERSION] - date
+          section=$(sed -n "/^## \[${VERSION}\]/,/^## /p" "$CHANGELOG_FILE" | head -n -1)
+          
+          # Fall back to legacy format: ## VERSION or ## VERSION-vcodex
+          if [ -z "$section" ]; then
+            section=$(sed -n "/^## .*${VERSION}/,/^## /p" "$CHANGELOG_FILE" | head -n -1)
+          fi
+          
+          if [ -z "$section" ]; then
+            echo "⚠️  No changelog section found for version ${VERSION}"
+            echo "changelog_section=Version ${VERSION} changelog not found in CHANGELOG.md" >> $GITHUB_OUTPUT
+          else
+            # Escape newlines for GitHub output
+            {
+              echo "changelog_section<<EOF"
+              echo "$section"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      # Get summary of commits since last tag/release
+      - name: Generate Commit Summary
+        id: commits
+        run: |
+          set -euo pipefail
+          
+          # Find previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+            COMMIT_MSG=$(git log $RANGE --oneline --no-decorate | head -20)
+          else
+            # No previous tag, show first 20 commits
+            COMMIT_MSG=$(git log --oneline --no-decorate | head -20)
+          fi
+          
+          {
+            echo "commit_summary<<EOF"
+            echo "### Recent Commits"
+            echo "\`\`\`"
+            echo "$COMMIT_MSG"
+            echo "\`\`\`"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      # Create comprehensive release notes
+      - name: Create Release Notes
+        id: release-notes
+        env:
+          CHANGELOG: ${{ steps.changelog.outputs.changelog_section }}
+          COMMITS: ${{ steps.commits.outputs.commit_summary }}
+        run: |
+          set -euo pipefail
+          
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          {
+            echo "release_notes<<'RELEASE_EOF'"
+            echo "# CrossPoint Reader v${VERSION}"
+            echo ""
+            echo "## Overview"
+            echo "ESP32-C3 optimized e-reader firmware for Xteink X4 device."
+            echo ""
+            
+            if [ -n "${{ env.CHANGELOG }}" ] && [ "${{ env.CHANGELOG }}" != "No changelog found" ]; then
+              echo "## Changelog"
+              echo "${{ env.CHANGELOG }}"
+              echo ""
+            fi
+            
+            echo "${{ env.COMMITS }}"
+            echo ""
+            echo "## Build Information"
+            echo "- **Version**: v${VERSION}"
+            echo "- **Build Date**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo "- **Platform**: ESP32-C3 (RISC-V, 160MHz, 380KB RAM)"
+            echo "- **Binary Target**: Xteink X4"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Flashing Instructions"
+            echo ""
+            echo "You can flash the firmware using the online web tool:"
+            echo "https://xteink.dve.al"
+            echo ""
+            echo "1. Open the link above in a compatible browser."
+            echo "2. Connect your device via USB."
+            echo "3. Select the downloaded \`.bin\` file."
+            echo "4. Follow the on-screen instructions to complete the flashing process."
+            echo "RELEASE_EOF"
+          } >> $GITHUB_OUTPUT
+
+      # Upload release artifacts with versioned naming
+      - name: Collect Build Artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p release-artifacts
+
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Copy main firmware binary — required; fail if missing
+          if [ ! -f ".pio/build/gh_release/firmware.bin" ]; then
+            echo "❌ firmware.bin not found — build may have failed"
+            exit 1
+          fi
+          cp .pio/build/gh_release/firmware.bin "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.bin"
+          echo "✅ cpr-vcodex_v${VERSION}_esp32c3.bin copied"
+
+          # Copy bootloader (if available)
+          if [ -f ".pio/build/gh_release/bootloader.bin" ]; then
+            cp .pio/build/gh_release/bootloader.bin "release-artifacts/cpr-vcodex_v${VERSION}_bootloader.bin"
+            echo "✅ bootloader copied"
+          fi
+
+          # Copy ELF file (for debugging)
+          if [ -f ".pio/build/gh_release/firmware.elf" ]; then
+            cp .pio/build/gh_release/firmware.elf "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.elf"
+            echo "✅ ELF copied"
+          fi
+
+          # Copy map file (for memory analysis)
+          if [ -f ".pio/build/gh_release/firmware.map" ]; then
+            cp .pio/build/gh_release/firmware.map "release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.map"
+            echo "✅ map copied"
+          fi
+
+          # Copy partitions
+          if [ -f "partitions.csv" ]; then
+            cp partitions.csv release-artifacts/
+            echo "✅ partitions.csv copied"
+          fi
+
+          ls -lah release-artifacts/
+
+      # Create GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.0.4
+        with:
+          tag_name: ${{ steps.version.outputs.version-tag }}
+          name: CrossPoint Reader v${{ steps.version.outputs.version }}
+          body: ${{ steps.release-notes.outputs.release_notes }}
+          files: release-artifacts/*
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-rc') || contains(steps.version.outputs.version, '-beta') || contains(steps.version.outputs.version, '-alpha') }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Build Outputs (Backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-release-build-${{ steps.version.outputs.version }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verify Release
+        run: |
+          echo "✅ Release created successfully!"
+          echo "📦 Version: v${{ steps.version.outputs.version }}"
+          echo "🔗 Release URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version-tag }}"
+
+  # Notify on release failure
+  release-failure:
+    name: Release Failure Notification
+    if: failure()
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Release Failure
+        run: |
+          echo "❌ Release workflow failed"
+          echo "Check the workflow logs for details"
+          exit 1

@@ -10,7 +10,7 @@
 #include "util/TimeUtils.h"
 
 namespace {
-constexpr uint8_t STATE_FILE_VERSION = 5;
+constexpr uint8_t STATE_FILE_VERSION = 6;
 constexpr char STATE_FILE_BIN[] = "/.crosspoint/state.bin";
 constexpr char STATE_FILE_JSON[] = "/.crosspoint/state.json";
 constexpr char STATE_FILE_BAK[] = "/.crosspoint/state.bin.bak";
@@ -85,6 +85,12 @@ bool CrossPointState::loadFromBinaryFile() {
     serialization::readPod(inputFile, lastKnownValidTimestamp);
   } else {
     lastKnownValidTimestamp = 0;
+  }
+
+  if (version >= 6) {
+    serialization::readPod(inputFile, lastAutoTimeSync);
+  } else {
+    lastAutoTimeSync = 0;
   }
 
   inputFile.close();

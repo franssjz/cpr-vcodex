@@ -9,12 +9,12 @@
 #include <string>
 
 #include "CrossPointState.h"
-#include "ReadingStatsStore.h"
 #include "ReadingDayDetailActivity.h"
+#include "ReadingStatsStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ReadingStatsAnalytics.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ReadingStatsAnalytics.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -42,9 +42,7 @@ struct MonthSummary {
   unsigned bestDayOfMonth = 0;
 };
 
-bool isLeapYear(const int year) {
-  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-}
+bool isLeapYear(const int year) { return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0); }
 
 unsigned getDaysInMonth(const int year, const unsigned month) {
   static constexpr unsigned DAYS_PER_MONTH[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -118,20 +116,19 @@ int getHeatLevel(const uint64_t readingMs) {
   return 4;
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 20 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
+  const int valueFontId = renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 20
+                              ? UI_12_FONT_ID
+                              : UI_10_FONT_ID;
   const std::string truncatedValue =
       renderer.truncatedText(valueFontId, value.c_str(), rect.width - 20, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + 10, rect.y + (valueFontId == UI_12_FONT_ID ? 13 : 16), truncatedValue.c_str(),
                     true, EpdFontFamily::BOLD);
 
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 20, 2, EpdFontFamily::REGULAR);
+  const auto labelLines = renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 20, 2, EpdFontFamily::REGULAR);
   int labelY = rect.y + 39;
   for (const auto& line : labelLines) {
     renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, line.c_str());
@@ -139,7 +136,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
+void drawGoalCheckBadge(const GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
   constexpr int checkWidth = 20;
   constexpr int checkHeight = 16;
   constexpr int paddingRight = 7;
@@ -153,7 +150,7 @@ void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool dark
   renderer.drawLine(checkX + 5, checkY + 13, checkX + 17, checkY + 1, 4, checkColor);
 }
 
-void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& cell) {
+void drawHeatCell(const GfxRenderer& renderer, const Rect& rect, const HeatmapCell& cell) {
   const int level = cell.inViewedMonth ? getHeatLevel(cell.readingMs) : 0;
   const Rect fillRect{rect.x + 1, rect.y + 1, std::max(0, rect.width - 2), std::max(0, rect.height - 2)};
   bool textBlack = true;
@@ -167,7 +164,8 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
       break;
     case 3:
       renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::DarkGray);
-      renderer.drawRect(fillRect.x + 2, fillRect.y + 2, std::max(0, fillRect.width - 4), std::max(0, fillRect.height - 4));
+      renderer.drawRect(fillRect.x + 2, fillRect.y + 2, std::max(0, fillRect.width - 4),
+                        std::max(0, fillRect.height - 4));
       break;
     case 4:
       renderer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height);
@@ -200,7 +198,7 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
   }
 }
 
-void drawLegendSwatch(GfxRenderer& renderer, const Rect& rect, const int level) {
+void drawLegendSwatch(const GfxRenderer& renderer, const Rect& rect, const int level) {
   const Rect heatRect{rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2};
 
   switch (level) {
@@ -212,7 +210,8 @@ void drawLegendSwatch(GfxRenderer& renderer, const Rect& rect, const int level) 
       break;
     case 3:
       renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::DarkGray);
-      renderer.drawRect(heatRect.x + 2, heatRect.y + 2, std::max(0, heatRect.width - 4), std::max(0, heatRect.height - 4));
+      renderer.drawRect(heatRect.x + 2, heatRect.y + 2, std::max(0, heatRect.width - 4),
+                        std::max(0, heatRect.height - 4));
       break;
     case 4:
       renderer.fillRect(heatRect.x, heatRect.y, heatRect.width, heatRect.height);
@@ -253,7 +252,6 @@ std::array<HeatmapCell, 42> buildHeatmapCells(const int year, const unsigned mon
                                               const uint32_t selectedDayOrdinal) {
   std::array<HeatmapCell, 42> cells{};
   const uint32_t firstDayOrdinal = TimeUtils::getDayOrdinalForDate(year, month, 1);
-  const unsigned daysInMonth = getDaysInMonth(year, month);
   const int firstWeekday = static_cast<int>((firstDayOrdinal + 3U) % 7U);  // Monday = 0
   const uint32_t gridStartOrdinal = firstDayOrdinal - static_cast<uint32_t>(firstWeekday);
 
@@ -284,7 +282,7 @@ std::array<HeatmapCell, 42> buildHeatmapCells(const int year, const unsigned mon
   return cells;
 }
 
-void drawLegend(GfxRenderer& renderer, const Rect& rect) {
+void drawLegend(const GfxRenderer& renderer, const Rect& rect) {
   struct LegendLevel {
     int level;
     const char* label;
@@ -318,10 +316,10 @@ void ReadingHeatmapActivity::onEnter() {
 }
 
 void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
-  int currentYear = 0;
-  unsigned currentMonth = 0;
   unsigned currentDay = 1;
   if (selectedDayOrdinal != 0) {
+    int currentYear = 0;
+    unsigned currentMonth = 0;
     TimeUtils::getDateFromDayOrdinal(selectedDayOrdinal, currentYear, currentMonth, currentDay);
   }
 
@@ -342,20 +340,6 @@ void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
   requestUpdate();
 }
 
-void ReadingHeatmapActivity::goToReferenceMonth() {
-  uint32_t referenceDayOrdinal = 0;
-  int year = 0;
-  unsigned month = 0;
-  resolveReferenceMonth(year, month, referenceDayOrdinal);
-  if (year == viewedYear && month == viewedMonth) {
-    return;
-  }
-  viewedYear = year;
-  viewedMonth = month;
-  resetSelectedDay();
-  requestUpdate();
-}
-
 void ReadingHeatmapActivity::resetSelectedDay() {
   uint32_t referenceDayOrdinal = 0;
   resolveReferenceMonth(viewedYear, viewedMonth, referenceDayOrdinal);
@@ -363,8 +347,8 @@ void ReadingHeatmapActivity::resetSelectedDay() {
   int year = 0;
   unsigned month = 0;
   unsigned day = 0;
-  if (referenceDayOrdinal != 0 && TimeUtils::getDateFromDayOrdinal(referenceDayOrdinal, year, month, day) && year == viewedYear &&
-      month == viewedMonth) {
+  if (referenceDayOrdinal != 0 && TimeUtils::getDateFromDayOrdinal(referenceDayOrdinal, year, month, day) &&
+      year == viewedYear && month == viewedMonth) {
     selectedDayOrdinal = referenceDayOrdinal;
     return;
   }
@@ -395,7 +379,8 @@ void ReadingHeatmapActivity::moveSelection(const int delta) {
   int year = 0;
   unsigned month = 0;
   unsigned day = 0;
-  if (!TimeUtils::getDateFromDayOrdinal(selectedDayOrdinal, year, month, day) || year != viewedYear || month != viewedMonth) {
+  if (!TimeUtils::getDateFromDayOrdinal(selectedDayOrdinal, year, month, day) || year != viewedYear ||
+      month != viewedMonth) {
     resetSelectedDay();
     requestUpdate();
     return;
@@ -460,9 +445,10 @@ void ReadingHeatmapActivity::render(RenderLock&&) {
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_HEATMAP));
 
   const uint32_t referenceTimestamp = getReferenceDisplayTimestamp();
-  const uint32_t referenceDayOrdinal = TimeUtils::isClockValid(referenceTimestamp)
-                                           ? TimeUtils::getLocalDayOrdinal(referenceTimestamp)
-                                           : (READING_STATS.hasReadingDays() ? READING_STATS.getReadingDays().back().dayOrdinal : 0);
+  const uint32_t referenceDayOrdinal =
+      TimeUtils::isClockValid(referenceTimestamp)
+          ? TimeUtils::getLocalDayOrdinal(referenceTimestamp)
+          : (READING_STATS.hasReadingDays() ? READING_STATS.getReadingDays().back().dayOrdinal : 0);
   const auto monthSummary = buildMonthSummary(viewedYear, viewedMonth);
   const auto cells = buildHeatmapCells(viewedYear, viewedMonth, referenceDayOrdinal, selectedDayOrdinal);
   const std::string monthLabel = formatMonthLabel(viewedYear, viewedMonth);
@@ -473,17 +459,16 @@ void ReadingHeatmapActivity::render(RenderLock&&) {
 
   const int summaryTop = contentTop + MONTH_HEADER_HEIGHT + 4;
   const int cardWidth = (pageWidth - sidePadding * 2 - SUMMARY_CARD_GAP) / 2;
-  const std::string bestDayValue =
-      monthSummary.bestDayOfMonth > 0
-          ? ReadingStatsAnalytics::formatDurationHm(monthSummary.bestDayReadingMs) + " (" +
-                std::to_string(monthSummary.bestDayOfMonth) + ")"
-          : ReadingStatsAnalytics::formatDurationHm(monthSummary.bestDayReadingMs);
+  const std::string bestDayValue = monthSummary.bestDayOfMonth > 0
+                                       ? ReadingStatsAnalytics::formatDurationHm(monthSummary.bestDayReadingMs) + " (" +
+                                             std::to_string(monthSummary.bestDayOfMonth) + ")"
+                                       : ReadingStatsAnalytics::formatDurationHm(monthSummary.bestDayReadingMs);
   drawMetricCard(renderer, Rect{sidePadding, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT}, tr(STR_MONTH_TOTAL),
                  ReadingStatsAnalytics::formatDurationHm(monthSummary.totalReadingMs));
   drawMetricCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_CARD_GAP, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_DAYS_READ), std::to_string(monthSummary.daysRead));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_CARD_GAP, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
+  drawMetricCard(renderer,
+                 Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_CARD_GAP, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_BEST_DAY), bestDayValue);
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_CARD_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_CARD_GAP,

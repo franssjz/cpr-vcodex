@@ -51,8 +51,8 @@ std::vector<std::string> splitLinesPreserveEmpty(const std::string& value) {
 
 void IfFoundActivity::loadContent() {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const int textWidth =
-      renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth - metrics.scrollBarRightOffset - 8;
+  const int textWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth -
+                        metrics.scrollBarRightOffset - 8;
 
   introLines = renderer.wrappedText(UI_10_FONT_ID, tr(STR_IF_FOUND_MESSAGE), textWidth, 8, EpdFontFamily::REGULAR);
 

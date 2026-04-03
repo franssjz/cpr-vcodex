@@ -1,0 +1,318 @@
+name: CI (Comprehensive Build & Test)
+
+# Triggers:
+# - On push to master and develop branches
+# - On pull requests to any branch
+# - Manual trigger (workflow_dispatch)
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # Code formatting check using clang-format
+  clang-format:
+    name: Code Formatting (clang-format)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install clang-format-21
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
+          sudo apt-get update
+          sudo apt-get install -y clang-format-21
+
+      - name: Run clang-format
+        run: |
+          PATH="/usr/lib/llvm-21/bin:$PATH" ./bin/clang-format-fix
+          git diff --exit-code || (echo "❌ Please run 'bin/clang-format-fix' to fix formatting issues" && exit 1)
+
+  # Static analysis using cppcheck
+  cppcheck:
+    name: Static Analysis (cppcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Run PlatformIO Check (cppcheck)
+        run: pio check --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+
+  # Build firmware (default development environment)
+  build:
+    name: Build Firmware (default)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Build Firmware (default environment)
+        run: |
+          set -euo pipefail
+          pio run -e default 2>&1 | tee pio-build.log
+
+      - name: Extract Firmware Build Stats
+        id: stats
+        run: |
+          set -euo pipefail
+          ram_line="$(grep -E "RAM:\s" -m1 pio-build.log || echo 'RAM: not found')"
+          flash_line="$(grep -E "Flash:\s" -m1 pio-build.log || echo 'Flash: not found')"
+          echo "ram=${ram_line}" >> $GITHUB_OUTPUT
+          echo "flash=${flash_line}" >> $GITHUB_OUTPUT
+          {
+            echo "## 📊 Firmware Build Stats"
+            echo "- ${ram_line}"
+            echo "- ${flash_line}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Firmware Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-default-build
+          path: .pio/build/default/firmware.bin
+          if-no-files-found: warn
+          retention-days: 10
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-build-logs
+          path: pio-build.log
+          if-no-files-found: warn
+          retention-days: 5
+
+  # Build vcodex_release environment
+  build-vcodex-release:
+    name: Build Firmware (vcodex_release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+            .pio
+          key: ${{ runner.os }}-platformio-${{ hashFiles('**/platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-platformio-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Build Firmware (vcodex_release environment)
+        run: |
+          set -euo pipefail
+          pio run -e vcodex_release 2>&1 | tee pio-vcodex-build.log
+
+      - name: Extract Firmware Build Stats
+        id: stats
+        run: |
+          set -euo pipefail
+          ram_line="$(grep -E "RAM:\s" -m1 pio-vcodex-build.log || echo 'RAM: not found')"
+          flash_line="$(grep -E "Flash:\s" -m1 pio-vcodex-build.log || echo 'Flash: not found')"
+          echo "ram=${ram_line}" >> $GITHUB_OUTPUT
+          echo "flash=${flash_line}" >> $GITHUB_OUTPUT
+          {
+            echo "## 📊 vcodex_release Build Stats"
+            echo "- ${ram_line}"
+            echo "- ${flash_line}"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Firmware Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpr-vcodex-vcodex-release-build
+          path: .pio/build/vcodex_release/firmware.bin
+          if-no-files-found: warn
+          retention-days: 10
+
+  # Native unit tests (compiled with g++ and Unity test framework)
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Unity test framework
+        run: |
+          set -euo pipefail
+          UNITY_REPO="https://github.com/ThrowTheSwitch/Unity.git"
+          UNITY_REF="cbcd08fa7de711053a3deec6339ee89cad5d2697"
+          git clone "${UNITY_REPO}" /tmp/Unity
+          git -C /tmp/Unity checkout --detach "${UNITY_REF}"
+
+      - name: Run native unit tests
+        run: ./test/run_tests.sh
+
+  # CI status check gate - ensures all required jobs pass
+  ci-status:
+    name: CI Status Check
+    needs: [clang-format, cppcheck, build, build-vcodex-release, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check CI Status
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "❌ CI failed or was cancelled"
+            exit 1
+          else
+            echo "✅ All CI checks passed"
+          fi
+
+  # Create GitHub Release with firmware binary on successful master builds
+  release:
+    name: Create Release
+    needs: [ci-status, build-vcodex-release]
+    if: success() && github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vcodex_release firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: cpr-vcodex-vcodex-release-build
+          path: release-artifacts/
+
+      - name: Get version info
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version' platformio.ini | head -1 | sed 's/.*= *//')
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Rename firmware artifact
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          SRC="release-artifacts/firmware.bin"
+          DEST="release-artifacts/cpr-vcodex_v${VERSION}_esp32c3.bin"
+          if [ ! -f "$SRC" ]; then
+            echo "❌ firmware.bin not found — build artifact missing"
+            exit 1
+          fi
+          mv "$SRC" "$DEST"
+          echo "✅ Renamed to $(basename $DEST)"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2.2.2
+        with:
+          tag_name: latest
+          name: "Latest Build \u2014 v${{ steps.version.outputs.version }} (${{ steps.version.outputs.short_sha }})"
+          body: |
+            ## CrossPoint Reader v${{ steps.version.outputs.version }}
+
+            Automated release from the latest successful CI build on `master`.
+
+            | Field | Value |
+            |-------|-------|
+            | **Version** | ${{ steps.version.outputs.version }} |
+            | **Commit** | [`${{ steps.version.outputs.short_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+            | **Build date** | ${{ github.event.head_commit.timestamp }} |
+            | **Platform** | ESP32-C3 (RISC-V, 160 MHz, 380 KB RAM) |
+
+            ---
+
+            ## Flashing Instructions
+
+            You can flash the firmware using the online web tool:
+            https://xteink.dve.al
+
+            1. Open the link above in a compatible browser.
+            2. Connect your device via USB.
+            3. Select the downloaded `.bin` file.
+            4. Follow the on-screen instructions to complete the flashing process.
+          files: release-artifacts/cpr-vcodex_v${{ steps.version.outputs.version }}_esp32c3.bin
+          draft: false
+          prerelease: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

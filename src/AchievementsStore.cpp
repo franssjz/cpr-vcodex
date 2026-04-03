@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+#include <numeric>
 
 #include "CrossPointSettings.h"
 #include "activities/reader/BookmarkStore.h"
@@ -18,21 +19,15 @@ namespace {
 constexpr char ACHIEVEMENTS_FILE_JSON[] = "/.crosspoint/achievements.json";
 
 uint32_t countGoalDaysFromStats() {
-  uint32_t count = 0;
-  for (const auto& day : READING_STATS.getReadingDays()) {
-    if (day.readingMs >= getDailyReadingGoalMs()) {
-      ++count;
-    }
-  }
-  return count;
+  const auto& days = READING_STATS.getReadingDays();
+  return static_cast<uint32_t>(std::count_if(days.begin(), days.end(),
+                                             [](const auto& day) { return day.readingMs >= getDailyReadingGoalMs(); }));
 }
 
 uint32_t countSessionsFromStats() {
-  uint32_t count = 0;
-  for (const auto& book : READING_STATS.getBooks()) {
-    count += book.sessions;
-  }
-  return count;
+  const auto& books = READING_STATS.getBooks();
+  return std::accumulate(books.begin(), books.end(), uint32_t{0},
+                         [](uint32_t sum, const auto& book) { return sum + book.sessions; });
 }
 
 uint32_t countCurrentBookmarksFromStats() {
@@ -51,11 +46,9 @@ uint32_t countCurrentBookmarksFromStats() {
 }
 
 uint32_t findLongestSessionFromStats() {
-  uint32_t maxSessionMs = 0;
-  for (const auto& book : READING_STATS.getBooks()) {
-    maxSessionMs = std::max(maxSessionMs, book.lastSessionMs);
-  }
-  return maxSessionMs;
+  const auto& books = READING_STATS.getBooks();
+  return std::accumulate(books.begin(), books.end(), uint32_t{0},
+                         [](uint32_t maxMs, const auto& book) { return std::max(maxMs, book.lastSessionMs); });
 }
 
 std::string formatDurationCompact(const uint64_t totalMs) {
@@ -203,12 +196,12 @@ const std::array<AchievementDefinition, static_cast<size_t>(AchievementId::_COUN
                             30ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_THIRTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::FortyFiveMinuteSession, AchievementMetric::MaxSessionMs,
                             45ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_FORTY_FIVE_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs,
-                            60ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
+      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs, 60ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::NinetyMinuteSession, AchievementMetric::MaxSessionMs,
                             90ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_NINETY_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs,
-                            120ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
+      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs, 120ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
   };
   return items;
 }
@@ -225,9 +218,8 @@ bool AchievementsStore::hasString(const std::vector<std::string>& values, const 
 
 const AchievementDefinition& AchievementsStore::getDefinition(const AchievementId id) const {
   const auto& items = definitions();
-  const auto it = std::find_if(items.begin(), items.end(), [id](const AchievementDefinition& definition) {
-    return definition.id == id;
-  });
+  const auto it = std::find_if(items.begin(), items.end(),
+                               [id](const AchievementDefinition& definition) { return definition.id == id; });
 
   if (it != items.end()) {
     return *it;
@@ -516,7 +508,7 @@ std::vector<AchievementView> AchievementsStore::buildViews() const {
     if (lhs.state.unlocked != rhs.state.unlocked) {
       return lhs.state.unlocked > rhs.state.unlocked;
     }
-    if (lhs.state.unlocked && rhs.state.unlocked && lhs.state.unlockedAt != rhs.state.unlockedAt) {
+    if (lhs.state.unlocked && lhs.state.unlockedAt != rhs.state.unlockedAt) {
       return lhs.state.unlockedAt > rhs.state.unlockedAt;
     }
     return false;

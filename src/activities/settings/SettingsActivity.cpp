@@ -1,18 +1,18 @@
 #include "SettingsActivity.h"
 
 #include <Arduino.h>
-#include <HalStorage.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <Logging.h>
 
 #include <algorithm>
 #include <ctime>
 
+#include "AchievementsStore.h"
 #include "ButtonRemapActivity.h"
 #include "CalibreSettingsActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
-#include "AchievementsStore.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
@@ -24,15 +24,14 @@
 #include "ShortcutVisibilityActivity.h"
 #include "StatusBarSettingsActivity.h"
 #include "TimeZoneSelectActivity.h"
-#include "activities/util/ConfirmationActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/TimeUtils.h"
 
-const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
-                                                              StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM,
-                                                              StrId::STR_APPS};
+const StrId SettingsActivity::categoryNames[categoryCount] = {
+    StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER, StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM, StrId::STR_APPS};
 
 namespace {
 std::string getReadingStatsExportPath() {
@@ -59,8 +58,7 @@ bool startsWith(const std::string& value, const std::string& prefix) {
 }
 
 bool endsWith(const std::string& value, const std::string& suffix) {
-  return value.size() >= suffix.size() &&
-         value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+  return value.size() >= suffix.size() && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 std::string getLatestReadingStatsImportPath() {
@@ -186,18 +184,16 @@ void SettingsActivity::buildSettingsLists() {
   appSettings.push_back(SettingInfo::Section(StrId::STR_DAY_SYNC_SECTION));
   appSettings.push_back(
       SettingInfo::Toggle(StrId::STR_DISPLAY_DAY, &CrossPointSettings::displayDay, "displayDay", StrId::STR_APPS));
-  appSettings.push_back(SettingInfo::Toggle(StrId::STR_AUTO_SYNC_DAY, &CrossPointSettings::autoSyncDay, "autoSyncDay",
-                                            StrId::STR_APPS));
   appSettings.push_back(
-      SettingInfo::Enum(StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
-                        {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
-                         StrId::STR_DATE_FORMAT_YYYY_MM_DD},
-                        "dateFormat", StrId::STR_APPS));
+      SettingInfo::Toggle(StrId::STR_AUTO_SYNC_DAY, &CrossPointSettings::autoSyncDay, "autoSyncDay", StrId::STR_APPS));
+  appSettings.push_back(SettingInfo::Enum(
+      StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
+      {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY, StrId::STR_DATE_FORMAT_YYYY_MM_DD},
+      "dateFormat", StrId::STR_APPS));
   appSettings.push_back(SettingInfo::Action(StrId::STR_TIME_ZONE, SettingAction::TimeZone));
   appSettings.push_back(SettingInfo::Section(StrId::STR_READING_STATS));
   appSettings.push_back(SettingInfo::Enum(StrId::STR_DAILY_GOAL, &CrossPointSettings::dailyGoalTarget,
-                                          {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45,
-                                           StrId::STR_MIN_60},
+                                          {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45, StrId::STR_MIN_60},
                                           "dailyGoalTarget", StrId::STR_APPS));
   appSettings.push_back(SettingInfo::Toggle(StrId::STR_SHOW_AFTER_READING, &CrossPointSettings::showStatsAfterReading,
                                             "showStatsAfterReading", StrId::STR_APPS));
@@ -421,15 +417,15 @@ void SettingsActivity::toggleCurrentSetting() {
                                resultHandler);
         break;
       case SettingAction::ResetReadingStats:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_RESET_READING_STATS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   RenderLock lock(*this);
-                                   READING_STATS.reset();
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RESET_READING_STATS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                RenderLock lock(*this);
+                READING_STATS.reset();
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::ExportReadingStats: {
         showTransientPopup(tr(STR_EXPORTING), 20, 120);
@@ -441,32 +437,32 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       }
       case SettingAction::ImportReadingStats:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_IMPORT_READING_STATS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   const std::string importPath = getLatestReadingStatsImportPath();
-                                   if (importPath.empty()) {
-                                     showTransientPopup(tr(STR_NO_READING_STATS_EXPORT), -1, 700);
-                                   } else {
-                                     showTransientPopup(tr(STR_IMPORTING), 20, 120);
-                                     const bool imported = READING_STATS.importFromFile(importPath);
-                                     showTransientPopup(imported ? tr(STR_IMPORT_DONE) : tr(STR_IMPORT_FAILED),
-                                                        imported ? 100 : -1, imported ? 350 : 700);
-                                   }
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_IMPORT_READING_STATS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                const std::string importPath = getLatestReadingStatsImportPath();
+                if (importPath.empty()) {
+                  showTransientPopup(tr(STR_NO_READING_STATS_EXPORT), -1, 700);
+                } else {
+                  showTransientPopup(tr(STR_IMPORTING), 20, 120);
+                  const bool imported = READING_STATS.importFromFile(importPath);
+                  showTransientPopup(imported ? tr(STR_IMPORT_DONE) : tr(STR_IMPORT_FAILED), imported ? 100 : -1,
+                                     imported ? 350 : 700);
+                }
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::ResetAchievements:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_RESET_ACHIEVEMENTS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   ACHIEVEMENTS.reset();
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RESET_ACHIEVEMENTS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                ACHIEVEMENTS.reset();
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::SyncAchievementsFromStats:
         showTransientPopup(tr(STR_SYNC_WITH_PREV_STATS), 20, 120);
@@ -522,8 +518,8 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
   }
 
   int firstVisibleIndex = 0;
-  int visibleWindowHeight = 0;
   if (selectedSettingIndex > 0) {
+    int visibleWindowHeight = 0;
     const int selectedIndex = std::clamp(selectedSettingIndex - 1, 0, settingsCount - 1);
     for (int index = 0; index <= selectedIndex; ++index) {
       visibleWindowHeight += getItemHeight(settings[index]);
@@ -630,9 +626,10 @@ void SettingsActivity::render(RenderLock&&) {
     renderAppSettingsList(listRect);
   } else {
     const auto& settings = *currentSettings;
-    GUI.drawList(renderer, listRect, settingsCount, selectedSettingIndex - 1,
-                 [&settings](int index) { return std::string(I18N.get(settings[index].nameId)); }, nullptr, nullptr,
-                 [&settings](int i) { return getSettingValueText(settings[i]); }, true);
+    GUI.drawList(
+        renderer, listRect, settingsCount, selectedSettingIndex - 1,
+        [&settings](int index) { return std::string(I18N.get(settings[index].nameId)); }, nullptr, nullptr,
+        [&settings](int i) { return getSettingValueText(settings[i]); }, true);
   }
 
   // Draw help text
@@ -641,9 +638,9 @@ void SettingsActivity::render(RenderLock&&) {
     confirmLabel = I18N.get(categoryNames[(selectedCategoryIndex + 1) % categoryCount]);
   } else {
     const auto& selectedSetting = (*currentSettings)[selectedSettingIndex - 1];
-    confirmLabel =
-        (selectedSetting.type == SettingType::ACTION || selectedSetting.type == SettingType::SECTION) ? tr(STR_SELECT)
-                                                                                                       : tr(STR_TOGGLE);
+    confirmLabel = (selectedSetting.type == SettingType::ACTION || selectedSetting.type == SettingType::SECTION)
+                       ? tr(STR_SELECT)
+                       : tr(STR_TOGGLE);
   }
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

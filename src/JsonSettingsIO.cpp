@@ -1,3 +1,4 @@
+
 #include "JsonSettingsIO.h"
 
 #include <ArduinoJson.h>
@@ -9,10 +10,10 @@
 #include <cstring>
 #include <string>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
-#include "AchievementsStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
@@ -54,17 +55,50 @@ class HalFileStream : public Stream {
   int peekedByte = -1;
 };
 
+/**
+ * @brief Atomically write JSON to file using temp file + rename pattern
+ * Prevents corruption on power loss by ensuring file is complete before rename
+ * @param moduleName Module identifier for logging
+ * @param path Destination file path
+ * @param doc JsonDocument to serialize and write
+ * @return true if atomic write succeeded
+ *
+ * Pattern: Write to path.tmp → flush() → close() → rename to final path
+ * If crash occurs during temp write, original file remains untouched
+ * If crash during rename, temp file cleanup on next boot
+ */
 bool saveJsonDocumentToFile(const char* moduleName, const char* path, const JsonDocument& doc) {
+  // Build temporary file path: "/path/file.json" → "/path/.file.json.tmp"
+  char tempPath[256];
+  snprintf(tempPath, sizeof(tempPath), "%s.tmp", path);
+
+  // Write to temporary file first
   HalFile file;
-  if (!Storage.openFileForWrite(moduleName, path, file)) {
-    LOG_ERR(moduleName, "Could not open JSON file for write: %s", path);
+  if (!Storage.openFileForWrite(moduleName, tempPath, file)) {
+    LOG_ERR(moduleName, "Could not open temp JSON file for write: %s", tempPath);
     return false;
   }
 
   const size_t written = serializeJson(doc, file);
   file.flush();
-  file.close();
-  return written > 0;
+  const bool closeOk = file.close();
+
+  if (written == 0 || !closeOk) {
+    LOG_ERR(moduleName, "Failed to write JSON to temp file, removing: %s", tempPath);
+    Storage.remove(tempPath);
+    return false;
+  }
+
+  // Atomic rename: temp file → final path
+  // On SPIFFS/SdFat, rename with target existing deletes target first
+  if (!Storage.rename(tempPath, path)) {
+    LOG_ERR(moduleName, "Failed atomic rename from %s to %s", tempPath, path);
+    Storage.remove(tempPath);  // Clean up temp file
+    return false;
+  }
+
+  LOG_DBG(moduleName, "Atomically wrote JSON to: %s", path);
+  return true;
 }
 
 bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocument& doc) {
@@ -81,6 +115,33 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
     LOG_ERR(moduleName, "JSON parse error: %s", error.c_str());
     return false;
   }
+  return true;
+}
+
+/**
+ * @brief Safely load JSON document with validation
+ * @param moduleName Module identifier for logging
+ * @param path File path to load from
+ * @param doc JsonDocument to populate
+ * @param requiredFields Array of required field names for validation
+ * @return true if loaded and validated successfully
+ *
+ * Validates required fields to prevent crashes from corrupted JSON files.
+ */
+bool safeLoadJsonDocument(const char* moduleName, const char* path, JsonDocument& doc,
+                          const std::vector<const char*>& requiredFields = {}) {
+  if (!loadJsonDocumentFromFile(moduleName, path, doc)) {
+    return false;
+  }
+
+  // Validate required fields to prevent runtime crashes
+  for (const char* field : requiredFields) {
+    if (!doc.containsKey(field)) {
+      LOG_ERR(moduleName, "Invalid JSON: missing required field '%s'", field);
+      return false;
+    }
+  }
+
   return true;
 }
 }  // namespace
@@ -143,6 +204,7 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["readerActivityLoadCount"] = s.readerActivityLoadCount;
   doc["lastSleepFromReader"] = s.lastSleepFromReader;
   doc["lastKnownValidTimestamp"] = s.lastKnownValidTimestamp;
+  doc["lastAutoTimeSync"] = s.lastAutoTimeSync;
 
   return saveJsonDocumentToFile("CPS", path, doc);
 }
@@ -160,6 +222,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | (uint8_t)0;
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
   s.lastKnownValidTimestamp = doc["lastKnownValidTimestamp"] | static_cast<uint32_t>(0);
+  s.lastAutoTimeSync = doc["lastAutoTimeSync"] | static_cast<uint32_t>(0);
   return true;
 }
 
@@ -222,6 +285,12 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepShortcutVisible"] = s.sleepShortcutVisible;
   doc["fontSizeSchemaVersion"] = FONT_SIZE_SCHEMA_VERSION;
 
+  // Check for allocation failures
+  if (doc.overflowed()) {
+    LOG_ERR("CPS", "Settings JSON document allocation failed, save aborted");
+    return false;
+  }
+
   return saveJsonDocumentToFile("CPS", path, doc);
 }
 
@@ -231,6 +300,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
+    return false;
+  }
+
+  if (doc.overflowed()) {
+    LOG_ERR("CPS", "Settings JSON allocation failed (possible corruption or attack)");
     return false;
   }
 
@@ -249,18 +323,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
     if (info.stringOffset) {
       const char* strPtr = (const char*)&s + info.stringOffset;
-      const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
-      std::string val;
-      if (info.obfuscated) {
-        bool ok = false;
-        val = obfuscation::deobfuscateFromBase64(doc[std::string(info.key) + "_obf"] | "", &ok);
-        if (!ok || val.empty()) {
-          val = doc[info.key] | fieldDefault;
-          if (val != fieldDefault && needsResave) *needsResave = true;
-        }
-      } else {
-        val = doc[info.key] | fieldDefault;
-      }
+      // Use fixed 256-byte buffer instead of std::string to avoid heap fragmentation
+      // Most settings fields are < 128 bytes; 256 provides 2x headroom
+      char valBuf[256];
+      const size_t maxLen = sizeof(valBuf) - 1;
+
+      // Read current default into fixed buffer (O(1) no allocation)
+      strncpy(valBuf, strPtr, maxLen);
+      valBuf[maxLen] = '\0';
+      const std::string_view fieldDefault(valBuf);  // View only, no allocation
+
       char* destPtr = (char*)&s + info.stringOffset;
       if (info.stringMaxLen == 0) {
         LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
@@ -268,7 +340,39 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
         if (needsResave) *needsResave = true;
         continue;
       }
-      strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
+
+      if (info.obfuscated) {
+        // Avoid creating temporary std::string for key lookup
+        // Construct obfuscated key name in fixed buffer
+        char obfuscatedKey[128];
+        snprintf(obfuscatedKey, sizeof(obfuscatedKey), "%s_obf", info.key);
+
+        bool ok = false;
+        const char* obfuscatedValue = doc[obfuscatedKey] | "";
+        std::string deobfuscated = obfuscation::deobfuscateFromBase64(obfuscatedValue, &ok);
+
+        // Copy deobfuscated result into fixed buffer
+        if (ok && !deobfuscated.empty()) {
+          strncpy(valBuf, deobfuscated.c_str(), maxLen);
+          valBuf[maxLen] = '\0';
+        } else {
+          // Fallback to standard key if obfuscated fails
+          const char* standardValue = doc[info.key] | "";
+          strncpy(valBuf, standardValue, maxLen);
+          valBuf[maxLen] = '\0';
+          if (strcmp(valBuf, fieldDefault.data()) != 0 && needsResave) {
+            *needsResave = true;
+          }
+        }
+      } else {
+        // Non-obfuscated: copy from JSON directly into fixed buffer
+        const char* jsonValue = doc[info.key] | "";
+        strncpy(valBuf, jsonValue, maxLen);
+        valBuf[maxLen] = '\0';
+      }
+
+      // Copy final result to destination
+      strncpy(destPtr, valBuf, info.stringMaxLen - 1);
       destPtr[info.stringMaxLen - 1] = '\0';
     } else {
       const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
@@ -316,12 +420,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     s.sleepDirectory[sizeof(s.sleepDirectory) - 1] = '\0';
   }
   s.sleepImageOrder = clamp(doc["sleepImageOrder"] | (uint8_t)CrossPointSettings::SLEEP_IMAGE_SHUFFLE,
-                            CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT,
-                            CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
+                            CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT, CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
 
   const uint8_t shortcutOrderCount = static_cast<uint8_t>(getShortcutDefinitions().size() + 1);
-  s.appsHubShortcutOrder = clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount,
-                                 s.appsHubShortcutOrder);
+  s.appsHubShortcutOrder =
+      clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount, s.appsHubShortcutOrder);
   s.browseFilesShortcutOrder = clamp(doc["browseFilesShortcutOrder"] | s.browseFilesShortcutOrder, shortcutOrderCount,
                                      s.browseFilesShortcutOrder);
   s.statsShortcutOrder =
@@ -348,39 +451,30 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                       shortcutOrderCount, s.fileTransferShortcutOrder);
   s.sleepShortcutOrder =
       clamp(doc["sleepShortcutOrder"] | s.sleepShortcutOrder, shortcutOrderCount, s.sleepShortcutOrder);
-  s.browseFilesShortcutVisible =
-      clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible, static_cast<uint8_t>(2),
-            s.browseFilesShortcutVisible);
+  s.browseFilesShortcutVisible = clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible,
+                                       static_cast<uint8_t>(2), s.browseFilesShortcutVisible);
   s.statsShortcutVisible =
       clamp(doc["statsShortcutVisible"] | s.statsShortcutVisible, static_cast<uint8_t>(2), s.statsShortcutVisible);
-  s.syncDayShortcutVisible =
-      clamp(doc["syncDayShortcutVisible"] | s.syncDayShortcutVisible, static_cast<uint8_t>(2), s.syncDayShortcutVisible);
-  s.settingsShortcutVisible =
-      clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
-            s.settingsShortcutVisible);
-  s.readingStatsShortcutVisible =
-      clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible, static_cast<uint8_t>(2),
-            s.readingStatsShortcutVisible);
-  s.readingHeatmapShortcutVisible =
-      clamp(doc["readingHeatmapShortcutVisible"] | s.readingHeatmapShortcutVisible, static_cast<uint8_t>(2),
-            s.readingHeatmapShortcutVisible);
-  s.achievementsShortcutVisible =
-      clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible, static_cast<uint8_t>(2),
-            s.achievementsShortcutVisible);
-  s.ifFoundShortcutVisible =
-      clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
-            s.ifFoundShortcutVisible);
+  s.syncDayShortcutVisible = clamp(doc["syncDayShortcutVisible"] | s.syncDayShortcutVisible, static_cast<uint8_t>(2),
+                                   s.syncDayShortcutVisible);
+  s.settingsShortcutVisible = clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
+                                    s.settingsShortcutVisible);
+  s.readingStatsShortcutVisible = clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible,
+                                        static_cast<uint8_t>(2), s.readingStatsShortcutVisible);
+  s.readingHeatmapShortcutVisible = clamp(doc["readingHeatmapShortcutVisible"] | s.readingHeatmapShortcutVisible,
+                                          static_cast<uint8_t>(2), s.readingHeatmapShortcutVisible);
+  s.achievementsShortcutVisible = clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible,
+                                        static_cast<uint8_t>(2), s.achievementsShortcutVisible);
+  s.ifFoundShortcutVisible = clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
+                                   s.ifFoundShortcutVisible);
   s.readMeShortcutVisible =
       clamp(doc["readMeShortcutVisible"] | s.readMeShortcutVisible, static_cast<uint8_t>(2), s.readMeShortcutVisible);
-  s.recentBooksShortcutVisible =
-      clamp(doc["recentBooksShortcutVisible"] | s.recentBooksShortcutVisible, static_cast<uint8_t>(2),
-            s.recentBooksShortcutVisible);
-  s.bookmarksShortcutVisible =
-      clamp(doc["bookmarksShortcutVisible"] | s.bookmarksShortcutVisible, static_cast<uint8_t>(2),
-            s.bookmarksShortcutVisible);
-  s.fileTransferShortcutVisible =
-      clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible, static_cast<uint8_t>(2),
-            s.fileTransferShortcutVisible);
+  s.recentBooksShortcutVisible = clamp(doc["recentBooksShortcutVisible"] | s.recentBooksShortcutVisible,
+                                       static_cast<uint8_t>(2), s.recentBooksShortcutVisible);
+  s.bookmarksShortcutVisible = clamp(doc["bookmarksShortcutVisible"] | s.bookmarksShortcutVisible,
+                                     static_cast<uint8_t>(2), s.bookmarksShortcutVisible);
+  s.fileTransferShortcutVisible = clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible,
+                                        static_cast<uint8_t>(2), s.fileTransferShortcutVisible);
   s.sleepShortcutVisible =
       clamp(doc["sleepShortcutVisible"] | s.sleepShortcutVisible, static_cast<uint8_t>(2), s.sleepShortcutVisible);
 
@@ -653,7 +747,8 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
 
 bool JsonSettingsIO::loadReadingStatsFromFile(ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  if (!loadJsonDocumentFromFile("RST", path, doc)) {
+  std::vector<const char*> requiredFields = {"formatVersion", "books"};
+  if (!safeLoadJsonDocument("RST", path, doc, requiredFields)) {
     return false;
   }
 

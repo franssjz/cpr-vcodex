@@ -24,15 +24,13 @@ constexpr int PROGRESS_BAR_HEIGHT = 8;
 constexpr int TITLE_TOP_GAP = 10;
 
 uint8_t getBookProgressPercent(const RecentBook& recentBook) {
-  for (const auto& book : READING_STATS.getBooks()) {
-    if (book.path == recentBook.path) {
-      return book.lastProgressPercent;
-    }
-  }
-  return 0;
+  const auto& books = READING_STATS.getBooks();
+  const auto it = std::find_if(books.begin(), books.end(),
+                               [&recentBook](const ReadingBookStats& book) { return book.path == recentBook.path; });
+  return it != books.end() ? it->lastProgressPercent : 0;
 }
 
-void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
+void drawMiniProgressBar(const GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
   const int fillWidth = std::max(0, (rect.width - 4) * std::min<int>(progressPercent, 100) / 100);
   if (fillWidth > 0) {
@@ -58,7 +56,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
         if (coverPath.empty()) {
           hasCover = false;
         } else {
-          const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, LyraCustomMetrics::values.homeCoverHeight);
+          const std::string coverBmpPath =
+              UITheme::getCoverThumbPath(coverPath, LyraCustomMetrics::values.homeCoverHeight);
 
           FsFile file;
           if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
@@ -109,7 +108,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       const std::string progressText = std::to_string(progressPercent) + "%";
       const int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
       const int progressRowHeight = std::max(titleLineHeight, PROGRESS_BAR_HEIGHT);
-      const int bottomBlockHeight = PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
+      const int bottomBlockHeight =
+          PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
 
       if (bookSelected) {
         renderer.fillRoundedRect(tileX, tileY, tileWidth, H_PADDING, CORNER_RADIUS, true, true, false, false,

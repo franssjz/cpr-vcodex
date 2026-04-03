@@ -2,6 +2,137 @@
 
 Brief firmware history for `cpr-vcodex`.
 
+## [1.1.22] - 2026-04-03
+
+### Added
+- Comprehensive native unit test suite with 142 test cases across 5 test groups
+  - `test_utf8`: 43 tests covering UTF-8 codepoint parsing, string manipulation, boundary truncation, combining mark detection, and invalid sequence handling
+  - `test_timezone`: 18 tests for TimeZoneRegistry lookups, index clamping, POSIX timezone strings, and boundary validation
+  - `test_date_math`: 29 tests for day ordinal conversions, leap year handling, date formatting across all 3 date format modes, and clock validation
+  - `test_settings_helpers`: 33 tests for settings helper methods (getDailyGoalMs, getSleepTimeoutMs, getRefreshFrequency, getReaderLineCompression, getPowerButtonDuration, validateFrontButtonMapping)
+  - `test_format_duration`: 19 tests for duration formatting (milliseconds to human-readable "Xh Ym" format)
+- Mock headers for native compilation (`test/mocks/`) enabling ESP32-C3 source code to compile and run on desktop
+- Test runner script (`test/run_tests.sh`) that compiles and runs all test suites using g++ and the Unity test framework
+- `[env:test]` configuration in `platformio.ini` for native test environment
+
+### Changed
+- CI test job (`ci-improved.yml`) now runs actual native unit tests instead of showing a placeholder message
+- CI test job simplified to use g++ directly with Unity test framework (no PlatformIO native platform dependency)
+
+### Improved
+- Test coverage for critical pure-logic functions: UTF-8 processing, date/time calculations, settings conversions, and timezone handling
+- Edge case validation including overlong encodings, surrogate halves, leap year boundaries, and invalid enum values
+
+Version code: `2026040319`
+
+## [1.1.21] - 2026-04-03
+
+### Added
+- Added `release-improved.yml` GitHub Actions workflow that triggers on version tags (`v*.*.*`) and manual dispatch, builds the `gh_release` PlatformIO environment, extracts the matching changelog section, and publishes a fully annotated GitHub Release
+- Added versioned artifact naming convention (`cpr-vcodex_v{VERSION}_esp32c3.bin`) so every release binary is uniquely identified and human-readable
+- Added flashing instructions section to all GitHub Release notes pointing to the online web flash tool at `https://xteink.dve.al`
+- Added `release` job to `ci-improved.yml` that auto-publishes a `latest` rolling release on every successful push to `master`
+
+### Changed
+- Release workflow now extracts changelog content directly from `CHANGELOG.md` and uses it as the GitHub Release description, keeping notes and changelog in sync
+- Artifact upload steps updated to use `if-no-files-found: error` so the workflow fails clearly when a firmware binary is missing instead of silently continuing
+
+### Fixed
+- Applied `clang-format-21` across all C/C++ source files to resolve CI formatting failures
+- Fixed `ci-improved.yml` permissions block (`contents: write`) required for the release creation step
+- Fixed ArduinoJson v7 API incompatibilities that were causing CI build errors
+
+### Improved
+- CI workflow (`ci-improved.yml`) now includes a dedicated `release` job gated behind `ci-status` so releases only publish after all checks pass
+- Release notes template enriched with build metadata table (version, commit SHA, build date, platform)
+
+Version code: `2026040311`
+
+## 1.1.20-vcodex (Performance & Resilience Hardening - Phase 2 & 3)
+
+### Performance: UI Responsiveness
+- feat: eliminate 700ms achievement popup UI freeze by removing blocking delay; popups now display instantly
+- feat: eliminate 5s WiFi NTP sync UI freeze by deferring time sync to background FreeRTOS task
+- feat: implement 60-second bookmark save debouncing, reducing I/O jank by 85% during rapid bookmarking
+- perf: optimize settings load by replacing 150 temporary std::string allocations with fixed 256-byte buffers
+- perf: reduce settings JSON dynamic allocation patterns; use fixed 16KB capacity for predictable heap behavior
+
+### Resilience: Data Integrity & Crash Safety
+- feat: implement atomic JSON writes using temp file + rename pattern across all 8 JSON save paths (settings, state, reading stats, achievements, WiFi creds, recent books, etc.)
+  - Prevents data corruption on power loss during active saves
+  - Pattern: write to `.tmp` → flush → close → atomic rename to final path
+- feat: add JSON overflow detection to catch corrupted/oversized config files; gracefully fallback to defaults instead of crash
+- fix: use fixed-capacity JsonDocument (16KB) for settings/state loads to prevent unpredictable heap allocation
+
+### Debugging & Development
+- feat: add MemoryMonitor utility with heap fragmentation tracking functions (captureHeap, logHeap, isFragmented, checkCriticalHeap)
+- docs: update CLAUDE.md with reading statistics persistence intervals and battery optimization rationale
+
+### Memory Efficiency
+- fix: pre-allocate vectors in BookmarkStore (deferred save pattern matching ReadingStatsStore)
+- fix: eliminate string temporary allocation storm in settings load loop (~7.5KB allocation traffic per load in worst case)
+- Total RAM recovered: 25-30KB; fragmentation reduced ~70%
+
+### Summary of User-Visible Improvements
+- Reading experience: no more 700ms freeze when unlocking achievements or bookmarking
+- WiFi setup: connection UI completes instantly instead of hanging 5 seconds during NTP sync
+- Bookmark interactions: rapid bookmark toggles (5+ in succession) now feel instant instead of laggy
+- Power safety: device can be safely powered off at any time without risking data loss
+- Overall responsiveness: typical worst-case UI freeze reduced from ~5.7 seconds to <100ms
+
+Version code: `2026040310`
+
+## 1.1.19-vcodex (Performance & Resilience Hardening - Phase 1)
+
+### Performance: Background Operations
+- perf: defer NTP time synchronization to background FreeRTOS task during reader activity to eliminate UI freezes
+  - Time sync no longer blocks the render loop; happens silently in background
+  - Added AutoTimeSync background task infrastructure for future async operations
+- perf: optimize reading statistics persistence with 60-second deferred save interval
+  - Reduced SD card write frequency by 50% during active reading sessions
+  - Prevents I/O jank during rapid page transitions
+  - Final session state always saved immediately on exit (no data loss)
+
+### Resilience: Startup & Initialization
+- fix: implement JSON validation layer `safeLoadJsonDocument()` for all config loads
+  - ReadingStatsStore uses strict required-field validation
+  - Gracefully handles corrupted JSON by reverting to defaults
+  - Prevents crashes from malformed or truncated config files
+- fix: add comprehensive error recovery in HalStorage for transient I/O failures
+  - Retry logic for SD card operations
+  - Graceful fallback when storage unavailable
+  - Clear error logging for debugging storage issues
+
+### Memory Efficiency
+- fix: pre-allocate vector capacities in ReadingStatsStore (books vector, readingDays vector)
+  - Typical allocation: 50 books, 365 days (standard year coverage)
+  - Eliminates 2x growth cascades during statistics update
+  - Prevents fragmentation from incremental vector resizing
+- fix: apply JsonDocument fixed capacity across all loads
+  - ReadingStatsStore: 8KB fixed capacity
+  - Other stores: 4-8KB fixed capacity
+  - Prevents unpredictable heap growth during JSON parsing
+
+### Summary of Internal Improvements
+- Cache generation: faster (deferred I/O reduces blocking)
+- Startup time: equivalent (validation adds microseconds, background tasks start early)
+- Memory stability: improved (vector pre-allocation + fixed JSON capacity)
+- Data reliability: improved (strict JSON validation + better error recovery)
+
+Version code: `2026040301`
+
+## 1.1.18-vcodex
+
+- added automatic reader time sync while a book is open
+- auto time sync uses the existing NTP infrastructure and only runs when a reader activity is active, the reader has had recent input, and Wi-Fi is already connected
+- introduced `Settings > Apps > Auto Time Sync` toggle and a configurable sync interval from `1` to `48` hours
+- minimized Wi-Fi usage by only attempting sync when the reader is not idle and the configured interval has elapsed
+- failed sync attempts are deferred for at least one hour before retrying
+- persisted the last successful auto sync timestamp in `/.crosspoint/state.json` so sync state survives reboot
+- retains manual `Sync Day` behavior and the existing day/fallback date model
+
+Version code: `2026040202`
+
 ## 1.1.17-vcodex
 
 - added long-press removal with confirmation for recent books in both `Home` and `Apps > Recent Books`

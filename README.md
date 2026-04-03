@@ -28,14 +28,22 @@ It keeps the strong CrossPoint base and adds a more polished day-to-day reading 
 
 This project is **not affiliated with Xteink**.
 
+## Build Status
+
+![CI Build](https://github.com/franssjz/crosspoint-reader-codex/actions/workflows/ci-improved.yml/badge.svg?branch=master)
+![Code Quality](https://github.com/franssjz/crosspoint-reader-codex/actions/workflows/ci-improved.yml/badge.svg?label=code%20quality)
+![Release](https://github.com/franssjz/crosspoint-reader-codex/actions/workflows/release-improved.yml/badge.svg)
+
+**CI/CD Pipeline**: Automated build verification, static analysis (clang-format, cppcheck), and GitHub Release automation on tag push. See [Continuous Integration](#continuous-integration) for details.
+
 ## At a glance
 
 | Item | Value |
 |---|---|
 | Base firmware | CrossPoint Reader |
 | Device | Xteink X4 |
-| Current release | `1.1.17-vcodex` |
-| Version code | `2026040201` |
+| Current release | `1.1.20-vcodex` |
+| Version code | `2026040310` |
 | Release notes | [CHANGELOG.md](./CHANGELOG.md) |
 | Recommended install | browser OTA fast flash |
 
@@ -128,6 +136,8 @@ Practical meaning:
 - one sync per day before reading is usually enough
 - after that, stats continue using the last valid saved day
 - if the real day changes, you should sync again
+
+This fork also supports automatic time sync while a book is open. Enable `Settings > Apps > Auto Time Sync` and choose a 1–48 hour interval for periodic NTP sync when Wi-Fi is connected and the reader is active.
 
 By default the time zone is `Spain / Madrid`.
 You can select your own `Time Zone` and `Date Format` from `Settings > Apps`.
@@ -445,6 +455,92 @@ Each firmware build exposes two identifiers:
 
 The boot screen shows both values, so you can identify exactly which firmware is installed on the device.
 For a brief release history, see [CHANGELOG.md](./CHANGELOG.md).
+
+## Continuous Integration
+
+This project uses GitHub Actions for automated testing, building, and releasing:
+
+### CI Workflow (`.github/workflows/ci-improved.yml`)
+
+Runs on every push to `master`/`develop` and pull requests:
+
+- **Code Formatting** (`clang-format-21`): Enforces consistent C++ code style
+- **Static Analysis** (`cppcheck`): Identifies potential bugs and code quality issues
+- **Build Verification**:
+  - `default` environment (development build with serial logging)
+  - `vcodex_release` environment (production firmware for flashable deployment)
+- **Memory & Size Analysis**: Extracts RAM/Flash usage from build output
+- **Artifact Upload**: Development builds available as downloadable artifacts (10 day retention)
+
+**Status**: Check build badge at the top of this README for current CI status.
+
+### Release Workflow (`.github/workflows/release-improved.yml`)
+
+Automatically triggered when you push a git tag matching `v*.*.*` pattern:
+
+**Example**:
+```bash
+git tag v1.1.21-vcodex
+git push origin v1.1.21-vcodex
+```
+
+The workflow then:
+
+1. **Builds** firmware using `gh_release` environment with optimizations
+2. **Extracts** changelog section from `CHANGELOG.md` for this version
+3. **Generates Release Notes**:
+   - Version header and build information
+   - Changelog entry for the release
+   - Summary of commits since previous release
+   - Installation instructions
+4. **Collects Artifacts**:
+   - `firmware.bin` - Primary firmware binary for flashing
+   - `bootloader.bin` - Bootloader (if available)
+   - `firmware.elf` - ELF file for debugging/analysis
+   - `firmware.map` - Memory map for size analysis
+   - `partitions.csv` - Partition table
+5. **Creates GitHub Release** with all artifacts and release notes
+
+**Release Tags**:
+- Semantic tags: `v1.1.20-vcodex` → Normal release
+- Pre-release variants: `v1.1.20-vcodex-rc1` or `-beta` automatically marked as pre-release
+
+### Important for Contributors
+
+**Code Submission**:
+- Your PR will automatically run through CI (formatting, analysis, build)
+- Status checks must pass before merge
+- Fix formatting with: `./bin/clang-format-fix`
+
+**Creating a Release**:
+1. Update version in `platformio.ini`:
+   ```ini
+   build_flags = ... -DFIRMWARE_VERSION_CODE=2026040500
+   ```
+2. Add entry to `CHANGELOG.md` with version header `## X.Y.Z-vcodex`
+3. Commit and tag:
+   ```bash
+   git tag v1.1.21-vcodex
+   git push origin v1.1.21-vcodex
+   ```
+4. GitHub Actions automatically builds and creates the release
+5. Verify release on [Releases page](https://github.com/franssjz/crosspoint-reader-codex/releases)
+
+**PlatformIO Environments**:
+- `default` - Development (full logging, symbolic debug info)
+- `gh_release` - Production (optimized, minimal logging)
+- `gh_release_rc` - Release candidate (moderate logging)
+- `slim` - Minimal (no serial, bare minimum)
+- `vcodex_release` - Optimized production build (main production target)
+
+### Performance Metrics Tracked
+
+CI/CD pipelines automatically extract and report:
+- **RAM Usage**: Current consumption vs previous builds
+- **Flash Usage**: Firmware size trends
+- **Build Time**: Optimization tracking
+
+See [PERFORMANCE_AND_RESILIENCE_IMPROVEMENTS.md](./docs/PERFORMANCE_AND_RESILIENCE_IMPROVEMENTS.md) for detailed optimization history.
 
 ## Build from source
 

@@ -6,8 +6,8 @@
 #include <algorithm>
 #include <string>
 
-#include "ReadingStatsExtendedActivity.h"
 #include "ReadingStatsDetailActivity.h"
+#include "ReadingStatsExtendedActivity.h"
 #include "ReadingStatsStore.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
@@ -43,27 +43,26 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
 }
 
-void drawCheckBadge(GfxRenderer& renderer, const int x, const int y) {
+void drawCheckBadge(const GfxRenderer& renderer, const int x, const int y) {
   renderer.fillRect(x, y, 18, 18, true);
   renderer.drawLine(x + 4, y + 10, x + 7, y + 13, 2, false);
   renderer.drawLine(x + 7, y + 13, x + 13, y + 5, 2, false);
 }
 
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
+void drawMetricCard(const GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
                     const bool showCheck = false) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
+  const int valueFontId = renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24
+                              ? UI_12_FONT_ID
+                              : UI_10_FONT_ID;
   const std::string truncatedValue =
       renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + 12, rect.y + (valueFontId == UI_12_FONT_ID ? 14 : 18), truncatedValue.c_str(),
                     true, EpdFontFamily::BOLD);
 
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
+  const auto labelLines = renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
   int labelY = rect.y + 42;
   for (const auto& line : labelLines) {
     renderer.drawText(UI_10_FONT_ID, rect.x + 12, labelY, line.c_str());
@@ -75,21 +74,22 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   }
 }
 
-void drawRecentWindowCard(GfxRenderer& renderer, const Rect& rect, const char* periodLabel, const std::string& value) {
+void drawRecentWindowCard(const GfxRenderer& renderer, const Rect& rect, const char* periodLabel,
+                          const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
   renderer.drawText(UI_10_FONT_ID, rect.x + 12, rect.y + 8, periodLabel, true, EpdFontFamily::BOLD);
 
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
+  const int valueFontId = renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24
+                              ? UI_12_FONT_ID
+                              : UI_10_FONT_ID;
   const std::string truncatedValue =
       renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
   renderer.drawText(valueFontId, rect.x + 12, rect.y + 24, truncatedValue.c_str(), true, EpdFontFamily::BOLD);
 }
 
-void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
+void drawMoreDetailsButton(const GfxRenderer& renderer, const Rect& rect, const bool selected) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   }
@@ -102,7 +102,7 @@ void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool s
   renderer.drawText(UI_12_FONT_ID, textX, textY, label, true, EpdFontFamily::BOLD);
 }
 
-void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
+void drawMiniProgressBar(const GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
   const int innerWidth = std::max(0, rect.width - 4);
   const int fillWidth = innerWidth * std::min<int>(percent, 100) / 100;
@@ -111,7 +111,7 @@ void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t 
   }
 }
 
-void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats& book, const bool selected) {
+void drawBookRow(const GfxRenderer& renderer, const Rect& rect, const ReadingBookStats& book, const bool selected) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
     renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
@@ -129,8 +129,8 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   const int subtitleY = innerY + 26;
   const int progressBarY = rect.y + rect.height - 14;
 
-  const std::string title = renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4,
-                                                   EpdFontFamily::BOLD);
+  const std::string title =
+      renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4, EpdFontFamily::BOLD);
   renderer.drawText(UI_12_FONT_ID, innerX, titleY, title.c_str(), true, EpdFontFamily::BOLD);
 
   const std::string subtitle =
@@ -147,8 +147,7 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   renderer.drawText(UI_12_FONT_ID, progressX, titleY, progressText.c_str(), true, EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, timeX, subtitleY, totalTimeText.c_str());
 
-  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9},
-                      book.lastProgressPercent);
+  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9}, book.lastProgressPercent);
 }
 }  // namespace
 
@@ -276,23 +275,24 @@ void ReadingStatsActivity::render(RenderLock&&) {
                  std::to_string(READING_STATS.getCurrentStreakDays()));
   drawMetricCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_MAX_STREAK), std::to_string(READING_STATS.getMaxStreakDays()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
+  drawMetricCard(renderer,
+                 Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_DAILY_GOAL), dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
                       SUMMARY_CARD_HEIGHT},
                  tr(STR_READING_TIME), formatDurationHm(READING_STATS.getTotalReadingMs()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
-                 tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
+  drawMetricCard(
+      renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth, SUMMARY_CARD_HEIGHT},
+      tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2,
                       cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_BOOKS_STARTED), std::to_string(READING_STATS.getBooksStartedCount()));
 
-  // drawRecentWindowCard(renderer, Rect{sidePadding, detailsTop, cardWidth, DETAILS_BUTTON_HEIGHT}, "7D", last7DaysValue);
-  // drawRecentWindowCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, detailsTop, cardWidth, DETAILS_BUTTON_HEIGHT},
+  // drawRecentWindowCard(renderer, Rect{sidePadding, detailsTop, cardWidth, DETAILS_BUTTON_HEIGHT}, "7D",
+  // last7DaysValue); drawRecentWindowCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, detailsTop, cardWidth,
+  // DETAILS_BUTTON_HEIGHT},
   //                      "30D", last30DaysValue);
   drawMoreDetailsButton(renderer, Rect{sidePadding, detailsTop, pageWidth - sidePadding * 2, DETAILS_BUTTON_HEIGHT},
                         selectedIndex == 0);

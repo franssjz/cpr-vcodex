@@ -2,9 +2,8 @@
 
 #include <string>
 
-#include "util/ButtonNavigator.h"
-
 #include "../Activity.h"
+#include "util/ButtonNavigator.h"
 
 struct ReadingStatsDetailContext {
   bool showSessionSummary = false;

@@ -9,17 +9,18 @@
 
 #include <algorithm>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "MappedInputManager.h"
-#include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/AutoTimeSync.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -31,9 +32,9 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   showPendingAchievementPopups(renderer);
-  const bool countedSession =
-      READING_STATS.getLastSessionSnapshot().valid && READING_STATS.getLastSessionSnapshot().counted &&
-      READING_STATS.getLastSessionSnapshot().path == bookPath;
+  const bool countedSession = READING_STATS.getLastSessionSnapshot().valid &&
+                              READING_STATS.getLastSessionSnapshot().counted &&
+                              READING_STATS.getLastSessionSnapshot().path == bookPath;
 
   if (SETTINGS.showStatsAfterReading && countedSession && !bookPath.empty()) {
     activityManager.replaceActivity(
@@ -84,6 +85,8 @@ void TxtReaderActivity::onExit() {
 
 void TxtReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  AutoTimeSync::noteReaderInteraction(mappedInput);
+  AutoTimeSync::pollReaderSync();
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
