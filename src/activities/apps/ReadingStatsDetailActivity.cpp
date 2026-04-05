@@ -193,6 +193,40 @@ std::string ensureCoverPath(const ReadingBookStats& book) {
   return "";
 }
 
+std::string findFastCoverPath(const ReadingBookStats& book) {
+  const std::string cachedResolvedPath = getCachedResolvedCoverPath(book);
+  if (!cachedResolvedPath.empty()) {
+    return cachedResolvedPath;
+  }
+
+  std::string resolved = resolveStoredCoverPath(book.coverBmpPath);
+  if (!resolved.empty()) {
+    rememberResolvedCoverPath(book, resolved);
+    return resolved;
+  }
+
+  if (!Storage.exists(book.path.c_str())) {
+    return "";
+  }
+
+  if (FsHelpers::hasEpubExtension(book.path)) {
+    Epub epub(book.path, "/.crosspoint");
+    resolved = resolveStoredCoverPath(epub.getCoverBmpPath());
+  } else if (FsHelpers::hasXtcExtension(book.path)) {
+    Xtc xtc(book.path, "/.crosspoint");
+    resolved = resolveStoredCoverPath(xtc.getCoverBmpPath());
+  } else if (FsHelpers::hasTxtExtension(book.path) || FsHelpers::hasMarkdownExtension(book.path)) {
+    Txt txt(book.path, "/.crosspoint");
+    resolved = resolveStoredCoverPath(txt.getCoverBmpPath());
+  }
+
+  if (!resolved.empty()) {
+    READING_STATS.updateBookMetadata(book.path, "", "", resolved);
+    rememberResolvedCoverPath(withCoverPath(book, resolved), resolved);
+  }
+  return resolved;
+}
+
 std::string getDisplayTitle(const ReadingBookStats& book) { return book.title.empty() ? book.path : book.title; }
 
 int findBookIndex(const std::string& bookPath) {
@@ -292,8 +326,12 @@ void drawCover(GfxRenderer& renderer, const Rect& rect, const std::string& cover
 
 void ReadingStatsDetailActivity::onEnter() {
   Activity::onEnter();
-  coverLoadPending = true;
-  coverLoaded = false;
+  resolvedCoverBmpPath.clear();
+  coverLoadPending = false;
+  if (const auto* book = findBook(bookPath)) {
+    resolvedCoverBmpPath = findFastCoverPath(*book);
+    coverLoadPending = resolvedCoverBmpPath.empty();
+  }
   requestUpdate();
 }
 
@@ -303,16 +341,15 @@ void ReadingStatsDetailActivity::setCurrentBookByIndex(const int index) {
     return;
   }
 
-  if (books[index].path == bookPath && coverLoaded) {
+  if (books[index].path == bookPath && !coverLoadPending) {
     return;
   }
 
-  const bool showLoadingTransition = coverLoaded;
+  const bool showBookTransition = !bookPath.empty();
   bookPath = books[index].path;
-  resolvedCoverBmpPath.clear();
-  coverLoadPending = true;
-  coverLoaded = false;
-  if (showLoadingTransition) {
+  resolvedCoverBmpPath = findFastCoverPath(books[index]);
+  coverLoadPending = resolvedCoverBmpPath.empty();
+  if (showBookTransition) {
     requestUpdateAndWait();
   } else {
     requestUpdate();
@@ -352,10 +389,12 @@ void ReadingStatsDetailActivity::loop() {
   if (coverLoadPending) {
     coverLoadPending = false;
     if (const auto* book = findBook(bookPath)) {
-      resolvedCoverBmpPath = ensureCoverPath(*book);
+      const std::string resolvedCoverPath = ensureCoverPath(*book);
+      if (!resolvedCoverPath.empty() && resolvedCoverPath != resolvedCoverBmpPath) {
+        resolvedCoverBmpPath = resolvedCoverPath;
+        requestUpdate();
+      }
     }
-    coverLoaded = true;
-    requestUpdate();
     return;
   }
 
@@ -377,20 +416,6 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
       lastSessionSnapshot.completedThisSession;
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
-
-  if (!coverLoaded) {
-    const Rect popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
-    GUI.fillPopupProgress(renderer, popupRect, 75);
-    if (book) {
-      renderer.drawCenteredText(UI_10_FONT_ID, metrics.topPadding + metrics.headerHeight + 145,
-                                getDisplayTitle(*book).c_str());
-    }
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", hasBookNavigation ? tr(STR_DIR_UP) : "",
-                                              hasBookNavigation ? tr(STR_DIR_DOWN) : "");
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-    renderer.displayBuffer();
-    return;
-  }
 
   if (!book) {
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, metrics.topPadding + metrics.headerHeight + 30,

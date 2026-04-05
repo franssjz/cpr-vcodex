@@ -16,7 +16,6 @@ class ReadingStatsDetailActivity final : public Activity {
   std::string resolvedCoverBmpPath;
   ReadingStatsDetailContext context;
   bool coverLoadPending = false;
-  bool coverLoaded = false;
 
   void setCurrentBookByIndex(int index);
   void navigateBook(int direction);
