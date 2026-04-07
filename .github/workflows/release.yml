@@ -116,6 +116,6 @@ jobs:
           tag_name: v${{ steps.bump_version.outputs.new }}
           name: vCodex ${{ steps.bump_version.outputs.new }}
           body_path: /tmp/release_notes.md
-          files: .pio/build/vcodex_release/firmware.bin
+          files: .pio/build/vcodex_release/vcodex-${{ steps.bump_version.outputs.new }}.bin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

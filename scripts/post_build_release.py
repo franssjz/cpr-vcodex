@@ -66,7 +66,7 @@ def after_build(target, source, env):
         return
 
     output_dir = os.path.dirname(bin_path)
-    versioned_name = f"firmware.{vcodex_version}-vcodex.bin"
+    versioned_name = f"vcodex-{vcodex_version}.bin"
     versioned_path = os.path.join(output_dir, versioned_name)
     shutil.copy2(bin_path, versioned_path)
     print(f"Post-build: created {versioned_name}")
