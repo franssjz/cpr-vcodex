@@ -42,6 +42,14 @@ CI failing on all three check jobs (clang-format, cppcheck, build) and auto-rele
 
 Brief firmware history for `cpr-vcodex`.
 
+## 1.2.0.7
+
+- bumped the fork release line to `1.2.0.7`
+- kept the current firmware feature set and upstream carry-forward state intact while publishing the new release build
+- refreshed README metadata to match the new visible fork version and version code
+
+Version code: `2026040707`
+
 ## 1.2.0.6
 
 - bumped the fork release line to `1.2.0.6`

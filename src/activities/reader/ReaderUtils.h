@@ -51,7 +51,14 @@ inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
 
 inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh) {
   if (pagesUntilFullRefresh <= 1) {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    // In dark mode, the stronger maintenance refresh causes a visible white flash
+    // on X4. Keep the cadence counter, but use FAST_REFRESH to preserve the dark
+    // reading experience instead of forcing a light-polarity-looking pass.
+    if (renderer.isDarkMode()) {
+      renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    } else {
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    }
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else {
     renderer.displayBuffer();
