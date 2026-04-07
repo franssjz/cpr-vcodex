@@ -1,3 +1,26 @@
+## 1.2.0.12 — 2026-04-07
+
+**ci: cache build objects, libdeps, and cppcheck analysis** (#8)
+
+CI build takes ~4.6 min wall-clock with the build job as the critical path (~4 min compilation). Only toolchain binaries and uv packages were cached.
+
+### Changes
+
+- **Build object cache** (`.pio/build/`): Keyed on source file hashes with `restore-keys` fallback so SCons performs incremental builds — only recompiles changed files
+- **Library dependency cache** (`.pio/libdeps/`): Added to existing package cache path in all 3 workflows (ci, release, release_candidate) to skip re-downloading ArduinoJson, PNGdec, JPEGDEC, etc.
+- **Cppcheck analysis cache**: Added `--cppcheck-build-dir=.cppcheck-cache` to `check_flags` in `platformio.ini` and cached the directory with a source-aware key so cppcheck skips re-analyzing unchanged files (~3 min → seconds on cache hit)
+
+### Cache key strategy
+
+```yaml
+# Exact match on source content; fallback restores most recent cache for incremental rebuild
+key: pio-build-${{ runner.os }}-${{ hashFiles('platformio.ini', 'src/**', 'lib/**', 'open-x4-sdk/**') }}
+restore-keys: pio-build-${{ runner.os }}-
+```
+
+Typical PR builds (few files changed) should drop from ~4.6 min to ~1-2 min.
+
+---
 ## 1.2.0.11 — 2026-04-07
 
 **Speed up GitHub Actions: PlatformIO caching, faster clang-format install** (#7)
