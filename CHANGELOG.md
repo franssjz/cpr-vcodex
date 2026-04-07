@@ -1,3 +1,21 @@
+## 1.2.0.9 — 2026-04-07
+
+**Sync with upstream franssjz/cpr-vcodex** (#5)
+
+Merges latest changes from [franssjz/cpr-vcodex](https://github.com/franssjz/cpr-vcodex) `master` into our fork. One conflict in `platformio.ini` resolved by keeping our version (`1.2.0.8`).
+
+### Upstream changes pulled in
+- **EpubReaderActivity**: Improved AA text refresh handling — skips harsh half-refresh on grayscale LUT pages, uses `FAST_REFRESH` instead to avoid inverted/flash artifacts in dark mode
+- **ActivityResult**: Replaced `std::enable_if_t` with C++20 `requires` constraint
+- **JpegToFramebufferConverter / PngToFramebufferConverter**: Simplified member initialization
+- **ReaderUtils**: Refresh utility enhancements
+- **Translations**: Russian and Ukrainian updates
+- **README / CHANGELOG**: Documentation refresh
+
+### Conflict resolution
+- `platformio.ini` `[vcodex]` version: kept ours (`1.2.0.8`) over upstream (`1.2.0.7`)
+
+---
 ## 1.2.0.8 — 2026-04-07
 
 **fix: remove -flto from vcodex_release to fix release build** (#4)
