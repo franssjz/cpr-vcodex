@@ -44,7 +44,8 @@ struct HomeShortcutEntry {
   bool isOpds = false;
 };
 
-void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth, const std::string& dateText) {
+void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth,
+                  const std::string& dateText) {
   if (dateText.empty()) {
     return;
   }
@@ -55,8 +56,10 @@ void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, cons
   int rightEdge = batteryX - 8;
 
   if (showBatteryPercentage) {
-    const std::string batteryText = std::to_string(powerManager.getBatteryPercentage()) + "%";
-    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText.c_str()) + 4;
+    // Use stack buffer to avoid heap allocation on every home screen render
+    char batteryText[8];
+    snprintf(batteryText, sizeof(batteryText), "%d%%", powerManager.getBatteryPercentage());
+    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText) + 4;
   }
 
   const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, dateText.c_str());
@@ -68,17 +71,25 @@ std::string formatDurationHmCompact(const uint64_t totalMs) {
   const uint64_t totalMinutes = totalMs / 60000ULL;
   const uint64_t hours = totalMinutes / 60ULL;
   const uint64_t minutes = totalMinutes % 60ULL;
+  // Use stack buffer to avoid multiple heap allocations from string concatenation
+  char buffer[32];
   if (hours == 0) {
-    return std::to_string(minutes) + "m";
+    snprintf(buffer, sizeof(buffer), "%llum", (unsigned long long)minutes);
+  } else {
+    snprintf(buffer, sizeof(buffer), "%lluh %llum", (unsigned long long)hours, (unsigned long long)minutes);
   }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
+  return std::string(buffer);
 }
 
 std::string getReadingStatsShortcutSubtitle() {
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
   const std::string todayValue = formatDurationHmCompact(todayReadingMs);
   const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
-  return todayValue + " / " + goalValue + " | " + std::to_string(READING_STATS.getCurrentStreakDays());
+  // Use stack buffer to avoid multiple heap allocations from string concatenation
+  char buffer[96];
+  snprintf(buffer, sizeof(buffer), "%s / %s | %u", todayValue.c_str(), goalValue.c_str(),
+           READING_STATS.getCurrentStreakDays());
+  return std::string(buffer);
 }
 
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
@@ -87,6 +98,7 @@ std::string getRecentBookConfirmationLabel(const RecentBook& book) {
 
 std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsUrl) {
   std::vector<HomeShortcutEntry> entries;
+  entries.reserve(getShortcutDefinitions().size() + 2);  // +2 for appsHub + possible OPDS
   entries.push_back(HomeShortcutEntry{nullptr, true, false});
 
   for (const auto& definition : getShortcutDefinitions()) {
@@ -311,8 +323,9 @@ void HomeActivity::freeCoverBuffer() {
 }
 
 void HomeActivity::loop() {
-  const int menuCount = getMenuItemCount();
+  // Compute shortcut entries once per loop iteration instead of 2× (getMenuItemCount + local copy).
   const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
+  const int menuCount = static_cast<int>(recentBooks.size() + homeEntries.size());
 
   buttonNavigator.onNext([this, menuCount] {
     selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
@@ -438,9 +451,10 @@ void HomeActivity::render(RenderLock&&) {
 
   const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
   const int selectedHomeIndex = selectorIndex - static_cast<int>(recentBooks.size());
-  const Rect shortcutsRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-                           pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
-                                         metrics.buttonHintsHeight + metrics.verticalSpacing)};
+  const Rect shortcutsRect{
+      0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
+      pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
+                    metrics.buttonHintsHeight + metrics.verticalSpacing)};
 
   if (static_cast<int>(homeEntries.size()) <= HOME_SHORTCUT_PAGE_SIZE) {
     GUI.drawButtonMenu(
@@ -453,24 +467,25 @@ void HomeActivity::render(RenderLock&&) {
     const int headerHeight = 34;
     const int listTop = shortcutsRect.y + headerHeight + 12;
     const int listHeight = std::max(0, shortcutsRect.height - headerHeight - 12);
-    const int currentPage =
-        std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
+    const int currentPage = std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
     const int totalPages =
         (static_cast<int>(homeEntries.size()) + HOME_SHORTCUT_PAGE_SIZE - 1) / HOME_SHORTCUT_PAGE_SIZE;
     const int pageStart = currentPage * HOME_SHORTCUT_PAGE_SIZE;
-    const int pageItemCount =
-        std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
-    const int localSelectedIndex =
-        (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount) ? selectedHomeIndex - pageStart
-                                                                                            : -1;
-    const std::string sectionLabel =
-        std::string(tr(STR_SHORTCUTS_SECTION)) + " (" + std::to_string(homeEntries.size()) + ")";
-    const std::string pageLabel = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
+    const int pageItemCount = std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
+    const int localSelectedIndex = (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount)
+                                       ? selectedHomeIndex - pageStart
+                                       : -1;
+    // Use stack buffers to avoid 4+ transient heap allocations from std::string concatenation.
+    char sectionLabelBuf[64];  // Max: translated string (~40 chars) + " (999)" = ~50 chars + null
+    snprintf(sectionLabelBuf, sizeof(sectionLabelBuf), "%s (%d)", tr(STR_SHORTCUTS_SECTION),
+             static_cast<int>(homeEntries.size()));
+    char pageLabelBuf[16];  // Max: "999/999" = 7 chars + null
+    snprintf(pageLabelBuf, sizeof(pageLabelBuf), "%d/%d", currentPage + 1, totalPages);
 
-    GUI.drawSubHeader(renderer,
-                      Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2,
-                           headerHeight},
-                      sectionLabel.c_str(), pageLabel.c_str());
+    GUI.drawSubHeader(
+        renderer,
+        Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2, headerHeight},
+        sectionLabelBuf, pageLabelBuf);
     GUI.drawButtonMenu(
         renderer, Rect{0, listTop, pageWidth, listHeight}, pageItemCount, localSelectedIndex,
         [&homeEntries, pageStart](const int index) { return getHomeShortcutTitle(homeEntries[pageStart + index]); },
@@ -507,6 +522,8 @@ void HomeActivity::onReadingStatsOpen() {
   activityManager.replaceActivity(std::make_unique<ReadingStatsActivity>(renderer, mappedInput));
 }
 
-void HomeActivity::onSyncDayOpen() { activityManager.replaceActivity(std::make_unique<SyncDayActivity>(renderer, mappedInput)); }
+void HomeActivity::onSyncDayOpen() {
+  activityManager.replaceActivity(std::make_unique<SyncDayActivity>(renderer, mappedInput));
+}
 
 void HomeActivity::onOpdsBrowserOpen() { activityManager.goToBrowser(); }

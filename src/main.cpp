@@ -12,13 +12,13 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
-
-#include <cstring>
 #include <esp_sleep.h>
 
+#include <cstring>
+
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "AchievementsStore.h"
 #include "FirmwareVersion.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
@@ -287,7 +287,13 @@ void loop() {
 
   gpio.update();
 
-  renderer.setFadingFix(SETTINGS.fadingFix);
+  {
+    static uint8_t lastFadingFix = 0xFF;
+    if (SETTINGS.fadingFix != lastFadingFix) {
+      renderer.setFadingFix(SETTINGS.fadingFix);
+      lastFadingFix = SETTINGS.fadingFix;
+    }
+  }
   {
     static uint8_t lastDarkMode = 0xFF;
     if (SETTINGS.darkMode != lastDarkMode) {

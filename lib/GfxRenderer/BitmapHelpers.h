@@ -22,16 +22,14 @@ void createBmpHeader(BmpHeader* bmpHeader, int width, int height);
 class Atkinson1BitDitherer {
  public:
   explicit Atkinson1BitDitherer(int width) : width(width) {
-    errorRow0 = new int16_t[width + 4]();  // Current row
-    errorRow1 = new int16_t[width + 4]();  // Next row
-    errorRow2 = new int16_t[width + 4]();  // Row after next
+    // Single allocation for all three error diffusion rows to reduce heap fragmentation.
+    errorBuf = new int16_t[3 * (width + 4)]();
+    errorRow0 = errorBuf;
+    errorRow1 = errorBuf + (width + 4);
+    errorRow2 = errorBuf + 2 * (width + 4);
   }
 
-  ~Atkinson1BitDitherer() {
-    delete[] errorRow0;
-    delete[] errorRow1;
-    delete[] errorRow2;
-  }
+  ~Atkinson1BitDitherer() { delete[] errorBuf; }
 
   // EXPLICITLY DELETE THE COPY CONSTRUCTOR
   Atkinson1BitDitherer(const Atkinson1BitDitherer& other) = delete;
@@ -89,6 +87,7 @@ class Atkinson1BitDitherer {
 
  private:
   int width;
+  int16_t* errorBuf;
   int16_t* errorRow0;
   int16_t* errorRow1;
   int16_t* errorRow2;
@@ -103,16 +102,14 @@ class Atkinson1BitDitherer {
 class AtkinsonDitherer {
  public:
   explicit AtkinsonDitherer(int width) : width(width) {
-    errorRow0 = new int16_t[width + 4]();  // Current row
-    errorRow1 = new int16_t[width + 4]();  // Next row
-    errorRow2 = new int16_t[width + 4]();  // Row after next
+    // Single allocation for all three error diffusion rows to reduce heap fragmentation.
+    errorBuf = new int16_t[3 * (width + 4)]();
+    errorRow0 = errorBuf;
+    errorRow1 = errorBuf + (width + 4);
+    errorRow2 = errorBuf + 2 * (width + 4);
   }
 
-  ~AtkinsonDitherer() {
-    delete[] errorRow0;
-    delete[] errorRow1;
-    delete[] errorRow2;
-  }
+  ~AtkinsonDitherer() { delete[] errorBuf; }
   // **1. EXPLICITLY DELETE THE COPY CONSTRUCTOR**
   AtkinsonDitherer(const AtkinsonDitherer& other) = delete;
 
@@ -188,6 +185,7 @@ class AtkinsonDitherer {
 
  private:
   int width;
+  int16_t* errorBuf;
   int16_t* errorRow0;
   int16_t* errorRow1;
   int16_t* errorRow2;
@@ -204,14 +202,13 @@ class AtkinsonDitherer {
 class FloydSteinbergDitherer {
  public:
   explicit FloydSteinbergDitherer(int width) : width(width), rowCount(0) {
-    errorCurRow = new int16_t[width + 2]();  // +2 for boundary handling
-    errorNextRow = new int16_t[width + 2]();
+    // Single allocation for both error diffusion rows to reduce heap fragmentation.
+    errorBuf = new int16_t[2 * (width + 2)]();
+    errorCurRow = errorBuf;
+    errorNextRow = errorBuf + (width + 2);
   }
 
-  ~FloydSteinbergDitherer() {
-    delete[] errorCurRow;
-    delete[] errorNextRow;
-  }
+  ~FloydSteinbergDitherer() { delete[] errorBuf; }
 
   // **1. EXPLICITLY DELETE THE COPY CONSTRUCTOR**
   FloydSteinbergDitherer(const FloydSteinbergDitherer& other) = delete;
@@ -315,6 +312,7 @@ class FloydSteinbergDitherer {
  private:
   int width;
   int rowCount;
+  int16_t* errorBuf;
   int16_t* errorCurRow;
   int16_t* errorNextRow;
 };

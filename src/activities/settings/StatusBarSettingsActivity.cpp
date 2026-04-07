@@ -111,7 +111,7 @@ void StatusBarSettingsActivity::handleSelection() {
     // Show Battery
     SETTINGS.statusBarBattery = (SETTINGS.statusBarBattery + 1) % 2;
   }
-  SETTINGS.saveToFile();
+  SETTINGS.markDirty();
 }
 
 void StatusBarSettingsActivity::render(RenderLock&&) {

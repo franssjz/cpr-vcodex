@@ -181,8 +181,8 @@ void CrossPointWebServer::begin() {
   running = true;
 
   LOG_DBG("WEB", "Web server started on port %d", port);
-  // Show the correct IP based on network mode
-  const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  // Show the correct IP based on network mode (convert to c_str immediately to avoid heap retention)
+  const std::string ipAddr = apMode ? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str();
   LOG_DBG("WEB", "Access at http://%s/", ipAddr.c_str());
   LOG_DBG("WEB", "WebSocket at ws://%s:%d/", ipAddr.c_str(), wsPort);
   LOG_DBG("WEB", "[MEM] Free heap after server.begin(): %d bytes", ESP.getFreeHeap());
@@ -273,13 +273,15 @@ void CrossPointWebServer::handleClient() {
       if (len > 0) {
         buffer[len] = '\0';
         if (strcmp(buffer, "hello") == 0) {
-          String hostname = WiFi.getHostname();
-          if (hostname.isEmpty()) {
+          const char* hostname = WiFi.getHostname();
+          if (hostname == nullptr || hostname[0] == '\0') {
             hostname = "crosspoint";
           }
-          String message = "crosspoint (on " + hostname + ");" + String(wsPort);
+          // Use stack buffer to avoid heap fragmentation during UDP discovery
+          char message[128];
+          snprintf(message, sizeof(message), "crosspoint (on %s);%u", hostname, wsPort);
           udp.beginPacket(udp.remoteIP(), udp.remotePort());
-          udp.write(reinterpret_cast<const uint8_t*>(message.c_str()), message.length());
+          udp.write(reinterpret_cast<const uint8_t*>(message), strlen(message));
           udp.endPacket();
         }
       }
@@ -310,14 +312,16 @@ void CrossPointWebServer::handleRoot() const {
 }
 
 void CrossPointWebServer::handleNotFound() const {
-  String message = "404 Not Found\n\n";
-  message += "URI: " + server->uri() + "\n";
-  server->send(404, "text/plain", message);
+  // Use std::string to avoid Arduino String heap fragmentation
+  std::string message = "404 Not Found\n\nURI: ";
+  message += server->uri().c_str();
+  message += "\n";
+  server->send(404, "text/plain", message.c_str());
 }
 
 void CrossPointWebServer::handleStatus() const {
-  // Get correct IP based on AP vs STA mode
-  const String ipAddr = apMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  // Get correct IP based on AP vs STA mode (use std::string to avoid heap fragmentation)
+  const std::string ipAddr = apMode ? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str();
 
   JsonDocument doc;
   doc["version"] = CROSSPOINT_VERSION;

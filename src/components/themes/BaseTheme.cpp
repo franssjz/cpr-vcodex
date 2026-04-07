@@ -208,8 +208,7 @@ void BaseTheme::drawSideButtonHints(const GfxRenderer& renderer, const char* top
       renderer.drawLine(x, topButtonY + buttonHeight, x, topButtonY + 2 * buttonHeight - 1);
       renderer.drawLine(x + buttonWidth - 1, topButtonY + buttonHeight, x + buttonWidth - 1,
                         topButtonY + 2 * buttonHeight - 1);
-      renderer.drawLine(x, topButtonY + 2 * buttonHeight - 1, x + buttonWidth - 1,
-                        topButtonY + 2 * buttonHeight - 1);
+      renderer.drawLine(x, topButtonY + 2 * buttonHeight - 1, x + buttonWidth - 1, topButtonY + 2 * buttonHeight - 1);
     }
 
     for (int i = 0; i < 2; i++) {
@@ -613,10 +612,9 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
                                const std::function<bool(int index)>& showAccessory) const {
   const int availableHeight = std::max(0, rect.height);
   const int gap = BaseMetrics::values.menuSpacing;
-  const int rowHeight = buttonCount > 0
-                            ? std::min(BaseMetrics::values.menuRowHeight,
-                                       (availableHeight - gap * std::max(0, buttonCount - 1)) / buttonCount)
-                            : BaseMetrics::values.menuRowHeight;
+  const int rowHeight = buttonCount > 0 ? std::min(BaseMetrics::values.menuRowHeight,
+                                                   (availableHeight - gap * std::max(0, buttonCount - 1)) / buttonCount)
+                                        : BaseMetrics::values.menuRowHeight;
 
   for (int i = 0; i < buttonCount; ++i) {
     const int tileY = rect.y + static_cast<int>(i) * (rowHeight + gap);
@@ -644,10 +642,9 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
       renderer.drawText(UI_10_FONT_ID, titleX, titleY, label, selectedIndex != i);
 
       const int accessoryPadding = showAccessory && showAccessory(i) ? 18 : 0;
-      std::string subtitleStr = renderer.truncatedText(SMALL_FONT_ID, subtitle.c_str(),
-                                                       rect.width - BaseMetrics::values.contentSidePadding * 2 - 24 -
-                                                           accessoryPadding,
-                                                       EpdFontFamily::REGULAR);
+      std::string subtitleStr = renderer.truncatedText(
+          SMALL_FONT_ID, subtitle.c_str(),
+          rect.width - BaseMetrics::values.contentSidePadding * 2 - 24 - accessoryPadding, EpdFontFamily::REGULAR);
       const int subtitleWidth = renderer.getTextWidth(SMALL_FONT_ID, subtitleStr.c_str());
       const int subtitleX = rect.x + (rect.width - subtitleWidth) / 2;
       const int subtitleY = tileY + 30;

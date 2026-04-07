@@ -27,13 +27,11 @@ void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& b
 
     if (ratio > rectRatio) {
       x = contentRect.x;
-      y = contentRect.y + std::round((static_cast<float>(contentRect.height) -
-                                      static_cast<float>(contentRect.width) / ratio) /
-                                     2.0f);
+      y = contentRect.y +
+          std::round((static_cast<float>(contentRect.height) - static_cast<float>(contentRect.width) / ratio) / 2.0f);
     } else {
-      x = contentRect.x + std::round((static_cast<float>(contentRect.width) -
-                                      static_cast<float>(contentRect.height) * ratio) /
-                                     2.0f);
+      x = contentRect.x +
+          std::round((static_cast<float>(contentRect.width) - static_cast<float>(contentRect.height) * ratio) / 2.0f);
       y = contentRect.y;
     }
 
@@ -116,20 +114,21 @@ void SleepPreviewActivity::render(RenderLock&&) {
   const int pageHeight = renderer.getScreenHeight();
   const bool isSelectedDirectory = directoryPath == std::string(SETTINGS.sleepDirectory);
   const std::string directoryLabel = SleepImageUtils::getDirectoryLabel(directoryPath);
-  const std::string subtitle =
-      imagePaths.empty() ? (isSelectedDirectory ? std::string(tr(STR_SELECTED)) : std::string())
-                         : (std::to_string(selectedIndex + 1) + "/" + std::to_string(imagePaths.size()));
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_USE_DIRECTORY),
-                                            imagePaths.empty() ? "" : tr(STR_DIR_UP),
-                                            imagePaths.empty() ? "" : tr(STR_DIR_DOWN));
+  const std::string subtitle = imagePaths.empty()
+                                   ? (isSelectedDirectory ? std::string(tr(STR_SELECTED)) : std::string())
+                                   : (std::to_string(selectedIndex + 1) + "/" + std::to_string(imagePaths.size()));
+  const auto labels =
+      mappedInput.mapLabels(tr(STR_BACK), tr(STR_USE_DIRECTORY), imagePaths.empty() ? "" : tr(STR_DIR_UP),
+                            imagePaths.empty() ? "" : tr(STR_DIR_DOWN));
 
   drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1, labels.btn2,
                    labels.btn3, labels.btn4);
 
-  const Rect contentRect{metrics.contentSidePadding, metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing,
-                         pageWidth - metrics.contentSidePadding * 2,
-                         pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.buttonHintsHeight +
-                                       metrics.verticalSpacing * 3)};
+  const Rect contentRect{
+      metrics.contentSidePadding, metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing,
+      pageWidth - metrics.contentSidePadding * 2,
+      pageHeight -
+          (metrics.topPadding + metrics.headerHeight + metrics.buttonHintsHeight + metrics.verticalSpacing * 3)};
 
   if (loading) {
     renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 10, tr(STR_LOADING), true, EpdFontFamily::BOLD);
@@ -151,14 +150,14 @@ void SleepPreviewActivity::render(RenderLock&&) {
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
         if (previewDirty) {
           GUI.fillPopupProgress(renderer, popupRect, 90);
-          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1,
-                           labels.btn2, labels.btn3, labels.btn4);
+          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1, labels.btn2,
+                           labels.btn3, labels.btn4);
         }
         drawPreviewBitmap(renderer, contentRect, bitmap);
       } else {
         if (previewDirty) {
-          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1,
-                           labels.btn2, labels.btn3, labels.btn4);
+          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1, labels.btn2,
+                           labels.btn3, labels.btn4);
         }
         renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Invalid BMP File");
       }

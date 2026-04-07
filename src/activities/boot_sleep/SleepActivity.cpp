@@ -21,7 +21,7 @@ bool canUseSleepCache(const Bitmap& bitmap) {
   return !(bitmap.hasGreyscale() &&
            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
 }
-}
+}  // namespace
 
 void SleepActivity::onEnter() {
   Activity::onEnter();

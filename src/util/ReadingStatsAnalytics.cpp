@@ -57,9 +57,7 @@ std::string formatDayOrdinalLabel(const uint32_t dayOrdinal) {
   return TimeUtils::formatDateParts(year, month, day);
 }
 
-std::string formatMonthLabel(const int year, const unsigned month) {
-  return TimeUtils::formatMonthYear(year, month);
-}
+std::string formatMonthLabel(const int year, const unsigned month) { return TimeUtils::formatMonthYear(year, month); }
 
 int getReferenceYear() {
   const uint32_t timestamp = READING_STATS.getDisplayTimestamp();
@@ -82,10 +80,9 @@ int getReferenceYear() {
 std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {
   std::vector<DayBookEntry> entries;
   for (const auto& book : READING_STATS.getBooks()) {
-    auto it = std::find_if(book.readingDays.begin(), book.readingDays.end(),
-                           [&](const ReadingDayStats& day) {
-                             return day.dayOrdinal == dayOrdinal && day.readingMs >= MIN_READING_DAY_BOOK_MS;
-                           });
+    auto it = std::find_if(book.readingDays.begin(), book.readingDays.end(), [&](const ReadingDayStats& day) {
+      return day.dayOrdinal == dayOrdinal && day.readingMs >= MIN_READING_DAY_BOOK_MS;
+    });
     if (it == book.readingDays.end()) {
       continue;
     }

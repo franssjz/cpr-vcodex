@@ -7,6 +7,7 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <unordered_map>
 #include <vector>
 
 #include "hyphenation/Hyphenator.h"
@@ -43,12 +44,19 @@ uint32_t lastCodepoint(const std::string& word) {
 
 bool containsSoftHyphen(const std::string& word) { return word.find(SOFT_HYPHEN_UTF8) != std::string::npos; }
 
-// Removes every soft hyphen in-place so rendered glyphs match measured widths.
+// Removes every soft hyphen in-place with a single-pass read/write sweep.
+// Avoids O(n²) from repeated find()+erase() on words with multiple soft hyphens.
 void stripSoftHyphensInPlace(std::string& word) {
-  size_t pos = 0;
-  while ((pos = word.find(SOFT_HYPHEN_UTF8, pos)) != std::string::npos) {
-    word.erase(pos, SOFT_HYPHEN_BYTES);
+  size_t writePos = 0;
+  const size_t len = word.size();
+  for (size_t readPos = 0; readPos < len;) {
+    if (readPos + 1 < len && word[readPos] == static_cast<char>(0xC2) && word[readPos + 1] == static_cast<char>(0xAD)) {
+      readPos += SOFT_HYPHEN_BYTES;  // skip soft hyphen
+    } else {
+      word[writePos++] = word[readPos++];
+    }
   }
+  word.resize(writePos);
 }
 
 // Returns the advance width for a word while ignoring soft hyphen glyphs and optionally appending a visible hyphen.
@@ -72,6 +80,50 @@ uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const s
     sanitized.push_back('-');
   }
   return renderer.getTextAdvanceX(fontId, sanitized.c_str(), style);
+}
+
+// FNV-1a 64-bit hash combining fontId, word content, and style into a single key.
+// 64-bit reduces collision probability to ~1 in 10^18 vs ~1 in 10^9 for 32-bit,
+// making it safe to use as the sole cache key without storing disambiguation data.
+uint64_t wordWidthCacheKey(const int fontId, const std::string& word, const EpdFontFamily::Style style) {
+  uint64_t h = 14695981039346656037ULL;
+  auto mix = [&h](uint8_t byte) {
+    h ^= byte;
+    h *= 1099511628211ULL;
+  };
+  // Mix in fontId bytes
+  for (size_t i = 0; i < sizeof(fontId); ++i) {
+    mix(static_cast<uint8_t>((static_cast<unsigned int>(fontId) >> (i * 8)) & 0xFF));
+  }
+  // Mix in style byte
+  mix(static_cast<uint8_t>(style));
+  // Mix in word bytes
+  for (const char c : word) {
+    mix(static_cast<uint8_t>(c));
+  }
+  return h;
+}
+
+// Maximum number of entries in the per-section word-width cache.
+// Limits transient RAM to ~8KB (512 × 16 bytes per entry including hash-map overhead).
+static constexpr size_t WORD_WIDTH_CACHE_MAX = 512;
+
+// Cached version of measureWordWidth for bulk measurement during layout.
+// Checks a transient hash map before calling the underlying renderer measurement.
+// Once the cache reaches WORD_WIDTH_CACHE_MAX entries, new words are measured without caching.
+uint16_t measureWordWidthCached(const GfxRenderer& renderer, const int fontId, const std::string& word,
+                                const EpdFontFamily::Style style, std::unordered_map<uint64_t, uint16_t>& cache) {
+  const uint64_t key = wordWidthCacheKey(fontId, word, style);
+  auto it = cache.find(key);
+  if (it != cache.end()) {
+    return it->second;
+  }
+  const uint16_t width = measureWordWidth(renderer, fontId, word, style);
+  // Enforce cache cap to bound transient RAM usage on large sections.
+  if (cache.size() < WORD_WIDTH_CACHE_MAX) {
+    cache.emplace(key, width);
+  }
+  return width;
 }
 
 }  // namespace
@@ -113,15 +165,30 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
-    extractLine(i, pageWidth, wordWidths, wordContinues, lineBreakIndices, processLine, renderer, fontId);
+    // Adapter: convert the public std::function callback to the internal zero-overhead
+    // function-pointer signature. The lambda captures nothing and is stateless, so the
+    // compiler emits a plain function pointer with no heap allocation.
+    extractLine(
+        i, pageWidth, wordWidths, wordContinues, lineBreakIndices,
+        [](void* ctx, std::shared_ptr<TextBlock> block) {
+          (*static_cast<const std::function<void(std::shared_ptr<TextBlock>)>*>(ctx))(std::move(block));
+        },
+        const_cast<void*>(static_cast<const void*>(&processLine)), renderer, fontId);
   }
 
-  // Remove consumed words so size() reflects only remaining words
+  // Remove consumed words so size() reflects only remaining words.
+  // Uses swap-and-shrink to avoid O(n) element shifting from erase(begin, begin+n).
   if (lineCount > 0) {
     const size_t consumed = lineBreakIndices[lineCount - 1];
-    words.erase(words.begin(), words.begin() + consumed);
-    wordStyles.erase(wordStyles.begin(), wordStyles.begin() + consumed);
-    wordContinues.erase(wordContinues.begin(), wordContinues.begin() + consumed);
+    const size_t remaining = words.size() - consumed;
+    if (remaining > 0) {
+      std::move(words.begin() + consumed, words.end(), words.begin());
+      std::move(wordStyles.begin() + consumed, wordStyles.end(), wordStyles.begin());
+      std::move(wordContinues.begin() + consumed, wordContinues.end(), wordContinues.begin());
+    }
+    words.resize(remaining);
+    wordStyles.resize(remaining);
+    wordContinues.resize(remaining);
   }
 }
 
@@ -129,8 +196,13 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
   std::vector<uint16_t> wordWidths;
   wordWidths.reserve(words.size());
 
+  // Transient per-section cache: common words like "the", "and", "a" are measured once.
+  // Typical English chapter has ~30-50% duplicate words; cache avoids redundant glyph lookups.
+  std::unordered_map<uint64_t, uint16_t> widthCache;
+  widthCache.reserve(std::min(words.size(), WORD_WIDTH_CACHE_MAX));
+
   for (size_t i = 0; i < words.size(); ++i) {
-    wordWidths.push_back(measureWordWidth(renderer, fontId, words[i], wordStyles[i]));
+    wordWidths.push_back(measureWordWidthCached(renderer, fontId, words[i], wordStyles[i], widthCache));
   }
 
   return wordWidths;
@@ -380,7 +452,50 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
     }
 
     const bool needsHyphen = info.requiresInsertedHyphen;
-    const int prefixWidth = measureWordWidth(renderer, fontId, word.substr(0, offset), style, needsHyphen);
+    // Use a stack buffer to measure short prefixes without allocating.
+    // For longer prefixes, fall back to a std::string so width is measured against the
+    // full candidate breakpoint instead of a truncated prefix.
+    static constexpr size_t MAX_HYPHEN_PREFIX_LEN = 128;
+    int prefixWidth = 0;
+    if (offset <= MAX_HYPHEN_PREFIX_LEN - 2) {  // -2 for possible hyphen + null
+      char prefixBuf[MAX_HYPHEN_PREFIX_LEN];
+      memcpy(prefixBuf, word.data(), offset);
+      size_t writeLen = offset;
+      if (needsHyphen) {
+        prefixBuf[writeLen++] = '-';
+      }
+      prefixBuf[writeLen] = '\0';
+      // Strip soft hyphens from the prefix buffer before measuring
+      // (soft hyphens are 2-byte sequences 0xC2 0xAD that must not be rendered)
+      size_t cleanLen = 0;
+      for (size_t k = 0; k < writeLen;) {
+        if (k + 1 < writeLen && prefixBuf[k] == static_cast<char>(0xC2) &&
+            prefixBuf[k + 1] == static_cast<char>(0xAD)) {
+          k += 2;
+        } else {
+          prefixBuf[cleanLen++] = prefixBuf[k++];
+        }
+      }
+      prefixBuf[cleanLen] = '\0';
+      prefixWidth = renderer.getTextAdvanceX(fontId, prefixBuf, style);
+    } else {
+      // Fallback for long words (URLs, identifiers): allocate to avoid truncation.
+      std::string prefix = word.substr(0, offset);
+      if (needsHyphen) {
+        prefix.push_back('-');
+      }
+      // Strip soft hyphens before measuring.
+      size_t cleanPos = 0;
+      for (size_t k = 0; k < prefix.size();) {
+        if (k + 1 < prefix.size() && prefix[k] == static_cast<char>(0xC2) && prefix[k + 1] == static_cast<char>(0xAD)) {
+          k += 2;
+        } else {
+          prefix[cleanPos++] = prefix[k++];
+        }
+      }
+      prefix.resize(cleanPos);
+      prefixWidth = renderer.getTextAdvanceX(fontId, prefix.c_str(), style);
+    }
     if (prefixWidth > availableWidth || prefixWidth <= chosenWidth) {
       continue;  // Skip if too wide or not an improvement
     }
@@ -437,8 +552,8 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
 
 void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const std::vector<uint16_t>& wordWidths,
                              const std::vector<bool>& continuesVec, const std::vector<size_t>& lineBreakIndices,
-                             const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
-                             const GfxRenderer& renderer, const int fontId) {
+                             LineCallback processLine, void* callbackCtx, const GfxRenderer& renderer,
+                             const int fontId) {
   const size_t lineBreak = lineBreakIndices[breakIndex];
   const size_t lastBreakAt = breakIndex > 0 ? lineBreakIndices[breakIndex - 1] : 0;
   const size_t lineWordCount = lineBreak - lastBreakAt;
@@ -536,6 +651,6 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     }
   }
 
-  processLine(
-      std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle));
+  processLine(callbackCtx, std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos),
+                                                       std::move(lineWordStyles), blockStyle));
 }

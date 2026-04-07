@@ -1,7 +1,7 @@
 #pragma once
-#include "../Activity.h"
-
 #include <string>
+
+#include "../Activity.h"
 
 class Bitmap;
 

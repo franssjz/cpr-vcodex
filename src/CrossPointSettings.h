@@ -134,12 +134,7 @@ class CrossPointSettings {
   // UI Theme
   enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, LYRA_CUSTOM = 3, UI_THEME_COUNT };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
-  enum DATE_FORMAT {
-    DATE_DD_MM_YYYY = 0,
-    DATE_MM_DD_YYYY = 1,
-    DATE_YYYY_MM_DD = 2,
-    DATE_FORMAT_COUNT
-  };
+  enum DATE_FORMAT { DATE_DD_MM_YYYY = 0, DATE_MM_DD_YYYY = 1, DATE_YYYY_MM_DD = 2, DATE_FORMAT_COUNT };
   enum DAILY_GOAL_TARGET {
     DAILY_GOAL_15_MIN = 0,
     DAILY_GOAL_30_MIN = 1,
@@ -147,11 +142,7 @@ class CrossPointSettings {
     DAILY_GOAL_60_MIN = 3,
     DAILY_GOAL_TARGET_COUNT
   };
-  enum SHORTCUT_LOCATION {
-    SHORTCUT_HOME = 0,
-    SHORTCUT_APPS = 1,
-    SHORTCUT_LOCATION_COUNT
-  };
+  enum SHORTCUT_LOCATION { SHORTCUT_HOME = 0, SHORTCUT_APPS = 1, SHORTCUT_LOCATION_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -282,6 +273,19 @@ class CrossPointSettings {
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
 
+  // Mark settings as modified. Actual SD write is deferred until saveIfDirty() is called
+  // (typically on activity exit), reducing SD card writes by 5-10× during settings browsing.
+  void markDirty() { dirty_ = true; }
+
+  // Save to file only if settings were modified since last save.
+  // Call from activity onExit() or at periodic intervals.
+  bool saveIfDirty() {
+    if (!dirty_) return true;
+    if (!saveToFile()) return false;
+    dirty_ = false;
+    return true;
+  }
+
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
   }
@@ -297,6 +301,7 @@ class CrossPointSettings {
 
  private:
   bool loadFromBinaryFile();
+  bool dirty_ = false;
 
  public:
   float getReaderLineCompression() const;

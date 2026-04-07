@@ -7,19 +7,7 @@ HalDisplay::HalDisplay() : einkDisplay(EPD_SCLK, EPD_MOSI, EPD_CS, EPD_DC, EPD_R
 
 HalDisplay::~HalDisplay() {}
 
-void HalDisplay::begin() {
-  if (gpio.deviceIsX3()) {
-    einkDisplay.setDisplayX3();
-  }
-
-  einkDisplay.begin();
-
-  const auto wakeupReason = gpio.getWakeupReason();
-  if (wakeupReason == HalGPIO::WakeupReason::PowerButton || wakeupReason == HalGPIO::WakeupReason::AfterFlash ||
-      wakeupReason == HalGPIO::WakeupReason::Other) {
-    einkDisplay.requestResync();
-  }
-}
+void HalDisplay::begin() { einkDisplay.begin(); }
 
 void HalDisplay::clearScreen(uint8_t color) const { einkDisplay.clearScreen(color); }
 
@@ -29,8 +17,8 @@ void HalDisplay::drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uin
 }
 
 void HalDisplay::drawImageTransparent(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                                      bool fromProgmem, bool invert) const {
-  einkDisplay.drawImageTransparent(imageData, x, y, w, h, fromProgmem, invert);
+                                      bool fromProgmem, bool /*invert*/) const {
+  einkDisplay.drawImageTransparent(imageData, x, y, w, h, fromProgmem);
 }
 
 EInkDisplay::RefreshMode convertRefreshMode(HalDisplay::RefreshMode mode) {
@@ -45,17 +33,11 @@ EInkDisplay::RefreshMode convertRefreshMode(HalDisplay::RefreshMode mode) {
   }
 }
 
-void HalDisplay::displayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen, bool invert) {
-  if (gpio.deviceIsX3() && mode == RefreshMode::HALF_REFRESH) {
-    einkDisplay.requestResync(1);
-  }
-  einkDisplay.displayBuffer(convertRefreshMode(mode), turnOffScreen, invert);
+void HalDisplay::displayBuffer(HalDisplay::RefreshMode mode, bool turnOffScreen, bool /*invert*/) {
+  einkDisplay.displayBuffer(convertRefreshMode(mode), turnOffScreen);
 }
 
 void HalDisplay::refreshDisplay(HalDisplay::RefreshMode mode, bool turnOffScreen) {
-  if (gpio.deviceIsX3() && mode == RefreshMode::HALF_REFRESH) {
-    einkDisplay.requestResync(1);
-  }
   einkDisplay.refreshDisplay(convertRefreshMode(mode), turnOffScreen);
 }
 
@@ -63,28 +45,28 @@ void HalDisplay::deepSleep() { einkDisplay.deepSleep(); }
 
 uint8_t* HalDisplay::getFrameBuffer() const { return einkDisplay.getFrameBuffer(); }
 
-void HalDisplay::copyGrayscaleBuffers(const uint8_t* lsbBuffer, const uint8_t* msbBuffer, bool invert) {
-  einkDisplay.copyGrayscaleBuffers(lsbBuffer, msbBuffer, invert);
+void HalDisplay::copyGrayscaleBuffers(const uint8_t* lsbBuffer, const uint8_t* msbBuffer, bool /*invert*/) {
+  einkDisplay.copyGrayscaleBuffers(lsbBuffer, msbBuffer);
 }
 
-void HalDisplay::copyGrayscaleLsbBuffers(const uint8_t* lsbBuffer, bool invert) {
-  einkDisplay.copyGrayscaleLsbBuffers(lsbBuffer, invert);
+void HalDisplay::copyGrayscaleLsbBuffers(const uint8_t* lsbBuffer, bool /*invert*/) {
+  einkDisplay.copyGrayscaleLsbBuffers(lsbBuffer);
 }
 
-void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer, bool invert) {
-  einkDisplay.copyGrayscaleMsbBuffers(msbBuffer, invert);
+void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer, bool /*invert*/) {
+  einkDisplay.copyGrayscaleMsbBuffers(msbBuffer);
 }
 
-void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer, bool invert) {
-  einkDisplay.cleanupGrayscaleBuffers(bwBuffer, invert);
+void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer, bool /*invert*/) {
+  einkDisplay.cleanupGrayscaleBuffers(bwBuffer);
 }
 
 void HalDisplay::displayGrayBuffer(bool turnOffScreen) { einkDisplay.displayGrayBuffer(turnOffScreen); }
 
-uint16_t HalDisplay::getDisplayWidth() const { return einkDisplay.getDisplayWidth(); }
+uint16_t HalDisplay::getDisplayWidth() const { return DISPLAY_WIDTH; }
 
-uint16_t HalDisplay::getDisplayHeight() const { return einkDisplay.getDisplayHeight(); }
+uint16_t HalDisplay::getDisplayHeight() const { return DISPLAY_HEIGHT; }
 
-uint16_t HalDisplay::getDisplayWidthBytes() const { return einkDisplay.getDisplayWidthBytes(); }
+uint16_t HalDisplay::getDisplayWidthBytes() const { return DISPLAY_WIDTH_BYTES; }
 
-uint32_t HalDisplay::getBufferSize() const { return einkDisplay.getBufferSize(); }
+uint32_t HalDisplay::getBufferSize() const { return BUFFER_SIZE; }

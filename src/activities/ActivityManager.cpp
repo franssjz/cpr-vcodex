@@ -192,8 +192,8 @@ void ActivityManager::goToReader(std::string path) {
 }
 
 void ActivityManager::goToEpubBookmark(std::string path, const int spineIndex, const uint32_t page) {
-  replaceActivity(std::make_unique<ReaderActivity>(
-      renderer, mappedInput, std::move(path), ReaderActivity::EpubBookmarkLaunch{true, spineIndex, page}));
+  replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path),
+                                                   ReaderActivity::EpubBookmarkLaunch{true, spineIndex, page}));
 }
 
 void ActivityManager::goToSleep() {

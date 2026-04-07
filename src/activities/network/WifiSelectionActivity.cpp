@@ -6,8 +6,8 @@
 #include <WiFi.h>
 
 #include <algorithm>
-#include <map>
 #include <ctime>
+#include <map>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"

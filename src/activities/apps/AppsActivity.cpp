@@ -1,16 +1,17 @@
 #include "AppsActivity.h"
 
-#include "AchievementsActivity.h"
 #include <GfxRenderer.h>
 #include <I18n.h>
 
 #include <algorithm>
-#include "ReadingStatsStore.h"
+
+#include "AchievementsActivity.h"
 #include "BookmarksAppActivity.h"
 #include "IfFoundActivity.h"
 #include "ReadMeActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingStatsActivity.h"
+#include "ReadingStatsStore.h"
 #include "SleepAppActivity.h"
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
@@ -23,16 +24,22 @@ std::string formatDurationHmCompact(const uint64_t totalMs) {
   const uint64_t totalMinutes = totalMs / 60000ULL;
   const uint64_t hours = totalMinutes / 60ULL;
   const uint64_t minutes = totalMinutes % 60ULL;
+  char buf[32];  // Max: "18446744073709551615h 59m" = ~25 chars + null
   if (hours == 0) {
-    return std::to_string(minutes) + "m";
+    snprintf(buf, sizeof(buf), "%llum", (unsigned long long)minutes);
+  } else {
+    snprintf(buf, sizeof(buf), "%lluh %llum", (unsigned long long)hours, (unsigned long long)minutes);
   }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
+  return std::string(buf);
 }
 
 std::string getStatsShortcutSubtitle() {
   const std::string todayValue = formatDurationHmCompact(READING_STATS.getTodayReadingMs());
   const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
-  return todayValue + " / " + goalValue + " | " + std::to_string(READING_STATS.getCurrentStreakDays());
+  char buf[96];  // Max: two durations (~25 each) + " / " + " | " + streak digits
+  snprintf(buf, sizeof(buf), "%s / %s | %u", todayValue.c_str(), goalValue.c_str(),
+           READING_STATS.getCurrentStreakDays());
+  return std::string(buf);
 }
 
 std::string getShortcutSubtitle(const ShortcutDefinition& definition) {
@@ -96,11 +103,11 @@ void AppsActivity::render(RenderLock&&) {
   if (appShortcuts.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, contentTop + 24, tr(STR_NO_ENTRIES));
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(appShortcuts.size()),
-                 selectedIndex,
-                 [this](const int index) { return std::string(I18N.get(appShortcuts[index]->nameId)); },
-                 [this](const int index) { return getShortcutSubtitle(*appShortcuts[index]); },
-                 [this](const int index) { return appShortcuts[index]->icon; });
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(appShortcuts.size()), selectedIndex,
+        [this](const int index) { return std::string(I18N.get(appShortcuts[index]->nameId)); },
+        [this](const int index) { return getShortcutSubtitle(*appShortcuts[index]); },
+        [this](const int index) { return appShortcuts[index]->icon; });
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));

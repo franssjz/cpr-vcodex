@@ -1,3 +1,198 @@
+## 1.2.0.15 — 2026-04-07
+
+**ESP32-C3 code optimisations: memory, CPU, SD I/O, and caching** (#13)
+
+Systematic optimisations targeting the 380KB RAM ceiling, reducing heap fragmentation, CPU time in text layout, and SD card I/O across the firmware.
+
+### Text layout engine (`ParsedText.cpp`)
+- **Word-width measurement cache**: FNV-1a keyed hash-map avoids redundant `getTextAdvanceX()` calls for duplicate words (~30-50% of a typical English chapter). Transient, freed after each section build.
+- **Eliminate triple `vector::erase(begin, begin+n)`**: Replaced O(n) front-erase of `words`/`wordStyles`/`wordContinues` with `std::move` + `resize`.
+- **Hyphenation prefix measurement on stack**: `word.substr(0, offset)` per breakpoint replaced with a fixed `char[128]` buffer — eliminates 5-10 heap allocations per hyphenated word.
+- **Single-pass soft hyphen strip**: O(n) read/write pointer replaces O(n²) repeated `find()`+`erase()`.
+- **`extractLine` callback**: Internal signature changed from `std::function` to plain function pointer + `void* ctx`. Public API unchanged.
+
+### Section cache (`Section.cpp/h`)
+- **Page LUT cached in RAM**: `ensureLutLoaded()` reads the page-offset table once (~200 bytes for 50 pages) instead of seeking the SD file on every page turn.
+- **Binary search for anchors**: `getPageForAnchor()` sorts + `lower_bound` instead of linear scan through SD-backed strings.
+- **Multi-orientation cache**: Section filenames now encode viewport dimensions (`{spine}_{W}x{H}.bin`), so rotating the device serves the other orientation's cache instead of rebuilding.
+
+### Font subsystem
+- **Retain hot buffer capacity** (`FontDecompressor.cpp`): Removed `shrink_to_fit()` from `freeHotGroup()` — the vectors are reused immediately on next cache miss.
+- **Skip `shrink_to_fit` in prewarm** (`FontCacheManager.cpp`): Scan string buffer kept across page turns instead of free+realloc each time.
+
+### Heap fragmentation
+- **Consolidated dithering buffers** (`BitmapHelpers.h`): All three ditherer classes now do a single allocation for their error rows (7 → 3 total `new` calls).
+- **`vector::reserve()`** added to `ShortcutRegistry::getConfiguredShortcuts()`, `getShortcutOrderEntries()`, and `getHomeShortcutEntries()`.
+
+### SD card write reduction
+- **Debounced settings saves**: New `markDirty()` / `saveIfDirty()` on `CrossPointSettings`. Settings activities mark dirty on change; flush happens once in `onExit()`. Callers outside settings (reader orientation change, web server) still call `saveToFile()` directly.
+
+### Misc
+- `setFadingFix()` in main loop guarded by change detection (same pattern as existing `darkMode` check).
+- `snprintf` replaces `std::string` concatenation in `HomeActivity::render()` and `AppsActivity` helpers.
+
+---
+## 1.2.0.14 — 2026-04-07
+
+**fix: restore Check for Updates in settings and fix Lexend font migration** (#12)
+
+Commit `f644cfd` accidentally removed the "Check for Updates" entry from System settings, making OTA firmware updates inaccessible from the device. A secondary bug in the same commit broke Lexend font persistence.
+
+- **Restore "Check for Updates" action in System settings**
+  - Re-added `SettingInfo::Action(STR_CHECK_UPDATES, CheckForUpdates)` to `buildSettingsLists()` — the handler in `toggleCurrentSetting()` was intact but unreachable
+
+- **Fix font family migration resetting Lexend to Bookerly**
+  - The migration code mapped `rawFontFamily == 2` → `BOOKERLY`, intended for the old enum where `2 = OpenDyslexic`. Current enum has `LEXEND = 2`, so every settings load silently reverted Lexend selections:
+    ```cpp
+    // Before: incorrectly remaps current LEXEND=2 to BOOKERLY
+    } else if (rawFontFamily == 2) {
+      s.fontFamily = CrossPointSettings::BOOKERLY;
+    ```
+  - Removed the `== 2` case. The `== 3` migration (old upstream Lexend index → current `LEXEND=2`) and the `>= FONT_FAMILY_COUNT` catch-all are preserved.
+
+---
+## 1.2.0.13 — 2026-04-07
+
+**chore: update actions/cache v4 → v5 for Node.js 24 support** (#9)
+
+`actions/cache@v4` runs on Node.js 20, which is deprecated and will be force-migrated to Node.js 24 on June 2, 2026. `actions/cache@v5` runs natively on Node.js 24.
+
+- Updated all 8 `actions/cache` references from `v4` to `v5` across:
+  - `ci.yml` (4 cache steps)
+  - `release.yml` (2 cache steps)
+  - `release_candidate.yml` (2 cache steps)
+
+```diff
+-        uses: actions/cache@v4
++        uses: actions/cache@v5
+```
+
+---
+## 1.2.0.12 — 2026-04-07
+
+**ci: cache build objects, libdeps, and cppcheck analysis** (#8)
+
+CI build takes ~4.6 min wall-clock with the build job as the critical path (~4 min compilation). Only toolchain binaries and uv packages were cached.
+
+### Changes
+
+- **Build object cache** (`.pio/build/`): Keyed on source file hashes with `restore-keys` fallback so SCons performs incremental builds — only recompiles changed files
+- **Library dependency cache** (`.pio/libdeps/`): Added to existing package cache path in all 3 workflows (ci, release, release_candidate) to skip re-downloading ArduinoJson, PNGdec, JPEGDEC, etc.
+- **Cppcheck analysis cache**: Added `--cppcheck-build-dir=.cppcheck-cache` to `check_flags` in `platformio.ini` and cached the directory with a source-aware key so cppcheck skips re-analyzing unchanged files (~3 min → seconds on cache hit)
+
+### Cache key strategy
+
+```yaml
+# Exact match on source content; fallback restores most recent cache for incremental rebuild
+key: pio-build-${{ runner.os }}-${{ hashFiles('platformio.ini', 'src/**', 'lib/**', 'open-x4-sdk/**') }}
+restore-keys: pio-build-${{ runner.os }}-
+```
+
+Typical PR builds (few files changed) should drop from ~4.6 min to ~1-2 min.
+
+---
+## 1.2.0.11 — 2026-04-07
+
+**Speed up GitHub Actions: PlatformIO caching, faster clang-format install** (#7)
+
+CI workflows re-download the full ESP32-C3 toolchain (~100MB+) and LLVM apt packages on every run. This adds unnecessary wall time to every push and PR.
+
+### Changes
+
+- **PlatformIO package caching** — Cache `~/.platformio/packages` and `~/.platformio/platforms` via `actions/cache@v4`, keyed on `platformio.ini` hash. Applied to all four workflows (`ci`, `release`, `release_candidate`).
+
+- **Faster clang-format install** — Replace the slow LLVM apt repo setup (`llvm.sh` + `apt-get install clang-format-21`) with `uv pip install --system 'clang-format>=21,<22'`. The `bin/clang-format-fix` script already falls back from `clang-format-21` → `clang-format` and validates version ≥ 21.
+
+- **Drop unnecessary submodule checkout** from the clang-format job — `git ls-files` only lists parent repo files, not submodule contents.
+
+- **Enable uv pip caching** — Flip `enable-cache: false` → `true` on `astral-sh/setup-uv` across all workflows.
+
+- **Bump `upload-artifact` v4 → v6** in `release_candidate.yml` for consistency with `ci.yml`.
+
+### Expected impact
+
+| Optimization | Savings (approx) |
+|---|---|
+| PlatformIO cache hit | ~60s per job |
+| pip clang-format vs apt LLVM | ~20-30s |
+| Skip submodule clone | ~10-15s |
+| uv cache hit | ~5-10s per job |
+
+The three CI jobs (`clang-format`, `cppcheck`, `build`) already run in parallel — no structural changes needed there.
+
+---
+## 1.2.0.10 — 2026-04-07
+
+**Rename release binary from firmware.bin to vcodex-{version}.bin** (#6)
+
+Release artifacts were uploaded as the generic PlatformIO default `firmware.bin`. Users downloading from GitHub Releases had no way to identify the firmware variant or version from the filename alone.
+
+### Changes
+
+- **`scripts/post_build_release.py`**: Changed versioned copy filename from `firmware.{version}-vcodex.bin` to `vcodex-{version}.bin`
+- **`.github/workflows/release.yml`**: Updated release asset path to reference the new versioned binary
+
+Release assets will now be named e.g. `vcodex-1.2.0.9.bin` instead of `firmware.bin`.
+
+---
+## 1.2.0.9 — 2026-04-07
+
+**Sync with upstream franssjz/cpr-vcodex** (#5)
+
+Merges latest changes from [franssjz/cpr-vcodex](https://github.com/franssjz/cpr-vcodex) `master` into our fork. One conflict in `platformio.ini` resolved by keeping our version (`1.2.0.8`).
+
+### Upstream changes pulled in
+- **EpubReaderActivity**: Improved AA text refresh handling — skips harsh half-refresh on grayscale LUT pages, uses `FAST_REFRESH` instead to avoid inverted/flash artifacts in dark mode
+- **ActivityResult**: Replaced `std::enable_if_t` with C++20 `requires` constraint
+- **JpegToFramebufferConverter / PngToFramebufferConverter**: Simplified member initialization
+- **ReaderUtils**: Refresh utility enhancements
+- **Translations**: Russian and Ukrainian updates
+- **README / CHANGELOG**: Documentation refresh
+
+### Conflict resolution
+- `platformio.ini` `[vcodex]` version: kept ours (`1.2.0.8`) over upstream (`1.2.0.7`)
+
+---
+## 1.2.0.8 — 2026-04-07
+
+**fix: remove -flto from vcodex_release to fix release build** (#4)
+
+Release workflow fails while CI passes because they use different PlatformIO environments. `vcodex_release` includes `-flto`, but the ESP32-C3 RISC-V toolchain's linker lacks the GCC LTO plugin — producing 291 "plugin needed to handle lto object" errors at link time.
+
+- **Removed `-flto`** from `[env:vcodex_release]` in `platformio.ini`
+- Remaining size optimization flags (`-Os`, `-fmerge-all-constants`, `-fno-unwind-tables`, `-fno-asynchronous-unwind-tables`) plus base section's `-ffunction-sections`/`-fdata-sections`/`-Wl,--gc-sections` still provide dead code elimination
+
+The key distinction: CI runs `pio run` (default env, no `-flto`) → passes. Release runs `pio run -e vcodex_release` (has `-flto`) → fails.
+
+---
+## 1.2.0.7 — 2026-04-07
+
+**fix: resolve CI build and auto-release workflow failures** (#3)
+
+CI failing on all three check jobs (clang-format, cppcheck, build) and auto-release workflow crashing on every PR merge due to shell injection from PR body and broken version parsing.
+
+### CI fixes (`HomeActivity.cpp`)
+
+- `%d` → `%u` for `uint32_t` return from `getCurrentStreakDays()` (cppcheck `invalidPrintfArgType_sint`)
+- Re-wrapped `snprintf` args to satisfy clang-format-21
+
+### Release workflow (`release.yml`)
+
+- **Shell injection**: `${{ github.event.pull_request.body }}` was directly interpolated into shell — PR bodies with C++ code, backticks, etc. were executed as commands. Moved to `env:` block.
+- **Version parsing**: `grep 'vcodex.version\s*='` matched nothing because the INI key is `version` under `[vcodex]`, not `vcodex.version`. Replaced with section-aware awk:
+  ```bash
+  awk '/^\[vcodex\]/{found=1} found && /^version\s*=/{print $NF; exit}' platformio.ini
+  ```
+- **Version update**: Same root cause — sed now uses range pattern `/^\[vcodex\]/,/^\[/` to scope to the correct section
+- **Missing `submodules: recursive`** on checkout → `PackageException` for `open-x4-sdk` symlinks
+- **Deprecated actions**: `checkout@v4` → `@v6`, `setup-python@v5` → `@v6`
+- **Wrong PlatformIO**: `pip install platformio` → pioarduino-core v6.1.19 via uv (matching CI)
+
+### Cleanup
+
+- Removed broken CHANGELOG.md entry with empty version left by the previous failed release run
+
+---
 # Changelog
 
 Brief firmware history for `cpr-vcodex`.
