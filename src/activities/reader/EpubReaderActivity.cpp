@@ -35,6 +35,8 @@ namespace {
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
 constexpr unsigned long skipChapterMs = 700;
 constexpr unsigned long bookmarkToggleMs = 700;
+// Deferred progress save interval (30 seconds) to reduce flash wear
+constexpr unsigned long PROGRESS_SAVE_INTERVAL_MS = 30UL * 1000UL;
 // pages per minute, first item is 1 to prevent division by zero if accessed
 const std::vector<int> PAGE_TURN_LABELS = {1, 1, 3, 6, 12};
 
@@ -210,6 +212,11 @@ void EpubReaderActivity::onEnter() {
 void EpubReaderActivity::onExit() {
   Activity::onExit();
 
+  // Final progress save if dirty
+  if (progressDirty && section) {
+    saveProgress(currentSpineIndex, section->currentPage, section->pageCount, true);
+  }
+
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
   renderer.setTextDarkness(0);
@@ -231,6 +238,11 @@ void EpubReaderActivity::loop() {
   }
 
   READING_STATS.tickActiveSession();
+
+  // Periodic progress save: save every 30 seconds if dirty
+  if (progressDirty && section && (millis() - lastProgressSaveTime) >= PROGRESS_SAVE_INTERVAL_MS) {
+    saveProgress(currentSpineIndex, section->currentPage, section->pageCount);
+  }
 
   if (automaticPageTurnActive) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
@@ -843,7 +855,8 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     renderContents(std::move(p), orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
   }
-  saveProgress(currentSpineIndex, section->currentPage, section->pageCount);
+  // Mark progress as dirty instead of immediate save to reduce flash wear
+  progressDirty = true;
 
   if (pendingScreenshot) {
     pendingScreenshot = false;
@@ -851,7 +864,12 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   }
 }
 
-void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount) {
+void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount, bool force) {
+  // Skip save if not forced and not enough time has passed since last save
+  if (!force && lastProgressSaveTime != 0 && (millis() - lastProgressSaveTime) < PROGRESS_SAVE_INTERVAL_MS) {
+    return;
+  }
+
   int progressPercent = 0;
   if (epub->getBookSize() > 0 && pageCount > 0) {
     const float chapterProgress = static_cast<float>(currentPage + 1) / static_cast<float>(pageCount);
@@ -876,6 +894,8 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
     data[5] = (pageCount >> 8) & 0xFF;
     f.write(data, 6);
     f.close();
+    lastProgressSaveTime = millis();
+    progressDirty = false;
     LOG_DBG("ERS", "Progress saved: Chapter %d, Page %d", spineIndex, currentPage);
   } else {
     LOG_ERR("ERS", "Could not save progress!");
