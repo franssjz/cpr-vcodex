@@ -344,10 +344,9 @@ std::optional<uint16_t> Section::getPageForAnchor(const std::string& anchor) con
   f.close();
 
   // Sort and binary search for O(log n) lookup instead of O(n) linear scan.
-  std::sort(anchors.begin(), anchors.end(),
-            [](const AnchorEntry& a, const AnchorEntry& b) { return a.key < b.key; });
+  std::sort(anchors.begin(), anchors.end(), [](const AnchorEntry& a, const AnchorEntry& b) { return a.key < b.key; });
   auto it = std::lower_bound(anchors.begin(), anchors.end(), anchor,
-                              [](const AnchorEntry& entry, const std::string& key) { return entry.key < key; });
+                             [](const AnchorEntry& entry, const std::string& key) { return entry.key < key; });
   if (it != anchors.end() && it->key == anchor) {
     return it->page;
   }
