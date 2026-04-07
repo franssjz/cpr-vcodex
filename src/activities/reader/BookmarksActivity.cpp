@@ -14,7 +14,7 @@
 namespace {
 constexpr const char* PAGE_LABEL = "Page ";
 constexpr unsigned long DELETE_BOOKMARK_HOLD_MS = 1000;
-}
+}  // namespace
 
 int BookmarksActivity::getPageItems() const {
   constexpr int lineHeight = 30;
@@ -41,8 +41,7 @@ std::string BookmarksActivity::getItemLabel(const int index) const {
     if (tocIndex != -1) {
       const auto tocItem = epub->getTocItem(tocIndex);
       snprintf(buffer, sizeof(buffer), "%d. ", index + 1);
-      return std::string(buffer) + tocItem.title + " - " + PAGE_LABEL +
-             std::to_string(bookmark.pageNumber + 1);
+      return std::string(buffer) + tocItem.title + " - " + PAGE_LABEL + std::to_string(bookmark.pageNumber + 1);
     }
 
     snprintf(buffer, sizeof(buffer), "%d. %s%d, %s%d", index + 1, tr(STR_SECTION_PREFIX), bookmark.spineIndex + 1,
@@ -68,37 +67,36 @@ void BookmarksActivity::confirmDeleteSelectedBookmark() {
 
   const auto bookmark = bookmarks[selectorIndex];
   const std::string body = getItemLabel(selectorIndex);
-  startActivityForResult(
-      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_BOOKMARK), body),
-      [this, bookmark](const ActivityResult& result) {
-        if (result.isCancelled) {
-          requestUpdate();
-          return;
-        }
+  startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_BOOKMARK), body),
+                         [this, bookmark](const ActivityResult& result) {
+                           if (result.isCancelled) {
+                             requestUpdate();
+                             return;
+                           }
 
-        if (onDeleteBookmark(bookmark)) {
-          bookmarks.erase(std::remove_if(bookmarks.begin(), bookmarks.end(),
-                                         [&](const BookmarkStore::Bookmark& current) {
-                                           return current.spineIndex == bookmark.spineIndex &&
-                                                  current.pageNumber == bookmark.pageNumber;
-                                         }),
-                          bookmarks.end());
+                           if (onDeleteBookmark(bookmark)) {
+                             bookmarks.erase(std::remove_if(bookmarks.begin(), bookmarks.end(),
+                                                            [&](const BookmarkStore::Bookmark& current) {
+                                                              return current.spineIndex == bookmark.spineIndex &&
+                                                                     current.pageNumber == bookmark.pageNumber;
+                                                            }),
+                                             bookmarks.end());
 
-          if (bookmarks.empty()) {
-            ActivityResult cancelResult;
-            cancelResult.isCancelled = true;
-            setResult(std::move(cancelResult));
-            finish();
-            return;
-          }
+                             if (bookmarks.empty()) {
+                               ActivityResult cancelResult;
+                               cancelResult.isCancelled = true;
+                               setResult(std::move(cancelResult));
+                               finish();
+                               return;
+                             }
 
-          if (selectorIndex >= static_cast<int>(bookmarks.size())) {
-            selectorIndex = static_cast<int>(bookmarks.size()) - 1;
-          }
-        }
+                             if (selectorIndex >= static_cast<int>(bookmarks.size())) {
+                               selectorIndex = static_cast<int>(bookmarks.size()) - 1;
+                             }
+                           }
 
-        requestUpdate();
-      });
+                           requestUpdate();
+                         });
 }
 
 void BookmarksActivity::loop() {
@@ -187,8 +185,7 @@ void BookmarksActivity::render(RenderLock&&) {
 
     const int displayY = 60 + contentY + i * 30;
     const bool isSelected = itemIndex == selectorIndex;
-    const std::string label =
-        renderer.truncatedText(UI_10_FONT_ID, getItemLabel(itemIndex).c_str(), contentWidth - 40);
+    const std::string label = renderer.truncatedText(UI_10_FONT_ID, getItemLabel(itemIndex).c_str(), contentWidth - 40);
     renderer.drawText(UI_10_FONT_ID, contentX + 20, displayY, label.c_str(), !isSelected);
   }
 

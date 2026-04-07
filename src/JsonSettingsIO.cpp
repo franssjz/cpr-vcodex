@@ -9,10 +9,10 @@
 #include <cstring>
 #include <string>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
-#include "AchievementsStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "SettingsList.h"
@@ -328,12 +328,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     s.sleepDirectory[sizeof(s.sleepDirectory) - 1] = '\0';
   }
   s.sleepImageOrder = clamp(doc["sleepImageOrder"] | (uint8_t)CrossPointSettings::SLEEP_IMAGE_SHUFFLE,
-                            CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT,
-                            CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
+                            CrossPointSettings::SLEEP_IMAGE_ORDER_COUNT, CrossPointSettings::SLEEP_IMAGE_SHUFFLE);
 
   const uint8_t shortcutOrderCount = static_cast<uint8_t>(getShortcutDefinitions().size() + 1);
-  s.appsHubShortcutOrder = clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount,
-                                 s.appsHubShortcutOrder);
+  s.appsHubShortcutOrder =
+      clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount, s.appsHubShortcutOrder);
   s.browseFilesShortcutOrder = clamp(doc["browseFilesShortcutOrder"] | s.browseFilesShortcutOrder, shortcutOrderCount,
                                      s.browseFilesShortcutOrder);
   s.statsShortcutOrder =
@@ -360,39 +359,30 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
                                       shortcutOrderCount, s.fileTransferShortcutOrder);
   s.sleepShortcutOrder =
       clamp(doc["sleepShortcutOrder"] | s.sleepShortcutOrder, shortcutOrderCount, s.sleepShortcutOrder);
-  s.browseFilesShortcutVisible =
-      clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible, static_cast<uint8_t>(2),
-            s.browseFilesShortcutVisible);
+  s.browseFilesShortcutVisible = clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible,
+                                       static_cast<uint8_t>(2), s.browseFilesShortcutVisible);
   s.statsShortcutVisible =
       clamp(doc["statsShortcutVisible"] | s.statsShortcutVisible, static_cast<uint8_t>(2), s.statsShortcutVisible);
-  s.syncDayShortcutVisible =
-      clamp(doc["syncDayShortcutVisible"] | s.syncDayShortcutVisible, static_cast<uint8_t>(2), s.syncDayShortcutVisible);
-  s.settingsShortcutVisible =
-      clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
-            s.settingsShortcutVisible);
-  s.readingStatsShortcutVisible =
-      clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible, static_cast<uint8_t>(2),
-            s.readingStatsShortcutVisible);
-  s.readingHeatmapShortcutVisible =
-      clamp(doc["readingHeatmapShortcutVisible"] | s.readingHeatmapShortcutVisible, static_cast<uint8_t>(2),
-            s.readingHeatmapShortcutVisible);
-  s.achievementsShortcutVisible =
-      clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible, static_cast<uint8_t>(2),
-            s.achievementsShortcutVisible);
-  s.ifFoundShortcutVisible =
-      clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
-            s.ifFoundShortcutVisible);
+  s.syncDayShortcutVisible = clamp(doc["syncDayShortcutVisible"] | s.syncDayShortcutVisible, static_cast<uint8_t>(2),
+                                   s.syncDayShortcutVisible);
+  s.settingsShortcutVisible = clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
+                                    s.settingsShortcutVisible);
+  s.readingStatsShortcutVisible = clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible,
+                                        static_cast<uint8_t>(2), s.readingStatsShortcutVisible);
+  s.readingHeatmapShortcutVisible = clamp(doc["readingHeatmapShortcutVisible"] | s.readingHeatmapShortcutVisible,
+                                          static_cast<uint8_t>(2), s.readingHeatmapShortcutVisible);
+  s.achievementsShortcutVisible = clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible,
+                                        static_cast<uint8_t>(2), s.achievementsShortcutVisible);
+  s.ifFoundShortcutVisible = clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
+                                   s.ifFoundShortcutVisible);
   s.readMeShortcutVisible =
       clamp(doc["readMeShortcutVisible"] | s.readMeShortcutVisible, static_cast<uint8_t>(2), s.readMeShortcutVisible);
-  s.recentBooksShortcutVisible =
-      clamp(doc["recentBooksShortcutVisible"] | s.recentBooksShortcutVisible, static_cast<uint8_t>(2),
-            s.recentBooksShortcutVisible);
-  s.bookmarksShortcutVisible =
-      clamp(doc["bookmarksShortcutVisible"] | s.bookmarksShortcutVisible, static_cast<uint8_t>(2),
-            s.bookmarksShortcutVisible);
-  s.fileTransferShortcutVisible =
-      clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible, static_cast<uint8_t>(2),
-            s.fileTransferShortcutVisible);
+  s.recentBooksShortcutVisible = clamp(doc["recentBooksShortcutVisible"] | s.recentBooksShortcutVisible,
+                                       static_cast<uint8_t>(2), s.recentBooksShortcutVisible);
+  s.bookmarksShortcutVisible = clamp(doc["bookmarksShortcutVisible"] | s.bookmarksShortcutVisible,
+                                     static_cast<uint8_t>(2), s.bookmarksShortcutVisible);
+  s.fileTransferShortcutVisible = clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible,
+                                        static_cast<uint8_t>(2), s.fileTransferShortcutVisible);
   s.sleepShortcutVisible =
       clamp(doc["sleepShortcutVisible"] | s.sleepShortcutVisible, static_cast<uint8_t>(2), s.sleepShortcutVisible);
 

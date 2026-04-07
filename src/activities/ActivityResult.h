@@ -56,9 +56,8 @@ struct FootnoteResult {
   std::string href;
 };
 
-using ResultVariant =
-    std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, PageResult,
-                 BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult>;
+using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
+                                   PageResult, BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

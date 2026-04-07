@@ -10,26 +10,26 @@
 #include <Logging.h>
 #include <esp_system.h>
 
-#include "CrossPointSettings.h"
-#include "CrossPointState.h"
 #include "AchievementsStore.h"
 #include "BookmarksActivity.h"
+#include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "EpubReaderChapterSelectionActivity.h"
 #include "EpubReaderFootnotesActivity.h"
 #include "EpubReaderPercentSelectionActivity.h"
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncActivity.h"
 #include "MappedInputManager.h"
-#include "ReadingStatsStore.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ScreenshotUtil.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/ScreenshotUtil.h"
 
 namespace {
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
@@ -78,8 +78,8 @@ uint8_t getStatsChapterProgressPercent(const int currentPage, const int pageCoun
     return 0;
   }
 
-  return static_cast<uint8_t>(
-      clampPercent(static_cast<int>((static_cast<float>(currentPage + 1) / static_cast<float>(pageCount)) * 100.0f + 0.5f)));
+  return static_cast<uint8_t>(clampPercent(
+      static_cast<int>((static_cast<float>(currentPage + 1) / static_cast<float>(pageCount)) * 100.0f + 0.5f)));
 }
 
 std::string getStableProgressPath(const std::string& bookId) {
@@ -119,9 +119,9 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   showPendingAchievementPopups(renderer);
-  const bool countedSession =
-      READING_STATS.getLastSessionSnapshot().valid && READING_STATS.getLastSessionSnapshot().counted &&
-      READING_STATS.getLastSessionSnapshot().path == bookPath;
+  const bool countedSession = READING_STATS.getLastSessionSnapshot().valid &&
+                              READING_STATS.getLastSessionSnapshot().counted &&
+                              READING_STATS.getLastSessionSnapshot().path == bookPath;
 
   if (SETTINGS.showStatsAfterReading && countedSession && !bookPath.empty()) {
     activityManager.replaceActivity(
@@ -270,8 +270,7 @@ void EpubReaderActivity::loop() {
     }
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= bookmarkToggleMs) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= bookmarkToggleMs) {
     if (section && section->currentPage >= 0 && section->currentPage < section->pageCount) {
       const uint16_t spineIndex = static_cast<uint16_t>(currentSpineIndex);
       const uint16_t pageNumber = static_cast<uint16_t>(section->currentPage);
@@ -305,26 +304,26 @@ void EpubReaderActivity::loop() {
       bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
     }
     const int bookProgressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
-    startActivityForResult(std::make_unique<EpubReaderMenuActivity>(
-                               renderer, mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-                               SETTINGS.orientation, SETTINGS.textDarkness, !currentPageFootnotes.empty(),
-                               !bookmarkStore.isEmpty()),
-                           [this](const ActivityResult& result) {
-                             READING_STATS.resumeSession();
-                             // Always apply orientation change even if the menu was cancelled
-                             const auto& menu = std::get<MenuResult>(result.data);
-                             applyOrientation(menu.orientation);
-                             toggleAutoPageTurn(menu.pageTurnOption);
-                             if (SETTINGS.textDarkness != menu.textDarkness) {
-                               SETTINGS.textDarkness = menu.textDarkness;
-                               SETTINGS.saveToFile();
-                               renderer.setTextDarkness(SETTINGS.textDarkness);
-                               requestUpdate();
-                             }
-                             if (!result.isCancelled) {
-                               onReaderMenuConfirm(static_cast<EpubReaderMenuActivity::MenuAction>(menu.action));
-                             }
-                           });
+    startActivityForResult(
+        std::make_unique<EpubReaderMenuActivity>(renderer, mappedInput, epub->getTitle(), currentPage, totalPages,
+                                                 bookProgressPercent, SETTINGS.orientation, SETTINGS.textDarkness,
+                                                 !currentPageFootnotes.empty(), !bookmarkStore.isEmpty()),
+        [this](const ActivityResult& result) {
+          READING_STATS.resumeSession();
+          // Always apply orientation change even if the menu was cancelled
+          const auto& menu = std::get<MenuResult>(result.data);
+          applyOrientation(menu.orientation);
+          toggleAutoPageTurn(menu.pageTurnOption);
+          if (SETTINGS.textDarkness != menu.textDarkness) {
+            SETTINGS.textDarkness = menu.textDarkness;
+            SETTINGS.saveToFile();
+            renderer.setTextDarkness(SETTINGS.textDarkness);
+            requestUpdate();
+          }
+          if (!result.isCancelled) {
+            onReaderMenuConfirm(static_cast<EpubReaderMenuActivity::MenuAction>(menu.action));
+          }
+        });
   }
 
   // Long press BACK (1s+) goes to file selection
@@ -488,8 +487,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     case EpubReaderMenuActivity::MenuAction::BOOKMARKS: {
       READING_STATS.noteActivity();
       READING_STATS.saveToFile();
-      startActivityForResult(
-                             std::make_unique<BookmarksActivity>(
+      startActivityForResult(std::make_unique<BookmarksActivity>(
                                  renderer, mappedInput, bookmarkStore.getAll(), epub, "",
                                  [this](const BookmarkStore::Bookmark& bookmark) {
                                    const bool removed = bookmarkStore.remove(bookmark.spineIndex, bookmark.pageNumber);
@@ -502,8 +500,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                                READING_STATS.resumeSession();
                                if (!result.isCancelled) {
                                  const auto& bookmark = std::get<BookmarkResult>(result.data);
-                                 if (currentSpineIndex != bookmark.spineIndex ||
-                                     !section || section->currentPage != static_cast<int>(bookmark.page)) {
+                                 if (currentSpineIndex != bookmark.spineIndex || !section ||
+                                     section->currentPage != static_cast<int>(bookmark.page)) {
                                    RenderLock lock(*this);
                                    currentSpineIndex = bookmark.spineIndex;
                                    nextPageNumber = static_cast<int>(bookmark.page);
@@ -877,7 +875,8 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
         clampPercent(static_cast<int>(epub->calculateProgress(spineIndex, chapterProgress) * 100.0f + 0.5f));
   }
   READING_STATS.updateProgress(static_cast<uint8_t>(progressPercent), progressPercent >= 100,
-                               getStatsChapterTitle(*epub, spineIndex), getStatsChapterProgressPercent(currentPage, pageCount));
+                               getStatsChapterTitle(*epub, spineIndex),
+                               getStatsChapterProgressPercent(currentPage, pageCount));
 
   FsFile f;
   const std::string progressPath = getStableProgressPath(stableBookId);

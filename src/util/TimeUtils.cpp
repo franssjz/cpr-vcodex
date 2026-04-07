@@ -1,12 +1,12 @@
 #include "TimeUtils.h"
 
-#include "CrossPointSettings.h"
 #include <Arduino.h>
 #include <esp_sntp.h>
 
 #include <algorithm>
 #include <ctime>
 
+#include "CrossPointSettings.h"
 #include "util/TimeZoneRegistry.h"
 
 namespace {
@@ -131,9 +131,8 @@ uint32_t TimeUtils::getLocalDayOrdinal(const uint32_t epochSeconds) {
     return epochSeconds / 86400UL;
   }
 
-  return static_cast<uint32_t>(
-      daysFromCivil(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
-                    static_cast<unsigned>(localTime.tm_mday)));
+  return static_cast<uint32_t>(daysFromCivil(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
+                                             static_cast<unsigned>(localTime.tm_mday)));
 }
 
 uint32_t TimeUtils::getDayOrdinalForDate(const int year, const unsigned month, const unsigned day) {
@@ -185,7 +184,8 @@ std::string TimeUtils::formatDateTime(const uint32_t epochSeconds, const bool ap
          (localTime.tm_min < 10 ? "0" : "") + std::to_string(localTime.tm_min);
 }
 
-std::string TimeUtils::formatDateParts(const int year, const unsigned month, const unsigned day, const bool appendBang) {
+std::string TimeUtils::formatDateParts(const int year, const unsigned month, const unsigned day,
+                                       const bool appendBang) {
   return formatDateBuffer(year, month, day, appendBang);
 }
 
