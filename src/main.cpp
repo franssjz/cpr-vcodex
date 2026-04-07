@@ -287,7 +287,13 @@ void loop() {
 
   gpio.update();
 
-  renderer.setFadingFix(SETTINGS.fadingFix);
+  {
+    static uint8_t lastFadingFix = 0xFF;
+    if (SETTINGS.fadingFix != lastFadingFix) {
+      renderer.setFadingFix(SETTINGS.fadingFix);
+      lastFadingFix = SETTINGS.fadingFix;
+    }
+  }
   {
     static uint8_t lastDarkMode = 0xFF;
     if (SETTINGS.darkMode != lastDarkMode) {

@@ -58,7 +58,7 @@ void CalibreSettingsActivity::handleSelection() {
                                const auto& kb = std::get<KeyboardResult>(result.data);
                                strncpy(SETTINGS.opdsServerUrl, kb.text.c_str(), sizeof(SETTINGS.opdsServerUrl) - 1);
                                SETTINGS.opdsServerUrl[sizeof(SETTINGS.opdsServerUrl) - 1] = '\0';
-                               SETTINGS.saveToFile();
+                               SETTINGS.markDirty();
                              }
                            });
   } else if (selectedIndex == 1) {
@@ -70,7 +70,7 @@ void CalibreSettingsActivity::handleSelection() {
                                const auto& kb = std::get<KeyboardResult>(result.data);
                                strncpy(SETTINGS.opdsUsername, kb.text.c_str(), sizeof(SETTINGS.opdsUsername) - 1);
                                SETTINGS.opdsUsername[sizeof(SETTINGS.opdsUsername) - 1] = '\0';
-                               SETTINGS.saveToFile();
+                               SETTINGS.markDirty();
                              }
                            });
   } else if (selectedIndex == 2) {
@@ -82,7 +82,7 @@ void CalibreSettingsActivity::handleSelection() {
                                const auto& kb = std::get<KeyboardResult>(result.data);
                                strncpy(SETTINGS.opdsPassword, kb.text.c_str(), sizeof(SETTINGS.opdsPassword) - 1);
                                SETTINGS.opdsPassword[sizeof(SETTINGS.opdsPassword) - 1] = '\0';
-                               SETTINGS.saveToFile();
+                               SETTINGS.markDirty();
                              }
                            });
   }

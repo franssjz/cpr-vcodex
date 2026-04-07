@@ -220,6 +220,8 @@ void SettingsActivity::buildSettingsLists() {
 void SettingsActivity::onExit() {
   Activity::onExit();
 
+  // Flush any pending settings changes to SD card.
+  SETTINGS.saveIfDirty();
   UITheme::getInstance().reload();  // Re-apply theme in case it was changed
 }
 
@@ -316,7 +318,7 @@ void SettingsActivity::loop() {
       selectedSettingIndex = 0;
       requestUpdate();
     } else {
-      SETTINGS.saveToFile();
+      SETTINGS.markDirty();
       onGoHome();
     }
     return;
@@ -374,7 +376,7 @@ void SettingsActivity::toggleCurrentSetting() {
       SETTINGS.*(setting.valuePtr) = currentValue + setting.valueRange.step;
     }
   } else if (setting.type == SettingType::ACTION) {
-    auto resultHandler = [this](const ActivityResult&) { SETTINGS.saveToFile(); };
+    auto resultHandler = [this](const ActivityResult&) { SETTINGS.markDirty(); };
 
     switch (setting.action) {
       case SettingAction::RemapFrontButtons:
@@ -491,7 +493,7 @@ void SettingsActivity::toggleCurrentSetting() {
     requestUpdate(true);
   }
 
-  SETTINGS.saveToFile();
+  SETTINGS.markDirty();
 }
 
 void SettingsActivity::renderAppSettingsList(const Rect& rect) const {

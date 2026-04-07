@@ -151,6 +151,7 @@ inline void normalizeShortcutOrderSettings(CrossPointSettings& settings) {
 inline std::vector<const ShortcutDefinition*> getConfiguredShortcuts(
     const CrossPointSettings::SHORTCUT_LOCATION location) {
   std::vector<const ShortcutDefinition*> shortcuts;
+  shortcuts.reserve(getShortcutDefinitions().size());
   for (const auto& definition : getShortcutDefinitions()) {
     if (static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr)) == location &&
         getShortcutVisibility(definition)) {
@@ -166,6 +167,7 @@ inline std::vector<const ShortcutDefinition*> getConfiguredShortcuts(
 
 inline std::vector<ShortcutOrderEntry> getShortcutOrderEntries(const ShortcutOrderGroup group) {
   std::vector<ShortcutOrderEntry> entries;
+  entries.reserve(getShortcutDefinitions().size() + 1);  // +1 for possible appsHub entry
   if (group == ShortcutOrderGroup::Home) {
     entries.push_back(ShortcutOrderEntry{nullptr, true});
   }

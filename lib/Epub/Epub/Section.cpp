@@ -4,6 +4,8 @@
 #include <Logging.h>
 #include <Serialization.h>
 
+#include <algorithm>
+
 #include "Epub/css/CssParser.h"
 #include "Page.h"
 #include "hyphenation/Hyphenator.h"
@@ -117,7 +119,8 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
 }
 
 // Your updated class method (assuming you are using the 'SD' object, which is a wrapper for a specific filesystem)
-bool Section::clearCache() const {
+bool Section::clearCache() {
+  pageLut.clear();  // Invalidate cached page-offset LUT
   if (!Storage.exists(filePath.c_str())) {
     LOG_DBG("SCT", "Cache does not exist, no action needed");
     return true;
@@ -261,19 +264,42 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   return true;
 }
 
+bool Section::ensureLutLoaded() {
+  if (!pageLut.empty()) {
+    return true;  // Already cached
+  }
+  FsFile f;
+  if (!Storage.openFileForRead("SCT", filePath, f)) {
+    return false;
+  }
+  // Read LUT offset from header
+  f.seek(HEADER_SIZE - sizeof(uint32_t) * 2);
+  uint32_t lutOffset;
+  serialization::readPod(f, lutOffset);
+
+  // Read all page offsets into in-memory LUT
+  pageLut.resize(pageCount);
+  f.seek(lutOffset);
+  for (uint16_t i = 0; i < pageCount; ++i) {
+    serialization::readPod(f, pageLut[i]);
+  }
+  f.close();
+  return true;
+}
+
 std::unique_ptr<Page> Section::loadPageFromSectionFile() {
-  if (!Storage.openFileForRead("SCT", filePath, file)) {
+  // Use the cached LUT to avoid re-reading the page offset table from SD on every page turn.
+  if (!ensureLutLoaded()) {
+    return nullptr;
+  }
+  if (currentPage < 0 || static_cast<uint16_t>(currentPage) >= pageCount) {
     return nullptr;
   }
 
-  file.seek(HEADER_SIZE - sizeof(uint32_t) * 2);
-  uint32_t lutOffset;
-  serialization::readPod(file, lutOffset);
-  file.seek(lutOffset + sizeof(uint32_t) * currentPage);
-  uint32_t pagePos;
-  serialization::readPod(file, pagePos);
-  file.seek(pagePos);
-
+  if (!Storage.openFileForRead("SCT", filePath, file)) {
+    return nullptr;
+  }
+  file.seek(pageLut[currentPage]);
   auto page = Page::deserialize(file);
   file.close();
   return page;
@@ -294,20 +320,33 @@ std::optional<uint16_t> Section::getPageForAnchor(const std::string& anchor) con
     return std::nullopt;
   }
 
+  // Read all anchors into a local vector for binary search.
+  // Typical anchor maps are small (10-50 entries), so the RAM cost is trivial.
   f.seek(anchorMapOffset);
   uint16_t count;
   serialization::readPod(f, count);
-  for (uint16_t i = 0; i < count; i++) {
+
+  struct AnchorEntry {
     std::string key;
     uint16_t page;
-    serialization::readString(f, key);
-    serialization::readPod(f, page);
-    if (key == anchor) {
-      f.close();
-      return page;
-    }
+  };
+  std::vector<AnchorEntry> anchors;
+  anchors.reserve(count);
+  for (uint16_t i = 0; i < count; i++) {
+    AnchorEntry entry;
+    serialization::readString(f, entry.key);
+    serialization::readPod(f, entry.page);
+    anchors.push_back(std::move(entry));
   }
-
   f.close();
+
+  // Sort and binary search for O(log n) lookup instead of O(n) linear scan.
+  std::sort(anchors.begin(), anchors.end(),
+            [](const AnchorEntry& a, const AnchorEntry& b) { return a.key < b.key; });
+  auto it = std::lower_bound(anchors.begin(), anchors.end(), anchor,
+                              [](const AnchorEntry& entry, const std::string& key) { return entry.key < key; });
+  if (it != anchors.end() && it->key == anchor) {
+    return it->page;
+  }
   return std::nullopt;
 }

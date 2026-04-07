@@ -756,6 +756,10 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     const uint16_t viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
     const uint16_t viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
 
+    // Enable per-orientation caching: include viewport dimensions in the section file path
+    // so that rotating the device doesn't invalidate the other orientation's cache.
+    section->setViewportDimensions(viewportWidth, viewportHeight);
+
     if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                   SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
                                   viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,

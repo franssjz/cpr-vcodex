@@ -25,7 +25,7 @@ void TimeZoneSelectActivity::loop() {
     {
       RenderLock lock(*this);
       SETTINGS.timeZonePreset = TimeZoneRegistry::clampPresetIndex(static_cast<uint8_t>(selectedIndex));
-      SETTINGS.saveToFile();
+      SETTINGS.markDirty();
       TimeUtils::configureTimezone();
     }
     finish();
