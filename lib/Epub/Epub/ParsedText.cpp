@@ -83,14 +83,14 @@ uint16_t measureWordWidth(const GfxRenderer& renderer, const int fontId, const s
   return renderer.getTextAdvanceX(fontId, sanitized.c_str(), style);
 }
 
-// FNV-1a hash combining fontId, word content, and style into a single 32-bit key.
-// Used by the per-section word-width measurement cache to avoid redundant glyph measurement
-// of common words (e.g. "the", "and", "a") that appear hundreds of times per chapter.
-uint32_t wordWidthCacheKey(const int fontId, const std::string& word, const EpdFontFamily::Style style) {
-  uint32_t h = 2166136261u;
+// FNV-1a 64-bit hash combining fontId, word content, and style into a single key.
+// 64-bit reduces collision probability to ~1 in 10^18 vs ~1 in 10^9 for 32-bit,
+// making it safe to use as the sole cache key without storing disambiguation data.
+uint64_t wordWidthCacheKey(const int fontId, const std::string& word, const EpdFontFamily::Style style) {
+  uint64_t h = 14695981039346656037ULL;
   auto mix = [&h](uint8_t byte) {
     h ^= byte;
-    h *= 16777619u;
+    h *= 1099511628211ULL;
   };
   // Mix in fontId bytes
   for (size_t i = 0; i < sizeof(fontId); ++i) {
@@ -105,18 +105,26 @@ uint32_t wordWidthCacheKey(const int fontId, const std::string& word, const EpdF
   return h;
 }
 
+// Maximum number of entries in the per-section word-width cache.
+// Limits transient RAM to ~8KB (512 × 16 bytes per entry including hash-map overhead).
+static constexpr size_t WORD_WIDTH_CACHE_MAX = 512;
+
 // Cached version of measureWordWidth for bulk measurement during layout.
 // Checks a transient hash map before calling the underlying renderer measurement.
+// Once the cache reaches WORD_WIDTH_CACHE_MAX entries, new words are measured without caching.
 uint16_t measureWordWidthCached(const GfxRenderer& renderer, const int fontId, const std::string& word,
                                 const EpdFontFamily::Style style,
-                                std::unordered_map<uint32_t, uint16_t>& cache) {
-  const uint32_t key = wordWidthCacheKey(fontId, word, style);
+                                std::unordered_map<uint64_t, uint16_t>& cache) {
+  const uint64_t key = wordWidthCacheKey(fontId, word, style);
   auto it = cache.find(key);
   if (it != cache.end()) {
     return it->second;
   }
   const uint16_t width = measureWordWidth(renderer, fontId, word, style);
-  cache.emplace(key, width);
+  // Enforce cache cap to bound transient RAM usage on large sections.
+  if (cache.size() < WORD_WIDTH_CACHE_MAX) {
+    cache.emplace(key, width);
+  }
   return width;
 }
 
@@ -191,9 +199,7 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
 
   // Transient per-section cache: common words like "the", "and", "a" are measured once.
   // Typical English chapter has ~30-50% duplicate words; cache avoids redundant glyph lookups.
-  // Cap at 512 entries (~4KB) to balance hit rate vs. transient memory for typical chapter sizes.
-  static constexpr size_t WORD_WIDTH_CACHE_MAX = 512;
-  std::unordered_map<uint32_t, uint16_t> widthCache;
+  std::unordered_map<uint64_t, uint16_t> widthCache;
   widthCache.reserve(std::min(words.size(), WORD_WIDTH_CACHE_MAX));
 
   for (size_t i = 0; i < words.size(); ++i) {
@@ -447,32 +453,51 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
     }
 
     const bool needsHyphen = info.requiresInsertedHyphen;
-    // Use a stack buffer to measure the prefix width instead of allocating a std::string via substr().
-    // Each breakpoint test previously created a heap-allocated substring; for a word with 5-10
-    // breakpoints this eliminates 5-10 mallocs per hyphenated word.
-    // 128 bytes accommodates any word prefix (UTF-8 words rarely exceed 60 bytes).
+    // Use a stack buffer to measure short prefixes without allocating.
+    // For longer prefixes, fall back to a std::string so width is measured against the
+    // full candidate breakpoint instead of a truncated prefix.
     static constexpr size_t MAX_HYPHEN_PREFIX_LEN = 128;
-    char prefixBuf[MAX_HYPHEN_PREFIX_LEN];
-    const size_t prefixLen = std::min(offset, MAX_HYPHEN_PREFIX_LEN - 2);  // -2 for possible hyphen + null
-    memcpy(prefixBuf, word.data(), prefixLen);
-    size_t writeLen = prefixLen;
-    if (needsHyphen) {
-      prefixBuf[writeLen++] = '-';
-    }
-    prefixBuf[writeLen] = '\0';
-    // Strip soft hyphens from the prefix buffer before measuring
-    // (soft hyphens are 2-byte sequences 0xC2 0xAD that must not be rendered)
-    size_t cleanLen = 0;
-    for (size_t k = 0; k < writeLen;) {
-      if (k + 1 < writeLen && prefixBuf[k] == static_cast<char>(0xC2) &&
-          prefixBuf[k + 1] == static_cast<char>(0xAD)) {
-        k += 2;
-      } else {
-        prefixBuf[cleanLen++] = prefixBuf[k++];
+    int prefixWidth = 0;
+    if (offset <= MAX_HYPHEN_PREFIX_LEN - 2) {  // -2 for possible hyphen + null
+      char prefixBuf[MAX_HYPHEN_PREFIX_LEN];
+      memcpy(prefixBuf, word.data(), offset);
+      size_t writeLen = offset;
+      if (needsHyphen) {
+        prefixBuf[writeLen++] = '-';
       }
+      prefixBuf[writeLen] = '\0';
+      // Strip soft hyphens from the prefix buffer before measuring
+      // (soft hyphens are 2-byte sequences 0xC2 0xAD that must not be rendered)
+      size_t cleanLen = 0;
+      for (size_t k = 0; k < writeLen;) {
+        if (k + 1 < writeLen && prefixBuf[k] == static_cast<char>(0xC2) &&
+            prefixBuf[k + 1] == static_cast<char>(0xAD)) {
+          k += 2;
+        } else {
+          prefixBuf[cleanLen++] = prefixBuf[k++];
+        }
+      }
+      prefixBuf[cleanLen] = '\0';
+      prefixWidth = renderer.getTextAdvanceX(fontId, prefixBuf, style);
+    } else {
+      // Fallback for long words (URLs, identifiers): allocate to avoid truncation.
+      std::string prefix = word.substr(0, offset);
+      if (needsHyphen) {
+        prefix.push_back('-');
+      }
+      // Strip soft hyphens before measuring.
+      size_t cleanPos = 0;
+      for (size_t k = 0; k < prefix.size();) {
+        if (k + 1 < prefix.size() && prefix[k] == static_cast<char>(0xC2) &&
+            prefix[k + 1] == static_cast<char>(0xAD)) {
+          k += 2;
+        } else {
+          prefix[cleanPos++] = prefix[k++];
+        }
+      }
+      prefix.resize(cleanPos);
+      prefixWidth = renderer.getTextAdvanceX(fontId, prefix.c_str(), style);
     }
-    prefixBuf[cleanLen] = '\0';
-    const int prefixWidth = renderer.getTextAdvanceX(fontId, prefixBuf, style);
     if (prefixWidth > availableWidth || prefixWidth <= chosenWidth) {
       continue;  // Skip if too wide or not an improvement
     }

@@ -281,8 +281,9 @@ class CrossPointSettings {
   // Call from activity onExit() or at periodic intervals.
   bool saveIfDirty() {
     if (!dirty_) return true;
+    if (!saveToFile()) return false;
     dirty_ = false;
-    return saveToFile();
+    return true;
   }
 
   uint16_t getPowerButtonDuration() const {

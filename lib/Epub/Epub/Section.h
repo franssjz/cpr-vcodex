@@ -46,7 +46,8 @@ class Section {
   // other orientation's cache — the user can switch back without a full rebuild.
   void setViewportDimensions(uint16_t viewportWidth, uint16_t viewportHeight) {
     char buf[16];
-    snprintf(buf, sizeof(buf), "_%ux%u", viewportWidth, viewportHeight);
+    snprintf(buf, sizeof(buf), "_%ux%u", static_cast<unsigned int>(viewportWidth),
+             static_cast<unsigned int>(viewportHeight));
     filePath = epub->getCachePath() + "/sections/" + std::to_string(spineIndex) + buf + ".bin";
     pageLut.clear();  // New file path, invalidate any cached LUT
   }
