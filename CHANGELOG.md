@@ -1,3 +1,37 @@
+## 1.2.0.15 — 2026-04-07
+
+**ESP32-C3 code optimisations: memory, CPU, SD I/O, and caching** (#13)
+
+Systematic optimisations targeting the 380KB RAM ceiling, reducing heap fragmentation, CPU time in text layout, and SD card I/O across the firmware.
+
+### Text layout engine (`ParsedText.cpp`)
+- **Word-width measurement cache**: FNV-1a keyed hash-map avoids redundant `getTextAdvanceX()` calls for duplicate words (~30-50% of a typical English chapter). Transient, freed after each section build.
+- **Eliminate triple `vector::erase(begin, begin+n)`**: Replaced O(n) front-erase of `words`/`wordStyles`/`wordContinues` with `std::move` + `resize`.
+- **Hyphenation prefix measurement on stack**: `word.substr(0, offset)` per breakpoint replaced with a fixed `char[128]` buffer — eliminates 5-10 heap allocations per hyphenated word.
+- **Single-pass soft hyphen strip**: O(n) read/write pointer replaces O(n²) repeated `find()`+`erase()`.
+- **`extractLine` callback**: Internal signature changed from `std::function` to plain function pointer + `void* ctx`. Public API unchanged.
+
+### Section cache (`Section.cpp/h`)
+- **Page LUT cached in RAM**: `ensureLutLoaded()` reads the page-offset table once (~200 bytes for 50 pages) instead of seeking the SD file on every page turn.
+- **Binary search for anchors**: `getPageForAnchor()` sorts + `lower_bound` instead of linear scan through SD-backed strings.
+- **Multi-orientation cache**: Section filenames now encode viewport dimensions (`{spine}_{W}x{H}.bin`), so rotating the device serves the other orientation's cache instead of rebuilding.
+
+### Font subsystem
+- **Retain hot buffer capacity** (`FontDecompressor.cpp`): Removed `shrink_to_fit()` from `freeHotGroup()` — the vectors are reused immediately on next cache miss.
+- **Skip `shrink_to_fit` in prewarm** (`FontCacheManager.cpp`): Scan string buffer kept across page turns instead of free+realloc each time.
+
+### Heap fragmentation
+- **Consolidated dithering buffers** (`BitmapHelpers.h`): All three ditherer classes now do a single allocation for their error rows (7 → 3 total `new` calls).
+- **`vector::reserve()`** added to `ShortcutRegistry::getConfiguredShortcuts()`, `getShortcutOrderEntries()`, and `getHomeShortcutEntries()`.
+
+### SD card write reduction
+- **Debounced settings saves**: New `markDirty()` / `saveIfDirty()` on `CrossPointSettings`. Settings activities mark dirty on change; flush happens once in `onExit()`. Callers outside settings (reader orientation change, web server) still call `saveToFile()` directly.
+
+### Misc
+- `setFadingFix()` in main loop guarded by change detection (same pattern as existing `darkMode` check).
+- `snprintf` replaces `std::string` concatenation in `HomeActivity::render()` and `AppsActivity` helpers.
+
+---
 ## 1.2.0.14 — 2026-04-07
 
 **fix: restore Check for Updates in settings and fix Lexend font migration** (#12)
