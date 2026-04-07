@@ -932,9 +932,15 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     }
     // Double FAST_REFRESH handles ghosting for image pages; don't count toward full refresh cadence
   } else if (enableTextAA) {
-    // Smooth text-only pages the same way as upstream: render the final page
-    // directly, and let the configured cadence decide when a half refresh is needed.
-    ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+    // AA pages look much smoother on X4 if we avoid the stronger maintenance
+    // refresh during live reading. The grayscale LUT pass already stabilizes the
+    // page visually; forcing a half refresh here causes either an inverted-looking
+    // flash or a full black/white flash depending on panel state.
+    pagesUntilFullRefresh--;
+    if (pagesUntilFullRefresh <= 0) {
+      pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+    }
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   } else {
     ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
   }
