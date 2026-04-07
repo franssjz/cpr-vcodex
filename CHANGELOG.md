@@ -1,3 +1,31 @@
+## 1.2.0.7 — 2026-04-07
+
+**fix: resolve CI build and auto-release workflow failures** (#3)
+
+CI failing on all three check jobs (clang-format, cppcheck, build) and auto-release workflow crashing on every PR merge due to shell injection from PR body and broken version parsing.
+
+### CI fixes (`HomeActivity.cpp`)
+
+- `%d` → `%u` for `uint32_t` return from `getCurrentStreakDays()` (cppcheck `invalidPrintfArgType_sint`)
+- Re-wrapped `snprintf` args to satisfy clang-format-21
+
+### Release workflow (`release.yml`)
+
+- **Shell injection**: `${{ github.event.pull_request.body }}` was directly interpolated into shell — PR bodies with C++ code, backticks, etc. were executed as commands. Moved to `env:` block.
+- **Version parsing**: `grep 'vcodex.version\s*='` matched nothing because the INI key is `version` under `[vcodex]`, not `vcodex.version`. Replaced with section-aware awk:
+  ```bash
+  awk '/^\[vcodex\]/{found=1} found && /^version\s*=/{print $NF; exit}' platformio.ini
+  ```
+- **Version update**: Same root cause — sed now uses range pattern `/^\[vcodex\]/,/^\[/` to scope to the correct section
+- **Missing `submodules: recursive`** on checkout → `PackageException` for `open-x4-sdk` symlinks
+- **Deprecated actions**: `checkout@v4` → `@v6`, `setup-python@v5` → `@v6`
+- **Wrong PlatformIO**: `pip install platformio` → pioarduino-core v6.1.19 via uv (matching CI)
+
+### Cleanup
+
+- Removed broken CHANGELOG.md entry with empty version left by the previous failed release run
+
+---
 # Changelog
 
 Brief firmware history for `cpr-vcodex`.
