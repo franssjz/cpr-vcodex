@@ -87,8 +87,8 @@ std::string getReadingStatsShortcutSubtitle() {
   const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
   // Use stack buffer to avoid multiple heap allocations from string concatenation
   char buffer[96];
-  snprintf(buffer, sizeof(buffer), "%s / %s | %d",
-           todayValue.c_str(), goalValue.c_str(), READING_STATS.getCurrentStreakDays());
+  snprintf(buffer, sizeof(buffer), "%s / %s | %u", todayValue.c_str(), goalValue.c_str(),
+           READING_STATS.getCurrentStreakDays());
   return std::string(buffer);
 }
 
