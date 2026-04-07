@@ -1,3 +1,22 @@
+## 1.2.0.14 — 2026-04-07
+
+**fix: restore Check for Updates in settings and fix Lexend font migration** (#12)
+
+Commit `f644cfd` accidentally removed the "Check for Updates" entry from System settings, making OTA firmware updates inaccessible from the device. A secondary bug in the same commit broke Lexend font persistence.
+
+- **Restore "Check for Updates" action in System settings**
+  - Re-added `SettingInfo::Action(STR_CHECK_UPDATES, CheckForUpdates)` to `buildSettingsLists()` — the handler in `toggleCurrentSetting()` was intact but unreachable
+
+- **Fix font family migration resetting Lexend to Bookerly**
+  - The migration code mapped `rawFontFamily == 2` → `BOOKERLY`, intended for the old enum where `2 = OpenDyslexic`. Current enum has `LEXEND = 2`, so every settings load silently reverted Lexend selections:
+    ```cpp
+    // Before: incorrectly remaps current LEXEND=2 to BOOKERLY
+    } else if (rawFontFamily == 2) {
+      s.fontFamily = CrossPointSettings::BOOKERLY;
+    ```
+  - Removed the `== 2` case. The `== 3` migration (old upstream Lexend index → current `LEXEND=2`) and the `>= FONT_FAMILY_COUNT` catch-all are preserved.
+
+---
 ## 1.2.0.13 — 2026-04-07
 
 **chore: update actions/cache v4 → v5 for Node.js 24 support** (#9)
