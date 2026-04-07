@@ -1,3 +1,20 @@
+## 1.2.0.13 — 2026-04-07
+
+**chore: update actions/cache v4 → v5 for Node.js 24 support** (#9)
+
+`actions/cache@v4` runs on Node.js 20, which is deprecated and will be force-migrated to Node.js 24 on June 2, 2026. `actions/cache@v5` runs natively on Node.js 24.
+
+- Updated all 8 `actions/cache` references from `v4` to `v5` across:
+  - `ci.yml` (4 cache steps)
+  - `release.yml` (2 cache steps)
+  - `release_candidate.yml` (2 cache steps)
+
+```diff
+-        uses: actions/cache@v4
++        uses: actions/cache@v5
+```
+
+---
 ## 1.2.0.12 — 2026-04-07
 
 **ci: cache build objects, libdeps, and cppcheck analysis** (#8)
