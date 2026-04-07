@@ -7,8 +7,39 @@ on:
       - master
 
 jobs:
-  release:
+  # Determine whether the merged PR touched any firmware-related files.
+  # If only docs, CI configs, or other non-firmware files changed, skip the release.
+  check-firmware-changes:
     if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      firmware_changed: ${{ steps.filter.outputs.firmware }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Check for firmware-related file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          filters: |
+            firmware:
+              - 'src/**'
+              - 'lib/**'
+              - 'open-x4-sdk/**'
+              - 'include/**'
+              - 'scripts/**'
+              - 'platformio.ini'
+              - 'partitions.csv'
+
+  release:
+    needs: check-firmware-changes
+    if: needs.check-firmware-changes.outputs.firmware_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
