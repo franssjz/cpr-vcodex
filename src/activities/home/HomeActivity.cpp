@@ -476,10 +476,10 @@ void HomeActivity::render(RenderLock&&) {
                                        ? selectedHomeIndex - pageStart
                                        : -1;
     // Use stack buffers to avoid 4+ transient heap allocations from std::string concatenation.
-    char sectionLabelBuf[64];
+    char sectionLabelBuf[64];  // Max: translated string (~40 chars) + " (999)" = ~50 chars + null
     snprintf(sectionLabelBuf, sizeof(sectionLabelBuf), "%s (%d)", tr(STR_SHORTCUTS_SECTION),
              static_cast<int>(homeEntries.size()));
-    char pageLabelBuf[16];
+    char pageLabelBuf[16];  // Max: "999/999" = 7 chars + null
     snprintf(pageLabelBuf, sizeof(pageLabelBuf), "%d/%d", currentPage + 1, totalPages);
 
     GUI.drawSubHeader(

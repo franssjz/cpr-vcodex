@@ -159,6 +159,9 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
   const size_t lineCount = includeLastLine ? lineBreakIndices.size() : lineBreakIndices.size() - 1;
 
   for (size_t i = 0; i < lineCount; ++i) {
+    // Adapter: convert the public std::function callback to the internal zero-overhead
+    // function-pointer signature. The lambda captures nothing and is stateless, so the
+    // compiler emits a plain function pointer with no heap allocation.
     extractLine(i, pageWidth, wordWidths, wordContinues, lineBreakIndices,
                 [](void* ctx, std::shared_ptr<TextBlock> block) {
                   (*static_cast<const std::function<void(std::shared_ptr<TextBlock>)>*>(ctx))(std::move(block));
@@ -188,8 +191,10 @@ std::vector<uint16_t> ParsedText::calculateWordWidths(const GfxRenderer& rendere
 
   // Transient per-section cache: common words like "the", "and", "a" are measured once.
   // Typical English chapter has ~30-50% duplicate words; cache avoids redundant glyph lookups.
+  // Cap at 512 entries (~4KB) to balance hit rate vs. transient memory for typical chapter sizes.
+  static constexpr size_t WORD_WIDTH_CACHE_MAX = 512;
   std::unordered_map<uint32_t, uint16_t> widthCache;
-  widthCache.reserve(std::min(words.size(), static_cast<size_t>(512)));
+  widthCache.reserve(std::min(words.size(), WORD_WIDTH_CACHE_MAX));
 
   for (size_t i = 0; i < words.size(); ++i) {
     wordWidths.push_back(measureWordWidthCached(renderer, fontId, words[i], wordStyles[i], widthCache));
@@ -445,8 +450,10 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
     // Use a stack buffer to measure the prefix width instead of allocating a std::string via substr().
     // Each breakpoint test previously created a heap-allocated substring; for a word with 5-10
     // breakpoints this eliminates 5-10 mallocs per hyphenated word.
-    char prefixBuf[128];
-    const size_t prefixLen = std::min(offset, sizeof(prefixBuf) - 2);  // -2 for possible hyphen + null
+    // 128 bytes accommodates any word prefix (UTF-8 words rarely exceed 60 bytes).
+    static constexpr size_t MAX_HYPHEN_PREFIX_LEN = 128;
+    char prefixBuf[MAX_HYPHEN_PREFIX_LEN];
+    const size_t prefixLen = std::min(offset, MAX_HYPHEN_PREFIX_LEN - 2);  // -2 for possible hyphen + null
     memcpy(prefixBuf, word.data(), prefixLen);
     size_t writeLen = prefixLen;
     if (needsHyphen) {

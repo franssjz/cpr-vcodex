@@ -278,10 +278,13 @@ bool Section::ensureLutLoaded() {
   serialization::readPod(f, lutOffset);
 
   // Read all page offsets into in-memory LUT
-  pageLut.resize(pageCount);
+  pageLut.clear();
+  pageLut.reserve(pageCount);
   f.seek(lutOffset);
   for (uint16_t i = 0; i < pageCount; ++i) {
-    serialization::readPod(f, pageLut[i]);
+    uint32_t offset;
+    serialization::readPod(f, offset);
+    pageLut.push_back(offset);
   }
   f.close();
   return true;

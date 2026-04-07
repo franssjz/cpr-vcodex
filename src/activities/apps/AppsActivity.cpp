@@ -24,7 +24,7 @@ std::string formatDurationHmCompact(const uint64_t totalMs) {
   const uint64_t totalMinutes = totalMs / 60000ULL;
   const uint64_t hours = totalMinutes / 60ULL;
   const uint64_t minutes = totalMinutes % 60ULL;
-  char buf[32];
+  char buf[32];  // Max: "18446744073709551615h 59m" = ~25 chars + null
   if (hours == 0) {
     snprintf(buf, sizeof(buf), "%llum", (unsigned long long)minutes);
   } else {
@@ -36,7 +36,7 @@ std::string formatDurationHmCompact(const uint64_t totalMs) {
 std::string getStatsShortcutSubtitle() {
   const std::string todayValue = formatDurationHmCompact(READING_STATS.getTodayReadingMs());
   const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
-  char buf[96];
+  char buf[96];  // Max: two durations (~25 each) + " / " + " | " + streak digits
   snprintf(buf, sizeof(buf), "%s / %s | %u", todayValue.c_str(), goalValue.c_str(),
            READING_STATS.getCurrentStreakDays());
   return std::string(buf);
