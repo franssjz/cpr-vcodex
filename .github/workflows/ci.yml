@@ -50,7 +50,7 @@ jobs:
           enable-cache: true
 
       - name: Cache PlatformIO packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.platformio/packages
@@ -60,7 +60,7 @@ jobs:
           restore-keys: pio-${{ runner.os }}-
 
       - name: Cache cppcheck analysis
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cppcheck-cache
           key: cppcheck-${{ runner.os }}-${{ hashFiles('platformio.ini', 'src/**', 'lib/**', 'open-x4-sdk/**') }}
@@ -92,7 +92,7 @@ jobs:
           enable-cache: true
 
       - name: Cache PlatformIO packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.platformio/packages
@@ -102,7 +102,7 @@ jobs:
           restore-keys: pio-${{ runner.os }}-
 
       - name: Cache PlatformIO build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .pio/build
           key: pio-build-${{ runner.os }}-${{ hashFiles('platformio.ini', 'src/**', 'lib/**', 'open-x4-sdk/**') }}
