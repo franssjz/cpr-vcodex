@@ -76,9 +76,10 @@ void FontCacheManager::PrewarmScope::endScanAndPrewarm() {
 
   manager_->prewarmCache(manager_->scanFontId_, manager_->scanText_.c_str(), styleMask);
 
-  // Free scan string memory
+  // Reuse the scan string buffer for the next page instead of releasing it.
+  // shrink_to_fit() was freeing the 2KB pre-reserved buffer after every prewarm pass,
+  // forcing reallocation on the next page turn — one unnecessary malloc+free cycle per page.
   manager_->scanText_.clear();
-  manager_->scanText_.shrink_to_fit();
 }
 
 FontCacheManager::PrewarmScope::~PrewarmScope() {

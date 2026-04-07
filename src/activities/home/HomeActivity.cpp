@@ -98,6 +98,7 @@ std::string getRecentBookConfirmationLabel(const RecentBook& book) {
 
 std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsUrl) {
   std::vector<HomeShortcutEntry> entries;
+  entries.reserve(getShortcutDefinitions().size() + 2);  // +2 for appsHub + possible OPDS
   entries.push_back(HomeShortcutEntry{nullptr, true, false});
 
   for (const auto& definition : getShortcutDefinitions()) {
@@ -322,8 +323,9 @@ void HomeActivity::freeCoverBuffer() {
 }
 
 void HomeActivity::loop() {
-  const int menuCount = getMenuItemCount();
+  // Compute shortcut entries once per loop iteration instead of 2× (getMenuItemCount + local copy).
   const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
+  const int menuCount = static_cast<int>(recentBooks.size() + homeEntries.size());
 
   buttonNavigator.onNext([this, menuCount] {
     selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
@@ -473,14 +475,17 @@ void HomeActivity::render(RenderLock&&) {
     const int localSelectedIndex = (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount)
                                        ? selectedHomeIndex - pageStart
                                        : -1;
-    const std::string sectionLabel =
-        std::string(tr(STR_SHORTCUTS_SECTION)) + " (" + std::to_string(homeEntries.size()) + ")";
-    const std::string pageLabel = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
+    // Use stack buffers to avoid 4+ transient heap allocations from std::string concatenation.
+    char sectionLabelBuf[64];  // Max: translated string (~40 chars) + " (999)" = ~50 chars + null
+    snprintf(sectionLabelBuf, sizeof(sectionLabelBuf), "%s (%d)", tr(STR_SHORTCUTS_SECTION),
+             static_cast<int>(homeEntries.size()));
+    char pageLabelBuf[16];  // Max: "999/999" = 7 chars + null
+    snprintf(pageLabelBuf, sizeof(pageLabelBuf), "%d/%d", currentPage + 1, totalPages);
 
     GUI.drawSubHeader(
         renderer,
         Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2, headerHeight},
-        sectionLabel.c_str(), pageLabel.c_str());
+        sectionLabelBuf, pageLabelBuf);
     GUI.drawButtonMenu(
         renderer, Rect{0, listTop, pageWidth, listHeight}, pageItemCount, localSelectedIndex,
         [&homeEntries, pageStart](const int index) { return getHomeShortcutTitle(homeEntries[pageStart + index]); },
