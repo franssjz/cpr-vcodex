@@ -1,40 +1,105 @@
-name: Compile Release
+name: Auto Release on PR Merge
+
 on:
-  push:
-    tags:
-      - '*'
+  pull_request:
+    types: [closed]
+    branches:
+      - master
 
 jobs:
-  build-release:
+  release:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.11'
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Read current version
+        id: read_version
+        run: |
+          VERSION=$(grep 'vcodex.version\s*=' platformio.ini | head -1 | sed 's/.*= *//')
+          echo "current=$VERSION" > $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          VERSION="${{ steps.read_version.outputs.current }}"
+          IFS='.' read -r -a PARTS <<< "$VERSION"
+          MAJOR=${PARTS[0]}
+          MINOR=${PARTS[1]}
+          PATCH=${PARTS[2]}
+          BUILD=${PARTS[3]}
+
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
+
+          if echo "$LABELS" | grep -qw "major"; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0; BUILD=0
+          elif echo "$LABELS" | grep -qw "minor"; then
+            MINOR=$((MINOR + 1)); PATCH=0; BUILD=0
+          else
+            BUILD=$((BUILD + 1))
+          fi
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH.$BUILD"
+          DATE=$(date -u +%Y%m%d)
+          NEW_VERSION_CODE="${DATE}$(printf '%02d' $BUILD)"
+
+          echo "new=$NEW_VERSION" > $GITHUB_OUTPUT
+          echo "version_code=$NEW_VERSION_CODE" > $GITHUB_OUTPUT
+
+      - name: Write version bump to platformio.ini
+        run: |
+          sed -i "s/vcodex\.version\s*=.*/vcodex.version = ${{ steps.bump_version.outputs.new }}/" platformio.ini
+          sed -i "s/vcodex\.version_code\s*=.*/vcodex.version_code = ${{ steps.bump_version.outputs.version_code }}/" platformio.ini
+
+      - name: Generate changelog entry
+        id: changelog
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          NEW_VERSION="${{ steps.bump_version.outputs.new }}"
+          DATE=$(date -u +%Y-%m-%d)
+
+          ENTRY="## $NEW_VERSION — $DATE\n\n**$PR_TITLE** (#$PR_NUMBER)\n\n$PR_BODY\n\n---\n"
+
+          # Prepend to CHANGELOG.md
+          echo -e "$ENTRY$(cat CHANGELOG.md)" > CHANGELOG.md
+
+          # Save for release notes
+          echo -e "$ENTRY" > /tmp/release_notes.md
+
+      - name: Commit version bump and changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add platformio.ini CHANGELOG.md
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new }} [skip ci]"
+          git push origin master
+
+      - name: Build firmware
+        run: pio run -e vcodex_release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          version: "latest"
-          enable-cache: false
-
-      - name: Install PlatformIO Core
-        run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
-
-      - name: Build CrossPoint
-        run: pio run -e gh_release
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: CrossPoint-${{ github.ref_name }}
-          path: |
-            .pio/build/gh_release/bootloader.bin
-            .pio/build/gh_release/firmware.bin
-            .pio/build/gh_release/firmware.elf
-            .pio/build/gh_release/firmware.map
-            .pio/build/gh_release/partitions.bin
+          tag_name: v${{ steps.bump_version.outputs.new }}
+          name: vCodex ${{ steps.bump_version.outputs.new }}
+          body_path: /tmp/release_notes.md
+          files: .pio/build/vcodex_release/firmware.bin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
