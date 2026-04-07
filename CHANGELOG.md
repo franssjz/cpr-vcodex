@@ -1,3 +1,33 @@
+## 1.2.0.11 — 2026-04-07
+
+**Speed up GitHub Actions: PlatformIO caching, faster clang-format install** (#7)
+
+CI workflows re-download the full ESP32-C3 toolchain (~100MB+) and LLVM apt packages on every run. This adds unnecessary wall time to every push and PR.
+
+### Changes
+
+- **PlatformIO package caching** — Cache `~/.platformio/packages` and `~/.platformio/platforms` via `actions/cache@v4`, keyed on `platformio.ini` hash. Applied to all four workflows (`ci`, `release`, `release_candidate`).
+
+- **Faster clang-format install** — Replace the slow LLVM apt repo setup (`llvm.sh` + `apt-get install clang-format-21`) with `uv pip install --system 'clang-format>=21,<22'`. The `bin/clang-format-fix` script already falls back from `clang-format-21` → `clang-format` and validates version ≥ 21.
+
+- **Drop unnecessary submodule checkout** from the clang-format job — `git ls-files` only lists parent repo files, not submodule contents.
+
+- **Enable uv pip caching** — Flip `enable-cache: false` → `true` on `astral-sh/setup-uv` across all workflows.
+
+- **Bump `upload-artifact` v4 → v6** in `release_candidate.yml` for consistency with `ci.yml`.
+
+### Expected impact
+
+| Optimization | Savings (approx) |
+|---|---|
+| PlatformIO cache hit | ~60s per job |
+| pip clang-format vs apt LLVM | ~20-30s |
+| Skip submodule clone | ~10-15s |
+| uv cache hit | ~5-10s per job |
+
+The three CI jobs (`clang-format`, `cppcheck`, `build`) already run in parallel — no structural changes needed there.
+
+---
 ## 1.2.0.10 — 2026-04-07
 
 **Rename release binary from firmware.bin to vcodex-{version}.bin** (#6)
