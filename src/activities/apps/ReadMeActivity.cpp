@@ -94,8 +94,8 @@ void ReadMeActivity::loadDetailLines() {
   scrollOffset = 0;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const int textWidth =
-      renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth - metrics.scrollBarRightOffset - 8;
+  const int textWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth -
+                        metrics.scrollBarRightOffset - 8;
 
   for (const auto& rawLine : splitLinesPreserveEmpty(getTopicBody(activeTopic))) {
     if (trim(rawLine).empty()) {
@@ -217,9 +217,10 @@ void ReadMeActivity::render(RenderLock&&) {
     const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
     const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, getTopicCount(), selectedIndex,
-                 [](const int index) { return getTopicIndexLabel(static_cast<Topic>(index)); }, nullptr,
-                 [](const int) { return UIIcon::Text; });
+    GUI.drawList(
+        renderer, Rect{0, contentTop, pageWidth, contentHeight}, getTopicCount(), selectedIndex,
+        [](const int index) { return getTopicIndexLabel(static_cast<Topic>(index)); }, nullptr,
+        [](const int) { return UIIcon::Text; });
 
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

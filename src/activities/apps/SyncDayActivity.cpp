@@ -7,10 +7,10 @@
 #include <algorithm>
 #include <ctime>
 
+#include "CrossPointState.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "CrossPointState.h"
 #include "util/HeaderDateUtils.h"
 #include "util/TimeUtils.h"
 
@@ -40,7 +40,8 @@ void drawInfoCard(GfxRenderer& renderer, const Rect& rect, const char* title, co
   top += 22;
 
   if (!primaryLine.empty()) {
-    const std::string primary = renderer.truncatedText(UI_12_FONT_ID, primaryLine.c_str(), textWidth, EpdFontFamily::BOLD);
+    const std::string primary =
+        renderer.truncatedText(UI_12_FONT_ID, primaryLine.c_str(), textWidth, EpdFontFamily::BOLD);
     renderer.drawText(UI_12_FONT_ID, left, top, primary.c_str(), true, EpdFontFamily::BOLD);
     top += 24;
   }
@@ -57,7 +58,8 @@ void drawInfoCard(GfxRenderer& renderer, const Rect& rect, const char* title, co
   }
 }
 
-std::string formatTimestampLabel(const uint32_t timestamp, const bool includeTime = false, const bool appendBang = false) {
+std::string formatTimestampLabel(const uint32_t timestamp, const bool includeTime = false,
+                                 const bool appendBang = false) {
   const std::string formatted =
       includeTime ? TimeUtils::formatDateTime(timestamp, appendBang) : TimeUtils::formatDate(timestamp, appendBang);
   return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
@@ -69,9 +71,7 @@ std::string getCurrentDateTimeLabel() {
   return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
-std::string getDeviceTimeLabel() {
-  return formatTimestampLabel(TimeUtils::getAuthoritativeTimestamp(), true);
-}
+std::string getDeviceTimeLabel() { return formatTimestampLabel(TimeUtils::getAuthoritativeTimestamp(), true); }
 
 std::string getHeaderDateLabel() {
   const auto info = HeaderDateUtils::getDisplayDateInfo();
@@ -227,9 +227,10 @@ void SyncDayActivity::render(RenderLock&&) {
   }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const std::string wifiPrimary = isWifiConnected() ? std::string(tr(STR_CONNECTED)) : std::string(tr(STR_NOT_CONNECTED));
-  const std::string wifiSecondary =
-      isWifiConnected() ? std::string(tr(STR_NETWORK_PREFIX)) + WiFi.SSID().c_str() : std::string(tr(STR_SYNC_DAY_WIFI_HINT));
+  const std::string wifiPrimary =
+      isWifiConnected() ? std::string(tr(STR_CONNECTED)) : std::string(tr(STR_NOT_CONNECTED));
+  const std::string wifiSecondary = isWifiConnected() ? std::string(tr(STR_NETWORK_PREFIX)) + WiFi.SSID().c_str()
+                                                      : std::string(tr(STR_SYNC_DAY_WIFI_HINT));
 
   drawInfoCard(renderer, Rect{sidePadding, contentTop, pageWidth - sidePadding * 2, INFO_CARD_HEIGHT}, tr(STR_WIFI),
                wifiPrimary, wifiSecondary);
@@ -239,9 +240,8 @@ void SyncDayActivity::render(RenderLock&&) {
                tr(STR_DEVICE_TIME), getDeviceTimeLabel(), getStatusMessage());
 
   const int diagnosticsTop = timeCardTop + INFO_CARD_HEIGHT + CARD_GAP;
-  const int diagnosticsHeight =
-      std::max(DIAGNOSTICS_CARD_MIN_HEIGHT,
-               pageHeight - diagnosticsTop - metrics.buttonHintsHeight - metrics.verticalSpacing);
+  const int diagnosticsHeight = std::max(
+      DIAGNOSTICS_CARD_MIN_HEIGHT, pageHeight - diagnosticsTop - metrics.buttonHintsHeight - metrics.verticalSpacing);
   drawDiagnosticCard(renderer, Rect{sidePadding, diagnosticsTop, pageWidth - sidePadding * 2, diagnosticsHeight});
 
   const char* actionLabel = isWifiConnected() ? tr(STR_SYNC_NOW) : tr(STR_CONNECT);

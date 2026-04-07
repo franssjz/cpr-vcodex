@@ -124,8 +124,8 @@ class ReadingStatsStore {
   static ReadingStatsStore& getInstance() { return instance; }
 
   void beginSession(const std::string& path, const std::string& title, const std::string& author,
-                    const std::string& coverBmpPath, uint8_t progressPercent = 0,
-                    const std::string& chapterTitle = "", uint8_t chapterProgressPercent = 0);
+                    const std::string& coverBmpPath, uint8_t progressPercent = 0, const std::string& chapterTitle = "",
+                    uint8_t chapterProgressPercent = 0);
   void noteActivity();
   void tickActiveSession();
   void resumeSession();

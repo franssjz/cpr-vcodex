@@ -29,9 +29,8 @@ constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 constexpr uint8_t LEGACY_FONT_SIZE_COUNT = 4;
 
 uint8_t migrateLegacyFontSize(const uint8_t legacyFontSize) {
-  return legacyFontSize < LEGACY_FONT_SIZE_COUNT
-             ? static_cast<uint8_t>(legacyFontSize + 1)
-             : static_cast<uint8_t>(CrossPointSettings::MEDIUM);
+  return legacyFontSize < LEGACY_FONT_SIZE_COUNT ? static_cast<uint8_t>(legacyFontSize + 1)
+                                                 : static_cast<uint8_t>(CrossPointSettings::MEDIUM);
 }
 
 // Convert legacy front button layout into explicit logical->hardware mapping.

@@ -227,8 +227,8 @@ void AchievementsActivity::render(RenderLock&&) {
       renderer.drawText(UI_10_FONT_ID, textX, rowRect.y + 8, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
       renderer.drawText(SMALL_FONT_ID, textX, rowRect.y + 29, truncatedDescription.c_str(), true,
                         EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - progressWidth - 10, rowRect.y + 18,
-                        progress.c_str(), true, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - progressWidth - 10, rowRect.y + 18, progress.c_str(),
+                        true, EpdFontFamily::REGULAR);
 
       currentY += ROW_HEIGHT;
     }

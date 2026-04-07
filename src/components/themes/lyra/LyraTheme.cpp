@@ -551,15 +551,14 @@ void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
                                const std::function<bool(int index)>& showAccessory) const {
   const int availableHeight = std::max(0, rect.height);
   const int gap = LyraMetrics::values.menuSpacing;
-  const int rowHeight = buttonCount > 0
-                            ? std::min(LyraMetrics::values.menuRowHeight,
-                                       (availableHeight - gap * std::max(0, buttonCount - 1)) / buttonCount)
-                            : LyraMetrics::values.menuRowHeight;
+  const int rowHeight = buttonCount > 0 ? std::min(LyraMetrics::values.menuRowHeight,
+                                                   (availableHeight - gap * std::max(0, buttonCount - 1)) / buttonCount)
+                                        : LyraMetrics::values.menuRowHeight;
 
   for (int i = 0; i < buttonCount; ++i) {
     int tileWidth = rect.width - LyraMetrics::values.contentSidePadding * 2;
-    Rect tileRect = Rect{rect.x + LyraMetrics::values.contentSidePadding,
-                         rect.y + i * (rowHeight + gap), tileWidth, rowHeight};
+    Rect tileRect =
+        Rect{rect.x + LyraMetrics::values.contentSidePadding, rect.y + i * (rowHeight + gap), tileWidth, rowHeight};
 
     const bool selected = selectedIndex == i;
 

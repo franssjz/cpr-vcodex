@@ -1,10 +1,11 @@
 #include "GfxRenderer.h"
 
-#include <algorithm>
 #include <FontDecompressor.h>
 #include <HalGPIO.h>
 #include <Logging.h>
 #include <Utf8.h>
+
+#include <algorithm>
 
 #include "FontCacheManager.h"
 
@@ -136,7 +137,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             // Text darkness shifts more AA pixels into the "draw" bucket for a bolder look.
             // bmpVal: 0=black, 1=dark gray, 2=light gray, 3=white
             const uint8_t darkness = renderer.getTextDarkness();
-            const bool hit = (darkness >= 2) ? (bmpVal >= 1 && bmpVal <= 2)
+            const bool hit = (darkness >= 2)   ? (bmpVal >= 1 && bmpVal <= 2)
                              : (darkness == 1) ? (bmpVal == 1 || bmpVal == 2)
                                                : (bmpVal == 2);
             if (gpio.deviceIsX3() && darkness == 0 && bmpVal != 2) {

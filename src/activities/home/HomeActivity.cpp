@@ -44,7 +44,8 @@ struct HomeShortcutEntry {
   bool isOpds = false;
 };
 
-void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth, const std::string& dateText) {
+void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth,
+                  const std::string& dateText) {
   if (dateText.empty()) {
     return;
   }
@@ -438,9 +439,10 @@ void HomeActivity::render(RenderLock&&) {
 
   const auto homeEntries = getHomeShortcutEntries(hasOpdsUrl);
   const int selectedHomeIndex = selectorIndex - static_cast<int>(recentBooks.size());
-  const Rect shortcutsRect{0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-                           pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
-                                         metrics.buttonHintsHeight + metrics.verticalSpacing)};
+  const Rect shortcutsRect{
+      0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
+      pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
+                    metrics.buttonHintsHeight + metrics.verticalSpacing)};
 
   if (static_cast<int>(homeEntries.size()) <= HOME_SHORTCUT_PAGE_SIZE) {
     GUI.drawButtonMenu(
@@ -453,24 +455,22 @@ void HomeActivity::render(RenderLock&&) {
     const int headerHeight = 34;
     const int listTop = shortcutsRect.y + headerHeight + 12;
     const int listHeight = std::max(0, shortcutsRect.height - headerHeight - 12);
-    const int currentPage =
-        std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
+    const int currentPage = std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
     const int totalPages =
         (static_cast<int>(homeEntries.size()) + HOME_SHORTCUT_PAGE_SIZE - 1) / HOME_SHORTCUT_PAGE_SIZE;
     const int pageStart = currentPage * HOME_SHORTCUT_PAGE_SIZE;
-    const int pageItemCount =
-        std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
-    const int localSelectedIndex =
-        (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount) ? selectedHomeIndex - pageStart
-                                                                                            : -1;
+    const int pageItemCount = std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
+    const int localSelectedIndex = (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount)
+                                       ? selectedHomeIndex - pageStart
+                                       : -1;
     const std::string sectionLabel =
         std::string(tr(STR_SHORTCUTS_SECTION)) + " (" + std::to_string(homeEntries.size()) + ")";
     const std::string pageLabel = std::to_string(currentPage + 1) + "/" + std::to_string(totalPages);
 
-    GUI.drawSubHeader(renderer,
-                      Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2,
-                           headerHeight},
-                      sectionLabel.c_str(), pageLabel.c_str());
+    GUI.drawSubHeader(
+        renderer,
+        Rect{metrics.contentSidePadding, shortcutsRect.y, pageWidth - metrics.contentSidePadding * 2, headerHeight},
+        sectionLabel.c_str(), pageLabel.c_str());
     GUI.drawButtonMenu(
         renderer, Rect{0, listTop, pageWidth, listHeight}, pageItemCount, localSelectedIndex,
         [&homeEntries, pageStart](const int index) { return getHomeShortcutTitle(homeEntries[pageStart + index]); },
@@ -507,6 +507,8 @@ void HomeActivity::onReadingStatsOpen() {
   activityManager.replaceActivity(std::make_unique<ReadingStatsActivity>(renderer, mappedInput));
 }
 
-void HomeActivity::onSyncDayOpen() { activityManager.replaceActivity(std::make_unique<SyncDayActivity>(renderer, mappedInput)); }
+void HomeActivity::onSyncDayOpen() {
+  activityManager.replaceActivity(std::make_unique<SyncDayActivity>(renderer, mappedInput));
+}
 
 void HomeActivity::onOpdsBrowserOpen() { activityManager.goToBrowser(); }

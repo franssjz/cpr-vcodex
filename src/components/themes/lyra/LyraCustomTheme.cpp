@@ -58,7 +58,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
         if (coverPath.empty()) {
           hasCover = false;
         } else {
-          const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, LyraCustomMetrics::values.homeCoverHeight);
+          const std::string coverBmpPath =
+              UITheme::getCoverThumbPath(coverPath, LyraCustomMetrics::values.homeCoverHeight);
 
           FsFile file;
           if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
@@ -109,7 +110,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       const std::string progressText = std::to_string(progressPercent) + "%";
       const int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
       const int progressRowHeight = std::max(titleLineHeight, PROGRESS_BAR_HEIGHT);
-      const int bottomBlockHeight = PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
+      const int bottomBlockHeight =
+          PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
 
       if (bookSelected) {
         renderer.fillRoundedRect(tileX, tileY, tileWidth, H_PADDING, CORNER_RADIUS, true, true, false, false,

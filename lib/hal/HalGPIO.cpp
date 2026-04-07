@@ -1,5 +1,4 @@
 #include <HalGPIO.h>
-
 #include <Logging.h>
 #include <Preferences.h>
 #include <SPI.h>
