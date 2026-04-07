@@ -20,7 +20,16 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "latest"
-          enable-cache: false
+          enable-cache: true
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: pio-${{ runner.os }}-
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
@@ -36,7 +45,7 @@ jobs:
         run: pio run -e gh_release_rc
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: CrossPoint-RC-${{ env.BRANCH_SUFFIX }}
           path: |
