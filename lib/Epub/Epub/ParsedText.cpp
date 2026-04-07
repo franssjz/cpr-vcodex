@@ -50,8 +50,7 @@ void stripSoftHyphensInPlace(std::string& word) {
   size_t writePos = 0;
   const size_t len = word.size();
   for (size_t readPos = 0; readPos < len;) {
-    if (readPos + 1 < len && word[readPos] == static_cast<char>(0xC2) &&
-        word[readPos + 1] == static_cast<char>(0xAD)) {
+    if (readPos + 1 < len && word[readPos] == static_cast<char>(0xC2) && word[readPos + 1] == static_cast<char>(0xAD)) {
       readPos += SOFT_HYPHEN_BYTES;  // skip soft hyphen
     } else {
       word[writePos++] = word[readPos++];
@@ -113,8 +112,7 @@ static constexpr size_t WORD_WIDTH_CACHE_MAX = 512;
 // Checks a transient hash map before calling the underlying renderer measurement.
 // Once the cache reaches WORD_WIDTH_CACHE_MAX entries, new words are measured without caching.
 uint16_t measureWordWidthCached(const GfxRenderer& renderer, const int fontId, const std::string& word,
-                                const EpdFontFamily::Style style,
-                                std::unordered_map<uint64_t, uint16_t>& cache) {
+                                const EpdFontFamily::Style style, std::unordered_map<uint64_t, uint16_t>& cache) {
   const uint64_t key = wordWidthCacheKey(fontId, word, style);
   auto it = cache.find(key);
   if (it != cache.end()) {
@@ -170,11 +168,12 @@ void ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
     // Adapter: convert the public std::function callback to the internal zero-overhead
     // function-pointer signature. The lambda captures nothing and is stateless, so the
     // compiler emits a plain function pointer with no heap allocation.
-    extractLine(i, pageWidth, wordWidths, wordContinues, lineBreakIndices,
-                [](void* ctx, std::shared_ptr<TextBlock> block) {
-                  (*static_cast<const std::function<void(std::shared_ptr<TextBlock>)>*>(ctx))(std::move(block));
-                },
-                const_cast<void*>(static_cast<const void*>(&processLine)), renderer, fontId);
+    extractLine(
+        i, pageWidth, wordWidths, wordContinues, lineBreakIndices,
+        [](void* ctx, std::shared_ptr<TextBlock> block) {
+          (*static_cast<const std::function<void(std::shared_ptr<TextBlock>)>*>(ctx))(std::move(block));
+        },
+        const_cast<void*>(static_cast<const void*>(&processLine)), renderer, fontId);
   }
 
   // Remove consumed words so size() reflects only remaining words.
@@ -488,8 +487,7 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
       // Strip soft hyphens before measuring.
       size_t cleanPos = 0;
       for (size_t k = 0; k < prefix.size();) {
-        if (k + 1 < prefix.size() && prefix[k] == static_cast<char>(0xC2) &&
-            prefix[k + 1] == static_cast<char>(0xAD)) {
+        if (k + 1 < prefix.size() && prefix[k] == static_cast<char>(0xC2) && prefix[k + 1] == static_cast<char>(0xAD)) {
           k += 2;
         } else {
           prefix[cleanPos++] = prefix[k++];
@@ -653,7 +651,6 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
     }
   }
 
-  processLine(
-      callbackCtx,
-      std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos), std::move(lineWordStyles), blockStyle));
+  processLine(callbackCtx, std::make_shared<TextBlock>(std::move(lineWords), std::move(lineXPos),
+                                                       std::move(lineWordStyles), blockStyle));
 }
