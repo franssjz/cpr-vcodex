@@ -64,8 +64,9 @@ jobs:
                 const lastAccessed = new Date(cache.last_accessed_at);
                 const ageDays = (now - lastAccessed) / (1000 * 60 * 60 * 24);
 
-                // Keep the most recent `keepCount` caches in each group,
-                // and delete any beyond that OR older than maxAgeDays
+                // Delete if EITHER condition is met:
+                //  - Beyond the top `keepCount` most-recently-accessed (excess caches)
+                //  - Older than `maxAgeDays` since last access (stale caches, even if in top 5)
                 if (i >= keepCount || ageDays > maxAgeDays) {
                   console.log(`  Deleting cache id=${cache.id} key="${cache.key}" (age: ${ageDays.toFixed(1)} days, last accessed: ${cache.last_accessed_at})`);
                   try {
