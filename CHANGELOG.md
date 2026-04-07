@@ -1,3 +1,17 @@
+## 1.2.0.10 — 2026-04-07
+
+**Rename release binary from firmware.bin to vcodex-{version}.bin** (#6)
+
+Release artifacts were uploaded as the generic PlatformIO default `firmware.bin`. Users downloading from GitHub Releases had no way to identify the firmware variant or version from the filename alone.
+
+### Changes
+
+- **`scripts/post_build_release.py`**: Changed versioned copy filename from `firmware.{version}-vcodex.bin` to `vcodex-{version}.bin`
+- **`.github/workflows/release.yml`**: Updated release asset path to reference the new versioned binary
+
+Release assets will now be named e.g. `vcodex-1.2.0.9.bin` instead of `firmware.bin`.
+
+---
 ## 1.2.0.9 — 2026-04-07
 
 **Sync with upstream franssjz/cpr-vcodex** (#5)
