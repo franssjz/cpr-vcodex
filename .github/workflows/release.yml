@@ -15,24 +15,31 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.14'
 
-      - name: Install PlatformIO
-        run: pip install platformio
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
       - name: Read current version
         id: read_version
         run: |
-          VERSION=$(grep 'vcodex.version\s*=' platformio.ini | head -1 | sed 's/.*= *//')
-          echo "current=$VERSION" > $GITHUB_OUTPUT
+          VERSION=$(awk '/^\[vcodex\]/{found=1} found && /^version\s*=/{print $NF; exit}' platformio.ini)
+          echo "current=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Bump version
         id: bump_version
@@ -58,30 +65,39 @@ jobs:
           DATE=$(date -u +%Y%m%d)
           NEW_VERSION_CODE="${DATE}$(printf '%02d' $BUILD)"
 
-          echo "new=$NEW_VERSION" > $GITHUB_OUTPUT
-          echo "version_code=$NEW_VERSION_CODE" > $GITHUB_OUTPUT
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$NEW_VERSION_CODE" >> "$GITHUB_OUTPUT"
 
       - name: Write version bump to platformio.ini
         run: |
-          sed -i "s/vcodex\.version\s*=.*/vcodex.version = ${{ steps.bump_version.outputs.new }}/" platformio.ini
-          sed -i "s/vcodex\.version_code\s*=.*/vcodex.version_code = ${{ steps.bump_version.outputs.version_code }}/" platformio.ini
+          NEW_VER="${{ steps.bump_version.outputs.new }}"
+          NEW_CODE="${{ steps.bump_version.outputs.version_code }}"
+          sed -i '/^\[vcodex\]/,/^\[/{s/^version = .*/version = '"$NEW_VER"'/}' platformio.ini
+          sed -i '/^\[vcodex\]/,/^\[/{s/^version_code = .*/version_code = '"$NEW_CODE"'/}' platformio.ini
 
       - name: Generate changelog entry
-        id: changelog
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          NEW_VERSION: ${{ steps.bump_version.outputs.new }}
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-          NEW_VERSION="${{ steps.bump_version.outputs.new }}"
           DATE=$(date -u +%Y-%m-%d)
 
-          ENTRY="## $NEW_VERSION — $DATE\n\n**$PR_TITLE** (#$PR_NUMBER)\n\n$PR_BODY\n\n---\n"
+          # Build release notes file safely using heredoc
+          {
+            echo "## $NEW_VERSION — $DATE"
+            echo ""
+            echo "**$PR_TITLE** (#$PR_NUMBER)"
+            echo ""
+            echo "$PR_BODY"
+            echo ""
+            echo "---"
+          } > /tmp/release_notes.md
 
           # Prepend to CHANGELOG.md
-          echo -e "$ENTRY$(cat CHANGELOG.md)" > CHANGELOG.md
-
-          # Save for release notes
-          echo -e "$ENTRY" > /tmp/release_notes.md
+          cat /tmp/release_notes.md CHANGELOG.md > /tmp/changelog_new.md
+          mv /tmp/changelog_new.md CHANGELOG.md
 
       - name: Commit version bump and changelog
         run: |
