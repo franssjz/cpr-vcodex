@@ -1,3 +1,15 @@
+## 1.2.0.8 — 2026-04-07
+
+**fix: remove -flto from vcodex_release to fix release build** (#4)
+
+Release workflow fails while CI passes because they use different PlatformIO environments. `vcodex_release` includes `-flto`, but the ESP32-C3 RISC-V toolchain's linker lacks the GCC LTO plugin — producing 291 "plugin needed to handle lto object" errors at link time.
+
+- **Removed `-flto`** from `[env:vcodex_release]` in `platformio.ini`
+- Remaining size optimization flags (`-Os`, `-fmerge-all-constants`, `-fno-unwind-tables`, `-fno-asynchronous-unwind-tables`) plus base section's `-ffunction-sections`/`-fdata-sections`/`-Wl,--gc-sections` still provide dead code elimination
+
+The key distinction: CI runs `pio run` (default env, no `-flto`) → passes. Release runs `pio run -e vcodex_release` (has `-flto`) → fails.
+
+---
 ## 1.2.0.7 — 2026-04-07
 
 **fix: resolve CI build and auto-release workflow failures** (#3)
