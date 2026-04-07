@@ -1,0 +1,87 @@
+name: Cache Cleanup
+
+on:
+  # Run weekly on Monday at 03:00 UTC
+  schedule:
+    - cron: '0 3 * * 1'
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cleanup stale caches
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const keepCount = 5;
+            const maxAgeDays = 30;
+            const now = new Date();
+
+            console.log(`Fetching caches for ${owner}/${repo}...`);
+
+            // Fetch all caches (paginated)
+            let allCaches = [];
+            let page = 1;
+            while (true) {
+              const resp = await github.rest.actions.getActionsCacheList({
+                owner,
+                repo,
+                per_page: 100,
+                page,
+                sort: 'last_accessed_at',
+                direction: 'desc',
+              });
+              allCaches = allCaches.concat(resp.data.actions_caches);
+              if (resp.data.actions_caches.length < 100) break;
+              page++;
+            }
+
+            console.log(`Found ${allCaches.length} total caches.`);
+
+            // Group caches by key prefix (e.g., "pio-Linux", "pio-build-Linux", "cppcheck-Linux")
+            const groups = {};
+            for (const cache of allCaches) {
+              // Use everything up to the first hash as the group key
+              const prefix = cache.key.replace(/-[a-f0-9]{32,}$/, '');
+              if (!groups[prefix]) groups[prefix] = [];
+              groups[prefix].push(cache);
+            }
+
+            let deletedCount = 0;
+            for (const [prefix, caches] of Object.entries(groups)) {
+              // Caches are already sorted by last_accessed_at desc from the API
+              console.log(`\nGroup "${prefix}": ${caches.length} cache(s)`);
+
+              for (let i = 0; i < caches.length; i++) {
+                const cache = caches[i];
+                const lastAccessed = new Date(cache.last_accessed_at);
+                const ageDays = (now - lastAccessed) / (1000 * 60 * 60 * 24);
+
+                // Keep the most recent `keepCount` caches in each group,
+                // and delete any beyond that OR older than maxAgeDays
+                if (i >= keepCount || ageDays > maxAgeDays) {
+                  console.log(`  Deleting cache id=${cache.id} key="${cache.key}" (age: ${ageDays.toFixed(1)} days, last accessed: ${cache.last_accessed_at})`);
+                  try {
+                    await github.rest.actions.deleteActionsCacheById({
+                      owner,
+                      repo,
+                      cache_id: cache.id,
+                    });
+                    deletedCount++;
+                  } catch (err) {
+                    console.log(`  Failed to delete cache id=${cache.id}: ${err.message}`);
+                  }
+                } else {
+                  console.log(`  Keeping cache id=${cache.id} key="${cache.key}" (age: ${ageDays.toFixed(1)} days)`);
+                }
+              }
+            }
+
+            console.log(`\nDone. Deleted ${deletedCount} stale cache(s).`);
