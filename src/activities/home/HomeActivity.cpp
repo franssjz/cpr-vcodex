@@ -55,8 +55,10 @@ void drawHomeDate(const GfxRenderer& renderer, const ThemeMetrics& metrics, cons
   int rightEdge = batteryX - 8;
 
   if (showBatteryPercentage) {
-    const std::string batteryText = std::to_string(powerManager.getBatteryPercentage()) + "%";
-    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText.c_str()) + 4;
+    // Use stack buffer to avoid heap allocation on every home screen render
+    char batteryText[8];
+    snprintf(batteryText, sizeof(batteryText), "%d%%", powerManager.getBatteryPercentage());
+    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText) + 4;
   }
 
   const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, dateText.c_str());
@@ -68,17 +70,25 @@ std::string formatDurationHmCompact(const uint64_t totalMs) {
   const uint64_t totalMinutes = totalMs / 60000ULL;
   const uint64_t hours = totalMinutes / 60ULL;
   const uint64_t minutes = totalMinutes % 60ULL;
+  // Use stack buffer to avoid multiple heap allocations from string concatenation
+  char buffer[32];
   if (hours == 0) {
-    return std::to_string(minutes) + "m";
+    snprintf(buffer, sizeof(buffer), "%llum", (unsigned long long)minutes);
+  } else {
+    snprintf(buffer, sizeof(buffer), "%lluh %llum", (unsigned long long)hours, (unsigned long long)minutes);
   }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
+  return std::string(buffer);
 }
 
 std::string getReadingStatsShortcutSubtitle() {
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
   const std::string todayValue = formatDurationHmCompact(todayReadingMs);
   const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
-  return todayValue + " / " + goalValue + " | " + std::to_string(READING_STATS.getCurrentStreakDays());
+  // Use stack buffer to avoid multiple heap allocations from string concatenation
+  char buffer[96];
+  snprintf(buffer, sizeof(buffer), "%s / %s | %d",
+           todayValue.c_str(), goalValue.c_str(), READING_STATS.getCurrentStreakDays());
+  return std::string(buffer);
 }
 
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
