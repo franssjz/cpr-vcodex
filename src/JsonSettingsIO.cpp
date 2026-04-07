@@ -297,12 +297,14 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       if (needsResave) *needsResave = true;
     }
   }
+  // Migrate legacy font family values from the old enum where OpenDyslexic=2 and Lexend=3.
+  // In the current enum: BOOKERLY=0, NOTOSANS=1, LEXEND=2.
+  // Value 3 (old Lexend) maps to current LEXEND=2.
+  // Values >= FONT_FAMILY_COUNT fall back to BOOKERLY.
+  // Note: value 2 is now LEXEND in the current enum, so no remapping needed.
   const uint8_t rawFontFamily = doc["fontFamily"] | s.fontFamily;
   if (rawFontFamily == 3) {
     s.fontFamily = CrossPointSettings::LEXEND;
-    if (needsResave) *needsResave = true;
-  } else if (rawFontFamily == 2) {
-    s.fontFamily = CrossPointSettings::BOOKERLY;
     if (needsResave) *needsResave = true;
   } else if (rawFontFamily >= static_cast<uint8_t>(CrossPointSettings::FONT_FAMILY_COUNT)) {
     s.fontFamily = CrossPointSettings::BOOKERLY;
