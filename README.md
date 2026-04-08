@@ -21,8 +21,8 @@
 | Upstream base commit | [`e6c6e72`](https://github.com/crosspoint-reader/crosspoint-reader/commit/e6c6e72a249a0edcd525ee29029739e457e4e797) |
 | Upstream carry-forward | manual carry-forward from [`9b38851`](https://github.com/crosspoint-reader/crosspoint-reader/commit/9b388513869a16f8bb3310fc5a3dd85385614fac), [`1c13331`](https://github.com/crosspoint-reader/crosspoint-reader/commit/1c1333118962f456ff56a3c599f52520d2d204d9), [`11984f8`](https://github.com/crosspoint-reader/crosspoint-reader/commit/11984f8fefc308c57a32d580b47d14b9a53e5621), [`f429f90`](https://github.com/crosspoint-reader/crosspoint-reader/commit/f429f9035c7301636c94b201bf27962d0289fabf), [`fa3c7d9`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fa3c7d96a0020687e1e22dd720e285402987d99b), [`cff3e12`](https://github.com/crosspoint-reader/crosspoint-reader/commit/cff3e12a0ac2bd496cc23588e9fc0b49edfd98d0), [`6cd19f5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/6cd19f561905e199fb5d630b9381d601b9babc56), [`1398aeb`](https://github.com/crosspoint-reader/crosspoint-reader/commit/1398aeb1edb3a2819e90d52bd96f339c8e073491), [`c656673`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c656673b9a887667c360b748ba6df31d64b880df) and [`b898d53`](https://github.com/crosspoint-reader/crosspoint-reader/commit/b898d53f7b8726f9a0c74ff064df61c1cc102f16) |
 | Device | Xteink X4 |
-| Current release (vCodex) | `1.2.0.8` |
-| Version code | `2026040808` |
+| Current release (vCodex) | `1.2.0.9` |
+| Version code | `2026040809` |
 | Release notes | [CHANGELOG.md](./CHANGELOG.md) |
 | Recommended install | browser fast flash |
 
@@ -456,8 +456,8 @@ Important files include:
 Each firmware build now keeps the base project version and the fork release separate:
 
 - `crosspoint.version`: the upstream base release, currently `1.2.0`
-- `vcodex.version`: the fork release shown to the user, currently `1.2.0.8`
-- `vcodex.version_code`: the exact build identifier, currently `2026040808`
+- `vcodex.version`: the fork release shown to the user, currently `1.2.0.9`
+- `vcodex.version_code`: the exact build identifier, currently `2026040809`
 
 The firmware UI keeps showing the fork version to avoid confusion, while the base version remains available as metadata for tracking upstream sync.
 For a brief release history, see [CHANGELOG.md](./CHANGELOG.md).
