@@ -54,7 +54,8 @@ bool SleepScreenCache::load(GfxRenderer& renderer, const std::string& sourcePath
     return false;
   }
 
-  if (file.fileSize() != HalDisplay::BUFFER_SIZE) {
+  const uint32_t bufferSize = display.getBufferSize();
+  if (file.fileSize() != bufferSize) {
     LOG_ERR("SLC", "Invalid cache size for %s", path.c_str());
     file.close();
     Storage.remove(path.c_str());
@@ -62,10 +63,10 @@ bool SleepScreenCache::load(GfxRenderer& renderer, const std::string& sourcePath
   }
 
   uint8_t* frameBuffer = renderer.getFrameBuffer();
-  const int bytesRead = file.read(frameBuffer, HalDisplay::BUFFER_SIZE);
+  const int bytesRead = file.read(frameBuffer, bufferSize);
   file.close();
 
-  if (bytesRead != static_cast<int>(HalDisplay::BUFFER_SIZE)) {
+  if (bytesRead != static_cast<int>(bufferSize)) {
     LOG_ERR("SLC", "Incomplete cache read for %s", path.c_str());
     return false;
   }
@@ -89,11 +90,12 @@ void SleepScreenCache::save(const GfxRenderer& renderer, const std::string& sour
     return;
   }
 
+  const uint32_t bufferSize = display.getBufferSize();
   const uint8_t* frameBuffer = renderer.getFrameBuffer();
-  const size_t bytesWritten = file.write(frameBuffer, HalDisplay::BUFFER_SIZE);
+  const size_t bytesWritten = file.write(frameBuffer, bufferSize);
   file.close();
 
-  if (bytesWritten != HalDisplay::BUFFER_SIZE) {
+  if (bytesWritten != bufferSize) {
     LOG_ERR("SLC", "Incomplete cache write for %s", path.c_str());
     Storage.remove(path.c_str());
     return;
