@@ -11,6 +11,7 @@
 #include "../util/ConfirmationActivity.h"
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "ReadingStatsStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -72,6 +73,7 @@ void sortFileList(std::vector<std::string>& strs) {
 
 void FileBrowserActivity::loadFiles() {
   files.clear();
+  completedFileStates.clear();
 
   auto root = Storage.open(basepath.c_str());
   if (!root || !root.isDirectory()) {
@@ -103,6 +105,22 @@ void FileBrowserActivity::loadFiles() {
   }
   root.close();
   sortFileList(files);
+
+  completedFileStates.reserve(files.size());
+  std::string fullPathPrefix = basepath;
+  if (fullPathPrefix.empty() || fullPathPrefix.back() != '/') {
+    fullPathPrefix += "/";
+  }
+
+  for (const auto& entry : files) {
+    if (entry.empty() || entry.back() == '/') {
+      completedFileStates.push_back(0);
+      continue;
+    }
+
+    const auto* statsBook = READING_STATS.findBook(fullPathPrefix + entry);
+    completedFileStates.push_back((statsBook != nullptr && statsBook->completed) ? 1 : 0);
+  }
 }
 
 void FileBrowserActivity::onEnter() {
@@ -136,6 +154,7 @@ void FileBrowserActivity::onEnter() {
 void FileBrowserActivity::onExit() {
   Activity::onExit();
   files.clear();
+  completedFileStates.clear();
 }
 
 void FileBrowserActivity::clearFileMetadata(const std::string& fullPath) {
@@ -299,7 +318,9 @@ void FileBrowserActivity::render(RenderLock&&) {
         renderer, Rect{0, contentTop, pageWidth, contentHeight}, files.size(), selectorIndex,
         [this](int index) { return getFileName(files[index]); }, nullptr,
         [this](int index) { return UITheme::getFileIcon(files[index]); },
-        [this](int index) { return getFileExtension(files[index]); }, false);
+        [this](int index) { return getFileExtension(files[index]); }, false,
+        [this](int index) { return index >= 0 && index < static_cast<int>(completedFileStates.size()) &&
+                                   completedFileStates[index] != 0; });
   }
 
   // Help text

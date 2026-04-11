@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "MappedInputManager.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
@@ -23,8 +24,10 @@ std::string getRecentBookConfirmationLabel(const RecentBook& book) {
 
 void RecentBooksActivity::loadRecentBooks() {
   recentBooks.clear();
+  recentBookCompletedStates.clear();
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(books.size());
+  recentBookCompletedStates.reserve(books.size());
 
   for (const auto& book : books) {
     // Skip if file no longer exists
@@ -32,6 +35,8 @@ void RecentBooksActivity::loadRecentBooks() {
       continue;
     }
     recentBooks.push_back(book);
+    const auto* statsBook = READING_STATS.findBook(!book.bookId.empty() ? book.bookId : book.path);
+    recentBookCompletedStates.push_back((statsBook != nullptr && statsBook->completed) ? 1 : 0);
   }
 }
 
@@ -48,6 +53,7 @@ void RecentBooksActivity::onEnter() {
 void RecentBooksActivity::onExit() {
   Activity::onExit();
   recentBooks.clear();
+  recentBookCompletedStates.clear();
 }
 
 void RecentBooksActivity::loop() {
@@ -134,7 +140,9 @@ void RecentBooksActivity::render(RenderLock&&) {
     GUI.drawList(
         renderer, Rect{0, contentTop, pageWidth, contentHeight}, recentBooks.size(), selectorIndex,
         [this](int index) { return recentBooks[index].title; }, [this](int index) { return recentBooks[index].author; },
-        [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); });
+        [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); }, nullptr, false,
+        [this](int index) { return index >= 0 && index < static_cast<int>(recentBookCompletedStates.size()) &&
+                                   recentBookCompletedStates[index] != 0; });
   }
 
   // Help text

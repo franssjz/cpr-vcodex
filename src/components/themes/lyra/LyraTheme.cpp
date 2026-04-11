@@ -139,6 +139,24 @@ int fallbackIconSize(UIIcon icon, int requestedSize) {
   }
   return 0;
 }
+
+void drawCompletedListBadge(const GfxRenderer& renderer, const int x, const int y, const int size) {
+  const int safeSize = std::max(12, size);
+  const int strokeWidth = safeSize >= 16 ? 2 : 1;
+
+  renderer.fillRect(x, y, safeSize, safeSize, true);
+  renderer.drawRect(x, y, safeSize, safeSize, false);
+
+  const int leftX = x + safeSize * 3 / 16;
+  const int midX = x + safeSize * 7 / 16;
+  const int rightX = x + safeSize * 13 / 16;
+  const int leftY = y + safeSize * 9 / 16;
+  const int midY = y + safeSize * 12 / 16;
+  const int rightY = y + safeSize * 4 / 16;
+
+  renderer.drawLine(leftX, leftY, midX, midY, strokeWidth, false);
+  renderer.drawLine(midX, midY, rightX, rightY, strokeWidth, false);
+}
 }  // namespace
 
 void LyraTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bool showPercentage) const {
@@ -317,7 +335,8 @@ void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
                          const std::function<std::string(int index)>& rowTitle,
                          const std::function<std::string(int index)>& rowSubtitle,
                          const std::function<UIIcon(int index)>& rowIcon,
-                         const std::function<std::string(int index)>& rowValue, bool highlightValue) const {
+                         const std::function<std::string(int index)>& rowValue, bool highlightValue,
+                         const std::function<bool(int index)>& rowCompleted) const {
   int rowHeight =
       (rowSubtitle != nullptr) ? LyraMetrics::values.listWithSubtitleRowHeight : LyraMetrics::values.listRowHeight;
   int pageItems = rect.height / rowHeight;
@@ -377,21 +396,30 @@ void LyraTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
     renderer.drawText(UI_10_FONT_ID, textX, itemY + 7, item.c_str(), true);
 
     if (rowIcon != nullptr) {
-      UIIcon icon = rowIcon(i);
-      int drawSize = iconSize;
-      const uint8_t* iconBitmap = iconForName(icon, drawSize);
-      if (iconBitmap == nullptr) {
-        const int fallbackSize = fallbackIconSize(icon, iconSize);
-        if (fallbackSize > 0) {
-          drawSize = fallbackSize;
-          iconBitmap = iconForName(icon, drawSize);
+      const int iconBaseX = rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection;
+      const int iconBaseY = itemY + iconY;
+
+      if (rowCompleted != nullptr && rowCompleted(i)) {
+        const int badgeSize = iconSize >= 32 ? 18 : 14;
+        const int badgeX = iconBaseX + std::max(0, (iconSize - badgeSize) / 2);
+        const int badgeY = iconBaseY + std::max(0, (iconSize - badgeSize) / 2);
+        drawCompletedListBadge(renderer, badgeX, badgeY, badgeSize);
+      } else {
+        UIIcon icon = rowIcon(i);
+        int drawSize = iconSize;
+        const uint8_t* iconBitmap = iconForName(icon, drawSize);
+        if (iconBitmap == nullptr) {
+          const int fallbackSize = fallbackIconSize(icon, iconSize);
+          if (fallbackSize > 0) {
+            drawSize = fallbackSize;
+            iconBitmap = iconForName(icon, drawSize);
+          }
         }
-      }
-      if (iconBitmap != nullptr) {
-        const int iconX = rect.x + LyraMetrics::values.contentSidePadding + hPaddingInSelection +
-                          std::max(0, (iconSize - drawSize) / 2);
-        const int adjustedIconY = itemY + iconY + std::max(0, (iconSize - drawSize) / 2);
-        renderer.drawIcon(iconBitmap, iconX, adjustedIconY, drawSize, drawSize);
+        if (iconBitmap != nullptr) {
+          const int iconX = iconBaseX + std::max(0, (iconSize - drawSize) / 2);
+          const int adjustedIconY = iconBaseY + std::max(0, (iconSize - drawSize) / 2);
+          renderer.drawIcon(iconBitmap, iconX, adjustedIconY, drawSize, drawSize);
+        }
       }
     }
 

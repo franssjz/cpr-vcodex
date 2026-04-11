@@ -17,6 +17,7 @@ class RecentBooksActivity final : public Activity {
 
   // Recent tab state
   std::vector<RecentBook> recentBooks;
+  std::vector<uint8_t> recentBookCompletedStates;
 
   // Data loading
   void loadRecentBooks();
