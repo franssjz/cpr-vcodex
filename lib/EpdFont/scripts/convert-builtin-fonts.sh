@@ -40,7 +40,7 @@ for size in ${LEXEND_FONT_SIZES[@]}; do
   done
 done
 
-UI_FONT_SIZES=(10 12)
+UI_FONT_SIZES=(8 10 12)
 UI_FONT_STYLES=("Regular" "Bold")
 
 for size in ${UI_FONT_SIZES[@]}; do

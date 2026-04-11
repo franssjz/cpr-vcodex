@@ -8,6 +8,7 @@
 
 #include "I18nKeys.h"
 #include "MappedInputManager.h"
+#include "UiFontSelection.h"
 #include "fontIds.h"
 
 void LanguageSelectActivity::onEnter() {
@@ -52,6 +53,8 @@ void LanguageSelectActivity::handleSelection() {
   {
     RenderLock lock(*this);
     I18N.setLanguage(static_cast<Language>(SORTED_LANGUAGE_INDICES[selectedIndex]));
+    refreshUiFontsForCurrentLanguage();
+    renderer.requestNextFullRefresh();
   }
 
   // Return to previous page

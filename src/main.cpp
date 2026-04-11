@@ -12,6 +12,11 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <builtinFonts/all.h>
+#include <builtinFonts/notosans_10_bold.h>
+#include <builtinFonts/notosans_10_bolditalic.h>
+#include <builtinFonts/notosans_10_italic.h>
+#include <builtinFonts/ubuntu_8_bold.h>
+#include <builtinFonts/ubuntu_8_regular.h>
 
 #include <cstring>
 #include <esp_sleep.h>
@@ -24,6 +29,7 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "UiFontSelection.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "components/UITheme.h"
@@ -97,8 +103,11 @@ EpdFontFamily lexend18FontFamily(&lexend18RegularFont, &lexend18BoldFont, &lexen
                                  &lexend18BoldFont);
 
 EpdFont notosans10RegularFont(&notosans_10_regular);
-EpdFontFamily notosans10FontFamily(&notosans10RegularFont, &notosans10RegularFont, &notosans10RegularFont,
-                                   &notosans10RegularFont);
+EpdFont notosans10BoldFont(&notosans_10_bold);
+EpdFont notosans10ItalicFont(&notosans_10_italic);
+EpdFont notosans10BoldItalicFont(&notosans_10_bolditalic);
+EpdFontFamily notosans10FontFamily(&notosans10RegularFont, &notosans10BoldFont, &notosans10ItalicFont,
+                                   &notosans10BoldItalicFont);
 EpdFont notosans12RegularFont(&notosans_12_regular);
 EpdFont notosans12BoldFont(&notosans_12_bold);
 EpdFont notosans12ItalicFont(&notosans_12_italic);
@@ -126,8 +135,12 @@ EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, 
 
 #endif  // OMIT_FONTS
 
-EpdFont smallFont(&notosans_8_regular);
-EpdFontFamily smallFontFamily(&smallFont);
+EpdFont smallNotoFont(&notosans_8_regular);
+EpdFontFamily smallNotoFontFamily(&smallNotoFont);
+
+EpdFont smallUbuntuRegularFont(&ubuntu_8_regular);
+EpdFont smallUbuntuBoldFont(&ubuntu_8_bold);
+EpdFontFamily smallUbuntuFontFamily(&smallUbuntuRegularFont, &smallUbuntuBoldFont);
 
 EpdFont ui10RegularFont(&ubuntu_10_regular);
 EpdFont ui10BoldFont(&ubuntu_10_bold);
@@ -136,8 +149,46 @@ EpdFontFamily ui10FontFamily(&ui10RegularFont, &ui10BoldFont);
 EpdFont ui12RegularFont(&ubuntu_12_regular);
 EpdFont ui12BoldFont(&ubuntu_12_bold);
 EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
+#ifndef OMIT_FONTS
+EpdFontFamily ui12NotoFontFamily(&notosans12RegularFont, &notosans12BoldFont, &notosans12ItalicFont,
+                                 &notosans12BoldItalicFont);
+#endif
 
 unsigned long t1 = 0;
+
+namespace {
+
+bool shouldUseNotoUiFonts(const Language lang) {
+#ifdef OMIT_FONTS
+  (void)lang;
+  return false;
+#else
+  return lang == Language::VI;
+#endif
+}
+
+void applyUiFontsForLanguage(const Language lang) {
+  const bool useNotoUiFonts = shouldUseNotoUiFonts(lang);
+  if (useNotoUiFonts) {
+    renderer.insertFont(SMALL_FONT_ID, smallNotoFontFamily);
+    // Vietnamese needs Noto Sans coverage, but keeping both UI slots at 12 pt
+    // makes several screens too dense. Use 10 pt for both UI sizes so layout
+    // metrics stay closer to the default Ubuntu setup.
+    renderer.insertFont(UI_10_FONT_ID, notosans10FontFamily);
+    renderer.insertFont(UI_12_FONT_ID, notosans10FontFamily);
+    LOG_INF("MAIN", "UI fonts: Noto Sans 8/10/10 for language %s", I18N.getLanguageName(lang));
+    return;
+  }
+
+  renderer.insertFont(SMALL_FONT_ID, smallUbuntuFontFamily);
+  renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
+  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
+  LOG_INF("MAIN", "UI fonts: Ubuntu 8/10/12 for language %s", I18N.getLanguageName(lang));
+}
+
+}  // namespace
+
+void refreshUiFontsForCurrentLanguage() { applyUiFontsForLanguage(I18N.getLanguage()); }
 
 void waitForPowerRelease() {
   gpio.update();
@@ -193,9 +244,7 @@ void setupDisplayAndFonts() {
   renderer.insertFont(NOTOSANS_16_FONT_ID, notosans16FontFamily);
   renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
 #endif  // OMIT_FONTS
-  renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
-  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
-  renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
+  refreshUiFontsForCurrentLanguage();
   LOG_DBG("MAIN", "Fonts setup");
 }
 

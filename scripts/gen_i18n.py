@@ -22,6 +22,7 @@ Example:
     python gen_i18n.py lib/I18n/translations lib/I18n/
 """
 
+import ast
 import sys
 import os
 import re
@@ -39,6 +40,11 @@ def _unescape_yaml_value(raw: str, filepath: str = "", line_num: int = 0) -> str
 
     Recognized escapes:  \\\\  →  \\       \\"  →  "       \\n  →  newline
     """
+    # Some legacy translation files over-escape escapes such as \\n or \\\"
+    # inside the quoted YAML value. Collapse those runs so the normal
+    # unescape logic below sees the intended \n / \" / \\ sequence.
+    raw = re.sub(r'\\{2,}(?=[n"\\])', r'\\', raw)
+
     result: List[str] = []
     i = 0
     while i < len(raw):
@@ -558,6 +564,13 @@ def generate_strings_cpp(
                 f"Language {code} string blob is too large for uint16_t offsets: {byte_offset} bytes"
             )
 
+        emitted_size = sum(len(_blob_string_bytes(text)) for text in entries)
+        if emitted_size != byte_offset:
+            raise ValueError(
+                f"Language {code} emitted blob size mismatch: offsets expect {byte_offset} bytes, "
+                f"but generated literals emit {emitted_size} bytes"
+            )
+
         lines.append(f"const char STRINGS_{abbrev}_DATA[] =")
         for text in entries:
             _append_blob_string(lines, text)
@@ -609,6 +622,20 @@ def _append_blob_string(lines: List[str], text: str, indent: str = "    ") -> No
     segments[-1] += "\\0"
     formatted = format_cpp_string_literal(segments, indent)
     lines.extend(formatted)
+
+
+def _blob_string_bytes(text: str) -> bytes:
+    """
+    Return the exact bytes emitted by _append_blob_string for *text*.
+
+    This mirrors the C++ adjacent-string-literal concatenation semantics and
+    lets the generator validate that emitted bytes match the offset math.
+    """
+    segments = escape_cpp_string(text)
+    if not segments:
+        segments = [""]
+    segments[-1] += "\\0"
+    return b"".join(ast.literal_eval('"' + seg + '"').encode("latin1") for seg in segments)
 
 
 def _append_integer_list(lines: List[str], values: List[int], indent: str = "    ", wrap_at: int = 16) -> None:
