@@ -100,6 +100,10 @@ inline const ShortcutDefinition* findShortcutDefinition(const ShortcutId id) {
   return nullptr;
 }
 
+inline bool isShortcutAlwaysVisible(const ShortcutDefinition& definition) {
+  return definition.id == ShortcutId::Settings;
+}
+
 inline uint8_t getShortcutOrder(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
   return settings.*(definition.orderPtr);
 }
@@ -113,6 +117,9 @@ inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const Shortcut
 }
 
 inline bool getShortcutVisibility(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
+  if (isShortcutAlwaysVisible(definition)) {
+    return true;
+  }
   return settings.*(definition.visiblePtr) != 0;
 }
 

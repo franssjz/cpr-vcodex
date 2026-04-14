@@ -20,6 +20,9 @@ void ShortcutVisibilityActivity::reloadEntries() {
   entries.clear();
   entries.reserve(getShortcutDefinitions().size());
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isShortcutAlwaysVisible(definition)) {
+      continue;
+    }
     entries.push_back(&definition);
   }
 

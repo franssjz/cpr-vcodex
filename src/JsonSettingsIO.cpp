@@ -372,7 +372,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["browseFilesShortcutVisible"] = s.browseFilesShortcutVisible;
   doc["statsShortcutVisible"] = s.statsShortcutVisible;
   doc["syncDayShortcutVisible"] = s.syncDayShortcutVisible;
-  doc["settingsShortcutVisible"] = s.settingsShortcutVisible;
+  doc["settingsShortcutVisible"] = 1;
   doc["readingStatsShortcutVisible"] = s.readingStatsShortcutVisible;
   doc["readingHeatmapShortcutVisible"] = s.readingHeatmapShortcutVisible;
   doc["readingProfileShortcutVisible"] = s.readingProfileShortcutVisible;
@@ -534,6 +534,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.settingsShortcutVisible =
       clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
             s.settingsShortcutVisible);
+  if (s.settingsShortcutVisible == 0) {
+    s.settingsShortcutVisible = 1;
+    if (needsResave) *needsResave = true;
+  }
   s.readingStatsShortcutVisible =
       clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible, static_cast<uint8_t>(2),
             s.readingStatsShortcutVisible);
