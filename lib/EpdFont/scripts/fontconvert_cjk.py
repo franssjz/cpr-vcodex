@@ -82,9 +82,9 @@ intervals = [
     (0x2190, 0x21FF),
     ### CJK ###
     # Core Unified Ideographs
-    # (0x4E00, 0x9FFF),
+    (0x4E00, 0x9FFF),
     # # Extension A
-    # (0x3400, 0x4DBF),
+    (0x3400, 0x4DBF),
     # # Extension B
     # (0x20000, 0x2A6DF),
     # # Extension C–F
@@ -92,9 +92,9 @@ intervals = [
     # # Extension G
     # (0x30000, 0x3134F),
     # # Hiragana
-    # (0x3040, 0x309F),
+    (0x3040, 0x309F),
     # # Katakana
-    # (0x30A0, 0x30FF),
+    (0x30A0, 0x30FF),
     # # Katakana Phonetic Extensions
     # (0x31F0, 0x31FF),
     # # Halfwidth Katakana
@@ -738,6 +738,11 @@ if compress:
         (0x20A0, 0x20CF),   # Currency Symbols
         (0x2190, 0x21FF),   # Arrows
         (0x2200, 0x22FF),   # Math Operators
+        ### CJK ###
+        (0x4E00, 0x9FFF),   # Core Unified Ideographs
+        (0x3400, 0x4DBF),   # Extension A
+        (0x3040, 0x309F),   # Hiragana
+        (0x30A0, 0x30FF),   # Katakana
         (0xFB00, 0xFB06),   # Alphabetic Presentation Forms (ligatures)
         (0xFFFD, 0xFFFD),   # Replacement Character
     ]

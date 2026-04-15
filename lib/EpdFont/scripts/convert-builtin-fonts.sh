@@ -15,7 +15,11 @@ for size in ${BOOKERLY_FONT_SIZES[@]}; do
     font_name="bookerly_${size}_$(echo $style | tr '[:upper:]' '[:lower:]')"
     font_path="../builtinFonts/source/Bookerly/Bookerly-${style}.ttf"
     output_path="../builtinFonts/${font_name}.h"
-    python fontconvert.py $font_name $size $font_path --2bit --compress > $output_path
+    if [ $size -lt 12 ] || [ $size -gt 16 ]; then
+      python fontconvert.py $font_name $size $font_path --2bit --compress > $output_path
+    else
+      python fontconvert_cjk.py $font_name $size $font_path --2bit --compress > $output_path
+    fi
     echo "Generated $output_path"
   done
 done

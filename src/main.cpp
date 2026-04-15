@@ -52,12 +52,12 @@ EpdFont bookerly14BoldItalicFont(&bookerly_14_bolditalic);
 EpdFontFamily bookerly14FontFamily(&bookerly14RegularFont, &bookerly14BoldFont, &bookerly14ItalicFont,
                                    &bookerly14BoldItalicFont);
 #ifndef OMIT_FONTS
-EpdFont bookerly10RegularFont(&bookerly_10_regular);
-EpdFont bookerly10BoldFont(&bookerly_10_bold);
-EpdFont bookerly10ItalicFont(&bookerly_10_italic);
-EpdFont bookerly10BoldItalicFont(&bookerly_10_bolditalic);
-EpdFontFamily bookerly10FontFamily(&bookerly10RegularFont, &bookerly10BoldFont, &bookerly10ItalicFont,
-                                   &bookerly10BoldItalicFont);
+// EpdFont bookerly10RegularFont(&bookerly_10_regular);
+// EpdFont bookerly10BoldFont(&bookerly_10_bold);
+// EpdFont bookerly10ItalicFont(&bookerly_10_italic);
+// EpdFont bookerly10BoldItalicFont(&bookerly_10_bolditalic);
+// EpdFontFamily bookerly10FontFamily(&bookerly10RegularFont, &bookerly10BoldFont, &bookerly10ItalicFont,
+//                                    &bookerly10BoldItalicFont);
 EpdFont bookerly12RegularFont(&bookerly_12_regular);
 EpdFont bookerly12BoldFont(&bookerly_12_bold);
 EpdFont bookerly12ItalicFont(&bookerly_12_italic);
@@ -70,19 +70,19 @@ EpdFont bookerly16ItalicFont(&bookerly_16_italic);
 EpdFont bookerly16BoldItalicFont(&bookerly_16_bolditalic);
 EpdFontFamily bookerly16FontFamily(&bookerly16RegularFont, &bookerly16BoldFont, &bookerly16ItalicFont,
                                    &bookerly16BoldItalicFont);
-EpdFont bookerly18RegularFont(&bookerly_18_regular);
-EpdFont bookerly18BoldFont(&bookerly_18_bold);
-EpdFont bookerly18ItalicFont(&bookerly_18_italic);
-EpdFont bookerly18BoldItalicFont(&bookerly_18_bolditalic);
-EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont, &bookerly18ItalicFont,
-                                   &bookerly18BoldItalicFont);
+// EpdFont bookerly18RegularFont(&bookerly_18_regular);
+// EpdFont bookerly18BoldFont(&bookerly_18_bold);
+// EpdFont bookerly18ItalicFont(&bookerly_18_italic);
+// EpdFont bookerly18BoldItalicFont(&bookerly_18_bolditalic);
+// EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont, &bookerly18ItalicFont,
+//                                    &bookerly18BoldItalicFont);
 
 // Lexend adapted from crosspet. No Italic TTF is bundled, so italic falls
 // back to regular and bolditalic falls back to bold.
-EpdFont lexend10RegularFont(&lexend_10_regular);
-EpdFont lexend10BoldFont(&lexend_10_bold);
-EpdFontFamily lexend10FontFamily(&lexend10RegularFont, &lexend10BoldFont, &lexend10RegularFont,
-                                 &lexend10BoldFont);
+// EpdFont lexend10RegularFont(&lexend_10_regular);
+// EpdFont lexend10BoldFont(&lexend_10_bold);
+// EpdFontFamily lexend10FontFamily(&lexend10RegularFont, &lexend10BoldFont, &lexend10RegularFont,
+//                                  &lexend10BoldFont);
 EpdFont lexend12RegularFont(&lexend_12_regular);
 EpdFont lexend12BoldFont(&lexend_12_bold);
 EpdFontFamily lexend12FontFamily(&lexend12RegularFont, &lexend12BoldFont, &lexend12RegularFont,
@@ -95,17 +95,17 @@ EpdFont lexend16RegularFont(&lexend_16_regular);
 EpdFont lexend16BoldFont(&lexend_16_bold);
 EpdFontFamily lexend16FontFamily(&lexend16RegularFont, &lexend16BoldFont, &lexend16RegularFont,
                                  &lexend16BoldFont);
-EpdFont lexend18RegularFont(&lexend_18_regular);
-EpdFont lexend18BoldFont(&lexend_18_bold);
-EpdFontFamily lexend18FontFamily(&lexend18RegularFont, &lexend18BoldFont, &lexend18RegularFont,
-                                 &lexend18BoldFont);
+// EpdFont lexend18RegularFont(&lexend_18_regular);
+// EpdFont lexend18BoldFont(&lexend_18_bold);
+// EpdFontFamily lexend18FontFamily(&lexend18RegularFont, &lexend18BoldFont, &lexend18RegularFont,
+//                                  &lexend18BoldFont);
 
-EpdFont notosans10RegularFont(&notosans_10_regular);
-EpdFont notosans10BoldFont(&notosans_10_bold);
-EpdFont notosans10ItalicFont(&notosans_10_italic);
-EpdFont notosans10BoldItalicFont(&notosans_10_bolditalic);
-EpdFontFamily notosans10FontFamily(&notosans10RegularFont, &notosans10BoldFont, &notosans10ItalicFont,
-                                   &notosans10BoldItalicFont);
+// EpdFont notosans10RegularFont(&notosans_10_regular);
+// EpdFont notosans10BoldFont(&notosans_10_bold);
+// EpdFont notosans10ItalicFont(&notosans_10_italic);
+// EpdFont notosans10BoldItalicFont(&notosans_10_bolditalic);
+// EpdFontFamily notosans10FontFamily(&notosans10RegularFont, &notosans10BoldFont, &notosans10ItalicFont,
+//                                    &notosans10BoldItalicFont);
 EpdFont notosans12RegularFont(&notosans_12_regular);
 EpdFont notosans12BoldFont(&notosans_12_bold);
 EpdFont notosans12ItalicFont(&notosans_12_italic);
@@ -124,12 +124,12 @@ EpdFont notosans16ItalicFont(&notosans_16_italic);
 EpdFont notosans16BoldItalicFont(&notosans_16_bolditalic);
 EpdFontFamily notosans16FontFamily(&notosans16RegularFont, &notosans16BoldFont, &notosans16ItalicFont,
                                    &notosans16BoldItalicFont);
-EpdFont notosans18RegularFont(&notosans_18_regular);
-EpdFont notosans18BoldFont(&notosans_18_bold);
-EpdFont notosans18ItalicFont(&notosans_18_italic);
-EpdFont notosans18BoldItalicFont(&notosans_18_bolditalic);
-EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, &notosans18ItalicFont,
-                                   &notosans18BoldItalicFont);
+// EpdFont notosans18RegularFont(&notosans_18_regular);
+// EpdFont notosans18BoldFont(&notosans_18_bold);
+// EpdFont notosans18ItalicFont(&notosans_18_italic);
+// EpdFont notosans18BoldItalicFont(&notosans_18_bolditalic);
+// EpdFontFamily notosans18FontFamily(&notosans18RegularFont, &notosans18BoldFont, &notosans18ItalicFont,
+//                                    &notosans18BoldItalicFont);
 
 #endif  // OMIT_FONTS
 
@@ -172,8 +172,8 @@ void applyUiFontsForLanguage(const Language lang) {
     // Vietnamese needs Noto Sans coverage, but keeping both UI slots at 12 pt
     // makes several screens too dense. Use 10 pt for both UI sizes so layout
     // metrics stay closer to the default Ubuntu setup.
-    renderer.insertFont(UI_10_FONT_ID, notosans10FontFamily);
-    renderer.insertFont(UI_12_FONT_ID, notosans10FontFamily);
+    renderer.insertFont(UI_10_FONT_ID, smallNotoFontFamily);
+    renderer.insertFont(UI_12_FONT_ID, smallNotoFontFamily);
     LOG_INF("MAIN", "UI fonts: Noto Sans 8/10/10 for language %s", I18N.getLanguageName(lang));
     return;
   }
@@ -224,22 +224,22 @@ void setupDisplayAndFonts() {
   renderer.setFontCacheManager(&fontCacheManager);
   renderer.insertFont(BOOKERLY_14_FONT_ID, bookerly14FontFamily);
 #ifndef OMIT_FONTS
-  renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
+  // renderer.insertFont(BOOKERLY_10_FONT_ID, bookerly10FontFamily);
   renderer.insertFont(BOOKERLY_12_FONT_ID, bookerly12FontFamily);
   renderer.insertFont(BOOKERLY_16_FONT_ID, bookerly16FontFamily);
-  renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly18FontFamily);
+  // renderer.insertFont(BOOKERLY_18_FONT_ID, bookerly18FontFamily);
 
-  renderer.insertFont(LEXEND_10_FONT_ID, lexend10FontFamily);
+  // renderer.insertFont(LEXEND_10_FONT_ID, lexend10FontFamily);
   renderer.insertFont(LEXEND_12_FONT_ID, lexend12FontFamily);
   renderer.insertFont(LEXEND_14_FONT_ID, lexend14FontFamily);
   renderer.insertFont(LEXEND_16_FONT_ID, lexend16FontFamily);
-  renderer.insertFont(LEXEND_18_FONT_ID, lexend18FontFamily);
+  // renderer.insertFont(LEXEND_18_FONT_ID, lexend18FontFamily);
 
-  renderer.insertFont(NOTOSANS_10_FONT_ID, notosans10FontFamily);
+  // renderer.insertFont(NOTOSANS_10_FONT_ID, notosans10FontFamily);
   renderer.insertFont(NOTOSANS_12_FONT_ID, notosans12FontFamily);
   renderer.insertFont(NOTOSANS_14_FONT_ID, notosans14FontFamily);
   renderer.insertFont(NOTOSANS_16_FONT_ID, notosans16FontFamily);
-  renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
+  // renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
 #endif  // OMIT_FONTS
   refreshUiFontsForCurrentLanguage();
   LOG_DBG("MAIN", "Fonts setup");
