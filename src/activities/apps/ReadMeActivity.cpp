@@ -44,12 +44,16 @@ std::string ReadMeActivity::getTopicTitle(const Topic topic) {
       return tr(STR_SYNC_DAY);
     case Topic::Stats:
       return tr(STR_READING_STATS);
+    case Topic::ReadingProfile:
+      return tr(STR_READING_PROFILE);
     case Topic::Bookmarks:
       return tr(STR_BOOKMARKS);
     case Topic::Sleep:
       return tr(STR_SLEEP);
     case Topic::Shortcuts:
       return tr(STR_README_TOPIC_SHORTCUTS);
+    case Topic::SettingsGuide:
+      return tr(STR_SETTINGS_TITLE);
     case Topic::Achievements:
       return tr(STR_ACHIEVEMENTS);
     case Topic::IfFound:
@@ -66,12 +70,16 @@ std::string ReadMeActivity::getTopicBody(const Topic topic) {
       return tr(STR_README_SYNC_DAY_BODY);
     case Topic::Stats:
       return tr(STR_README_STATS_BODY);
+    case Topic::ReadingProfile:
+      return tr(STR_README_PROFILE_BODY);
     case Topic::Bookmarks:
       return tr(STR_README_BOOKMARKS_BODY);
     case Topic::Sleep:
       return tr(STR_README_SLEEP_BODY);
     case Topic::Shortcuts:
       return tr(STR_README_SHORTCUTS_BODY);
+    case Topic::SettingsGuide:
+      return tr(STR_README_SETTINGS_BODY);
     case Topic::Achievements:
       return tr(STR_README_ACHIEVEMENTS_BODY);
     case Topic::IfFound:
@@ -86,7 +94,7 @@ std::string ReadMeActivity::getTopicIndexLabel(const Topic topic) {
   if (topic == Topic::Reports) {
     return "99. " + getTopicTitle(topic);
   }
-  return std::to_string(static_cast<int>(topic)) + ". " + getTopicTitle(topic);
+  return std::to_string(static_cast<int>(topic) + 1) + ". " + getTopicTitle(topic);
 }
 
 void ReadMeActivity::loadDetailLines() {
@@ -227,8 +235,27 @@ void ReadMeActivity::render(RenderLock&&) {
     return;
   }
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_README),
-                 getTopicIndexLabel(activeTopic).c_str());
+  const char* readmeTitle = tr(STR_README);
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, readmeTitle, nullptr);
+
+  const int titleX = metrics.contentSidePadding;
+  const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
+  const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, readmeTitle, EpdFontFamily::BOLD);
+  const int topicGap = 10;
+  const int topicX = titleX + titleWidth + topicGap;
+  const int topicMaxWidth = std::max(0, pageWidth - metrics.contentSidePadding - topicX);
+  if (topicMaxWidth > 24) {
+    const std::string headerTopic =
+        renderer.truncatedText(SMALL_FONT_ID, getTopicTitle(activeTopic).c_str(), topicMaxWidth, EpdFontFamily::REGULAR);
+    if (!headerTopic.empty()) {
+      const std::string topicPrefix = "/ ";
+      renderer.drawText(SMALL_FONT_ID, topicX, titleY + 4, topicPrefix.c_str(), true, EpdFontFamily::REGULAR);
+      renderer.drawText(
+          SMALL_FONT_ID,
+          topicX + renderer.getTextWidth(SMALL_FONT_ID, topicPrefix.c_str(), EpdFontFamily::REGULAR),
+          titleY + 4, headerTopic.c_str(), true, EpdFontFamily::REGULAR);
+    }
+  }
 
   const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;

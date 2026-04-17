@@ -332,19 +332,21 @@ ReadingProfileSummary buildReadingProfileSummary() {
 
   uint64_t weeklyTotalReadingMs = 0;
   uint64_t maxDayReadingMs = 0;
-  int currentStreak = 0;
+  int currentGoalStreak = 0;
   for (const uint64_t readingMs : readingMsByDay) {
     weeklyTotalReadingMs += readingMs;
     maxDayReadingMs = std::max(maxDayReadingMs, readingMs);
     if (readingMs > 0) {
       summary.daysRead++;
-      currentStreak++;
-      summary.longestReadStreak = std::max(summary.longestReadStreak, currentStreak);
       if (readingMs >= dailyGoalMs) {
         summary.goalDays++;
+        currentGoalStreak++;
+        summary.longestReadStreak = std::max(summary.longestReadStreak, currentGoalStreak);
+      } else {
+        currentGoalStreak = 0;
       }
     } else {
-      currentStreak = 0;
+      currentGoalStreak = 0;
     }
   }
 
@@ -406,7 +408,7 @@ ReadingProfileSummary buildReadingProfileSummary() {
   }
 
   const int habitScore = clampPercent(roundDiv(summary.daysRead * 65 + summary.goalDays * 35, static_cast<int>(LAST_7_DAYS)));
-  const int streakScore = summary.daysRead > 0 ? roundDiv(summary.longestReadStreak * 100, summary.daysRead) : 0;
+  const int streakScore = summary.goalDays > 0 ? roundDiv(summary.longestReadStreak * 100, summary.goalDays) : 0;
   int balanceScore = 0;
   if (summary.daysRead > 1 && weeklyTotalReadingMs > 0) {
     const double bestShare = static_cast<double>(maxDayReadingMs) / static_cast<double>(weeklyTotalReadingMs);

@@ -17,7 +17,19 @@ class ReadMeActivity final : public Activity {
 
  private:
   enum class ViewMode : uint8_t { Menu = 0, Detail };
-  enum class Topic : uint8_t { SyncDay = 0, Stats, Bookmarks, Sleep, Shortcuts, Achievements, IfFound, Reports, Count };
+  enum class Topic : uint8_t {
+    SyncDay = 0,
+    Stats,
+    ReadingProfile,
+    Achievements,
+    Bookmarks,
+    Sleep,
+    SettingsGuide,
+    Shortcuts,
+    IfFound,
+    Reports,
+    Count
+  };
 
   ButtonNavigator buttonNavigator;
   bool waitForConfirmRelease = false;

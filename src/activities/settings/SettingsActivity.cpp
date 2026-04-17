@@ -846,6 +846,7 @@ void SettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const char* settingsTitle = tr(STR_SETTINGS_TITLE);
   const char* selectedCategoryLabel = I18N.get(categoryNames[selectedCategoryIndex]);
+  const char* firmwareVersion = CROSSPOINT_VERSION;
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, settingsTitle, nullptr);
   HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
@@ -853,10 +854,13 @@ void SettingsActivity::render(RenderLock&&) {
   const int titleX = metrics.contentSidePadding;
   const int titleY = metrics.topPadding + metrics.batteryBarHeight + 3;
   const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, settingsTitle, EpdFontFamily::BOLD);
-  const int batteryReserveWidth = 110;
   const int categoryGap = 10;
   const int categoryX = titleX + titleWidth + categoryGap;
-  const int categoryMaxWidth = std::max(0, pageWidth - categoryX - metrics.contentSidePadding - batteryReserveWidth);
+  const int versionWidth =
+      renderer.getTextWidth(SMALL_FONT_ID, firmwareVersion, EpdFontFamily::REGULAR);
+  const int versionX = pageWidth - metrics.contentSidePadding - versionWidth;
+  const int versionGap = 12;
+  const int categoryMaxWidth = std::max(0, versionX - categoryX - versionGap);
   if (categoryMaxWidth > 24) {
     const std::string headerCategory =
         renderer.truncatedText(SMALL_FONT_ID, selectedCategoryLabel, categoryMaxWidth, EpdFontFamily::REGULAR);
@@ -868,6 +872,7 @@ void SettingsActivity::render(RenderLock&&) {
                         titleY + 4, headerCategory.c_str(), true, EpdFontFamily::REGULAR);
     }
   }
+  renderer.drawText(SMALL_FONT_ID, versionX, titleY + 4, firmwareVersion, true, EpdFontFamily::REGULAR);
 
   std::vector<std::string> tabLabels;
   tabLabels.reserve(categoryCount);
