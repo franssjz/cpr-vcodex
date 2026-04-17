@@ -24,6 +24,7 @@ class ReadMeActivity final : public Activity {
     Achievements,
     Bookmarks,
     Favorites,
+    Flashcards,
     Sleep,
     SettingsGuide,
     Shortcuts,

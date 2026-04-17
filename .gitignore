@@ -16,3 +16,5 @@ build
 /.venv
 /artifacts/
 *.local*
+*.log
+/.codex-build/

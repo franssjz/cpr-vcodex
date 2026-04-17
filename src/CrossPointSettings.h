@@ -166,6 +166,20 @@ class CrossPointSettings {
     DAILY_GOAL_60_MIN = 3,
     DAILY_GOAL_TARGET_COUNT
   };
+  enum FLASHCARD_STUDY_MODE {
+    FLASHCARD_STUDY_DUE = 0,
+    FLASHCARD_STUDY_SCHEDULED = 1,
+    FLASHCARD_STUDY_INFINITE = 2,
+    FLASHCARD_STUDY_MODE_COUNT
+  };
+  enum FLASHCARD_SESSION_SIZE {
+    FLASHCARD_SESSION_10 = 0,
+    FLASHCARD_SESSION_20 = 1,
+    FLASHCARD_SESSION_30 = 2,
+    FLASHCARD_SESSION_50 = 3,
+    FLASHCARD_SESSION_ALL = 4,
+    FLASHCARD_SESSION_SIZE_COUNT
+  };
   enum SYNC_DAY_REMINDER_STARTS {
     SYNC_DAY_REMINDER_OFF = 0,
     SYNC_DAY_REMINDER_10 = 1,
@@ -255,6 +269,8 @@ class CrossPointSettings {
   uint8_t timeZonePreset = 0;
   uint8_t dateFormat = DATE_DD_MM_YYYY;
   uint8_t dailyGoalTarget = DAILY_GOAL_30_MIN;
+  uint8_t flashcardStudyMode = FLASHCARD_STUDY_DUE;
+  uint8_t flashcardSessionSize = FLASHCARD_SESSION_ALL;
   uint8_t showStatsAfterReading = 1;
   uint8_t achievementsEnabled = 1;
   uint8_t achievementPopups = 1;
@@ -285,10 +301,12 @@ class CrossPointSettings {
   uint8_t bookmarksShortcutOrder = 12;
   uint8_t favoritesShortcut = SHORTCUT_APPS;
   uint8_t favoritesShortcutOrder = 13;
+  uint8_t flashcardsShortcut = SHORTCUT_APPS;
+  uint8_t flashcardsShortcutOrder = 14;
   uint8_t fileTransferShortcut = SHORTCUT_APPS;
-  uint8_t fileTransferShortcutOrder = 14;
+  uint8_t fileTransferShortcutOrder = 15;
   uint8_t sleepShortcut = SHORTCUT_APPS;
-  uint8_t sleepShortcutOrder = 15;
+  uint8_t sleepShortcutOrder = 16;
   uint8_t browseFilesShortcutVisible = 1;
   uint8_t statsShortcutVisible = 1;
   uint8_t syncDayShortcutVisible = 1;
@@ -302,6 +320,7 @@ class CrossPointSettings {
   uint8_t recentBooksShortcutVisible = 1;
   uint8_t bookmarksShortcutVisible = 1;
   uint8_t favoritesShortcutVisible = 1;
+  uint8_t flashcardsShortcutVisible = 1;
   uint8_t fileTransferShortcutVisible = 1;
   uint8_t sleepShortcutVisible = 1;
   // Sunlight fading compensation

@@ -55,8 +55,28 @@ struct FootnoteResult {
   std::string href;
 };
 
+struct FlashcardSessionResult {
+  std::string deckId;
+  std::string deckPath;
+  std::string deckTitle;
+  int reviewed = 0;
+  int correct = 0;
+  int failed = 0;
+  int skipped = 0;
+  int newSeen = 0;
+  int dueRemaining = 0;
+  int totalCards = 0;
+  int seenCards = 0;
+  int unseenCards = 0;
+  int dueCards = 0;
+  int masteredCards = 0;
+  int successRatePercent = 0;
+  int sessionCount = 0;
+};
+
 using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
-                                   PageResult, BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult>;
+                                   PageResult, BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult,
+                                   FlashcardSessionResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

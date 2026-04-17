@@ -18,11 +18,37 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | `1.2.0.22-cpr-vcodex` |
+| Current release (CPR-vCodex) build | `1.2.0.23-cpr-vcodex` |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`ce1756e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ce1756e36f8e70e4f1c10df0f5735be22eb6259c) |
 | Latest official commit incorporated | [`3b12c08`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3b12c083bca972d4ee79113ced0e2cf2b5291acf) |
 
+## Flashcards study modes
+
+`Flashcards` currently offers three review modes:
+
+- `Due`: builds a finite session from cards that are due first, then fills with unseen cards if needed. `Session size` is respected here, and `All` means "all due cards plus unseen cards".
+- `Scheduled`: builds a finite shuffled session from the whole deck. `Session size` is respected here, and `All` means the whole deck.
+- `Infinite`: ignores `Session size`, keeps drawing cards from the whole deck, and never finishes on its own. Exit manually when you want the session summary.
+
+Why it is split this way:
+
+- `Study mode` decides **which cards** enter the session
+- `Session size` decides **how many** of those cards are included
+
+`Fail` and `Next` send the current card back through the session flow. In `Infinite`, the queue is rebuilt again when a full pass is consumed, so practice can continue indefinitely.
+
+Example CSV deck structure:
+
+```csv
+front,back
+"What is the capital of France?","Paris"
+"Who wrote Don Quixote?","Miguel de Cervantes"
+"What is 12 x 12?","144"
+```
+
+Sample deck ready to copy to the SD card:
+- [flashcards_sample.csv](./flashcards_sample.csv)
 
 `CPR-vCodex` is a reading-focused firmware fork for the **Xteink X4**, built on top of the stable **CrossPoint Reader** baseline and extended with analytics, reader utilities, branding cleanup, extra UI features, and carefully selected upstream carry-forwards.
 
@@ -40,6 +66,7 @@ This project is **not affiliated with Xteink**.
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - EPUB bookmarks plus a global bookmarks app
 - configurable `Home` and `Apps` shortcuts
+- `Flashcards` with offline CSV decks, session summary, recents, stats and settings
 - `Text Darkness`, `Reader Refresh Mode`, `Lexend`, `X Small`
 - `Sleep` tools with directory selection, preview, cache, sequential and shuffle behavior
 - `Dark Mode (Experimental)`
@@ -111,6 +138,7 @@ That is enough to start using the core `vcodex` additions: coherent day-based an
 | `Reading Day` | one-day drill-down from the heatmap | [Reading analytics suite](#reading-analytics-suite) |
 | `Reading Profile` | weekly reading behavior summary | [Reading analytics suite](#reading-analytics-suite) |
 | `Achievements` | console-style milestones and optional popups | [Achievements](#achievements) |
+| `Flashcards` | offline deck study with `Scheduled` and `Infinite` session modes | [Flashcards](#flashcards) |
 | `Sync Day` | manual Wi-Fi date sync and fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
 | `Home + Apps shortcuts` | configurable placement, visibility, and ordering | [Home and Apps](#home-and-apps) |
 | `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
@@ -234,6 +262,7 @@ It includes compact help pages for:
 - `Sync Day`
 - `Reading Stats`
 - `Bookmarks`
+- `Flashcards`
 - `Sleep`
 - `Customize Home and Apps`
 - `Achievements`
@@ -265,6 +294,36 @@ Supported flow:
 - open bookmark list from the reader
 - reopen a book directly at a saved bookmark from the global bookmarks app
 - delete individual bookmarks or all bookmarks for one book
+
+## Flashcards
+
+`Flashcards` is an offline study app built around CSV decks on the SD card.
+
+Main sections:
+
+- `Open`
+- `Recents`
+- `Statistics`
+- `Settings`
+
+Deck flow:
+
+- open a CSV deck from the SD card
+- study in landscape using `Flip`, `Next`, `Success` and `Fail`
+- leave the deck through the page buttons when you want to finish
+- get a session summary when you exit
+
+Study modes:
+
+- `Due`: finite review-oriented session, using due cards first and unseen cards second
+- `Scheduled`: finite shuffled session from the whole deck
+- `Infinite`: endless practice, ignores `Session size`
+
+Statistics:
+
+- each deck keeps its own seen / unseen / due / mastered metrics
+- `Statistics` lists known decks
+- holding `Select` on a deck inside `Statistics` lets you reset that deck's flashcard stats after confirmation
 
 ## Sleep
 
