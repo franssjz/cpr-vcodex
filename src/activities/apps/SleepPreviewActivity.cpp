@@ -1,6 +1,7 @@
 #include "SleepPreviewActivity.h"
 
 #include <Bitmap.h>
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -15,6 +16,7 @@
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/SleepImageUtils.h"
+#include "util/PngSleepRenderer.h"
 
 namespace {
 void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& bitmap) {
@@ -44,6 +46,11 @@ void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& b
   renderer.drawBitmap(bitmap, x, y, bitmap.getWidth(), bitmap.getHeight(), 0, 0);
 }
 
+bool drawPreviewPng(GfxRenderer& renderer, const Rect& contentRect, const std::string& imagePath) {
+  return PngSleepRenderer::drawTransparentPng(imagePath, renderer, contentRect.x, contentRect.y, contentRect.width,
+                                              contentRect.height);
+}
+
 void drawPreviewFrame(GfxRenderer& renderer, const std::string& directoryLabel, const std::string& subtitle,
                       const char* btn1, const char* btn2, const char* btn3, const char* btn4) {
   renderer.clearScreen();
@@ -61,7 +68,7 @@ void SleepPreviewActivity::onEnter() {
 }
 
 void SleepPreviewActivity::loadImages() {
-  imagePaths = SleepImageUtils::listBmpFiles(directoryPath);
+  imagePaths = SleepImageUtils::listImageFiles(directoryPath);
   if (selectedIndex >= static_cast<int>(imagePaths.size())) {
     selectedIndex = imagePaths.empty() ? 0 : static_cast<int>(imagePaths.size()) - 1;
   }
@@ -143,18 +150,32 @@ void SleepPreviewActivity::render(RenderLock&&) {
       if (previewDirty) {
         GUI.fillPopupProgress(renderer, popupRect, 55);
       }
-      Bitmap bitmap(file, true);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      const bool isPng = FsHelpers::hasPngExtension(imagePaths[selectedIndex]);
+      bool rendered = false;
+
+      if (isPng) {
         if (previewDirty) {
           GUI.fillPopupProgress(renderer, popupRect, 90);
           drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
         }
-        drawPreviewBitmap(renderer, contentRect, bitmap);
+        rendered = drawPreviewPng(renderer, contentRect, imagePaths[selectedIndex]);
       } else {
+        Bitmap bitmap(file, true);
+        if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+          if (previewDirty) {
+            GUI.fillPopupProgress(renderer, popupRect, 90);
+            drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+          }
+          drawPreviewBitmap(renderer, contentRect, bitmap);
+          rendered = true;
+        }
+      }
+
+      if (!rendered) {
         if (previewDirty) {
           drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
         }
-        renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Invalid BMP File");
+        renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Invalid image file");
       }
       file.close();
     } else {
