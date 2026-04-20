@@ -27,6 +27,7 @@ struct ReadingBookStats {
   uint32_t lastSessionMs = 0;
   uint32_t firstReadAt = 0;
   uint32_t lastReadAt = 0;
+  uint32_t completedAt = 0;
   uint8_t lastProgressPercent = 0;
   uint8_t chapterProgressPercent = 0;
   bool completed = false;

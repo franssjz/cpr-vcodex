@@ -244,6 +244,16 @@ std::string formatDate(const uint32_t timestamp) {
   return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
 }
 
+std::string formatDateRange(const uint32_t startTimestamp, const uint32_t endTimestamp) {
+  const std::string start = TimeUtils::formatDate(startTimestamp);
+  const std::string end = TimeUtils::formatDate(endTimestamp);
+  return (start.empty() ? "?" : start) + " - " + (end.empty() ? "?" : end);
+}
+
+uint32_t getCompletionDateForDisplay(const ReadingBookStats& book) {
+  return book.completedAt;
+}
+
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
@@ -496,6 +506,10 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
                                 cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2,
                                 pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
                  tr(STR_LAST_READ_DATE), formatDate(book->lastReadAt));
+  drawMetricCard(renderer, Rect{metrics.contentSidePadding,
+                                cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 3,
+                                pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
+                 tr(STR_START_END_DATE), formatDateRange(book->firstReadAt, getCompletionDateForDisplay(*book)));
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "",
                                             hasBookNavigation ? tr(STR_DIR_UP) : "",
                                             hasBookNavigation ? tr(STR_DIR_DOWN) : "");

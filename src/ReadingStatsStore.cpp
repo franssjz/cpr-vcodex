@@ -202,6 +202,11 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
     primary.firstReadAt = duplicate.firstReadAt;
   }
   primary.lastReadAt = std::max(primary.lastReadAt, duplicate.lastReadAt);
+  if (primary.completedAt == 0) {
+    primary.completedAt = duplicate.completedAt;
+  } else if (duplicate.completedAt != 0) {
+    primary.completedAt = std::min(primary.completedAt, duplicate.completedAt);
+  }
   if (duplicate.lastReadAt >= primary.lastReadAt) {
     primary.lastProgressPercent = duplicate.lastProgressPercent;
     primary.chapterProgressPercent = duplicate.chapterProgressPercent;
@@ -351,6 +356,9 @@ uint32_t ReadingStatsStore::getLatestKnownTimestamp() const {
   for (const auto& book : books) {
     if (isClockValid(book.lastReadAt)) {
       latestTimestamp = std::max(latestTimestamp, book.lastReadAt);
+    }
+    if (isClockValid(book.completedAt)) {
+      latestTimestamp = std::max(latestTimestamp, book.completedAt);
     }
     if (isClockValid(book.firstReadAt)) {
       latestTimestamp = std::max(latestTimestamp, book.firstReadAt);
@@ -663,6 +671,9 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   }
 
   updateBookReadTimestamp(book, TimeUtils::getAuthoritativeTimestamp());
+  if (completionChanged && book.completedAt == 0) {
+    book.completedAt = book.lastReadAt;
+  }
 
   markDirty();
   if (shouldSaveDeferred()) {

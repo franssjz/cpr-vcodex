@@ -1056,7 +1056,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
 
 bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  doc["formatVersion"] = 4;
+  doc["formatVersion"] = 5;
 
   JsonArray days = doc["readingDays"].to<JsonArray>();
   for (const auto& day : store.getReadingDays()) {
@@ -1097,6 +1097,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["lastSessionMs"] = book.lastSessionMs;
     obj["firstReadAt"] = book.firstReadAt;
     obj["lastReadAt"] = book.lastReadAt;
+    obj["completedAt"] = book.completedAt;
     obj["lastProgressPercent"] = book.lastProgressPercent;
     obj["chapterProgressPercent"] = book.chapterProgressPercent;
     obj["completed"] = book.completed;
@@ -1188,6 +1189,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);
     book.lastReadAt = obj["lastReadAt"] | static_cast<uint32_t>(0);
+    book.completedAt = obj["completedAt"] | static_cast<uint32_t>(0);
     book.lastProgressPercent = obj["lastProgressPercent"] | static_cast<uint8_t>(0);
     book.chapterProgressPercent = obj["chapterProgressPercent"] | static_cast<uint8_t>(0);
     book.completed = obj["completed"] | false;
