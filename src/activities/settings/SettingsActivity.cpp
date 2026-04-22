@@ -94,6 +94,7 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
                          StrId::STR_BOOK_S_STYLE}),
       SettingInfo::Toggle(StrId::STR_EMBEDDED_STYLE, &CrossPointSettings::embeddedStyle),
       SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled),
+      SettingInfo::Toggle(StrId::STR_BIONIC_READING, &CrossPointSettings::bionicReading),
       SettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
                         {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}),
       SettingInfo::Toggle(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacing),

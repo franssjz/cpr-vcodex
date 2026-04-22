@@ -249,6 +249,7 @@ class CrossPointSettings {
   // Reader refresh override (default auto)
   uint8_t readerRefreshMode = READER_REFRESH_AUTO;
   uint8_t hyphenationEnabled = 0;
+  uint8_t bionicReading = 0;
 
   // Reader screen margin settings
   uint8_t screenMargin = 5;

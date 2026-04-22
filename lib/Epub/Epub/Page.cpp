@@ -3,8 +3,9 @@
 #include <Logging.h>
 #include <Serialization.h>
 
-void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
-  block->render(renderer, fontId, xPos + xOffset, yPos + yOffset);
+void PageLine::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                      const bool bionicReading) {
+  block->render(renderer, fontId, xPos + xOffset, yPos + yOffset, bionicReading);
 }
 
 bool PageLine::serialize(FsFile& file) {
@@ -25,7 +26,8 @@ std::unique_ptr<PageLine> PageLine::deserialize(FsFile& file) {
   return std::unique_ptr<PageLine>(new PageLine(std::move(tb), xPos, yPos));
 }
 
-void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) {
+void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                       const bool /*bionicReading*/) {
   // Images don't use fontId or text rendering
   imageBlock->render(renderer, xPos + xOffset, yPos + yOffset);
 }
@@ -48,9 +50,10 @@ std::unique_ptr<PageImage> PageImage::deserialize(FsFile& file) {
   return std::unique_ptr<PageImage>(new PageImage(std::move(ib), xPos, yPos));
 }
 
-void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset) const {
+void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
+                  const bool bionicReading) const {
   for (auto& element : elements) {
-    element->render(renderer, fontId, xOffset, yOffset);
+    element->render(renderer, fontId, xOffset, yOffset, bionicReading);
   }
 }
 

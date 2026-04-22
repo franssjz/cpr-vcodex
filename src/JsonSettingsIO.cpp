@@ -312,6 +312,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("paragraphAlignment", s.paragraphAlignment, CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT);
   loadToggle("embeddedStyle", s.embeddedStyle);
   loadToggle("hyphenationEnabled", s.hyphenationEnabled);
+  loadToggle("bionicReading", s.bionicReading);
   loadEnum("orientation", s.orientation, CrossPointSettings::ORIENTATION_COUNT);
   loadToggle("extraParagraphSpacing", s.extraParagraphSpacing);
   loadToggle("textAntiAliasing", s.textAntiAliasing);
@@ -580,6 +581,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["paragraphAlignment"] = s.paragraphAlignment;
   doc["embeddedStyle"] = s.embeddedStyle;
   doc["hyphenationEnabled"] = s.hyphenationEnabled;
+  doc["bionicReading"] = s.bionicReading;
   doc["orientation"] = s.orientation;
   doc["extraParagraphSpacing"] = s.extraParagraphSpacing;
   doc["textAntiAliasing"] = s.textAntiAliasing;
