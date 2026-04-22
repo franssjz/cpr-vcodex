@@ -22,7 +22,7 @@ class PageElement {
   int16_t yPos;
   explicit PageElement(const int16_t xPos, const int16_t yPos) : xPos(xPos), yPos(yPos) {}
   virtual ~PageElement() = default;
-  virtual void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset) = 0;
+  virtual void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool bionicReading = false) = 0;
   virtual bool serialize(FsFile& file) = 0;
   virtual PageElementTag getTag() const = 0;  // Add type identification
 };
@@ -35,7 +35,7 @@ class PageLine final : public PageElement {
   PageLine(std::shared_ptr<TextBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), block(std::move(block)) {}
   const std::shared_ptr<TextBlock>& getBlock() const { return block; }
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset) override;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool bionicReading = false) override;
   bool serialize(FsFile& file) override;
   PageElementTag getTag() const override { return TAG_PageLine; }
   static std::unique_ptr<PageLine> deserialize(FsFile& file);
@@ -48,7 +48,7 @@ class PageImage final : public PageElement {
  public:
   PageImage(std::shared_ptr<ImageBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), imageBlock(std::move(block)) {}
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset) override;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool bionicReading = false) override;
   bool serialize(FsFile& file) override;
   PageElementTag getTag() const override { return TAG_PageImage; }
   static std::unique_ptr<PageImage> deserialize(FsFile& file);
@@ -72,7 +72,7 @@ class Page {
     footnotes.push_back(entry);
   }
 
-  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset) const;
+  void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, bool bionicReading = false) const;
   void renderImages(GfxRenderer& renderer, int xOffset, int yOffset) const;
   bool serialize(FsFile& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);

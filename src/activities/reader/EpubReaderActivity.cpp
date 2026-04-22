@@ -961,7 +961,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   // Font prewarm: scan pass accumulates text, then prewarm, then real render
   const uint32_t heapBefore = esp_get_free_heap_size();
   auto scope = fcm->createPrewarmScope();
-  page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);  // scan pass
+  page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);  // scan pass
   scope.endScanAndPrewarm();
   const uint32_t heapAfter = esp_get_free_heap_size();
   fcm->logStats("prewarm");
@@ -979,7 +979,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   HalDisplay::RefreshMode configuredRefreshMode = HalDisplay::FAST_REFRESH;
   const bool hasConfiguredRefreshMode = ReaderUtils::getConfiguredReaderRefreshMode(configuredRefreshMode);
 
-  page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+  page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
   renderStatusBar();
   fcm->logStats("bw_render");
   const auto tBwRender = millis();
@@ -1002,7 +1002,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 
       // Re-render page content to restore images into the blanked area
       // Status bar is not re-rendered here to avoid reading stale dynamic values (e.g. battery %)
-      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     } else {
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
@@ -1025,7 +1025,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     if (enableImageGrayscaleOnly) {
       page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
     } else {
-      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
     }
     renderer.copyGrayscaleLsbBuffers();
     const auto tGrayLsb = millis();
@@ -1036,7 +1036,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     if (enableImageGrayscaleOnly) {
       page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
     } else {
-      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop);
+      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
     }
     renderer.copyGrayscaleMsbBuffers();
     const auto tGrayMsb = millis();
