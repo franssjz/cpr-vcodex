@@ -11,6 +11,7 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <SPI.h>
+#include <WiFi.h>
 #include <builtinFonts/all.h>
 
 #include <cstring>
@@ -289,6 +290,12 @@ void setup() {
   HalSystem::begin();
   gpio.begin();
   powerManager.begin();
+
+  // Disable Arduino core's NVS auto-persist of Wi-Fi credentials. WifiSelectionActivity
+  // always scans first and uses WifiCredentialStore (SD card JSON) as the source of
+  // truth; the SDK's hidden nvs.net80211 copy must not auto-reconnect behind the user.
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_OFF);
 
 #ifdef ENABLE_SERIAL_LOG
   if (gpio.isUsbConnected()) {
