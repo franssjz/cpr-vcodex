@@ -8,8 +8,6 @@
 #include "CrossPointSettings.h"
 
 namespace {
-constexpr uint8_t CACHE_KEY_VERSION = 2;
-
 uint32_t getSourceFileSize(const std::string& sourcePath) {
   FsFile file;
   if (!Storage.openFileForRead("SLC", sourcePath, file)) {
@@ -23,8 +21,6 @@ uint32_t getSourceFileSize(const std::string& sourcePath) {
 
 uint32_t SleepScreenCache::hashKey(const std::string& sourcePath, const uint32_t fileSize) {
   uint32_t hash = 2166136261u;
-  hash ^= CACHE_KEY_VERSION;
-  hash *= 16777619u;
   for (char c : sourcePath) {
     hash ^= static_cast<uint8_t>(c);
     hash *= 16777619u;

@@ -4,7 +4,6 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 
 | Version | Changes |
 |---|---|
-| `1.2.0.31` | - Fixed custom BMP sleep screens rendering blank when `Sleep Screen Cover Mode` was set to `Crop`.<br>- Bumped the sleep framebuffer cache key so existing bad cached sleep screens are ignored automatically after updating. |
 | `1.2.0.29` | - Synced the fork with upstream through `e28918b`, including OPDS/copyparty fixes, KOSync improvements, keyboard updates, web UI tweaks, and minor typo cleanups.<br>- Fixed the `Lyra vCodex` theme so opening the Wi-Fi password keyboard no longer freezes when connecting to protected networks. |
 | `1.2.0.28` | - Tuned `Text Darkness` again so the first black-and-white page render in `Normal` matches the final anti-aliased result more closely.<br>- Kept `Dark` and `Extra Dark` bold while reducing the visible "first bold, then softer" jump when turning pages. |
 | `1.2.0.27` | - Rebalanced `Text Darkness` so `Normal`, `Dark`, and `Extra Dark` all render noticeably bolder.<br>- Improved the perceived text weight without adding extra rendering passes or slowing the reader down. |
