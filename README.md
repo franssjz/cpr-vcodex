@@ -22,8 +22,9 @@
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`e28918b`](https://github.com/crosspoint-reader/crosspoint-reader/commit/e28918b24da0ca21eb8ec711ced614901e01a529) |
-| Latest official commit incorporated | [`e28918b`](https://github.com/crosspoint-reader/crosspoint-reader/commit/e28918b24da0ca21eb8ec711ced614901e01a529) |
+| Latest official commit reviewed | [`15e0d39`](https://github.com/crosspoint-reader/crosspoint-reader/commit/15e0d39d2cdd3c7649e3ad0eacf4dbbf2c06085e) |
+| Latest official commit incorporated | [`6c4e946`](https://github.com/crosspoint-reader/crosspoint-reader/commit/6c4e946e27954dd5dfc36feeebc50833ae2c3c20) plus selected earlier fixes after `e28918b` |
+| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39` |
 
 ## Flashcards study modes
 
