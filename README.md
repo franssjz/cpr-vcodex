@@ -18,7 +18,7 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.32-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.32-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.33-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.33-cpr-vcodex) |
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |

@@ -54,7 +54,7 @@ def update_readme_release_version(project_dir: Path, artifact_name: str) -> None
         return
 
     if updated_text != readme_text:
-        readme_path.write_text(updated_text, encoding="utf-8", newline="\n")
+        readme_path.write_text(updated_text, encoding="utf-8", newline="")
         print(f"Updated README current release to {artifact_name[:-4]}")
 
 
