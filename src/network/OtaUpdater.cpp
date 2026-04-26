@@ -12,7 +12,6 @@
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/franssjz/cpr-vcodex/releases/latest";
 constexpr char legacyFirmwareAssetName[] = "firmware.bin";
-constexpr char vcodexFirmwareSuffix[] = ".cpr-vcodex.bin";
 
 struct ParsedVersion {
   int parts[4] = {0, 0, 0, 0};
@@ -31,14 +30,8 @@ const char* currentVersionString() {
 
 std::string buildUserAgent() { return std::string("CrossPoint-ESP32-") + currentVersionString(); }
 
-bool endsWith(const std::string& value, const char* suffix) {
-  const size_t valueLen = value.size();
-  const size_t suffixLen = strlen(suffix);
-  return valueLen >= suffixLen && value.compare(valueLen - suffixLen, suffixLen, suffix) == 0;
-}
-
-bool isSupportedFirmwareAsset(const std::string& assetName) {
-  return assetName == legacyFirmwareAssetName || endsWith(assetName, vcodexFirmwareSuffix);
+bool isSupportedFirmwareAsset(const std::string& assetName, const std::string& releaseFirmwareAssetName) {
+  return assetName == releaseFirmwareAssetName || assetName == legacyFirmwareAssetName;
 }
 
 ParsedVersion parseVersion(const char* version) {
@@ -72,8 +65,8 @@ ParsedVersion parseVersion(const char* version) {
     ++cursor;
   }
 
-  parsedVersion.isRc = strstr(version, "-rc") != nullptr;
-  parsedVersion.isDev = strstr(version, "-dev") != nullptr;
+  parsedVersion.isRc = strstr(version, "-rc") != nullptr || strstr(version, ".rc") != nullptr;
+  parsedVersion.isDev = strstr(version, "-dev") != nullptr || strstr(version, ".dev") != nullptr;
   return parsedVersion;
 }
 
@@ -213,20 +206,21 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   }
 
   latestVersion = doc["tag_name"].as<std::string>();
+  const std::string releaseFirmwareAssetName = latestVersion + ".bin";
 
   for (int i = 0; i < doc["assets"].size(); i++) {
     if (!doc["assets"][i]["name"].is<std::string>()) continue;
     const std::string assetName = doc["assets"][i]["name"].as<std::string>();
-    if (!isSupportedFirmwareAsset(assetName)) continue;
+    if (!isSupportedFirmwareAsset(assetName, releaseFirmwareAssetName)) continue;
 
     otaUrl = doc["assets"][i]["browser_download_url"].as<std::string>();
     otaSize = doc["assets"][i]["size"].as<size_t>();
     totalSize = otaSize;
     updateAvailable = true;
 
-    // Prefer the vcodex-named artifact when it exists, but keep accepting
-    // legacy firmware.bin releases for compatibility.
-    if (endsWith(assetName, vcodexFirmwareSuffix)) {
+    // Prefer the release-tagged artifact, but keep accepting legacy
+    // firmware.bin releases for compatibility.
+    if (assetName == releaseFirmwareAssetName) {
       break;
     }
   }
