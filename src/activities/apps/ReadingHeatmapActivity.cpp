@@ -10,6 +10,7 @@
 
 #include "CrossPointState.h"
 #include "ReadingStatsStore.h"
+#include "AppMetricCard.h"
 #include "ReadingDayDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -117,24 +118,13 @@ int getHeatLevel(const uint64_t readingMs) {
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 20 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
-  const std::string truncatedValue =
-      renderer.truncatedText(valueFontId, value.c_str(), rect.width - 20, EpdFontFamily::BOLD);
-  renderer.drawText(valueFontId, rect.x + 10, rect.y + (valueFontId == UI_12_FONT_ID ? 13 : 16), truncatedValue.c_str(),
-                    true, EpdFontFamily::BOLD);
-
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 20, 2, EpdFontFamily::REGULAR);
-  int labelY = rect.y + 39;
-  for (const auto& line : labelLines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, line.c_str());
-    labelY += renderer.getLineHeight(UI_10_FONT_ID);
-  }
+  AppMetricCard::Options options;
+  options.paddingX = 10;
+  options.contentInset = 20;
+  options.valueLargeY = 13;
+  options.valueSmallY = 16;
+  options.labelY = 39;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
 void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {

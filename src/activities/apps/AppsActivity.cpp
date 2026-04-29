@@ -10,7 +10,6 @@
 #include "FavoritesAppActivity.h"
 #include "FlashcardsAppActivity.h"
 #include "IfFoundActivity.h"
-#include "ReadMeActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingProfileActivity.h"
 #include "ReadingStatsActivity.h"
@@ -174,9 +173,6 @@ void AppsActivity::openSelectedApp() {
       break;
     case ShortcutId::IfFound:
       activity = std::make_unique<IfFoundActivity>(renderer, mappedInput);
-      break;
-    case ShortcutId::ReadMe:
-      activity = std::make_unique<ReadMeActivity>(renderer, mappedInput);
       break;
     case ShortcutId::RecentBooks:
       activityManager.goToRecentBooks();

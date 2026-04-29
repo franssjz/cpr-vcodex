@@ -72,7 +72,7 @@ uint32_t getSkipMaskForStage(const BootRecovery::BootStage stage) {
 
 void saveRecoveryState() {
   Storage.mkdir("/.crosspoint");
-  Storage.mkdir(CprVcodexLogs::getLogDir());
+  Storage.mkdir(CPR_VCODEX_LOG_DIR);
 
   JsonDocument doc;
   doc["skipMask"] = recoveryMask;
@@ -85,17 +85,17 @@ void saveRecoveryState() {
     Storage.remove(tempPath.c_str());
   }
   if (!Storage.writeFile(tempPath.c_str(), json)) {
-    CprVcodexLogs::appendEvent("BOOT", "Failed to write recovery temp file");
+    CPR_VCODEX_LOG_EVENT("BOOT", "Failed to write recovery temp file");
     return;
   }
   if (Storage.exists(RECOVERY_FILE) && !Storage.remove(RECOVERY_FILE)) {
     Storage.remove(tempPath.c_str());
-    CprVcodexLogs::appendEvent("BOOT", "Failed to replace recovery.json");
+    CPR_VCODEX_LOG_EVENT("BOOT", "Failed to replace recovery.json");
     return;
   }
   if (!Storage.rename(tempPath.c_str(), RECOVERY_FILE)) {
     Storage.remove(tempPath.c_str());
-    CprVcodexLogs::appendEvent("BOOT", "Failed to finalize recovery.json");
+    CPR_VCODEX_LOG_EVENT("BOOT", "Failed to finalize recovery.json");
   }
 }
 
@@ -113,7 +113,7 @@ void loadRecoveryState() {
   JsonDocument doc;
   auto error = deserializeJson(doc, json);
   if (error) {
-    CprVcodexLogs::appendEvent("BOOT", std::string("Failed to parse recovery.json: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("BOOT", std::string("Failed to parse recovery.json: ") + error.c_str());
     return;
   }
 
@@ -121,6 +121,7 @@ void loadRecoveryState() {
 }
 
 void persistPanicInfo() {
+#ifndef CPR_DISABLE_EVENT_LOGS
   if (!HalSystem::isRebootFromPanic()) {
     return;
   }
@@ -130,9 +131,10 @@ void persistPanicInfo() {
   reportBody += "\n\n";
   reportBody += HalSystem::getPanicInfo(true);
   std::string outPath;
-  if (CprVcodexLogs::writeReport("panic", reportBody, &outPath)) {
-    CprVcodexLogs::appendEvent("BOOT", std::string("Saved panic report to ") + outPath);
+  if (CPR_VCODEX_WRITE_REPORT("panic", reportBody, &outPath)) {
+    CPR_VCODEX_LOG_EVENT("BOOT", std::string("Saved panic report to ") + outPath);
   }
+#endif
 }
 
 bool hasMask(const uint32_t bit) { return (recoveryMask & bit) != 0; }
@@ -167,7 +169,7 @@ void initialize() {
       std::string message = "Panic detected during boot stage ";
       message += getStageName(culpritStage);
       message += "; enabling recovery mode";
-      CprVcodexLogs::appendEvent("BOOT", message);
+      CPR_VCODEX_LOG_EVENT("BOOT", message);
     } else {
       recoveryActive = recoveryMask != 0;
     }
@@ -183,7 +185,7 @@ void enterStage(const BootStage stage) { recordedStageRaw = static_cast<uint8_t>
 void markBootCompleted() {
   recordedStageRaw = static_cast<uint8_t>(BootStage::Completed);
   if (recoveryMask != 0 || recoveryActive) {
-    CprVcodexLogs::appendEvent("BOOT", "Boot completed successfully; clearing recovery state");
+    CPR_VCODEX_LOG_EVENT("BOOT", "Boot completed successfully; clearing recovery state");
     clearRecoveryState();
   }
 }

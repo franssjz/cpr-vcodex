@@ -322,7 +322,7 @@ void setup() {
   HalSystem::checkPanic();
   BootRecovery::initialize();
 
-  const auto logSkip = [](const char* message) { CprVcodexLogs::appendEvent("BOOT", message); };
+  const auto logSkip = [](const char* message) { CPR_VCODEX_LOG_EVENT("BOOT", message); };
 
   if (BootRecovery::shouldSkipSettings()) {
     logSkip("Skipping settings load due to recovery mode");
@@ -381,7 +381,7 @@ void setup() {
   gpio.update();
   const bool manualSafeBoot = gpio.isPressed(HalGPIO::BTN_BACK);
   if (manualSafeBoot) {
-    CprVcodexLogs::appendEvent("BOOT", "Manual safe boot requested by holding Back during boot");
+    CPR_VCODEX_LOG_EVENT("BOOT", "Manual safe boot requested by holding Back during boot");
   }
 
   BootRecovery::enterStage(BootRecovery::BootStage::DisplayAndFonts);
@@ -480,7 +480,9 @@ void setup() {
 void loop() {
   static unsigned long maxLoopDuration = 0;
   const unsigned long loopStartTime = millis();
+#ifdef ENABLE_SERIAL_LOG
   static unsigned long lastMemPrint = 0;
+#endif
 
   gpio.update();
 
@@ -488,6 +490,7 @@ void loop() {
   renderer.setDarkMode(SETTINGS.darkMode);
   renderer.setTextDarkness(SETTINGS.textDarkness);
 
+#ifdef ENABLE_SERIAL_LOG
   if (Serial && millis() - lastMemPrint >= 10000) {
     LOG_INF("MEM", "Free: %d bytes, Total: %d bytes, Min Free: %d bytes, MaxAlloc: %d bytes", ESP.getFreeHeap(),
             ESP.getHeapSize(), ESP.getMinFreeHeap(), ESP.getMaxAllocHeap());
@@ -510,6 +513,7 @@ void loop() {
       }
     }
   }
+#endif
 
   // Check for any user activity (button press or release) or active background work
   static unsigned long lastActivityTime = millis();

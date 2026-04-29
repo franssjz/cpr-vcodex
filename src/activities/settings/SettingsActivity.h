@@ -43,7 +43,6 @@ enum class SettingAction {
   Flashcards,
   SleepApp,
   IfFound,
-  ReadMe,
 };
 
 struct SettingInfo {

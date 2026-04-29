@@ -389,11 +389,15 @@
 
   async function loadSettings() {
     try {
-      const response = await fetch('/api/settings');
-      if (!response.ok) {
-        throw new Error('Failed to load settings: ' + response.status);
+      allSettings = [];
+      for (let category = 0; category < 8; category++) {
+        const response = await fetch('/api/settings?category=' + category);
+        if (!response.ok) {
+          throw new Error('Failed to load settings category ' + category + ': ' + response.status);
+        }
+        const categorySettings = await response.json();
+        allSettings = allSettings.concat(categorySettings);
       }
-      allSettings = await response.json();
 
       // Store original values
       originalValues = {};
@@ -478,7 +482,9 @@
     btn.textContent = 'Save Settings';
   }
 
-  loadSettings();
+  loadSettings().then(function() {
+    return loadOpdsServers();
+  });
 
   // --- OPDS Server Management ---
   // Dynamically renders an editable list of OPDS servers, communicating with the
@@ -594,7 +600,6 @@
     }
   }
 
-  loadOpdsServers();
 </script>
 </body>
 </html>

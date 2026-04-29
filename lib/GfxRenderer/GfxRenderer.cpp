@@ -166,11 +166,15 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             bool hitLsb = false;
 
             switch (darkness) {
+              case 1:  // Legacy BW: classic BW fill and classic AA mapping.
+                hitMsb = (bmpVal == 2);
+                hitLsb = (bmpVal == 1);
+                break;
               case 0:  // Normal: stronger baseline, close to the old "Dark"
                 hitMsb = (bmpVal == 1 || bmpVal == 2);
                 hitLsb = (bmpVal == 1);
                 break;
-              case 1:  // Dark: darken both AA buckets further
+              case 2:  // Dark: darken both AA buckets further
                 hitMsb = (bmpVal == 1 || bmpVal == 2);
                 hitLsb = (bmpVal == 1 || bmpVal == 2);
                 break;

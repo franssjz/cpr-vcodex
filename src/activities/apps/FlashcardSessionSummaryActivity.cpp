@@ -3,6 +3,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 
+#include "AppMetricCard.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
@@ -12,10 +13,14 @@ constexpr int METRIC_CARD_HEIGHT = 72;
 constexpr int METRIC_CARD_GAP = 8;
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-  renderer.drawText(UI_12_FONT_ID, rect.x + 10, rect.y + 12, value.c_str(), true, EpdFontFamily::BOLD);
-  renderer.drawText(UI_10_FONT_ID, rect.x + 10, rect.y + 46, label);
+  AppMetricCard::Options options;
+  options.paddingX = 10;
+  options.contentInset = 20;
+  options.valueLargeY = 12;
+  options.labelY = 46;
+  options.shrinkValue = false;
+  options.labelMode = AppMetricCard::LabelMode::Simple;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 }  // namespace
 

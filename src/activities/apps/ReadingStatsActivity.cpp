@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string>
 
+#include "AppMetricCard.h"
 #include "ReadingStatsDetailActivity.h"
 #include "ReadingStatsExtendedActivity.h"
 #include "ReadingStatsStore.h"
@@ -13,6 +14,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ReadingStatsAnalytics.h"
 
 namespace {
 constexpr unsigned long DELETE_STATS_HOLD_MS = 1000;
@@ -25,16 +27,6 @@ constexpr int BOOK_ROW_HEIGHT = 80;
 constexpr int BOOK_ROW_GAP = 10;
 constexpr int BOOKS_PER_PAGE = 3;
 
-std::string formatDurationHm(const uint64_t totalMs) {
-  const uint64_t totalMinutes = totalMs / 60000ULL;
-  const uint64_t hours = totalMinutes / 60ULL;
-  const uint64_t minutes = totalMinutes % 60ULL;
-  if (hours == 0) {
-    return std::to_string(minutes) + "m";
-  }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
-}
-
 std::string getBookTitle(const ReadingBookStats& book) { return book.title.empty() ? book.path : book.title; }
 
 std::string getBookSubtitle(const ReadingBookStats& book) {
@@ -44,36 +36,11 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
 }
 
-void drawCheckBadge(GfxRenderer& renderer, const int x, const int y) {
-  renderer.fillRect(x, y, 18, 18, true);
-  renderer.drawLine(x + 4, y + 10, x + 7, y + 13, 2, false);
-  renderer.drawLine(x + 7, y + 13, x + 13, y + 5, 2, false);
-}
-
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
                     const bool showCheck = false) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
-  const std::string truncatedValue =
-      renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
-  renderer.drawText(valueFontId, rect.x + 12, rect.y + (valueFontId == UI_12_FONT_ID ? 14 : 18), truncatedValue.c_str(),
-                    true, EpdFontFamily::BOLD);
-
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
-  int labelY = rect.y + 42;
-  for (const auto& line : labelLines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 12, labelY, line.c_str());
-    labelY += renderer.getLineHeight(UI_10_FONT_ID);
-  }
-
-  if (showCheck) {
-    drawCheckBadge(renderer, rect.x + rect.width - 28, rect.y + 40);
-  }
+  AppMetricCard::Options options;
+  options.showCheck = showCheck;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
 void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
@@ -125,7 +92,7 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   renderer.drawText(UI_10_FONT_ID, innerX, subtitleY, subtitle.c_str());
 
   const std::string progressText = std::to_string(book.lastProgressPercent) + "%";
-  const std::string totalTimeText = formatDurationHm(book.totalReadingMs);
+  const std::string totalTimeText = ReadingStatsAnalytics::formatDurationHm(book.totalReadingMs);
   const int progressWidth = renderer.getTextWidth(UI_12_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
   const int timeWidth = renderer.getTextWidth(UI_10_FONT_ID, totalTimeText.c_str());
   const int progressX = rect.x + rect.width - sidePadding - progressWidth;
@@ -255,7 +222,8 @@ void ReadingStatsActivity::render(RenderLock&&) {
   const int detailsTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
   const std::string dailyGoalValue =
-      formatDurationHm(todayReadingMs) + " / " + formatDurationHm(getDailyReadingGoalMs());
+      ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
+      ReadingStatsAnalytics::formatDurationHm(getDailyReadingGoalMs());
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
@@ -269,7 +237,7 @@ void ReadingStatsActivity::render(RenderLock&&) {
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
                       SUMMARY_CARD_HEIGHT},
-                 tr(STR_READING_TIME), formatDurationHm(READING_STATS.getTotalReadingMs()));
+                 tr(STR_READING_TIME), ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
   drawMetricCard(renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth,
                                 SUMMARY_CARD_HEIGHT},
                  tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));

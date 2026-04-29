@@ -13,10 +13,12 @@
 #include <string>
 #include <vector>
 
+#include "AppMetricCard.h"
 #include "ReadingStatsStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ReadingStatsAnalytics.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -80,16 +82,6 @@ ReadingBookStats withCoverPath(const ReadingBookStats& book, const std::string& 
   ReadingBookStats updated = book;
   updated.coverBmpPath = coverBmpPath;
   return updated;
-}
-
-std::string formatDurationHm(const uint64_t totalMs) {
-  const uint64_t totalMinutes = totalMs / 60000ULL;
-  const uint64_t hours = totalMinutes / 60ULL;
-  const uint64_t minutes = totalMinutes % 60ULL;
-  if (hours == 0) {
-    return std::to_string(minutes) + "m";
-  }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
 }
 
 const ReadingBookStats* findBook(const std::string& bookPath) {
@@ -255,17 +247,12 @@ uint32_t getCompletionDateForDisplay(const ReadingBookStats& book) {
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const std::string truncatedValue =
-      renderer.truncatedText(UI_12_FONT_ID, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
-  renderer.drawText(UI_12_FONT_ID, rect.x + 12, rect.y + METRIC_CARD_VALUE_Y, truncatedValue.c_str(), true,
-                    EpdFontFamily::BOLD);
-
-  const std::string truncatedLabel =
-      renderer.truncatedText(UI_10_FONT_ID, label, rect.width - 24, EpdFontFamily::REGULAR);
-  renderer.drawText(UI_10_FONT_ID, rect.x + 12, rect.y + METRIC_CARD_LABEL_Y, truncatedLabel.c_str());
+  AppMetricCard::Options options;
+  options.valueLargeY = METRIC_CARD_VALUE_Y;
+  options.labelY = METRIC_CARD_LABEL_Y;
+  options.shrinkValue = false;
+  options.labelMode = AppMetricCard::LabelMode::Truncate;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
 void drawSummaryBanner(GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& summary,
@@ -491,10 +478,10 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const int cardWidth = (pageWidth - metrics.contentSidePadding * 2 - METRIC_CARD_GAP) / 2;
 
   drawMetricCard(renderer, Rect{metrics.contentSidePadding, cardsTop, cardWidth, METRIC_CARD_HEIGHT}, tr(STR_LAST_SESSION),
-                 formatDurationHm(book->lastSessionMs));
+                 ReadingStatsAnalytics::formatDurationHm(book->lastSessionMs));
   drawMetricCard(renderer, Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP, cardsTop, cardWidth,
                                 METRIC_CARD_HEIGHT},
-                 tr(STR_TOTAL_TIME), formatDurationHm(book->totalReadingMs));
+                 tr(STR_TOTAL_TIME), ReadingStatsAnalytics::formatDurationHm(book->totalReadingMs));
   drawMetricCard(renderer,
                  Rect{metrics.contentSidePadding, cardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth,
                       METRIC_CARD_HEIGHT},

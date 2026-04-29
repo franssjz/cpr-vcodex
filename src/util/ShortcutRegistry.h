@@ -18,7 +18,6 @@ enum class ShortcutId {
   ReadingProfile,
   Achievements,
   IfFound,
-  ReadMe,
   RecentBooks,
   Bookmarks,
   Favorites,
@@ -38,8 +37,8 @@ struct ShortcutDefinition {
   uint8_t CrossPointSettings::* visiblePtr;
 };
 
-inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
-  static const std::array<ShortcutDefinition, 17> definitions = {
+inline const std::array<ShortcutDefinition, 16>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, 16> definitions = {
       ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
                          &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder,
                          &CrossPointSettings::browseFilesShortcutVisible},
@@ -69,9 +68,6 @@ inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
       ShortcutDefinition{ShortcutId::IfFound, StrId::STR_IF_FOUND_RETURN_ME, StrId::STR_IF_FOUND_APP_DESC, UIIcon::File,
                          &CrossPointSettings::ifFoundShortcut, &CrossPointSettings::ifFoundShortcutOrder,
                          &CrossPointSettings::ifFoundShortcutVisible},
-      ShortcutDefinition{ShortcutId::ReadMe, StrId::STR_README, StrId::STR_README_APP_DESC, UIIcon::Text,
-                         &CrossPointSettings::readMeShortcut, &CrossPointSettings::readMeShortcutOrder,
-                         &CrossPointSettings::readMeShortcutVisible},
       ShortcutDefinition{ShortcutId::RecentBooks, StrId::STR_MENU_RECENT_BOOKS, StrId::STR_RECENT_BOOKS_APP_DESC,
                          UIIcon::Recent, &CrossPointSettings::recentBooksShortcut,
                          &CrossPointSettings::recentBooksShortcutOrder, &CrossPointSettings::recentBooksShortcutVisible},

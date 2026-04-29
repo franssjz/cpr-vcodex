@@ -18,7 +18,6 @@
 #include "activities/apps/FavoritesAppActivity.h"
 #include "activities/apps/FlashcardsAppActivity.h"
 #include "activities/apps/IfFoundActivity.h"
-#include "activities/apps/ReadMeActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
@@ -101,7 +100,7 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
       SettingInfo::Toggle(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacing),
       SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing),
       SettingInfo::Enum(StrId::STR_TEXT_DARKNESS, &CrossPointSettings::textDarkness,
-                        {StrId::STR_NORMAL, StrId::STR_DARK, StrId::STR_EXTRA_DARK}),
+                        {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK, StrId::STR_EXTRA_DARK}),
       SettingInfo::Enum(StrId::STR_READER_REFRESH_MODE, &CrossPointSettings::readerRefreshMode,
                         {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_REFRESH_MODE_FAST, StrId::STR_REFRESH_MODE_HALF,
                          StrId::STR_REFRESH_MODE_FULL}),
@@ -199,7 +198,6 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
                         {StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30, StrId::STR_NUM_50, StrId::STR_ALL}),
       SettingInfo::Action(StrId::STR_SLEEP, SettingAction::SleepApp),
       SettingInfo::Action(StrId::STR_IF_FOUND_RETURN_ME, SettingAction::IfFound),
-      SettingInfo::Action(StrId::STR_README, SettingAction::ReadMe),
       SettingInfo::Section(StrId::STR_SHORTCUTS_SECTION),
       SettingInfo::Action(StrId::STR_SHORTCUT_LOCATION, SettingAction::ShortcutLocation),
       SettingInfo::Action(StrId::STR_SHORTCUT_VISIBILITY, SettingAction::ShortcutVisibility),
@@ -706,9 +704,6 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::IfFound:
         startActivityForResult(std::make_unique<IfFoundActivity>(renderer, mappedInput), resultHandler);
-        break;
-      case SettingAction::ReadMe:
-        startActivityForResult(std::make_unique<ReadMeActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::None:
         // Do nothing

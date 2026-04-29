@@ -26,7 +26,6 @@
 #include "activities/apps/FavoritesAppActivity.h"
 #include "activities/apps/FlashcardsAppActivity.h"
 #include "activities/apps/IfFoundActivity.h"
-#include "activities/apps/ReadMeActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
@@ -408,10 +407,6 @@ void HomeActivity::loop() {
           break;
         case ShortcutId::IfFound:
           startActivityForResult(std::make_unique<IfFoundActivity>(renderer, mappedInput),
-                                 [this](const ActivityResult&) { requestUpdate(); });
-          break;
-        case ShortcutId::ReadMe:
-          startActivityForResult(std::make_unique<ReadMeActivity>(renderer, mappedInput),
                                  [this](const ActivityResult&) { requestUpdate(); });
           break;
         case ShortcutId::RecentBooks:

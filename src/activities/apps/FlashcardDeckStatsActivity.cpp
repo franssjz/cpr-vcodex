@@ -7,6 +7,7 @@
 
 #include "FlashcardReviewActivity.h"
 #include "FlashcardSessionSummaryActivity.h"
+#include "AppMetricCard.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
@@ -22,10 +23,14 @@ std::string formatDateOrFallback(const uint32_t timestamp) {
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-  renderer.drawText(UI_12_FONT_ID, rect.x + 10, rect.y + 12, value.c_str(), true, EpdFontFamily::BOLD);
-  renderer.drawText(UI_10_FONT_ID, rect.x + 10, rect.y + 48, label);
+  AppMetricCard::Options options;
+  options.paddingX = 10;
+  options.contentInset = 20;
+  options.valueLargeY = 12;
+  options.labelY = 48;
+  options.shrinkValue = false;
+  options.labelMode = AppMetricCard::LabelMode::Simple;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 }  // namespace
 

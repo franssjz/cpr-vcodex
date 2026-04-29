@@ -4,18 +4,21 @@
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_task_wdt.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 
 #include "AchievementsStore.h"
 #include "CrossPointSettings.h"
+#include "KOReaderCredentialStore.h"
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
-#include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
@@ -109,6 +112,298 @@ bool isProtectedItemName(const String& name) {
     }
   }
   return false;
+}
+
+void sendRaw(WebServer* server, const char* data) { server->sendContent(data, strlen(data)); }
+
+void sendJsonEscaped(WebServer* server, const char* value) {
+  server->sendContent("\"", 1);
+  if (!value) {
+    server->sendContent("\"", 1);
+    return;
+  }
+
+  char buffer[96];
+  size_t pos = 0;
+  auto flush = [&] {
+    if (pos > 0) {
+      server->sendContent(buffer, pos);
+      pos = 0;
+    }
+  };
+  auto append = [&](const char* text) {
+    while (*text) {
+      if (pos >= sizeof(buffer)) flush();
+      buffer[pos++] = *text++;
+    }
+  };
+
+  for (const unsigned char* cursor = reinterpret_cast<const unsigned char*>(value); *cursor; ++cursor) {
+    switch (*cursor) {
+      case '"':
+        append("\\\"");
+        break;
+      case '\\':
+        append("\\\\");
+        break;
+      case '\b':
+        append("\\b");
+        break;
+      case '\f':
+        append("\\f");
+        break;
+      case '\n':
+        append("\\n");
+        break;
+      case '\r':
+        append("\\r");
+        break;
+      case '\t':
+        append("\\t");
+        break;
+      default:
+        if (*cursor < 0x20) {
+          char escaped[7];
+          snprintf(escaped, sizeof(escaped), "\\u%04x", *cursor);
+          append(escaped);
+        } else {
+          if (pos >= sizeof(buffer)) flush();
+          buffer[pos++] = static_cast<char>(*cursor);
+        }
+        break;
+    }
+  }
+  flush();
+  server->sendContent("\"", 1);
+}
+
+void sendJsonIntField(WebServer* server, const char* key, int value) {
+  char buffer[48];
+  const int len = snprintf(buffer, sizeof(buffer), "\"%s\":%d", key, value);
+  if (len > 0) {
+    server->sendContent(buffer, static_cast<size_t>(len));
+  }
+}
+
+void sendJsonStringField(WebServer* server, const char* key, const char* value) {
+  server->sendContent("\"", 1);
+  sendRaw(server, key);
+  sendRaw(server, "\":");
+  sendJsonEscaped(server, value);
+}
+
+int webSettingsCategoryIndex(StrId category) {
+  switch (category) {
+    case StrId::STR_CAT_DISPLAY:
+      return 0;
+    case StrId::STR_CAT_READER:
+      return 1;
+    case StrId::STR_CAT_CONTROLS:
+      return 2;
+    case StrId::STR_CAT_SYSTEM:
+      return 3;
+    case StrId::STR_APPS:
+      return 4;
+    case StrId::STR_SHORTCUTS_SECTION:
+      return 5;
+    case StrId::STR_KOREADER_SYNC:
+      return 6;
+    case StrId::STR_CUSTOMISE_STATUS_BAR:
+      return 7;
+    default:
+      return -1;
+  }
+}
+
+enum class WebSettingType : uint8_t { Toggle, Enum, Value, String };
+enum class WebDynamicSetting : uint8_t { None, KoUsername, KoPassword, KoServerUrl, KoMatchMethod };
+
+struct WebSettingDef {
+  StrId nameId;
+  StrId category;
+  WebSettingType type;
+  uint8_t CrossPointSettings::* valuePtr;
+  const StrId* options;
+  uint8_t optionCount;
+  uint8_t min;
+  uint8_t max;
+  uint8_t step;
+  WebDynamicSetting dynamic;
+  const char* key;
+};
+
+constexpr StrId OPT_SLEEP_SCREEN[] = {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER,
+                                      StrId::STR_NONE_OPT, StrId::STR_COVER_CUSTOM};
+constexpr StrId OPT_FIT_CROP[] = {StrId::STR_FIT, StrId::STR_CROP};
+constexpr StrId OPT_SLEEP_FILTER[] = {StrId::STR_NONE_OPT, StrId::STR_FILTER_CONTRAST, StrId::STR_INVERTED};
+constexpr StrId OPT_HIDE_BATTERY[] = {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS};
+constexpr StrId OPT_REFRESH_FREQ[] = {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10,
+                                      StrId::STR_PAGES_15, StrId::STR_PAGES_30};
+constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM};
+constexpr StrId OPT_RECENTS_FAVORITES[] = {StrId::STR_RECENTS, StrId::STR_FAVORITES};
+constexpr StrId OPT_FONT_FAMILY[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
+constexpr StrId OPT_FONT_SIZE[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
+                                   StrId::STR_X_LARGE};
+constexpr StrId OPT_LINE_SPACING[] = {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE};
+constexpr StrId OPT_ALIGNMENT[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
+                                   StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
+constexpr StrId OPT_BIONIC[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE};
+constexpr StrId OPT_ORIENTATION[] = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED,
+                                     StrId::STR_LANDSCAPE_CCW};
+constexpr StrId OPT_TEXT_DARKNESS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
+                                       StrId::STR_EXTRA_DARK};
+constexpr StrId OPT_READER_REFRESH[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_REFRESH_MODE_FAST,
+                                        StrId::STR_REFRESH_MODE_HALF, StrId::STR_REFRESH_MODE_FULL};
+constexpr StrId OPT_IMAGES[] = {StrId::STR_IMAGES_DISPLAY, StrId::STR_IMAGES_PLACEHOLDER, StrId::STR_IMAGES_SUPPRESS};
+constexpr StrId OPT_SIDE_BUTTONS[] = {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV};
+constexpr StrId OPT_SHORT_PWR[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN,
+                                   StrId::STR_FORCE_REFRESH};
+constexpr StrId OPT_SLEEP_TIMEOUT[] = {StrId::STR_MIN_1, StrId::STR_MIN_5, StrId::STR_MIN_10, StrId::STR_MIN_15,
+                                       StrId::STR_MIN_30};
+constexpr StrId OPT_AUTO_MANUAL[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_MANUAL};
+constexpr StrId OPT_REMINDER_STARTS[] = {StrId::STR_STATE_OFF, StrId::STR_NUM_10, StrId::STR_NUM_20,
+                                         StrId::STR_NUM_30, StrId::STR_NUM_40, StrId::STR_NUM_50,
+                                         StrId::STR_NUM_60};
+constexpr StrId OPT_DATE_FORMAT[] = {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
+                                     StrId::STR_DATE_FORMAT_YYYY_MM_DD};
+constexpr StrId OPT_DAILY_GOAL[] = {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45, StrId::STR_MIN_60};
+constexpr StrId OPT_STUDY_MODE[] = {StrId::STR_DUE, StrId::STR_SCHEDULED, StrId::STR_RANDOM_PRACTICE};
+constexpr StrId OPT_SESSION_SIZE[] = {StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30, StrId::STR_NUM_50,
+                                      StrId::STR_ALL};
+constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_APPS};
+constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
+constexpr StrId OPT_BOOK_CHAPTER_HIDE[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
+constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
+                                       StrId::STR_PROGRESS_BAR_THICK};
+
+#define WEB_TOGGLE(name, member, key, category) \
+  {name, category, WebSettingType::Toggle, &CrossPointSettings::member, nullptr, 0, 0, 0, 0, WebDynamicSetting::None, key}
+#define WEB_ENUM(name, member, opts, key, category)                                                        \
+  {name, category, WebSettingType::Enum, &CrossPointSettings::member, opts, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, WebDynamicSetting::None, key}
+#define WEB_VALUE(name, member, lo, hi, inc, key, category) \
+  {name, category, WebSettingType::Value, &CrossPointSettings::member, nullptr, 0, lo, hi, inc, WebDynamicSetting::None, key}
+#define WEB_DYNAMIC(name, kind, type, opts, key, category)                                                  \
+  {name, category, type, nullptr, opts, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, kind, key}
+#define WEB_DYNAMIC_STRING(name, kind, key, category) \
+  {name, category, WebSettingType::String, nullptr, nullptr, 0, 0, 0, 0, kind, key}
+
+constexpr WebSettingDef WEB_SETTINGS[] = {
+    WEB_ENUM(StrId::STR_SLEEP_SCREEN, sleepScreen, OPT_SLEEP_SCREEN, "sleepScreen", StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_SLEEP_COVER_MODE, sleepScreenCoverMode, OPT_FIT_CROP, "sleepScreenCoverMode",
+             StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_SLEEP_COVER_FILTER, sleepScreenCoverFilter, OPT_SLEEP_FILTER, "sleepScreenCoverFilter",
+             StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_HIDE_BATTERY, hideBatteryPercentage, OPT_HIDE_BATTERY, "hideBatteryPercentage",
+             StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_REFRESH_FREQ, refreshFrequency, OPT_REFRESH_FREQ, "refreshFrequency", StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_UI_THEME, uiTheme, OPT_UI_THEME, "uiTheme", StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_HOME_CAROUSEL, homeCarouselSource, OPT_RECENTS_FAVORITES, "homeCarouselSource",
+             StrId::STR_CAT_DISPLAY),
+    WEB_TOGGLE(StrId::STR_DARK_MODE, darkMode, "darkMode", StrId::STR_CAT_DISPLAY),
+    WEB_TOGGLE(StrId::STR_SUNLIGHT_FADING_FIX, fadingFix, "fadingFix", StrId::STR_CAT_DISPLAY),
+
+    WEB_ENUM(StrId::STR_FONT_FAMILY, fontFamily, OPT_FONT_FAMILY, "fontFamily", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_FONT_SIZE, fontSize, OPT_FONT_SIZE, "fontSize", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_LINE_SPACING, lineSpacing, OPT_LINE_SPACING, "lineSpacing", StrId::STR_CAT_READER),
+    WEB_VALUE(StrId::STR_SCREEN_MARGIN, screenMargin, 5, 40, 5, "screenMargin", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_PARA_ALIGNMENT, paragraphAlignment, OPT_ALIGNMENT, "paragraphAlignment", StrId::STR_CAT_READER),
+    WEB_TOGGLE(StrId::STR_EMBEDDED_STYLE, embeddedStyle, "embeddedStyle", StrId::STR_CAT_READER),
+    WEB_TOGGLE(StrId::STR_HYPHENATION, hyphenationEnabled, "hyphenationEnabled", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_BIONIC_READING, bionicReading, OPT_BIONIC, "bionicReading", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_ORIENTATION, orientation, OPT_ORIENTATION, "orientation", StrId::STR_CAT_READER),
+    WEB_TOGGLE(StrId::STR_EXTRA_SPACING, extraParagraphSpacing, "extraParagraphSpacing", StrId::STR_CAT_READER),
+    WEB_TOGGLE(StrId::STR_TEXT_AA, textAntiAliasing, "textAntiAliasing", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_TEXT_DARKNESS, textDarkness, OPT_TEXT_DARKNESS, "textDarkness", StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_READER_REFRESH_MODE, readerRefreshMode, OPT_READER_REFRESH, "readerRefreshMode",
+             StrId::STR_CAT_READER),
+    WEB_ENUM(StrId::STR_IMAGES, imageRendering, OPT_IMAGES, "imageRendering", StrId::STR_CAT_READER),
+
+    WEB_ENUM(StrId::STR_SIDE_BTN_LAYOUT, sideButtonLayout, OPT_SIDE_BUTTONS, "sideButtonLayout",
+             StrId::STR_CAT_CONTROLS),
+    WEB_TOGGLE(StrId::STR_LONG_PRESS_SKIP, longPressChapterSkip, "longPressChapterSkip", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_SHORT_PWR_BTN, shortPwrBtn, OPT_SHORT_PWR, "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+
+    WEB_ENUM(StrId::STR_TIME_TO_SLEEP, sleepTimeout, OPT_SLEEP_TIMEOUT, "sleepTimeout", StrId::STR_CAT_SYSTEM),
+    WEB_TOGGLE(StrId::STR_SHOW_HIDDEN_FILES, showHiddenFiles, "showHiddenFiles", StrId::STR_CAT_SYSTEM),
+
+    WEB_TOGGLE(StrId::STR_DISPLAY_DAY, displayDay, "displayDay", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_CHOOSE_WIFI, syncDayWifiChoice, OPT_AUTO_MANUAL, "syncDayWifiChoice", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_SYNC_DAY_REMINDER_EVERY, syncDayReminderStarts, OPT_REMINDER_STARTS,
+             "syncDayReminderStarts", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_DATE_FORMAT, dateFormat, OPT_DATE_FORMAT, "dateFormat", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_DAILY_GOAL, dailyGoalTarget, OPT_DAILY_GOAL, "dailyGoalTarget", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_STUDY_MODE, flashcardStudyMode, OPT_STUDY_MODE, "flashcardStudyMode", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_SESSION_SIZE, flashcardSessionSize, OPT_SESSION_SIZE, "flashcardSessionSize", StrId::STR_APPS),
+    WEB_TOGGLE(StrId::STR_SHOW_AFTER_READING, showStatsAfterReading, "showStatsAfterReading", StrId::STR_APPS),
+    WEB_TOGGLE(StrId::STR_ENABLE_ACHIEVEMENTS, achievementsEnabled, "achievementsEnabled", StrId::STR_APPS),
+    WEB_TOGGLE(StrId::STR_ACHIEVEMENT_POPUPS, achievementPopups, "achievementPopups", StrId::STR_APPS),
+
+    WEB_ENUM(StrId::STR_BROWSE_FILES, browseFilesShortcut, OPT_SHORTCUT_LOCATION, "browseFilesShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_STATS_SHORTCUT, statsShortcut, OPT_SHORTCUT_LOCATION, "statsShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_SYNC_DAY, syncDayShortcut, OPT_SHORTCUT_LOCATION, "syncDayShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_SETTINGS_TITLE, settingsShortcut, OPT_SHORTCUT_LOCATION, "settingsShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_READING_STATS, readingStatsShortcut, OPT_SHORTCUT_LOCATION, "readingStatsShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_READING_HEATMAP, readingHeatmapShortcut, OPT_SHORTCUT_LOCATION, "readingHeatmapShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_READING_PROFILE, readingProfileShortcut, OPT_SHORTCUT_LOCATION, "readingProfileShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_ACHIEVEMENTS, achievementsShortcut, OPT_SHORTCUT_LOCATION, "achievementsShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_IF_FOUND_RETURN_ME, ifFoundShortcut, OPT_SHORTCUT_LOCATION, "ifFoundShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_MENU_RECENT_BOOKS, recentBooksShortcut, OPT_SHORTCUT_LOCATION, "recentBooksShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_BOOKMARKS, bookmarksShortcut, OPT_SHORTCUT_LOCATION, "bookmarksShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_FAVORITES, favoritesShortcut, OPT_SHORTCUT_LOCATION, "favoritesShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_FLASHCARDS, flashcardsShortcut, OPT_SHORTCUT_LOCATION, "flashcardsShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_FILE_TRANSFER, fileTransferShortcut, OPT_SHORTCUT_LOCATION, "fileTransferShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+    WEB_ENUM(StrId::STR_SLEEP, sleepShortcut, OPT_SHORTCUT_LOCATION, "sleepShortcut",
+             StrId::STR_SHORTCUTS_SECTION),
+
+    WEB_DYNAMIC_STRING(StrId::STR_KOREADER_USERNAME, WebDynamicSetting::KoUsername, "koUsername",
+                       StrId::STR_KOREADER_SYNC),
+    WEB_DYNAMIC_STRING(StrId::STR_KOREADER_PASSWORD, WebDynamicSetting::KoPassword, "koPassword",
+                       StrId::STR_KOREADER_SYNC),
+    WEB_DYNAMIC_STRING(StrId::STR_SYNC_SERVER_URL, WebDynamicSetting::KoServerUrl, "koServerUrl",
+                       StrId::STR_KOREADER_SYNC),
+    WEB_DYNAMIC(StrId::STR_DOCUMENT_MATCHING, WebDynamicSetting::KoMatchMethod, WebSettingType::Enum, OPT_KO_MATCH,
+                "koMatchMethod", StrId::STR_KOREADER_SYNC),
+
+    WEB_TOGGLE(StrId::STR_CHAPTER_PAGE_COUNT, statusBarChapterPageCount, "statusBarChapterPageCount",
+               StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_TOGGLE(StrId::STR_BOOK_PROGRESS_PERCENTAGE, statusBarBookProgressPercentage,
+               "statusBarBookProgressPercentage", StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_ENUM(StrId::STR_PROGRESS_BAR, statusBarProgressBar, OPT_BOOK_CHAPTER_HIDE, "statusBarProgressBar",
+             StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_ENUM(StrId::STR_PROGRESS_BAR_THICKNESS, statusBarProgressBarThickness, OPT_BAR_THICKNESS,
+             "statusBarProgressBarThickness", StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_ENUM(StrId::STR_TITLE, statusBarTitle, OPT_BOOK_CHAPTER_HIDE, "statusBarTitle",
+             StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_TOGGLE(StrId::STR_BATTERY, statusBarBattery, "statusBarBattery", StrId::STR_CUSTOMISE_STATUS_BAR),
+};
+
+#undef WEB_DYNAMIC_STRING
+#undef WEB_DYNAMIC
+#undef WEB_VALUE
+#undef WEB_ENUM
+#undef WEB_TOGGLE
+
+const WebSettingDef* findWebSetting(const char* key) {
+  for (const auto& setting : WEB_SETTINGS) {
+    if (strcmp(setting.key, key) == 0) {
+      return &setting;
+    }
+  }
+  return nullptr;
 }
 }  // namespace
 
@@ -1120,86 +1415,128 @@ void CrossPointWebServer::handleSettingsPage() const {
 }
 
 void CrossPointWebServer::handleGetSettings() const {
-  const auto& settings = getSettingsList();
+  int requestedCategory = -1;
+  if (server->hasArg("category")) {
+    const String categoryArg = server->arg("category");
+    requestedCategory = categoryArg.toInt();
+    if (requestedCategory < 0 || requestedCategory > 7) {
+      server->send(400, "text/plain", "Invalid category");
+      return;
+    }
+  }
+
+  LOG_DBG("WEB", "[MEM] /api/settings start category=%d free=%u min=%u", requestedCategory, ESP.getFreeHeap(),
+          ESP.getMinFreeHeap());
 
   server->setContentLength(CONTENT_LENGTH_UNKNOWN);
   server->send(200, "application/json", "");
   server->sendContent("[");
 
-  char output[512];
-  constexpr size_t outputSize = sizeof(output);
   bool seenFirst = false;
-  JsonDocument doc;
 
-  for (const auto& s : settings) {
-    if (!s.key) continue;  // Skip ACTION-only entries
-
-    doc.clear();
-    doc["key"] = s.key;
-    doc["name"] = I18N.get(s.nameId);
-    doc["category"] = I18N.get(s.category);
-
-    switch (s.type) {
-      case SettingType::TOGGLE: {
-        doc["type"] = "toggle";
-        if (s.valuePtr) {
-          doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-        }
-        break;
-      }
-      case SettingType::ENUM: {
-        doc["type"] = "enum";
-        if (s.valuePtr) {
-          doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-        } else if (s.valueGetter) {
-          doc["value"] = static_cast<int>(s.valueGetter());
-        }
-        JsonArray options = doc["options"].to<JsonArray>();
-        for (const auto& opt : s.enumValues) {
-          options.add(I18N.get(opt));
-        }
-        break;
-      }
-      case SettingType::VALUE: {
-        doc["type"] = "value";
-        if (s.valuePtr) {
-          doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
-        }
-        doc["min"] = s.valueRange.min;
-        doc["max"] = s.valueRange.max;
-        doc["step"] = s.valueRange.step;
-        break;
-      }
-      case SettingType::STRING: {
-        doc["type"] = "string";
-        if (s.stringGetter) {
-          doc["value"] = s.stringGetter();
-        } else if (s.stringOffset > 0) {
-          doc["value"] = reinterpret_cast<const char*>(&SETTINGS) + s.stringOffset;
-        }
-        break;
-      }
-      default:
-        continue;
-    }
-
-    const size_t written = serializeJson(doc, output, outputSize);
-    if (written >= outputSize) {
-      LOG_DBG("WEB", "Skipping oversized setting JSON for: %s", s.key);
-      continue;
-    }
+  for (const auto& s : WEB_SETTINGS) {
+    if (requestedCategory >= 0 && webSettingsCategoryIndex(s.category) != requestedCategory) continue;
 
     if (seenFirst) {
-      server->sendContent(",");
+      server->sendContent(",", 1);
     } else {
       seenFirst = true;
     }
-    server->sendContent(output);
+
+    server->sendContent("{", 1);
+    sendJsonStringField(server.get(), "key", s.key);
+    server->sendContent(",", 1);
+    sendJsonStringField(server.get(), "name", I18N.get(s.nameId));
+    server->sendContent(",", 1);
+    sendJsonStringField(server.get(), "category", I18N.get(s.category));
+    server->sendContent(",", 1);
+
+    bool handled = true;
+    switch (s.type) {
+      case WebSettingType::Toggle: {
+        sendJsonStringField(server.get(), "type", "toggle");
+        if (s.valuePtr) {
+          server->sendContent(",", 1);
+          sendJsonIntField(server.get(), "value", static_cast<int>(SETTINGS.*(s.valuePtr)));
+        }
+        break;
+      }
+      case WebSettingType::Enum: {
+        sendJsonStringField(server.get(), "type", "enum");
+        server->sendContent(",", 1);
+        if (s.valuePtr) {
+          sendJsonIntField(server.get(), "value", static_cast<int>(SETTINGS.*(s.valuePtr)));
+        } else if (s.dynamic == WebDynamicSetting::KoMatchMethod) {
+          sendJsonIntField(server.get(), "value", static_cast<int>(KOREADER_STORE.getMatchMethod()));
+        } else {
+          sendJsonIntField(server.get(), "value", 0);
+        }
+        sendRaw(server.get(), ",\"options\":[");
+        bool seenOption = false;
+        for (uint8_t i = 0; i < s.optionCount; i++) {
+          if (seenOption) {
+            server->sendContent(",", 1);
+          } else {
+            seenOption = true;
+          }
+          sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+        }
+        server->sendContent("]", 1);
+        break;
+      }
+      case WebSettingType::Value: {
+        sendJsonStringField(server.get(), "type", "value");
+        if (s.valuePtr) {
+          server->sendContent(",", 1);
+          sendJsonIntField(server.get(), "value", static_cast<int>(SETTINGS.*(s.valuePtr)));
+        }
+        server->sendContent(",", 1);
+        sendJsonIntField(server.get(), "min", s.min);
+        server->sendContent(",", 1);
+        sendJsonIntField(server.get(), "max", s.max);
+        server->sendContent(",", 1);
+        sendJsonIntField(server.get(), "step", s.step);
+        break;
+      }
+      case WebSettingType::String: {
+        sendJsonStringField(server.get(), "type", "string");
+        server->sendContent(",", 1);
+        std::string value;
+        switch (s.dynamic) {
+          case WebDynamicSetting::KoUsername:
+            value = KOREADER_STORE.getUsername();
+            break;
+          case WebDynamicSetting::KoPassword:
+            value = KOREADER_STORE.getPassword();
+            break;
+          case WebDynamicSetting::KoServerUrl:
+            value = KOREADER_STORE.getServerUrl();
+            break;
+          default:
+            break;
+        }
+        sendJsonStringField(server.get(), "value", value.c_str());
+        break;
+      }
+      default:
+        handled = false;
+        break;
+    }
+
+    if (!handled) {
+      server->sendContent("}", 1);
+      continue;
+    }
+
+    server->sendContent("}", 1);
+    yield();
+    esp_task_wdt_reset();
   }
 
   server->sendContent("]");
   server->sendContent("");
-  LOG_DBG("WEB", "Served settings API");
+  LOG_DBG("WEB", "[MEM] /api/settings end category=%d free=%u min=%u", requestedCategory, ESP.getFreeHeap(),
+          ESP.getMinFreeHeap());
 }
 
 void CrossPointWebServer::handlePostSettings() {
@@ -1216,52 +1553,65 @@ void CrossPointWebServer::handlePostSettings() {
     return;
   }
 
-  const auto& settings = getSettingsList();
   int applied = 0;
+  bool saveSettings = false;
+  bool saveKOReader = false;
 
-  for (const auto& s : settings) {
-    if (!s.key) continue;
+  for (const auto& s : WEB_SETTINGS) {
     if (!doc[s.key].is<JsonVariant>()) continue;
 
     switch (s.type) {
-      case SettingType::TOGGLE: {
+      case WebSettingType::Toggle: {
         const int val = doc[s.key].as<int>() ? 1 : 0;
         if (s.valuePtr) {
           SETTINGS.*(s.valuePtr) = val;
+          saveSettings = true;
         }
         applied++;
         break;
       }
-      case SettingType::ENUM: {
+      case WebSettingType::Enum: {
         const int val = doc[s.key].as<int>();
-        if (val >= 0 && val < static_cast<int>(s.enumValues.size())) {
+        if (val >= 0 && val < static_cast<int>(s.optionCount)) {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
-          } else if (s.valueSetter) {
-            s.valueSetter(static_cast<uint8_t>(val));
+            saveSettings = true;
+          } else if (s.dynamic == WebDynamicSetting::KoMatchMethod) {
+            KOREADER_STORE.setMatchMethod(static_cast<DocumentMatchMethod>(val));
+            saveKOReader = true;
           }
           applied++;
         }
         break;
       }
-      case SettingType::VALUE: {
+      case WebSettingType::Value: {
         const int val = doc[s.key].as<int>();
-        if (val >= s.valueRange.min && val <= s.valueRange.max) {
+        if (val >= s.min && val <= s.max) {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
+            saveSettings = true;
           }
           applied++;
         }
         break;
       }
-      case SettingType::STRING: {
+      case WebSettingType::String: {
         const std::string val = doc[s.key].as<std::string>();
-        if (s.stringSetter) {
-          s.stringSetter(val);
-        } else if (s.stringOffset > 0 && s.stringMaxLen > 0) {
-          char* ptr = reinterpret_cast<char*>(&SETTINGS) + s.stringOffset;
-          strncpy(ptr, val.c_str(), s.stringMaxLen - 1);
-          ptr[s.stringMaxLen - 1] = '\0';
+        switch (s.dynamic) {
+          case WebDynamicSetting::KoUsername:
+            KOREADER_STORE.setCredentials(val, KOREADER_STORE.getPassword());
+            saveKOReader = true;
+            break;
+          case WebDynamicSetting::KoPassword:
+            KOREADER_STORE.setCredentials(KOREADER_STORE.getUsername(), val);
+            saveKOReader = true;
+            break;
+          case WebDynamicSetting::KoServerUrl:
+            KOREADER_STORE.setServerUrl(val);
+            saveKOReader = true;
+            break;
+          default:
+            break;
         }
         applied++;
         break;
@@ -1271,7 +1621,12 @@ void CrossPointWebServer::handlePostSettings() {
     }
   }
 
-  SETTINGS.saveToFile();
+  if (saveSettings) {
+    SETTINGS.saveToFile();
+  }
+  if (saveKOReader) {
+    KOREADER_STORE.saveToFile();
+  }
 
   LOG_DBG("WEB", "Applied %d setting(s)", applied);
   server->send(200, "text/plain", String("Applied ") + String(applied) + " setting(s)");
@@ -1287,24 +1642,19 @@ void CrossPointWebServer::handleGetOpdsServers() const {
   server->send(200, "application/json", "");
   server->sendContent("[");
 
-  char output[512];
-  constexpr size_t outputSize = sizeof(output);
-  JsonDocument doc;
-
   for (size_t i = 0; i < servers.size(); i++) {
-    doc.clear();
-    doc["index"] = i;
-    doc["name"] = servers[i].name;
-    doc["url"] = servers[i].url;
-    doc["username"] = servers[i].username;
-    // Never expose passwords over the API — only indicate whether one is set
-    doc["hasPassword"] = !servers[i].password.empty();
-
-    const size_t written = serializeJson(doc, output, outputSize);
-    if (written >= outputSize) continue;
-
-    if (i > 0) server->sendContent(",");
-    server->sendContent(output);
+    if (i > 0) server->sendContent(",", 1);
+    server->sendContent("{", 1);
+    sendJsonIntField(server.get(), "index", static_cast<int>(i));
+    server->sendContent(",", 1);
+    sendJsonStringField(server.get(), "name", servers[i].name.c_str());
+    server->sendContent(",", 1);
+    sendJsonStringField(server.get(), "url", servers[i].url.c_str());
+    server->sendContent(",", 1);
+    sendJsonStringField(server.get(), "username", servers[i].username.c_str());
+    sendRaw(server.get(), ",\"hasPassword\":");
+    sendRaw(server.get(), servers[i].password.empty() ? "false" : "true");
+    server->sendContent("}", 1);
   }
 
   server->sendContent("]");

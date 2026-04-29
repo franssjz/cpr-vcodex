@@ -1,7 +1,7 @@
 #include "I18n.h"
 
 #include <HalStorage.h>
-#include <HardwareSerial.h>
+#include <Logging.h>
 #include <Serialization.h>
 
 #include "I18nStrings.h"
@@ -49,7 +49,7 @@ void I18n::saveSettings() {
 
   FsFile file;
   if (!Storage.openFileForWrite("I18N", SETTINGS_FILE, file)) {
-    Serial.printf("[I18N] Failed to save settings\n");
+    LOG_ERR("I18N", "Failed to save settings");
     return;
   }
 
@@ -57,20 +57,20 @@ void I18n::saveSettings() {
   serialization::writePod(file, static_cast<uint8_t>(_language));
 
   file.close();
-  Serial.printf("[I18N] Settings saved: language=%d\n", static_cast<int>(_language));
+  LOG_DBG("I18N", "Settings saved: language=%d", static_cast<int>(_language));
 }
 
 void I18n::loadSettings() {
   FsFile file;
   if (!Storage.openFileForRead("I18N", SETTINGS_FILE, file)) {
-    Serial.printf("[I18N] No settings file, using default (English)\n");
+    LOG_DBG("I18N", "No settings file, using default (English)");
     return;
   }
 
   uint8_t version;
   serialization::readPod(file, version);
   if (version != SETTINGS_VERSION) {
-    Serial.printf("[I18N] Settings version mismatch\n");
+    LOG_ERR("I18N", "Settings version mismatch");
     return;
   }
 
@@ -78,7 +78,7 @@ void I18n::loadSettings() {
   serialization::readPod(file, lang);
   if (lang < static_cast<size_t>(Language::_COUNT)) {
     _language = static_cast<Language>(lang);
-    Serial.printf("[I18N] Loaded language: %d\n", static_cast<int>(_language));
+    LOG_DBG("I18N", "Loaded language: %d", static_cast<int>(_language));
   }
 }
 
