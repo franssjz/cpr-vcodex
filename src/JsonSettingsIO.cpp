@@ -29,6 +29,7 @@ namespace {
 constexpr uint8_t FONT_FAMILY_SCHEMA_VERSION = 2;
 constexpr uint8_t FONT_SIZE_SCHEMA_VERSION = 2;
 constexpr uint8_t UI_THEME_SCHEMA_VERSION = 2;
+constexpr uint8_t TEXT_DARKNESS_SCHEMA_VERSION = 2;
 constexpr uint8_t FLASHCARD_STUDY_MODE_SCHEMA_VERSION = 2;
 
 class HalFileStream : public Stream {
@@ -68,7 +69,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
 
   if (targetPath.empty()) {
     LOG_ERR(moduleName, "Missing JSON path for write");
-    CprVcodexLogs::appendEvent(moduleName, "Missing JSON path for write");
+    CPR_VCODEX_LOG_EVENT(moduleName, "Missing JSON path for write");
     return false;
   }
 
@@ -79,7 +80,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   HalFile file;
   if (!Storage.openFileForWrite(moduleName, tempPath.c_str(), file)) {
     LOG_ERR(moduleName, "Could not open JSON file for write: %s", tempPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName, std::string("Could not open JSON temp file for write: ") + tempPath);
+    CPR_VCODEX_LOG_EVENT(moduleName, std::string("Could not open JSON temp file for write: ") + tempPath);
     return false;
   }
 
@@ -88,14 +89,14 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   file.close();
   if (written == 0) {
     Storage.remove(tempPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName, std::string("serializeJson wrote 0 bytes for ") + targetPath);
+    CPR_VCODEX_LOG_EVENT(moduleName, std::string("serializeJson wrote 0 bytes for ") + targetPath);
     return false;
   }
 
   if (Storage.exists(targetPath.c_str()) && !Storage.remove(targetPath.c_str())) {
     Storage.remove(tempPath.c_str());
     LOG_ERR(moduleName, "Could not remove JSON file before replace: %s", targetPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName,
+    CPR_VCODEX_LOG_EVENT(moduleName,
                                std::string("Could not remove JSON file before replace: ") + targetPath);
     return false;
   }
@@ -103,7 +104,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   if (!Storage.rename(tempPath.c_str(), targetPath.c_str())) {
     Storage.remove(tempPath.c_str());
     LOG_ERR(moduleName, "Could not rename JSON temp file to final path: %s", targetPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName,
+    CPR_VCODEX_LOG_EVENT(moduleName,
                                std::string("Could not rename JSON temp file to final path: ") + targetPath);
     return false;
   }
@@ -116,7 +117,7 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
   if (!Storage.openFileForRead(moduleName, path, file)) {
     LOG_ERR(moduleName, "Could not open JSON file for read: %s", path);
     if (Storage.exists(path)) {
-      CprVcodexLogs::appendEvent(moduleName, std::string("Could not open JSON file for read: ") + path);
+      CPR_VCODEX_LOG_EVENT(moduleName, std::string("Could not open JSON file for read: ") + path);
     }
     return false;
   }
@@ -126,12 +127,14 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
   file.close();
   if (error) {
     LOG_ERR(moduleName, "JSON parse error: %s", error.c_str());
+#ifndef CPR_DISABLE_EVENT_LOGS
     const std::string reportBody = std::string("File: ") + path + "\nModule: " + moduleName +
                                    "\nError: " + error.c_str() + "\n";
     std::string outPath;
-    if (CprVcodexLogs::writeReport("json_error", reportBody, &outPath)) {
-      CprVcodexLogs::appendEvent(moduleName, std::string("Saved JSON parse error report to ") + outPath);
+    if (CPR_VCODEX_WRITE_REPORT("json_error", reportBody, &outPath)) {
+      CPR_VCODEX_LOG_EVENT(moduleName, std::string("Saved JSON parse error report to ") + outPath);
     }
+#endif
     return false;
   }
   return true;
@@ -317,7 +320,26 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("orientation", s.orientation, CrossPointSettings::ORIENTATION_COUNT);
   loadToggle("extraParagraphSpacing", s.extraParagraphSpacing);
   loadToggle("textAntiAliasing", s.textAntiAliasing);
-  loadEnum("textDarkness", s.textDarkness, CrossPointSettings::TEXT_DARKNESS_COUNT);
+  {
+    const uint8_t textDarknessSchemaVersion = doc["textDarknessSchemaVersion"] | static_cast<uint8_t>(0);
+    const uint8_t rawTextDarkness = doc["textDarkness"] | s.textDarkness;
+    if (textDarknessSchemaVersion < TEXT_DARKNESS_SCHEMA_VERSION && !doc["textDarkness"].isNull()) {
+      if (rawTextDarkness == 1) {
+        s.textDarkness = CrossPointSettings::TEXT_DARKNESS_DARK;
+        if (needsResave) *needsResave = true;
+      } else if (rawTextDarkness == 2) {
+        s.textDarkness = CrossPointSettings::TEXT_DARKNESS_EXTRA_DARK;
+        if (needsResave) *needsResave = true;
+      } else {
+        s.textDarkness = CrossPointSettings::TEXT_DARKNESS_NORMAL;
+      }
+    } else if (rawTextDarkness < static_cast<uint8_t>(CrossPointSettings::TEXT_DARKNESS_COUNT)) {
+      s.textDarkness = rawTextDarkness;
+    } else {
+      s.textDarkness = CrossPointSettings::TEXT_DARKNESS_NORMAL;
+      if (needsResave) *needsResave = true;
+    }
+  }
   loadEnum("readerRefreshMode", s.readerRefreshMode, CrossPointSettings::READER_REFRESH_MODE_COUNT);
   loadEnum("imageRendering", s.imageRendering, CrossPointSettings::IMAGE_RENDERING_COUNT);
 
@@ -536,7 +558,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("CPS", std::string("Settings JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("CPS", std::string("Settings JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -593,6 +615,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["extraParagraphSpacing"] = s.extraParagraphSpacing;
   doc["textAntiAliasing"] = s.textAntiAliasing;
   doc["textDarkness"] = s.textDarkness;
+  doc["textDarknessSchemaVersion"] = TEXT_DARKNESS_SCHEMA_VERSION;
   doc["readerRefreshMode"] = s.readerRefreshMode;
   doc["imageRendering"] = s.imageRendering;
 
@@ -627,7 +650,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["statusBarTitle"] = s.statusBarTitle;
   doc["statusBarBattery"] = s.statusBarBattery;
 
-  // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
+  // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
@@ -698,7 +721,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("CPS", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("CPS", std::string("State JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("CPS", std::string("State JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -714,7 +737,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   for (const auto& info : getSettingsList()) {
     if (!info.key) continue;
-    // Dynamic entries (KOReader etc.) are stored in their own files — skip.
+    // Dynamic entries (KOReader etc.) are stored in their own files - skip.
     if (!info.valuePtr && !info.stringOffset) continue;
 
     if (info.stringOffset) {
@@ -757,7 +780,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
 
-  // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
+  // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.
   const uint8_t fontSizeSchemaVersion = doc["fontSizeSchemaVersion"] | static_cast<uint8_t>(0);
   if (fontSizeSchemaVersion < FONT_SIZE_SCHEMA_VERSION && !doc["fontSize"].isNull()) {
     const uint8_t legacyFontSize = doc["fontSize"] | static_cast<uint8_t>(CrossPointSettings::MEDIUM - 1);
@@ -959,7 +982,7 @@ bool JsonSettingsIO::loadKOReader(KOReaderCredentialStore& store, const char* js
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("KRS", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("KRS", std::string("KOReader JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("KRS", std::string("KOReader JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1000,7 +1023,7 @@ bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("WCS", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("WCS", std::string("WiFi JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("WCS", std::string("WiFi JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1048,7 +1071,7 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("RBS", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("RBS", std::string("Recent books JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("RBS", std::string("Recent books JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1097,7 +1120,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("FAV", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("FAV", std::string("Favorites JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("FAV", std::string("Favorites JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1184,7 +1207,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("RST", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("RST", std::string("Reading stats JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("RST", std::string("Reading stats JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1280,12 +1303,12 @@ bool JsonSettingsIO::loadReadingStatsFromFile(ReadingStatsStore& store, const ch
   }
   const String json = Storage.readFile(path);
   if (json.isEmpty()) {
-    CprVcodexLogs::appendEvent("RST", std::string("Reading stats file empty or unreadable: ") + path);
+    CPR_VCODEX_LOG_EVENT("RST", std::string("Reading stats file empty or unreadable: ") + path);
     return false;
   }
   const bool loaded = loadReadingStats(store, json.c_str());
   if (!loaded) {
-    CprVcodexLogs::appendEvent("RST", std::string("Failed to load reading stats from ") + path);
+    CPR_VCODEX_LOG_EVENT("RST", std::string("Failed to load reading stats from ") + path);
   }
   return loaded;
 }
@@ -1332,7 +1355,7 @@ bool JsonSettingsIO::loadAchievements(AchievementsStore& store, const char* json
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR("ACH", "JSON parse error: %s", error.c_str());
-    CprVcodexLogs::appendEvent("ACH", std::string("Achievements JSON parse error: ") + error.c_str());
+    CPR_VCODEX_LOG_EVENT("ACH", std::string("Achievements JSON parse error: ") + error.c_str());
     return false;
   }
 
@@ -1405,12 +1428,12 @@ bool JsonSettingsIO::loadAchievementsFromFile(AchievementsStore& store, const ch
   }
   const String json = Storage.readFile(path);
   if (json.isEmpty()) {
-    CprVcodexLogs::appendEvent("ACH", std::string("Achievements file empty or unreadable: ") + path);
+    CPR_VCODEX_LOG_EVENT("ACH", std::string("Achievements file empty or unreadable: ") + path);
     return false;
   }
   const bool loaded = loadAchievements(store, json.c_str());
   if (!loaded) {
-    CprVcodexLogs::appendEvent("ACH", std::string("Failed to load achievements from ") + path);
+    CPR_VCODEX_LOG_EVENT("ACH", std::string("Failed to load achievements from ") + path);
   }
   return loaded;
 }

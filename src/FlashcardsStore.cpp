@@ -65,7 +65,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
 
   if (targetPath.empty()) {
     LOG_ERR(moduleName, "Missing JSON path for write");
-    CprVcodexLogs::appendEvent(moduleName, "Missing JSON path for write");
+    CPR_VCODEX_LOG_EVENT(moduleName, "Missing JSON path for write");
     return false;
   }
 
@@ -76,7 +76,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   HalFile file;
   if (!Storage.openFileForWrite(moduleName, tempPath.c_str(), file)) {
     LOG_ERR(moduleName, "Could not open JSON file for write: %s", tempPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName, std::string("Could not open JSON temp file for write: ") + tempPath);
+    CPR_VCODEX_LOG_EVENT(moduleName, std::string("Could not open JSON temp file for write: ") + tempPath);
     return false;
   }
 
@@ -85,14 +85,14 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   file.close();
   if (written == 0) {
     Storage.remove(tempPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName, std::string("serializeJson wrote 0 bytes for ") + targetPath);
+    CPR_VCODEX_LOG_EVENT(moduleName, std::string("serializeJson wrote 0 bytes for ") + targetPath);
     return false;
   }
 
   if (Storage.exists(targetPath.c_str()) && !Storage.remove(targetPath.c_str())) {
     Storage.remove(tempPath.c_str());
     LOG_ERR(moduleName, "Could not remove JSON file before replace: %s", targetPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName,
+    CPR_VCODEX_LOG_EVENT(moduleName,
                                std::string("Could not remove JSON file before replace: ") + targetPath);
     return false;
   }
@@ -100,7 +100,7 @@ bool saveJsonDocumentToFile(const char* moduleName, const char* path, const Json
   if (!Storage.rename(tempPath.c_str(), targetPath.c_str())) {
     Storage.remove(tempPath.c_str());
     LOG_ERR(moduleName, "Could not rename JSON temp file to final path: %s", targetPath.c_str());
-    CprVcodexLogs::appendEvent(moduleName,
+    CPR_VCODEX_LOG_EVENT(moduleName,
                                std::string("Could not rename JSON temp file to final path: ") + targetPath);
     return false;
   }
@@ -122,12 +122,14 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
   auto error = deserializeJson(doc, json);
   if (error) {
     LOG_ERR(moduleName, "JSON parse error in %s: %s", path, error.c_str());
+#ifndef CPR_DISABLE_EVENT_LOGS
     const std::string reportBody = std::string("File: ") + path + "\nModule: " + moduleName +
                                    "\nError: " + error.c_str() + "\n";
     std::string outPath;
-    if (CprVcodexLogs::writeReport("json_error", reportBody, &outPath)) {
-      CprVcodexLogs::appendEvent(moduleName, std::string("Saved JSON parse error report to ") + outPath);
+    if (CPR_VCODEX_WRITE_REPORT("json_error", reportBody, &outPath)) {
+      CPR_VCODEX_LOG_EVENT(moduleName, std::string("Saved JSON parse error report to ") + outPath);
     }
+#endif
     return false;
   }
   return true;

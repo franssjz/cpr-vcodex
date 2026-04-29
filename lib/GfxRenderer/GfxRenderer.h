@@ -36,7 +36,7 @@ class GfxRenderer {
   Orientation orientation;
   bool fadingFix;
   bool darkMode;
-  uint8_t textDarkness = 0;  // 0=normal, 1=dark, 2=extra dark
+  uint8_t textDarkness = 0;  // 0=normal, 1=legacy BW, 2=dark, 3=extra dark
   uint8_t* frameBuffer = nullptr;
   uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
   uint16_t panelHeight = HalDisplay::DISPLAY_HEIGHT;

@@ -8,6 +8,7 @@ Version scheme:
 
 import configparser
 import os
+import subprocess
 import sys
 
 COUNTER_DIR = "artifacts"
@@ -32,6 +33,25 @@ def get_base_version(project_dir):
         warn("No [crosspoint] version in platformio.ini; base version will be \"0.0.0\"")
         return "0.0.0"
     return config.get("crosspoint", "version")
+
+
+def run_git_value(project_dir, args, label):
+    try:
+        value = subprocess.check_output(["git", *args], text=True, stderr=subprocess.PIPE, cwd=project_dir).strip()
+        return "".join(c for c in value if c not in '"\\')
+    except FileNotFoundError:
+        warn(f'git not found on PATH; {label} suffix will be "unknown"')
+    except subprocess.CalledProcessError as e:
+        warn(f"git command failed (exit {e.returncode}): {e.stderr.strip()}; {label} suffix will be \"unknown\"")
+    except OSError as e:
+        warn(f'OS error reading git {label}: {e}; {label} suffix will be "unknown"')
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        warn(f'Unexpected error reading git {label}: {e}; {label} suffix will be "unknown"')
+    return "unknown"
+
+
+def get_git_short_sha(project_dir):
+    return run_git_value(project_dir, ["rev-parse", "--short", "HEAD"], "short SHA")
 
 
 def _ensure_counter_dir(project_dir):
@@ -97,7 +117,8 @@ def inject_version(env):
     if env_name == "default":
         release_number, release_counter_path = get_current_release_number(project_dir)
         build_counter, counter_path = next_dev_counter(project_dir, release_number)
-        version_string = f"{base_version}.{release_number}.dev{build_counter}"
+        short_sha = get_git_short_sha(project_dir)
+        version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
         build_kind = "dev"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
     else:
