@@ -161,6 +161,29 @@
       margin-bottom: 16px;
     }
 
+    .toolbar-field {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .toolbar-field .select {
+      min-height: 28px;
+      padding: 4px 8px;
+      border-color: transparent;
+      background: var(--surface-2);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
     .button,
     label.file-button {
       display: inline-flex;
@@ -973,6 +996,16 @@
         width: 100%;
       }
 
+      .toolbar-field {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .toolbar-field .select {
+        width: auto;
+        min-width: 142px;
+      }
+
       .collapse-toggle {
         display: flex;
         align-items: center;
@@ -1190,6 +1223,13 @@
       <label class="file-button" for="fileInput"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span data-i18n="openStats">Open stats_exported</span></label>
       <input id="fileInput" type="file">
       <button class="button" id="newBtn" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg><span data-i18n="newStats">New empty stats</span></button>
+      <label class="toolbar-field" for="dateFormatSelect"><span id="dateFormatLabel">Date format</span>
+        <select class="select" id="dateFormatSelect">
+          <option value="ddmmyyyy">DD/MM/YYYY</option>
+          <option value="mmddyyyy">MM/DD/YYYY</option>
+          <option value="yyyymmdd">YYYY-MM-DD</option>
+        </select>
+      </label>
       <button class="button primary" id="exportBtn" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg><span data-i18n="downloadStats">Download stats_exported</span></button>
     </div>
 
@@ -1255,6 +1295,7 @@
       rawFileName: "",
       activeTab: "details",
       heatmapMonthOffset: 0,
+      dateFormat: localStorage.getItem("cprStatsDateFormat") || "ddmmyyyy",
       language: (window.CPRTools && window.CPRTools.getLanguage()) || localStorage.getItem("cprToolsLanguage") || localStorage.getItem("cprStatsLanguage") || "en",
       theme: (window.CPRTools && window.CPRTools.getTheme()) || localStorage.getItem("cprToolsTheme") || localStorage.getItem("cprStatsTheme") || "light"
     };
@@ -1267,6 +1308,8 @@
       languageSelect: document.getElementById("languageSelect"),
       noticeCloseBtn: document.getElementById("noticeCloseBtn"),
       newBtn: document.getElementById("newBtn"),
+      dateFormatLabel: document.getElementById("dateFormatLabel"),
+      dateFormatSelect: document.getElementById("dateFormatSelect"),
       exportBtn: document.getElementById("exportBtn"),
       addBookBtn: document.getElementById("addBookBtn"),
       deleteBookBtn: document.getElementById("deleteBookBtn"),
@@ -3027,6 +3070,36 @@
       vi: "vi"
     };
 
+    const dateFormatLabels = {
+      be: "Фармат даты",
+      ca: "Format de data",
+      cs: "Formát data",
+      da: "Datoformat",
+      nl: "Datumnotatie",
+      en: "Date format",
+      fi: "Päivämäärämuoto",
+      fr: "Format des dates",
+      de: "Datumsformat",
+      hu: "Dátumformátum",
+      it: "Formato data",
+      kk: "Күн пішімі",
+      lt: "Datos formatas",
+      pl: "Format daty",
+      pt: "Formato de data",
+      ro: "Format de dată",
+      ru: "Формат даты",
+      si: "Oblika datuma",
+      es: "Formato de fecha",
+      sv: "Datumformat",
+      tr: "Tarih biçimi",
+      uk: "Формат дати",
+      vi: "Định dạng ngày"
+    };
+
+    if (!["ddmmyyyy", "mmddyyyy", "yyyymmdd"].includes(state.dateFormat)) {
+      state.dateFormat = "ddmmyyyy";
+    }
+
     function t(key, vars = {}) {
       let text = (i18n[state.language] && i18n[state.language][key]) || i18n.en[key] || key;
       for (const [name, value] of Object.entries(vars)) {
@@ -3041,6 +3114,25 @@
 
     function formatLocaleDate(date, options) {
       return date.toLocaleDateString(currentLocale(), options);
+    }
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function formatDateByPreference(date) {
+      const day = pad2(date.getDate());
+      const month = pad2(date.getMonth() + 1);
+      const year = date.getFullYear();
+      if (state.dateFormat === "mmddyyyy") return `${month}/${day}/${year}`;
+      if (state.dateFormat === "yyyymmdd") return `${year}-${month}-${day}`;
+      return `${day}/${month}/${year}`;
+    }
+
+    function formatMonthByPreference(date) {
+      const month = pad2(date.getMonth() + 1);
+      const year = date.getFullYear();
+      return state.dateFormat === "yyyymmdd" ? `${year}-${month}` : `${month}/${year}`;
     }
 
     function weekdayLabels() {
@@ -3061,6 +3153,7 @@
     function applyLanguage() {
       document.documentElement.lang = state.language;
       els.languageSelect.value = state.language;
+      els.dateFormatLabel.textContent = dateFormatLabels[state.language] || dateFormatLabels.en;
       if (window.CPRTools) window.CPRTools.applyI18n(state.language);
       document.querySelectorAll("[data-i18n]").forEach(node => {
         const key = node.dataset.i18n;
@@ -3074,6 +3167,8 @@
       });
     }
 
+    els.dateFormatSelect.value = state.dateFormat;
+
     els.themeToggleBtn.addEventListener("click", () => {
       state.theme = state.theme === "dark" ? "light" : "dark";
       localStorage.setItem("cprToolsTheme", state.theme);
@@ -3086,6 +3181,14 @@
       localStorage.setItem("cprToolsLanguage", state.language);
       localStorage.setItem("cprStatsLanguage", state.language);
       applyLanguage();
+      renderAll();
+    });
+
+    els.dateFormatSelect.addEventListener("change", () => {
+      state.dateFormat = ["ddmmyyyy", "mmddyyyy", "yyyymmdd"].includes(els.dateFormatSelect.value)
+        ? els.dateFormatSelect.value
+        : "ddmmyyyy";
+      localStorage.setItem("cprStatsDateFormat", state.dateFormat);
       renderAll();
     });
 
@@ -3138,7 +3241,7 @@
       const dateValue = dateFromDayOrdinal(dayOrdinal);
       if (!dateValue) return "";
       const date = new Date(`${dateValue}T00:00:00`);
-      return formatLocaleDate(date, {month: "short", day: "numeric", year: "numeric"});
+      return formatDateByPreference(date);
     }
 
     function dayOrdinalFromDate(value) {
@@ -3355,7 +3458,7 @@
     }
 
     function monthLabel(date) {
-      return formatLocaleDate(date, {month: "2-digit", year: "numeric"});
+      return formatMonthByPreference(date);
     }
 
     function dayOrdinalFromDateParts(year, monthIndex, day) {
@@ -3495,8 +3598,9 @@
         const height = Math.max(ms > 0 ? 3 : 0, Math.round(ms * 100 / maxMs));
         const date = new Date(`${key}-01T00:00:00`);
         const label = formatLocaleDate(date, {month: "short"});
+        const monthTitle = `${formatMonthByPreference(date)} - ${formatDuration(ms)}`;
         return `
-          <div class="month-col" title="${escapeAttr(`${key} - ${formatDuration(ms)}`)}">
+          <div class="month-col" title="${escapeAttr(monthTitle)}">
             <div class="month-bar" style="height:${height}%"></div>
             <div class="month-label">${escapeHtml(label)}</div>
           </div>
