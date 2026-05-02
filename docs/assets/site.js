@@ -470,7 +470,7 @@
   function getTheme() {
     const saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(LEGACY_THEME_KEY);
     if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return "dark";
   }
 
   function t(key, languageOrVars = getLanguage(), vars = {}) {
