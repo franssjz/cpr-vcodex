@@ -13,11 +13,13 @@
       --bg: #f7f7f8;
       --surface: #ffffff;
       --surface-2: #f1f1f4;
+      --surface-3: #fafafd;
       --text: #111118;
       --muted: #666672;
       --line: #e5e5e8;
       --danger: #ef233c;
       --success: #16803a;
+      --warning: #a45b00;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
@@ -27,10 +29,12 @@
         --bg: #0f0f14;
         --surface: #181820;
         --surface-2: #22222b;
+        --surface-3: #1d1d25;
         --text: #f4f4f6;
         --muted: #aaa7b0;
         --line: #30303a;
         --success: #53d978;
+        --warning: #ffb35c;
       }
     }
 
@@ -145,7 +149,7 @@
 
     .grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+      grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
       gap: 18px;
       align-items: start;
     }
@@ -245,20 +249,87 @@
       color: var(--danger);
       padding: 12px;
       font-weight: 700;
+      white-space: pre-wrap;
     }
 
-    .progress {
-      display: none;
-    }
-
-    .progress.active,
     .unsupported.active,
     .error.active {
       display: block;
     }
 
+    .runner {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-3);
+      padding: 12px;
+    }
+
+    .runner.active {
+      display: block;
+    }
+
+    .runner ol {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .run-step {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      padding: 10px;
+    }
+
+    .run-step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .run-step-name {
+      font-weight: 800;
+    }
+
+    .run-step-state {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .run-step[data-state="running"] .run-step-state {
+      color: var(--accent);
+    }
+
+    .run-step[data-state="done"] .run-step-state {
+      color: var(--success);
+    }
+
+    .run-step[data-state="failed"] .run-step-state {
+      color: var(--danger);
+    }
+
+    .run-step-detail {
+      display: none;
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .run-step-detail.active {
+      display: block;
+    }
+
     .progress-track {
-      height: 16px;
+      height: 8px;
       overflow: hidden;
       border-radius: 999px;
       background: var(--surface-2);
@@ -273,13 +344,18 @@
     }
 
     .status {
-      margin: 8px 0 0;
+      margin: 0;
       color: var(--muted);
       font-size: 14px;
     }
 
     .status.success {
       color: var(--success);
+      font-weight: 800;
+    }
+
+    .status.warning {
+      color: var(--warning);
       font-weight: 800;
     }
 
@@ -334,7 +410,7 @@
     <section class="hero">
       <p class="eyebrow">Browser-based installer</p>
       <h1>Flash CPR-vCodex</h1>
-      <p>Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. This flashes only the app firmware partition.</p>
+      <p>Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
     </section>
 
     <section class="grid">
@@ -362,7 +438,7 @@
           <div class="step">
             <div>
               <h3>Do not unplug while flashing</h3>
-              <p>The page writes the firmware to offset <code>0x10000</code>. When it finishes, reboot the device manually.</p>
+              <p>The page validates the partition table, writes the inactive OTA app slot, updates <code>otadata</code>, and resets the device when it finishes.</p>
             </div>
           </div>
         </div>
@@ -388,12 +464,11 @@
 
         <button class="button primary" id="flash-button" type="button">Flash CPR-vCodex Firmware</button>
 
-        <div class="progress" id="progress">
-          <div class="progress-track">
-            <div class="progress-fill" id="progress-fill"></div>
-          </div>
-          <p class="status" id="status">Waiting...</p>
+        <div class="runner" id="runner" aria-live="polite">
+          <ol id="step-list"></ol>
         </div>
+
+        <p class="status" id="status">Ready. Clicking Flash will open the browser serial device chooser.</p>
 
         <div class="actions">
           <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.37-cpr-vcodex/1.2.0.37-cpr-vcodex.bin">Download .bin</a>
@@ -417,9 +492,67 @@ pio run -e gh_release -t upload</code></pre>
   <script type="module">
     import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
 
-    const APP_OFFSET = 0x10000;
     const USB_VENDOR_ID = 0x303a;
     const USB_PRODUCT_ID = 0x1001;
+    const PARTITION_TABLE_OFFSET = 0x8000;
+    const PARTITION_TABLE_SIZE = 0x2000;
+    const OTADATA_OFFSET = 0xe000;
+    const OTADATA_SIZE = 0x2000;
+    const APP_SIZE = 0x640000;
+    const APP_MIN_SIZE = 0xf0000;
+    const APP_OFFSETS = {
+      app0: 0x10000,
+      app1: 0x650000
+    };
+    const STEP_IDS = [
+      "connect",
+      "partition",
+      "download",
+      "read-otadata",
+      "flash-app",
+      "flash-otadata",
+      "reset"
+    ];
+    const STEP_LABELS = {
+      connect: "Connect to device",
+      partition: "Validate partition table",
+      download: "Download firmware",
+      "read-otadata": "Read otadata partition",
+      "flash-app": "Flash app partition",
+      "flash-otadata": "Flash otadata partition",
+      reset: "Reset device"
+    };
+    const EXPECTED_PARTITION_TABLE = [
+      {type: "data-nvs", offset: 36864, size: 20480},
+      {type: "data-ota", offset: 57344, size: 8192},
+      {type: "app-ota_0", offset: 65536, size: 6553600},
+      {type: "app-ota_1", offset: 6619136, size: 6553600},
+      {type: "data-spiffs", offset: 13172736, size: 3538944},
+      {type: "data-coredump", offset: 16711680, size: 65536}
+    ];
+    const PARTITION_TYPES = {
+      0x00: {
+        0x00: "app-factory",
+        0x10: "app-ota_0",
+        0x11: "app-ota_1",
+        0x12: "app-ota_2",
+        0x13: "app-ota_3",
+        0x20: "app-test"
+      },
+      0x01: {
+        0x00: "data-ota",
+        0x01: "data-phy",
+        0x02: "data-nvs",
+        0x03: "data-coredump",
+        0x04: "data-nvs_keys",
+        0x05: "data-efuse",
+        0x06: "data-undefined",
+        0x80: "data-esphttpd",
+        0x81: "data-fat",
+        0x82: "data-spiffs",
+        0x83: "data-littlefs"
+      }
+    };
     const FALLBACK_RELEASE = {
       version: "1.2.0.37-cpr-vcodex",
       firmwareUrl: "firmware/firmware.bin",
@@ -428,8 +561,8 @@ pio run -e gh_release -t upload</code></pre>
 
     const els = {
       flashButton: document.getElementById("flash-button"),
-      progress: document.getElementById("progress"),
-      progressFill: document.getElementById("progress-fill"),
+      runner: document.getElementById("runner"),
+      stepList: document.getElementById("step-list"),
       status: document.getElementById("status"),
       version: document.getElementById("firmware-version"),
       downloadLink: document.getElementById("download-link"),
@@ -439,6 +572,8 @@ pio run -e gh_release -t upload</code></pre>
     };
 
     const firmware = {...FALLBACK_RELEASE};
+    const stepNodes = new Map();
+    let currentTransport = null;
 
     if (!("serial" in navigator)) {
       els.unsupported.classList.add("active");
@@ -460,86 +595,414 @@ pio run -e gh_release -t upload</code></pre>
     els.flashButton.addEventListener("click", startFlash);
 
     async function startFlash() {
-      if (!confirm("Flash CPR-vCodex firmware now? Do not unplug the device until it finishes.")) {
-        return;
-      }
-
-      let transport = null;
+      let loader = null;
       setError("");
-      setProgress(0, "Requesting serial port...");
-      els.flashButton.disabled = true;
-      els.flashButton.textContent = "Flashing...";
+      setStatus("Choose the ESP32-C3 serial port in the browser prompt.");
+      resetSteps();
+      setRunning(true);
 
       try {
-        const port = await navigator.serial.requestPort({
-          filters: [{usbVendorId: USB_VENDOR_ID, usbProductId: USB_PRODUCT_ID}]
+        loader = await runStep("connect", async () => {
+          const port = await navigator.serial.requestPort({
+            filters: [{usbVendorId: USB_VENDOR_ID, usbProductId: USB_PRODUCT_ID}]
+          });
+          currentTransport = new Transport(port, false);
+          const espLoader = new ESPLoader({
+            transport: currentTransport,
+            baudrate: 115200,
+            romBaudrate: 115200,
+            enableTracing: false
+          });
+
+          updateStep("connect", {detail: "Opening bootloader connection..."});
+          await espLoader.main();
+          return espLoader;
         });
 
-        setProgress(0, "Connecting to ESP32-C3...");
-        transport = new Transport(port, false);
-        const loader = new ESPLoader({
-          transport,
-          baudrate: 115200,
-          romBaudrate: 115200,
-          enableTracing: false
+        await runStep("partition", async () => {
+          const table = parsePartitionTable(await readFlashBytes(loader, PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE));
+          validatePartitionTable(table);
+          updateStep("partition", {detail: "Default CrossPoint/Xteink OTA partition table found."});
         });
 
-        await loader.main();
-        setProgress(0, "Downloading firmware package...");
-
-        const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
-        if (!response.ok) {
-          throw new Error(`Firmware download failed: HTTP ${response.status}`);
-        }
-
-        const firmwareBuffer = await response.arrayBuffer();
-        const firmwareBinary = loader.ui8ToBstr(new Uint8Array(firmwareBuffer));
-        const sizeMb = (firmwareBuffer.byteLength / 1024 / 1024).toFixed(1);
-        setProgress(0, `Writing ${sizeMb} MB to firmware partition...`);
-
-        await loader.writeFlash({
-          fileArray: [{data: firmwareBinary, address: APP_OFFSET}],
-          flashSize: "keep",
-          flashMode: "keep",
-          flashFreq: "keep",
-          eraseAll: false,
-          compress: true,
-          reportProgress: (_fileIndex, written, total) => {
-            const pct = Math.round((written / total) * 100);
-            setProgress(pct, `Writing ${pct}% (${Math.round(written / 1024)} / ${Math.round(total / 1024)} KB)`);
+        const firmwareData = await runStep("download", async () => {
+          updateStep("download", {detail: "Fetching firmware package..."});
+          const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
+          if (!response.ok) {
+            throw new Error(`Firmware download failed: HTTP ${response.status}`);
           }
+          const data = new Uint8Array(await response.arrayBuffer());
+          if (data.length > APP_SIZE) {
+            throw new Error(`Firmware is too large for the app partition: ${formatBytes(data.length)}.`);
+          }
+          if (data.length < APP_MIN_SIZE) {
+            throw new Error("Firmware looks too small. Refusing to flash a suspicious file.");
+          }
+          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}`});
+          return data;
         });
 
-        await loader.after("no_reset");
-        await transport.disconnect();
-        transport = null;
-        setProgress(100, "Flash complete. Reboot the device manually.");
-        els.status.classList.add("success");
+        const otaPartition = await runStep("read-otadata", async () => {
+          const otaData = await readFlashBytes(loader, OTADATA_OFFSET, OTADATA_SIZE, (current, total) => {
+            updateStep("read-otadata", {
+              progress: percent(current, total),
+              detail: `${formatBytes(current)} / ${formatBytes(total)}`
+            });
+          });
+          const partition = new OtaPartition(otaData);
+          const currentBoot = partition.getCurrentBootPartitionLabel();
+          const backup = partition.getCurrentBackupPartitionLabel();
+          updateStep("read-otadata", {detail: `Current boot: ${currentBoot}. Next flash target: ${backup}.`});
+          return partition;
+        });
+
+        const targetPartition = otaPartition.getCurrentBackupPartitionLabel();
+        await runStep("flash-app", async () => {
+          updateStep("flash-app", {
+            name: `Flash app partition (${targetPartition})`,
+            detail: `Writing to offset ${hex(APP_OFFSETS[targetPartition])}...`
+          });
+          await writeBytes(loader, APP_OFFSETS[targetPartition], firmwareData, (fileIndex, written, total) => {
+            updateStep("flash-app", {
+              progress: percent(written, total),
+              detail: `${formatBytes(written)} / ${formatBytes(total)}`
+            });
+          });
+        });
+
+        await runStep("flash-otadata", async () => {
+          otaPartition.setBootPartition(targetPartition);
+          await writeBytes(loader, OTADATA_OFFSET, otaPartition.data, (fileIndex, written, total) => {
+            updateStep("flash-otadata", {
+              progress: percent(written, total),
+              detail: `${formatBytes(written)} / ${formatBytes(total)}`
+            });
+          });
+        });
+
+        await runStep("reset", async () => {
+          await disconnectLoader(loader, false);
+          loader = null;
+        });
+
+        setStatus("Flash complete. The device should reboot into CPR-vCodex.", "success");
       } catch (error) {
         console.error(error);
-        setError(error && error.message ? error.message : "Unknown flash error");
-        hideProgress();
+        const message = error && error.message ? error.message : "Unknown flash error";
+        setError(message);
+        setStatus("Flash stopped. Check the message above before trying again.", "warning");
+        markRunningStepFailed(message);
       } finally {
-        if (transport) {
+        if (loader || currentTransport) {
           try {
-            await transport.disconnect();
+            await disconnectLoader(loader, true);
           } catch (_) {}
         }
-        els.flashButton.disabled = false;
-        els.flashButton.textContent = "Flash CPR-vCodex Firmware";
+        setRunning(false);
       }
     }
 
-    function setProgress(percent, message) {
-      els.progress.classList.add("active");
-      els.progressFill.style.width = `${percent}%`;
-      els.status.textContent = message;
-      els.status.classList.remove("success");
+    function resetSteps() {
+      stepNodes.clear();
+      els.stepList.innerHTML = "";
+      els.runner.classList.add("active");
+      for (const id of STEP_IDS) {
+        const item = document.createElement("li");
+        item.className = "run-step";
+        item.dataset.step = id;
+        item.dataset.state = "pending";
+        item.innerHTML = `
+          <div class="run-step-header">
+            <span class="run-step-name">${STEP_LABELS[id]}</span>
+            <span class="run-step-state">Pending</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="run-step-detail"></p>
+        `;
+        els.stepList.appendChild(item);
+        stepNodes.set(id, {
+          item,
+          name: item.querySelector(".run-step-name"),
+          state: item.querySelector(".run-step-state"),
+          fill: item.querySelector(".progress-fill"),
+          detail: item.querySelector(".run-step-detail")
+        });
+      }
     }
 
-    function hideProgress() {
-      els.progress.classList.remove("active");
-      els.progressFill.style.width = "0%";
+    async function runStep(id, task) {
+      updateStep(id, {state: "running", progress: 3});
+      try {
+        const result = await task();
+        updateStep(id, {state: "done", progress: 100});
+        return result;
+      } catch (error) {
+        updateStep(id, {
+          state: "failed",
+          detail: error && error.message ? error.message : "Failed"
+        });
+        throw error;
+      }
+    }
+
+    function updateStep(id, options) {
+      const node = stepNodes.get(id);
+      if (!node) return;
+      if (options.name) {
+        node.name.textContent = options.name;
+      }
+      if (options.state) {
+        node.item.dataset.state = options.state;
+        node.state.textContent = {
+          pending: "Pending",
+          running: "Running",
+          done: "Done",
+          failed: "Failed"
+        }[options.state] || options.state;
+      }
+      if (Number.isFinite(options.progress)) {
+        node.fill.style.width = `${Math.max(0, Math.min(100, options.progress))}%`;
+      }
+      if (options.detail) {
+        node.detail.textContent = options.detail;
+        node.detail.classList.add("active");
+      }
+    }
+
+    function markRunningStepFailed(message) {
+      for (const id of STEP_IDS) {
+        const node = stepNodes.get(id);
+        if (node && node.item.dataset.state === "running") {
+          updateStep(id, {state: "failed", detail: message});
+          break;
+        }
+      }
+    }
+
+    async function readFlashBytes(loader, address, size, onProgress) {
+      const data = await loader.readFlash(address, size, (_packet, current, total) => {
+        if (onProgress) onProgress(current, total);
+      });
+      return toUint8Array(data);
+    }
+
+    async function writeBytes(loader, address, data, reportProgress) {
+      await loader.writeFlash({
+        fileArray: [{data: loader.ui8ToBstr(data), address}],
+        flashSize: "keep",
+        flashMode: "keep",
+        flashFreq: "keep",
+        eraseAll: false,
+        compress: true,
+        reportProgress
+      });
+    }
+
+    async function disconnectLoader(loader, skipReset) {
+      try {
+        if (loader) {
+          await loader.after(skipReset ? "no_reset" : "hard_reset");
+        }
+      } finally {
+        if (currentTransport) {
+          await currentTransport.disconnect();
+          currentTransport = null;
+        }
+      }
+    }
+
+    function parsePartitionTable(data) {
+      const partitions = [];
+      for (let offset = 0; offset + 32 <= data.length; offset += 32) {
+        const chunk = data.slice(offset, offset + 32);
+        if (chunk.every(byte => byte === 0xff)) {
+          break;
+        }
+        if (chunk[0] === 0xeb && chunk[1] === 0xeb) {
+          continue;
+        }
+        const type = PARTITION_TYPES[chunk[2]]?.[chunk[3]] || "unknown";
+        partitions.push({
+          type,
+          offset: leBytesToU32(chunk.slice(4, 8)),
+          size: leBytesToU32(chunk.slice(8, 12))
+        });
+      }
+      return partitions;
+    }
+
+    function validatePartitionTable(table) {
+      const ok = table.length === EXPECTED_PARTITION_TABLE.length &&
+        EXPECTED_PARTITION_TABLE.every((expected, index) => {
+          const actual = table[index];
+          return actual &&
+            actual.type === expected.type &&
+            actual.offset === expected.offset &&
+            actual.size === expected.size;
+        });
+      if (!ok) {
+        throw new Error(
+          "Unexpected partition configuration. This browser flasher only supports devices using the default CrossPoint/Xteink OTA partition table.\n" +
+          JSON.stringify(table, null, 2)
+        );
+      }
+    }
+
+    class OtaPartition {
+      constructor(data) {
+        this.data = data;
+        this.cached = null;
+      }
+
+      otaAppPartitions() {
+        if (!this.cached) {
+          this.cached = [
+            this.parseOtaAppPartition("app0"),
+            this.parseOtaAppPartition("app1")
+          ];
+        }
+        return this.cached;
+      }
+
+      getCurrentBootPartition() {
+        return this.otaAppPartitions()
+          .filter(partition => !["invalid", "aborted"].includes(partition.state) && partition.crcValid)
+          .sort((a, b) => b.sequence - a.sequence)[0];
+      }
+
+      getCurrentBootPartitionLabel() {
+        return this.getCurrentBootPartition()?.partitionLabel || "app0";
+      }
+
+      getCurrentBackupPartitionLabel() {
+        return this.getCurrentBootPartitionLabel() === "app0" ? "app1" : "app0";
+      }
+
+      setBootPartition(partitionLabel) {
+        const current = this.getCurrentBootPartition();
+        if (current?.partitionLabel === partitionLabel) {
+          return;
+        }
+        const nextSequence = (current?.sequence || 0) + 1;
+        this.setOtaPartitionDetails({
+          partitionLabel,
+          sequence: nextSequence,
+          state: "new"
+        });
+      }
+
+      parseOtaAppPartition(partitionLabel) {
+        const offset = partitionLabel === "app1" ? 0x1000 : 0;
+        const sequence = leBytesToU32(this.data.slice(offset, offset + 4));
+        const state = otaPartitionStateFromBytes(this.data.slice(offset + 0x18, offset + 0x1c));
+        const crcBytes = this.data.slice(offset + 0x1c, offset + 0x20);
+        const expectedCrc = generateCrc32Le(sequence);
+        return {
+          partitionLabel,
+          sequence,
+          state,
+          crcBytes,
+          crcValid: isEqualBytes(crcBytes, expectedCrc)
+        };
+      }
+
+      setOtaPartitionDetails(partition) {
+        const offset = partition.partitionLabel === "app1" ? 0x1000 : 0;
+        this.cached = null;
+        this.data.set(u32ToLeBytes(partition.sequence), offset);
+        this.data.set(otaPartitionStateToBytes(partition.state), offset + 0x18);
+        this.data.set(generateCrc32Le(partition.sequence), offset + 0x1c);
+      }
+    }
+
+    function otaPartitionStateFromBytes(bytes) {
+      const state = leBytesToU32(bytes);
+      if (state === 0) return "new";
+      if (state === 1) return "pending_verify";
+      if (state === 2) return "valid";
+      if (state === 3) return "invalid";
+      if (state === 4) return "aborted";
+      if (state === 0xffffffff) return "undefined";
+      throw new Error("Invalid otadata state");
+    }
+
+    function otaPartitionStateToBytes(state) {
+      if (state === "new") return u32ToLeBytes(0);
+      if (state === "pending_verify") return u32ToLeBytes(1);
+      if (state === "valid") return u32ToLeBytes(2);
+      if (state === "invalid") return u32ToLeBytes(3);
+      if (state === "undefined") return new Uint8Array([0xff, 0xff, 0xff, 0xff]);
+      throw new Error("Invalid otadata state");
+    }
+
+    function toUint8Array(data) {
+      if (data instanceof Uint8Array) return data;
+      if (data instanceof ArrayBuffer) return new Uint8Array(data);
+      if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      if (typeof data === "string") {
+        return Uint8Array.from(data, char => char.charCodeAt(0) & 0xff);
+      }
+      return new Uint8Array(data);
+    }
+
+    function u32ToLeBytes(value) {
+      return new Uint8Array([
+        value & 0xff,
+        (value >>> 8) & 0xff,
+        (value >>> 16) & 0xff,
+        (value >>> 24) & 0xff
+      ]);
+    }
+
+    function leBytesToU32(bytes) {
+      return (
+        (bytes[0] || 0) +
+        (((bytes[1] || 0) << 8) >>> 0) +
+        (((bytes[2] || 0) << 16) >>> 0) +
+        (((bytes[3] || 0) << 24) >>> 0)
+      ) >>> 0;
+    }
+
+    function isEqualBytes(left, right) {
+      if (left.length !== right.length) return false;
+      for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) return false;
+      }
+      return true;
+    }
+
+    const CRC32_TABLE = new Uint32Array(256);
+    for (let i = 0; i < CRC32_TABLE.length; i += 1) {
+      let value = i;
+      for (let bit = 0; bit < 8; bit += 1) {
+        value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+      }
+      CRC32_TABLE[i] = value >>> 0;
+    }
+
+    function generateCrc32Le(sequence) {
+      return u32ToLeBytes(crc32WithPrevious(u32ToLeBytes(sequence), 0xffffffff));
+    }
+
+    function crc32WithPrevious(data, previous) {
+      let crc = previous === 0 ? 0 : (previous | 0) ^ -1;
+      for (const byte of data) {
+        crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ -1) >>> 0;
+    }
+
+    function setRunning(isRunning) {
+      els.flashButton.disabled = isRunning;
+      els.flashButton.textContent = isRunning ? "Flashing..." : "Flash CPR-vCodex Firmware";
+    }
+
+    function setStatus(message, tone) {
+      els.status.textContent = message;
+      els.status.classList.toggle("success", tone === "success");
+      els.status.classList.toggle("warning", tone === "warning");
     }
 
     function setError(message) {
@@ -550,6 +1013,24 @@ pio run -e gh_release -t upload</code></pre>
       }
       els.errorMessage.textContent = message;
       els.errorBox.classList.add("active");
+    }
+
+    function percent(current, total) {
+      return total ? Math.round((current / total) * 100) : 0;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes >= 1024 * 1024) {
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      }
+      if (bytes >= 1024) {
+        return `${Math.round(bytes / 1024)} KB`;
+      }
+      return `${bytes} B`;
+    }
+
+    function hex(value) {
+      return `0x${value.toString(16)}`;
     }
   </script>
 </body>
