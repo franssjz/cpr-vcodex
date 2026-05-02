@@ -130,6 +130,8 @@ const std::vector<SettingInfo>& getDeviceSystemSettings() {
       SettingInfo::Toggle(StrId::STR_SHOW_HIDDEN_FILES, &CrossPointSettings::showHiddenFiles),
       SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network),
       SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync),
+      SettingInfo::Enum(StrId::STR_OPDS_FILENAME_FORMAT, &CrossPointSettings::opdsFilenameFormat,
+                        {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR}),
       SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser),
       SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache),
       SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates),

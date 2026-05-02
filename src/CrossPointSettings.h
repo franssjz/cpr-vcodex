@@ -202,6 +202,11 @@ class CrossPointSettings {
     SYNC_DAY_REMINDER_60 = 6,
     SYNC_DAY_REMINDER_STARTS_COUNT
   };
+  enum OPDS_FILENAME_FORMAT {
+    OPDS_FILENAME_AUTHOR_TITLE = 0,
+    OPDS_FILENAME_TITLE_AUTHOR = 1,
+    OPDS_FILENAME_FORMAT_COUNT
+  };
   enum SHORTCUT_LOCATION {
     SHORTCUT_HOME = 0,
     SHORTCUT_APPS = 1,
@@ -264,6 +269,7 @@ class CrossPointSettings {
   char opdsServerUrl[128] = "";
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
+  uint8_t opdsFilenameFormat = OPDS_FILENAME_AUTHOR_TITLE;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
   // Long-press chapter skip on side buttons

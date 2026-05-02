@@ -192,6 +192,9 @@ const std::vector<SettingInfo>& getSettingsList() {
             KOREADER_STORE.saveToFile();
           },
           "koMatchMethod", StrId::STR_KOREADER_SYNC),
+      SettingInfo::Enum(StrId::STR_OPDS_FILENAME_FORMAT, &CrossPointSettings::opdsFilenameFormat,
+                        {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR}, "opdsFilenameFormat",
+                        StrId::STR_KOREADER_SYNC),
       // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
       SettingInfo::Toggle(StrId::STR_CHAPTER_PAGE_COUNT, &CrossPointSettings::statusBarChapterPageCount,
                           "statusBarChapterPageCount", StrId::STR_CUSTOMISE_STATUS_BAR),
