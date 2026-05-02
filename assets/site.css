@@ -1,13 +1,20 @@
 :root {
-  --site-header-bg: var(--surface, #ffffff);
-  --site-text: var(--text, #111118);
-  --site-muted: var(--muted, #666672);
-  --site-line: var(--line, #e5e5e8);
-  --site-accent: var(--accent, #B621B4);
+  --site-width: 1280px;
+  --site-header-bg: #ffffff;
+  --site-control-bg: #ffffff;
+  --site-text: #111118;
+  --site-muted: #666672;
+  --site-line: #e5e5e8;
+  --site-accent: #B621B4;
 }
 
 html[data-theme="dark"] {
   color-scheme: dark;
+  --site-header-bg: #181820;
+  --site-control-bg: #181820;
+  --site-text: #f4f4f6;
+  --site-muted: #aaa7b0;
+  --site-line: #30303a;
 }
 
 .site-header {
@@ -20,7 +27,7 @@ html[data-theme="dark"] {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  width: min(var(--site-width, 1040px), calc(100vw - 32px));
+  width: min(var(--site-width, 1280px), calc(100vw - 32px));
   margin: 0 auto;
   padding: 12px 0;
 }
@@ -48,7 +55,7 @@ html[data-theme="dark"] {
   min-height: 38px;
   border: 1px solid var(--site-line);
   border-radius: 6px;
-  background: var(--site-header-bg);
+  background: var(--site-control-bg);
   color: var(--site-text);
   padding: 8px 12px;
   font: inherit;
@@ -83,7 +90,7 @@ html[data-theme="dark"] {
   max-width: 190px;
   border: 1px solid var(--site-line);
   border-radius: 6px;
-  background: var(--site-header-bg);
+  background: var(--site-control-bg);
   color: var(--site-text);
   padding: 8px 10px;
   font: inherit;

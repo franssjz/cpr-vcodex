@@ -59,13 +59,6 @@
       margin: 0 auto;
     }
 
-    nav {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    nav a,
     .button {
       display: inline-flex;
       align-items: center;
@@ -82,7 +75,6 @@
       cursor: pointer;
     }
 
-    nav a[aria-current="page"],
     .button.primary {
       border-color: var(--accent);
       background: var(--accent);
@@ -618,14 +610,14 @@ pio run -e gh_release -t upload</code></pre>
           updateStep("download", {detail: siteT("fetchingFirmware")});
           const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
           if (!response.ok) {
-            throw new Error(`Firmware download failed: HTTP ${response.status}`);
+            throw new Error(`${siteT("firmwareDownloadFailed")}: HTTP ${response.status}`);
           }
           const data = new Uint8Array(await response.arrayBuffer());
           if (data.length > APP_SIZE) {
-            throw new Error(`Firmware is too large for the app partition: ${formatBytes(data.length)}.`);
+            throw new Error(siteT("firmwareTooLarge", {size: formatBytes(data.length)}));
           }
           if (data.length < APP_MIN_SIZE) {
-            throw new Error("Firmware looks too small. Refusing to flash a suspicious file.");
+            throw new Error(siteT("firmwareTooSmall"));
           }
           updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}`});
           return data;
@@ -641,15 +633,15 @@ pio run -e gh_release -t upload</code></pre>
           const partition = new OtaPartition(otaData);
           const currentBoot = partition.getCurrentBootPartitionLabel();
           const backup = partition.getCurrentBackupPartitionLabel();
-          updateStep("read-otadata", {detail: `Current boot: ${currentBoot}. Next flash target: ${backup}.`});
+          updateStep("read-otadata", {detail: siteT("currentBootTarget", {current: currentBoot, target: backup})});
           return partition;
         });
 
         const targetPartition = otaPartition.getCurrentBackupPartitionLabel();
         await runStep("flash-app", async () => {
           updateStep("flash-app", {
-            name: `Flash app partition (${targetPartition})`,
-            detail: `Writing to offset ${hex(APP_OFFSETS[targetPartition])}...`
+            name: `${siteT("stepFlashApp")} (${targetPartition})`,
+            detail: siteT("writingOffset", {offset: hex(APP_OFFSETS[targetPartition])})
           });
           await writeBytes(loader, APP_OFFSETS[targetPartition], firmwareData, (fileIndex, written, total) => {
             updateStep("flash-app", {
@@ -677,7 +669,7 @@ pio run -e gh_release -t upload</code></pre>
         setStatus(siteT("flashComplete"), "success");
       } catch (error) {
         console.error(error);
-        const message = error && error.message ? error.message : "Unknown flash error";
+        const message = error && error.message ? error.message : siteT("unknownFlashError");
         setError(message);
         setStatus(siteT("flashStopped"), "warning");
         markRunningStepFailed(message);
@@ -833,7 +825,7 @@ pio run -e gh_release -t upload</code></pre>
         });
       if (!ok) {
         throw new Error(
-          "Unexpected partition configuration. This browser flasher only supports devices using the default CrossPoint/Xteink OTA partition table.\n" +
+          `${siteT("partitionUnexpected")}\n` +
           JSON.stringify(table, null, 2)
         );
       }
@@ -1022,8 +1014,8 @@ pio run -e gh_release -t upload</code></pre>
       return `0x${value.toString(16)}`;
     }
 
-    function siteT(key) {
-      return window.CPRTools ? window.CPRTools.t(key) : key;
+    function siteT(key, vars) {
+      return window.CPRTools ? window.CPRTools.t(key, vars || {}) : key;
     }
 
     function stepLabel(id) {
