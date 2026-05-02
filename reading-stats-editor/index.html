@@ -1,0 +1,3868 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPR-vCodex Reading Stats Editor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page-top: #ffffff;
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --surface-2: #f4f4f5;
+      --text: #111118;
+      --muted: #6f6f78;
+      --line: #e5e5e8;
+      --accent: #B621B4;
+      --accent-2: #211521;
+      --accent-soft: #f6e4f6;
+      --control-bg: #ffffff;
+      --control-hover: #fafafa;
+      --heat-empty: #eeeeef;
+      --heat-outside: #f6f6f7;
+      --danger: #ef233c;
+      --danger-soft: #fff0f2;
+      --danger-line: #ffb3bd;
+      --warning: #8a5a00;
+      --radius: 8px;
+      --shadow: 0 12px 28px rgba(17, 17, 24, 0.07);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body[data-theme="dark"] {
+      color-scheme: dark;
+      --page-top: #111118;
+      --bg: #0f0f14;
+      --surface: #181820;
+      --surface-2: #22222b;
+      --text: #f4f4f6;
+      --muted: #aaa7b0;
+      --line: #30303a;
+      --accent-soft: #351934;
+      --control-bg: #202028;
+      --control-hover: #292932;
+      --heat-empty: #24242c;
+      --heat-outside: #1c1c23;
+      --danger-soft: #3a1118;
+      --danger-line: #7e2632;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, var(--page-top) 0, var(--bg) 320px);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 10px 22px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      display: grid;
+      flex: 0 0 auto;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 10px;
+      background: #111118;
+      color: #ffffff;
+      box-shadow: 0 8px 18px rgba(17, 17, 24, 0.14);
+    }
+
+    .icon-only {
+      width: 38px;
+      min-width: 38px;
+      padding: 8px;
+    }
+
+    body[data-theme="dark"] .brand-mark {
+      background: var(--accent);
+      box-shadow: 0 8px 18px rgba(182, 33, 180, 0.22);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .select {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 18px 22px 32px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .button,
+    label.file-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 36px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+      user-select: none;
+      transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+    }
+
+    .button:hover,
+    label.file-button:hover {
+      border-color: #d8d8dd;
+      background: var(--control-hover);
+      transform: translateY(-1px);
+    }
+
+    body[data-theme="dark"] .button:hover,
+    body[data-theme="dark"] label.file-button:hover {
+      border-color: #494954;
+      background: #22222b;
+    }
+
+    .button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .button.ghost {
+      background: transparent;
+    }
+
+    .button.danger {
+      border-color: var(--danger-line);
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    label.file-button {
+      border-color: var(--accent);
+      background: var(--surface);
+      color: var(--accent);
+      font-weight: 750;
+      box-shadow: 0 8px 18px rgba(182, 33, 180, 0.12);
+    }
+
+    label.file-button:hover {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .metric {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 12px;
+      min-height: 70px;
+      box-shadow: var(--shadow);
+    }
+
+    .metric-head {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .metric-icon {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 8px;
+      background: #f2f2f4;
+      color: #111118;
+    }
+
+    .metric:nth-child(2) .metric-icon {
+      background: #f2f2f4;
+      color: #111118;
+    }
+
+    .metric:nth-child(3) .metric-icon {
+      background: #f2f2f4;
+      color: #111118;
+    }
+
+    .metric:nth-child(4) .metric-icon {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .metric span.label {
+      display: block;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .visuals {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .chart-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 12px;
+      min-width: 0;
+      box-shadow: var(--shadow);
+    }
+
+    .chart-card.wide {
+      grid-column: span 2;
+    }
+
+    .chart-card.full {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .chart-title h2 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .chart-title span,
+    .chart-note {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .heatmap-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .mini-button {
+      display: grid;
+      width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .heatmap-month-label {
+      flex: 1;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+      text-align: center;
+    }
+
+    .heatmap-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .heatmap-stat {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-2);
+      padding: 6px 7px;
+    }
+
+    .heatmap-stat strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .heatmap-stat span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .heatmap-calendar {
+      max-width: 240px;
+      margin: 0 auto;
+    }
+
+    .heatmap-weekdays,
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 2px;
+    }
+
+    .heatmap-weekdays {
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      text-align: center;
+    }
+
+    .heat-cell {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: var(--heat-empty);
+      color: var(--text);
+      font-size: 9px;
+      text-align: center;
+      padding: 2px;
+    }
+
+    .heat-cell.outside {
+      background: var(--heat-outside);
+      color: var(--muted);
+      opacity: 1;
+    }
+
+    .heat-cell.l1 {
+      background: #f7dff7;
+      font-weight: 750;
+    }
+
+    .heat-cell.l2 {
+      background: #efb4ee;
+      font-weight: 750;
+    }
+
+    .heat-cell.l3 {
+      background: #de70dc;
+      font-weight: 750;
+    }
+
+    .heat-cell.l4 {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+      font-weight: 750;
+    }
+
+    .heat-cell.has-value {
+      font-weight: 800;
+    }
+
+    body[data-theme="dark"] .heat-cell.l1 {
+      border-color: #5f4865;
+      background: #3c2d43;
+      color: #f3dff4;
+    }
+
+    body[data-theme="dark"] .heat-cell.l2 {
+      border-color: #86608f;
+      background: #6f4a79;
+      color: #ffffff;
+    }
+
+    body[data-theme="dark"] .heat-cell.l3 {
+      border-color: #d58ae1;
+      background: #d58ae1;
+      color: #111118;
+    }
+
+    body[data-theme="dark"] .heat-cell.l4 {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      justify-content: center;
+    }
+
+    .bar-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 1fr) minmax(120px, 2fr) auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .bar-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 650;
+    }
+
+    .bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+
+    .bar-value {
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .month-bars {
+      display: flex;
+      align-items: end;
+      gap: 8px;
+      height: 84px;
+      padding-top: 8px;
+      border-bottom: 1px solid var(--line);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .month-col {
+      display: flex;
+      flex: 1;
+      min-width: 20px;
+      height: 100%;
+      flex-direction: column;
+      justify-content: end;
+      align-items: stretch;
+      gap: 5px;
+    }
+
+    .month-bar {
+      min-height: 2px;
+      border-radius: 4px 4px 0 0;
+      background: var(--accent);
+    }
+
+    .month-label {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 9px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.9fr) minmax(480px, 1.4fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+      padding: 10px 12px;
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .panel-title-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 0;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    .panel-title-toggle::before {
+      content: "-";
+      display: none;
+      width: 20px;
+      height: 20px;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .panel.is-collapsed > .panel-header .panel-title-toggle::before {
+      content: "+";
+    }
+
+    .panel.is-collapsed > .panel-body {
+      display: none;
+    }
+
+    .panel-body {
+      padding: 12px;
+    }
+
+    .search {
+      width: 100%;
+      min-height: 36px;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+
+    .book-list {
+      display: grid;
+      gap: 6px;
+      max-height: 620px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .book-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--control-bg);
+      padding: 9px 10px;
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .book-row.selected {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .book-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 650;
+    }
+
+    .book-meta {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .pill {
+      align-self: center;
+      min-width: 42px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      padding: 2px 7px;
+      color: var(--text);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .pill.complete {
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 750;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field.full {
+      grid-column: 1 / -1;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: var(--control-bg);
+      color: var(--text);
+      font: inherit;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--muted);
+      opacity: 1;
+    }
+
+    input:disabled,
+    textarea:disabled,
+    select:disabled {
+      opacity: 0.65;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      min-height: auto;
+    }
+
+    .inline-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 36px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--line);
+      padding: 7px 6px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    td input {
+      min-height: 32px;
+      padding: 5px 7px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin: 14px 0 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .tab {
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      padding: 8px 10px;
+      color: var(--muted);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      border-color: var(--accent);
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .raw-json {
+      width: 100%;
+      min-height: 360px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+    }
+
+    .notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      position: relative;
+      margin: 0 0 10px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 10px 42px 10px 14px;
+      color: var(--text);
+      font-size: 13px;
+      box-shadow: var(--shadow);
+    }
+
+    .notice-icon {
+      display: grid;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .notice-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .notice-close:hover {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .notice.is-hidden {
+      display: none;
+    }
+
+    .notice strong {
+      font-weight: 750;
+    }
+
+    .warning {
+      border-left-color: var(--text);
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .warning .notice-icon {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    .empty {
+      padding: 28px 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .status-line {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .collapsible {
+      margin-bottom: 16px;
+    }
+
+    .collapse-toggle {
+      display: none;
+    }
+
+    .collapse-content {
+      display: block;
+    }
+
+    @media (max-width: 900px) {
+      .summary,
+      .visuals,
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-card.wide {
+        grid-column: auto;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 640px) {
+      main {
+        padding: 14px 12px 24px;
+      }
+
+      .topbar {
+        padding: 10px 12px;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .top-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .button,
+      label.file-button,
+      .select {
+        width: 100%;
+      }
+
+      .collapse-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        padding: 12px;
+        color: var(--text);
+        font: inherit;
+        font-weight: 750;
+        box-shadow: var(--shadow);
+      }
+
+      .collapse-toggle::after {
+        content: "+";
+        display: grid;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .collapsible.is-open > .collapse-toggle::after {
+        content: "-";
+      }
+
+      .collapsible > .collapse-content {
+        display: none;
+        margin-top: 10px;
+      }
+
+      .collapsible.is-open > .collapse-content {
+        display: block;
+      }
+
+      .summary,
+      .visuals,
+      .workspace {
+        display: grid;
+      }
+
+      .summary {
+        gap: 8px;
+      }
+
+      .visuals {
+        gap: 10px;
+      }
+
+      .workspace {
+        gap: 12px;
+      }
+
+      .metric,
+      .chart-card,
+      .panel,
+      .notice {
+        box-shadow: 0 8px 18px rgba(17, 17, 24, 0.06);
+      }
+
+      .chart-title {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .heatmap-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .heat-cell {
+        min-height: 0;
+        padding: 3px;
+      }
+
+      .bar-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 5px;
+      }
+
+      .month-bars {
+        gap: 4px;
+        height: 78px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+      }
+
+      .month-col {
+        flex: 0 0 22px;
+        min-width: 22px;
+      }
+
+      .month-label {
+        font-size: 10px;
+        transform: rotate(-35deg);
+        transform-origin: center top;
+      }
+
+      .book-list {
+        max-height: 360px;
+      }
+
+      .panel-title-toggle::before {
+        display: grid;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .notice {
+        margin-top: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <symbol id="icon-book-open" viewBox="0 0 24 24">
+      <path d="M12 7v14"></path><path d="M3 5a7 7 0 0 1 9 2 7 7 0 0 1 9-2v14a7 7 0 0 0-9 2 7 7 0 0 0-9-2z"></path>
+    </symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24">
+      <path d="M12 3v12"></path><path d="m7 8 5-5 5 5"></path><path d="M5 21h14"></path>
+    </symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14"></path><path d="M5 12h14"></path>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24">
+      <path d="M20 11a8 8 0 0 0-14.5-4"></path><path d="M4 7h5V2"></path><path d="M4 13a8 8 0 0 0 14.5 4"></path><path d="M20 17h-5v5"></path>
+    </symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24">
+      <path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path>
+    </symbol>
+    <symbol id="icon-file-json" viewBox="0 0 24 24">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M10 13a2 2 0 0 0 0 4"></path><path d="M14 13a2 2 0 0 1 0 4"></path>
+    </symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>
+    </symbol>
+    <symbol id="icon-repeat" viewBox="0 0 24 24">
+      <path d="m17 2 4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24">
+      <path d="m20 6-11 11-5-5"></path>
+    </symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24">
+      <path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path>
+    </symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24">
+      <rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M4 16V6a2 2 0 0 1 2-2h10"></path>
+    </symbol>
+    <symbol id="icon-calendar" viewBox="0 0 24 24">
+      <path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18"></path>
+    </symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path>
+    </symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"></path><path d="M9 12l2 2 4-4"></path>
+    </symbol>
+    <symbol id="icon-moon" viewBox="0 0 24 24">
+      <path d="M12 3a6.8 6.8 0 0 0 8.7 8.7A9 9 0 1 1 12 3"></path>
+    </symbol>
+    <symbol id="icon-sun" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24">
+      <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
+    </symbol>
+  </svg>
+  <header>
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-book-open"></use></svg></div>
+        <div>
+          <h1 data-i18n="appTitle">CPR-vCodex Reading Stats Editor</h1>
+          <div class="subtitle" data-i18n="subtitle">Local editor for exported reading stats. No upload, no server.</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="button icon-only" id="themeToggleBtn" type="button" aria-label="Dark mode" title="Dark mode"><svg class="icon" aria-hidden="true"><use id="themeIconUse" href="#icon-moon"></use></svg></button>
+        <select class="select" id="languageSelect" aria-label="Language">
+          <option value="be">Беларуская</option>
+          <option value="ca">Català</option>
+          <option value="cs">Čeština</option>
+          <option value="da">Dansk</option>
+          <option value="nl">Nederlands</option>
+          <option value="en">English</option>
+          <option value="fi">Suomi</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="hu">Magyar</option>
+          <option value="it">Italiano</option>
+          <option value="kk">Қазақша</option>
+          <option value="lt">Lietuvių</option>
+          <option value="pl">Polski</option>
+          <option value="pt">Português (Brasil)</option>
+          <option value="ro">Română</option>
+          <option value="ru">Русский</option>
+          <option value="si">Slovenščina</option>
+          <option value="es">Español</option>
+          <option value="sv">Svenska</option>
+          <option value="tr">Türkçe</option>
+          <option value="uk">Українська</option>
+          <option value="vi">Tiếng Việt</option>
+        </select>
+        <div class="status-line" id="fileStatus">No file loaded</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="notice">
+      <span class="notice-icon"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg></span>
+      <span data-i18n-html="importNotice">Copy the exported file back to the device as <strong>/exports/stats_exported</strong>, then use
+      <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.</span>
+      <button class="notice-close" id="noticeCloseBtn" type="button" aria-label="Close notice" title="Close notice"><svg class="icon" aria-hidden="true"><use href="#icon-x"></use></svg></button>
+    </div>
+
+    <div class="toolbar">
+      <label class="file-button" for="fileInput"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span data-i18n="openStats">Open stats_exported</span></label>
+      <input id="fileInput" type="file">
+      <button class="button" id="newBtn" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg><span data-i18n="newStats">New empty stats</span></button>
+      <button class="button primary" id="exportBtn" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg><span data-i18n="downloadStats">Download stats_exported</span></button>
+    </div>
+
+    <section class="collapsible is-open" data-collapse-id="overview">
+      <button class="collapse-toggle" type="button" data-i18n="overview">Overview</button>
+      <div class="collapse-content">
+        <section class="summary" aria-label="Stats summary">
+          <div class="metric"><div class="metric-head"><span class="metric-icon"><svg class="icon" aria-hidden="true"><use href="#icon-book-open"></use></svg></span><span class="label" data-i18n="books">Books</span></div><strong id="summaryBooks">0</strong></div>
+          <div class="metric"><div class="metric-head"><span class="metric-icon"><svg class="icon" aria-hidden="true"><use href="#icon-clock"></use></svg></span><span class="label" data-i18n="totalReadingTime">Total reading time</span></div><strong id="summaryTime">0m</strong></div>
+          <div class="metric"><div class="metric-head"><span class="metric-icon"><svg class="icon" aria-hidden="true"><use href="#icon-repeat"></use></svg></span><span class="label" data-i18n="sessions">Sessions</span></div><strong id="summarySessions">0</strong></div>
+          <div class="metric"><div class="metric-head"><span class="metric-icon"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg></span><span class="label" data-i18n="completed">Completed</span></div><strong id="summaryCompleted">0</strong></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="collapsible" data-collapse-id="charts">
+      <button class="collapse-toggle" type="button" data-i18n="charts">Charts</button>
+      <div class="collapse-content">
+        <section class="visuals" id="visualDashboard" aria-label="Reading stats visualizations"></section>
+      </div>
+    </section>
+
+    <section class="collapsible is-open" data-collapse-id="editor">
+      <button class="collapse-toggle" type="button" data-i18n="booksEditor">Books and editor</button>
+      <div class="collapse-content">
+        <section class="workspace">
+          <aside class="panel inner-collapsible" data-inner-collapse-id="books">
+            <div class="panel-header">
+              <button class="panel-title-toggle" type="button"><span data-i18n="books">Books</span></button>
+              <button class="button ghost" id="addBookBtn" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg><span data-i18n="addBook">Add book</span></button>
+            </div>
+            <div class="panel-body">
+              <input class="search" id="searchInput" type="search" placeholder="Search title, author or path" data-i18n-placeholder="searchPlaceholder" disabled>
+              <div class="book-list" id="bookList">
+                <div class="empty" data-i18n="openStatsBegin">Open a stats file to begin.</div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="panel inner-collapsible" data-inner-collapse-id="editor-panel">
+            <div class="panel-header">
+              <button class="panel-title-toggle" type="button"><span id="editorTitle" data-i18n="editor">Editor</span></button>
+              <button class="button danger" id="deleteBookBtn" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-trash"></use></svg><span data-i18n="deleteBook">Delete book</span></button>
+            </div>
+            <div class="panel-body" id="editorBody">
+              <div class="empty">Select a book to edit its metadata and reading days.</div>
+            </div>
+          </section>
+        </section>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const MS_PER_MINUTE = 60000;
+    const MS_PER_DAY = 86400000;
+
+    const state = {
+      data: null,
+      selectedIndex: -1,
+      rawFileName: "",
+      activeTab: "details",
+      heatmapMonthOffset: 0,
+      language: localStorage.getItem("cprStatsLanguage") || "en",
+      theme: localStorage.getItem("cprStatsTheme") || "light"
+    };
+
+    const els = {
+      fileInput: document.getElementById("fileInput"),
+      fileStatus: document.getElementById("fileStatus"),
+      themeToggleBtn: document.getElementById("themeToggleBtn"),
+      themeIconUse: document.getElementById("themeIconUse"),
+      languageSelect: document.getElementById("languageSelect"),
+      noticeCloseBtn: document.getElementById("noticeCloseBtn"),
+      newBtn: document.getElementById("newBtn"),
+      exportBtn: document.getElementById("exportBtn"),
+      addBookBtn: document.getElementById("addBookBtn"),
+      deleteBookBtn: document.getElementById("deleteBookBtn"),
+      searchInput: document.getElementById("searchInput"),
+      bookList: document.getElementById("bookList"),
+      editorTitle: document.getElementById("editorTitle"),
+      editorBody: document.getElementById("editorBody"),
+      summaryBooks: document.getElementById("summaryBooks"),
+      summaryTime: document.getElementById("summaryTime"),
+      summarySessions: document.getElementById("summarySessions"),
+      summaryCompleted: document.getElementById("summaryCompleted"),
+      visualDashboard: document.getElementById("visualDashboard")
+    };
+
+    const i18n = {
+      en: {
+        appTitle: "CPR-vCodex Reading Stats Editor",
+        subtitle: "Local editor for exported reading stats. No upload, no server.",
+        darkMode: "Dark mode",
+        lightMode: "Light mode",
+        openStats: "Open stats_exported",
+        newStats: "New empty stats",
+        downloadStats: "Download stats_exported",
+        importNotice: "Copy the exported file back to the device as <strong>/exports/stats_exported</strong>, then use <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Overview",
+        charts: "Charts",
+        booksEditor: "Books and editor",
+        books: "Books",
+        totalReadingTime: "Total reading time",
+        sessions: "Sessions",
+        completed: "Completed",
+        addBook: "Add book",
+        editor: "Editor",
+        deleteBook: "Delete book",
+        searchPlaceholder: "Search title, author or path",
+        noFileLoaded: "No file loaded",
+        statsLoaded: "Stats loaded",
+        newStatsStatus: "new stats",
+        openCharts: "Open a stats file to see heatmaps, charts and book rankings.",
+        openStatsBegin: "Open a stats file to begin.",
+        selectBook: "Select a book to edit its metadata and reading days.",
+        noMatchingBooks: "No matching books.",
+        noAuthor: "No author",
+        readingHeatmap: "Reading heatmap",
+        monthTotal: "Month Total",
+        daysRead: "Days Read",
+        bestDay: "Best Day",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Top books",
+        byTime: "By time",
+        noReadingTime: "No reading time yet.",
+        monthlyReading: "Monthly reading",
+        last12Months: "Last 12 months",
+        hoverValues: "Hover bars or heatmap cells to see exact values.",
+        details: "Details",
+        readingDays: "Reading days",
+        rawJson: "Raw JSON",
+        title: "Title",
+        author: "Author",
+        path: "Path",
+        bookId: "Book ID",
+        knownPaths: "Known paths, one per line",
+        coverBmpPath: "Cover BMP path",
+        chapterTitle: "Chapter title",
+        totalReadingMinutes: "Total reading minutes",
+        lastSessionMinutes: "Last session minutes",
+        bookProgress: "Book progress %",
+        chapterProgress: "Chapter progress %",
+        firstReadAt: "First read at",
+        lastReadAt: "Last read at",
+        completedAt: "Completed at",
+        markCompleted: "Mark as completed",
+        applyChanges: "Apply changes",
+        recalculateFromDays: "Recalculate from days",
+        duplicateBook: "Duplicate book",
+        date: "Date",
+        minutes: "Minutes",
+        addDay: "Add day",
+        applyDays: "Apply days",
+        noReadingDays: "No reading days for this book.",
+        applyRawJson: "Apply raw JSON",
+        delete: "Delete",
+        deleteConfirm: "Delete \"{title}\" from reading stats?",
+        invalidJson: "Invalid JSON: {message}",
+        loadError: "Could not load stats file: {message}"
+      },
+      es: {
+        appTitle: "Editor de estadísticas CPR-vCodex",
+        subtitle: "Editor local para estadísticas exportadas. Sin subida, sin servidor.",
+        darkMode: "Modo oscuro",
+        lightMode: "Modo claro",
+        openStats: "Abrir stats_exported",
+        newStats: "Crear stats vacías",
+        downloadStats: "Descargar stats_exported",
+        importNotice: "Copia el archivo exportado al dispositivo como <strong>/exports/stats_exported</strong> y luego usa <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Resumen",
+        charts: "Gráficas",
+        booksEditor: "Libros y editor",
+        books: "Libros",
+        totalReadingTime: "Tiempo total de lectura",
+        sessions: "Sesiones",
+        completed: "Completados",
+        addBook: "Añadir libro",
+        editor: "Editor",
+        deleteBook: "Borrar libro",
+        searchPlaceholder: "Buscar título, autor o ruta",
+        noFileLoaded: "Ningún archivo cargado",
+        statsLoaded: "Stats cargadas",
+        newStatsStatus: "stats nuevas",
+        openCharts: "Abre un archivo de stats para ver heatmaps, gráficas y rankings de libros.",
+        openStatsBegin: "Abre un archivo de stats para empezar.",
+        selectBook: "Selecciona un libro para editar sus metadatos y días de lectura.",
+        noMatchingBooks: "No hay libros que coincidan.",
+        noAuthor: "Sin autor",
+        readingHeatmap: "Heatmap de lectura",
+        monthTotal: "Total del mes",
+        daysRead: "Días leídos",
+        bestDay: "Mejor día",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Top libros",
+        byTime: "Por tiempo",
+        noReadingTime: "Aún no hay tiempo de lectura.",
+        monthlyReading: "Lectura mensual",
+        last12Months: "Últimos 12 meses",
+        hoverValues: "Pasa el cursor por barras o celdas para ver valores exactos.",
+        details: "Detalles",
+        readingDays: "Días de lectura",
+        rawJson: "JSON bruto",
+        title: "Título",
+        author: "Autor",
+        path: "Ruta",
+        bookId: "Book ID",
+        knownPaths: "Rutas conocidas, una por línea",
+        coverBmpPath: "Ruta de portada BMP",
+        chapterTitle: "Título de capítulo",
+        totalReadingMinutes: "Minutos totales de lectura",
+        lastSessionMinutes: "Minutos de la última sesión",
+        bookProgress: "Progreso del libro %",
+        chapterProgress: "Progreso del capítulo %",
+        firstReadAt: "Primera lectura",
+        lastReadAt: "Última lectura",
+        completedAt: "Completado en",
+        markCompleted: "Marcar como completado",
+        applyChanges: "Aplicar cambios",
+        recalculateFromDays: "Recalcular desde días",
+        duplicateBook: "Duplicar libro",
+        date: "Fecha",
+        minutes: "Minutos",
+        addDay: "Añadir día",
+        applyDays: "Aplicar días",
+        noReadingDays: "Este libro no tiene días de lectura.",
+        applyRawJson: "Aplicar JSON bruto",
+        delete: "Borrar",
+        deleteConfirm: "¿Borrar \"{title}\" de las estadísticas?",
+        invalidJson: "JSON no válido: {message}",
+        loadError: "No se pudo cargar el archivo de stats: {message}"
+      }
+    };
+
+    Object.assign(i18n, {
+      be: {
+        appTitle: "Рэдактар статыстыкі CPR-vCodex",
+        subtitle: "Лакальны рэдактар экспартаванай статыстыкі. Без загрузкі, без сервера.",
+        darkMode: "Цёмны рэжым",
+        lightMode: "Светлы рэжым",
+        openStats: "Адкрыць stats_exported",
+        newStats: "Новая пустая статыстыка",
+        downloadStats: "Спампаваць stats_exported",
+        importNotice: "Скапіруйце экспартаваны файл назад на прыладу як <strong>/exports/stats_exported</strong>, потым выкарыстоўвайце <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Агляд",
+        charts: "Графікі",
+        booksEditor: "Кнігі і рэдактар",
+        books: "Кнігі",
+        totalReadingTime: "Агульны час чытання",
+        sessions: "Сеансы",
+        completed: "Завершана",
+        addBook: "Дадаць кнігу",
+        editor: "Рэдактар",
+        deleteBook: "Выдаліць кнігу",
+        searchPlaceholder: "Шукаць назву, аўтара або шлях",
+        noFileLoaded: "Файл не загружаны",
+        statsLoaded: "Статыстыка загружана",
+        newStatsStatus: "новая статыстыка",
+        openCharts: "Адкрыйце файл статыстыкі, каб убачыць цеплавыя карты, графікі і рэйтынгі кніг.",
+        openStatsBegin: "Адкрыйце файл статыстыкі, каб пачаць.",
+        selectBook: "Выберыце кнігу, каб рэдагаваць метаданыя і дні чытання.",
+        noMatchingBooks: "Няма адпаведных кніг.",
+        noAuthor: "Без аўтара",
+        readingHeatmap: "Цеплавая карта чытання",
+        monthTotal: "Усяго за месяц",
+        daysRead: "Дзён чытання",
+        bestDay: "Лепшы дзень",
+        legend1: "1хв+",
+        legend10: "10хв+",
+        legend30: "30хв+",
+        legend60: "60хв+",
+        topBooks: "Лепшыя кнігі",
+        byTime: "Па часе",
+        noReadingTime: "Пакуль няма часу чытання.",
+        monthlyReading: "Чытанне па месяцах",
+        last12Months: "Апошнія 12 месяцаў",
+        hoverValues: "Навядзіце курсор на слупкі або клеткі, каб убачыць дакладныя значэнні.",
+        details: "Падрабязнасці",
+        readingDays: "Дні чытання",
+        rawJson: "Сыры JSON",
+        title: "Назва",
+        author: "Аўтар",
+        path: "Шлях",
+        bookId: "ID кнігі",
+        knownPaths: "Вядомыя шляхі, па адным у радку",
+        coverBmpPath: "Шлях да вокладкі BMP",
+        chapterTitle: "Назва раздзела",
+        totalReadingMinutes: "Агульныя хвіліны чытання",
+        lastSessionMinutes: "Хвіліны апошняга сеанса",
+        bookProgress: "Прагрэс кнігі %",
+        chapterProgress: "Прагрэс раздзела %",
+        firstReadAt: "Першае чытанне",
+        lastReadAt: "Апошняе чытанне",
+        completedAt: "Завершана",
+        markCompleted: "Пазначыць як завершаную",
+        applyChanges: "Ужыць змены",
+        recalculateFromDays: "Пералічыць па днях",
+        duplicateBook: "Дубляваць кнігу",
+        date: "Дата",
+        minutes: "Хвіліны",
+        addDay: "Дадаць дзень",
+        applyDays: "Ужыць дні",
+        noReadingDays: "Для гэтай кнігі няма дзён чытання.",
+        applyRawJson: "Ужыць сыры JSON",
+        delete: "Выдаліць",
+        deleteConfirm: "Выдаліць \"{title}\" са статыстыкі чытання?",
+        invalidJson: "Няправільны JSON: {message}",
+        loadError: "Не ўдалося загрузіць файл статыстыкі: {message}"
+      },
+      ca: {
+        appTitle: "Editor d'estadístiques CPR-vCodex",
+        subtitle: "Editor local per a estadístiques exportades. Sense pujada, sense servidor.",
+        darkMode: "Mode fosc",
+        lightMode: "Mode clar",
+        openStats: "Obre stats_exported",
+        newStats: "Estadístiques buides noves",
+        downloadStats: "Descarrega stats_exported",
+        importNotice: "Copia el fitxer exportat al dispositiu com a <strong>/exports/stats_exported</strong> i després fes servir <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Resum",
+        charts: "Gràfics",
+        booksEditor: "Llibres i editor",
+        books: "Llibres",
+        totalReadingTime: "Temps total de lectura",
+        sessions: "Sessions",
+        completed: "Completats",
+        addBook: "Afegeix llibre",
+        editor: "Editor",
+        deleteBook: "Suprimeix llibre",
+        searchPlaceholder: "Cerca títol, autor o ruta",
+        noFileLoaded: "Cap fitxer carregat",
+        statsLoaded: "Estadístiques carregades",
+        newStatsStatus: "estadístiques noves",
+        openCharts: "Obre un fitxer d'estadístiques per veure mapes de calor, gràfics i rànquings de llibres.",
+        openStatsBegin: "Obre un fitxer d'estadístiques per començar.",
+        selectBook: "Selecciona un llibre per editar-ne les metadades i els dies de lectura.",
+        noMatchingBooks: "No hi ha llibres coincidents.",
+        noAuthor: "Sense autor",
+        readingHeatmap: "Mapa de calor de lectura",
+        monthTotal: "Total del mes",
+        daysRead: "Dies llegits",
+        bestDay: "Millor dia",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Millors llibres",
+        byTime: "Per temps",
+        noReadingTime: "Encara no hi ha temps de lectura.",
+        monthlyReading: "Lectura mensual",
+        last12Months: "Últims 12 mesos",
+        hoverValues: "Passa el cursor per barres o cel·les per veure els valors exactes.",
+        details: "Detalls",
+        readingDays: "Dies de lectura",
+        rawJson: "JSON brut",
+        title: "Títol",
+        author: "Autor",
+        path: "Ruta",
+        bookId: "ID del llibre",
+        knownPaths: "Rutes conegudes, una per línia",
+        coverBmpPath: "Ruta de portada BMP",
+        chapterTitle: "Títol del capítol",
+        totalReadingMinutes: "Minuts totals de lectura",
+        lastSessionMinutes: "Minuts de l'última sessió",
+        bookProgress: "Progrés del llibre %",
+        chapterProgress: "Progrés del capítol %",
+        firstReadAt: "Primera lectura",
+        lastReadAt: "Última lectura",
+        completedAt: "Completat el",
+        markCompleted: "Marca com a completat",
+        applyChanges: "Aplica canvis",
+        recalculateFromDays: "Recalcula des dels dies",
+        duplicateBook: "Duplica llibre",
+        date: "Data",
+        minutes: "Minuts",
+        addDay: "Afegeix dia",
+        applyDays: "Aplica dies",
+        noReadingDays: "Aquest llibre no té dies de lectura.",
+        applyRawJson: "Aplica JSON brut",
+        delete: "Suprimeix",
+        deleteConfirm: "Vols suprimir \"{title}\" de les estadístiques de lectura?",
+        invalidJson: "JSON no vàlid: {message}",
+        loadError: "No s'ha pogut carregar el fitxer d'estadístiques: {message}"
+      },
+      cs: {
+        appTitle: "Editor statistik CPR-vCodex",
+        subtitle: "Místní editor exportovaných statistik čtení. Bez nahrávání, bez serveru.",
+        darkMode: "Tmavý režim",
+        lightMode: "Světlý režim",
+        openStats: "Otevřít stats_exported",
+        newStats: "Nové prázdné statistiky",
+        downloadStats: "Stáhnout stats_exported",
+        importNotice: "Zkopírujte exportovaný soubor zpět do zařízení jako <strong>/exports/stats_exported</strong> a potom použijte <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Přehled",
+        charts: "Grafy",
+        booksEditor: "Knihy a editor",
+        books: "Knihy",
+        totalReadingTime: "Celkový čas čtení",
+        sessions: "Relace",
+        completed: "Dokončeno",
+        addBook: "Přidat knihu",
+        editor: "Editor",
+        deleteBook: "Smazat knihu",
+        searchPlaceholder: "Hledat název, autora nebo cestu",
+        noFileLoaded: "Není načten žádný soubor",
+        statsLoaded: "Statistiky načteny",
+        newStatsStatus: "nové statistiky",
+        openCharts: "Otevřete soubor statistik a zobrazte tepelné mapy, grafy a žebříčky knih.",
+        openStatsBegin: "Začněte otevřením souboru statistik.",
+        selectBook: "Vyberte knihu a upravte její metadata a dny čtení.",
+        noMatchingBooks: "Žádné odpovídající knihy.",
+        noAuthor: "Bez autora",
+        readingHeatmap: "Tepelná mapa čtení",
+        monthTotal: "Celkem za měsíc",
+        daysRead: "Dny čtení",
+        bestDay: "Nejlepší den",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Nejlepší knihy",
+        byTime: "Podle času",
+        noReadingTime: "Zatím žádný čas čtení.",
+        monthlyReading: "Měsíční čtení",
+        last12Months: "Posledních 12 měsíců",
+        hoverValues: "Najeďte na sloupce nebo buňky mapy pro přesné hodnoty.",
+        details: "Podrobnosti",
+        readingDays: "Dny čtení",
+        rawJson: "Surový JSON",
+        title: "Název",
+        author: "Autor",
+        path: "Cesta",
+        bookId: "ID knihy",
+        knownPaths: "Známé cesty, jedna na řádek",
+        coverBmpPath: "Cesta k obálce BMP",
+        chapterTitle: "Název kapitoly",
+        totalReadingMinutes: "Celkové minuty čtení",
+        lastSessionMinutes: "Minuty poslední relace",
+        bookProgress: "Postup knihy %",
+        chapterProgress: "Postup kapitoly %",
+        firstReadAt: "První čtení",
+        lastReadAt: "Poslední čtení",
+        completedAt: "Dokončeno",
+        markCompleted: "Označit jako dokončené",
+        applyChanges: "Použít změny",
+        recalculateFromDays: "Přepočítat z dnů",
+        duplicateBook: "Duplikovat knihu",
+        date: "Datum",
+        minutes: "Minuty",
+        addDay: "Přidat den",
+        applyDays: "Použít dny",
+        noReadingDays: "Tato kniha nemá žádné dny čtení.",
+        applyRawJson: "Použít surový JSON",
+        delete: "Smazat",
+        deleteConfirm: "Smazat \"{title}\" ze statistik čtení?",
+        invalidJson: "Neplatný JSON: {message}",
+        loadError: "Soubor statistik se nepodařilo načíst: {message}"
+      },
+      da: {
+        appTitle: "CPR-vCodex læsestatistik-editor",
+        subtitle: "Lokal editor til eksporteret læsestatistik. Ingen upload, ingen server.",
+        darkMode: "Mørk tilstand",
+        lightMode: "Lys tilstand",
+        openStats: "Åbn stats_exported",
+        newStats: "Ny tom statistik",
+        downloadStats: "Download stats_exported",
+        importNotice: "Kopiér den eksporterede fil tilbage til enheden som <strong>/exports/stats_exported</strong>, og brug derefter <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Overblik",
+        charts: "Grafer",
+        booksEditor: "Bøger og editor",
+        books: "Bøger",
+        totalReadingTime: "Samlet læsetid",
+        sessions: "Sessioner",
+        completed: "Færdige",
+        addBook: "Tilføj bog",
+        editor: "Editor",
+        deleteBook: "Slet bog",
+        searchPlaceholder: "Søg efter titel, forfatter eller sti",
+        noFileLoaded: "Ingen fil indlæst",
+        statsLoaded: "Statistik indlæst",
+        newStatsStatus: "ny statistik",
+        openCharts: "Åbn en statistikfil for at se heatmaps, grafer og bograngeringer.",
+        openStatsBegin: "Åbn en statistikfil for at begynde.",
+        selectBook: "Vælg en bog for at redigere metadata og læsedage.",
+        noMatchingBooks: "Ingen matchende bøger.",
+        noAuthor: "Ingen forfatter",
+        readingHeatmap: "Læse-heatmap",
+        monthTotal: "Måned i alt",
+        daysRead: "Læsedage",
+        bestDay: "Bedste dag",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Topbøger",
+        byTime: "Efter tid",
+        noReadingTime: "Ingen læsetid endnu.",
+        monthlyReading: "Månedlig læsning",
+        last12Months: "Seneste 12 måneder",
+        hoverValues: "Hold musen over søjler eller heatmap-celler for nøjagtige værdier.",
+        details: "Detaljer",
+        readingDays: "Læsedage",
+        rawJson: "Rå JSON",
+        title: "Titel",
+        author: "Forfatter",
+        path: "Sti",
+        bookId: "Bog-ID",
+        knownPaths: "Kendte stier, én pr. linje",
+        coverBmpPath: "Sti til BMP-omslag",
+        chapterTitle: "Kapiteltitel",
+        totalReadingMinutes: "Samlede læseminutter",
+        lastSessionMinutes: "Minutter i seneste session",
+        bookProgress: "Bogfremskridt %",
+        chapterProgress: "Kapitel fremskridt %",
+        firstReadAt: "Først læst",
+        lastReadAt: "Sidst læst",
+        completedAt: "Færdiggjort",
+        markCompleted: "Markér som færdig",
+        applyChanges: "Anvend ændringer",
+        recalculateFromDays: "Genberegn fra dage",
+        duplicateBook: "Duplikér bog",
+        date: "Dato",
+        minutes: "Minutter",
+        addDay: "Tilføj dag",
+        applyDays: "Anvend dage",
+        noReadingDays: "Denne bog har ingen læsedage.",
+        applyRawJson: "Anvend rå JSON",
+        delete: "Slet",
+        deleteConfirm: "Slet \"{title}\" fra læsestatistikken?",
+        invalidJson: "Ugyldig JSON: {message}",
+        loadError: "Kunne ikke indlæse statistikfil: {message}"
+      },
+      nl: {
+        appTitle: "CPR-vCodex leesstatistieken-editor",
+        subtitle: "Lokale editor voor geëxporteerde leesstatistieken. Geen upload, geen server.",
+        darkMode: "Donkere modus",
+        lightMode: "Lichte modus",
+        openStats: "stats_exported openen",
+        newStats: "Nieuwe lege statistieken",
+        downloadStats: "stats_exported downloaden",
+        importNotice: "Kopieer het geëxporteerde bestand terug naar het apparaat als <strong>/exports/stats_exported</strong> en gebruik daarna <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Overzicht",
+        charts: "Grafieken",
+        booksEditor: "Boeken en editor",
+        books: "Boeken",
+        totalReadingTime: "Totale leestijd",
+        sessions: "Sessies",
+        completed: "Voltooid",
+        addBook: "Boek toevoegen",
+        editor: "Editor",
+        deleteBook: "Boek verwijderen",
+        searchPlaceholder: "Zoek titel, auteur of pad",
+        noFileLoaded: "Geen bestand geladen",
+        statsLoaded: "Statistieken geladen",
+        newStatsStatus: "nieuwe statistieken",
+        openCharts: "Open een statistiekenbestand om heatmaps, grafieken en boekenranglijsten te zien.",
+        openStatsBegin: "Open een statistiekenbestand om te beginnen.",
+        selectBook: "Selecteer een boek om metadata en leesdagen te bewerken.",
+        noMatchingBooks: "Geen overeenkomende boeken.",
+        noAuthor: "Geen auteur",
+        readingHeatmap: "Lees-heatmap",
+        monthTotal: "Maandtotaal",
+        daysRead: "Leesdagen",
+        bestDay: "Beste dag",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Topboeken",
+        byTime: "Op tijd",
+        noReadingTime: "Nog geen leestijd.",
+        monthlyReading: "Maandelijks lezen",
+        last12Months: "Laatste 12 maanden",
+        hoverValues: "Beweeg over balken of heatmap-cellen om exacte waarden te zien.",
+        details: "Details",
+        readingDays: "Leesdagen",
+        rawJson: "Ruwe JSON",
+        title: "Titel",
+        author: "Auteur",
+        path: "Pad",
+        bookId: "Boek-ID",
+        knownPaths: "Bekende paden, één per regel",
+        coverBmpPath: "Pad naar BMP-omslag",
+        chapterTitle: "Hoofdstuktitel",
+        totalReadingMinutes: "Totale leesminuten",
+        lastSessionMinutes: "Minuten laatste sessie",
+        bookProgress: "Boekvoortgang %",
+        chapterProgress: "Hoofdstukvoortgang %",
+        firstReadAt: "Eerst gelezen",
+        lastReadAt: "Laatst gelezen",
+        completedAt: "Voltooid op",
+        markCompleted: "Markeren als voltooid",
+        applyChanges: "Wijzigingen toepassen",
+        recalculateFromDays: "Herberekenen uit dagen",
+        duplicateBook: "Boek dupliceren",
+        date: "Datum",
+        minutes: "Minuten",
+        addDay: "Dag toevoegen",
+        applyDays: "Dagen toepassen",
+        noReadingDays: "Dit boek heeft geen leesdagen.",
+        applyRawJson: "Ruwe JSON toepassen",
+        delete: "Verwijderen",
+        deleteConfirm: "\"{title}\" uit leesstatistieken verwijderen?",
+        invalidJson: "Ongeldige JSON: {message}",
+        loadError: "Kon statistiekenbestand niet laden: {message}"
+      },
+      fi: {
+        appTitle: "CPR-vCodex-lukutilastojen editori",
+        subtitle: "Paikallinen editori viedyille lukutilastoille. Ei lähetystä, ei palvelinta.",
+        darkMode: "Tumma tila",
+        lightMode: "Vaalea tila",
+        openStats: "Avaa stats_exported",
+        newStats: "Uudet tyhjät tilastot",
+        downloadStats: "Lataa stats_exported",
+        importNotice: "Kopioi viety tiedosto takaisin laitteeseen nimellä <strong>/exports/stats_exported</strong> ja käytä sitten <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Yleiskatsaus",
+        charts: "Kaaviot",
+        booksEditor: "Kirjat ja editori",
+        books: "Kirjat",
+        totalReadingTime: "Kokonaislukuaika",
+        sessions: "Istunnot",
+        completed: "Valmiit",
+        addBook: "Lisää kirja",
+        editor: "Editori",
+        deleteBook: "Poista kirja",
+        searchPlaceholder: "Hae otsikkoa, tekijää tai polkua",
+        noFileLoaded: "Ei ladattua tiedostoa",
+        statsLoaded: "Tilastot ladattu",
+        newStatsStatus: "uudet tilastot",
+        openCharts: "Avaa tilastotiedosto nähdäksesi lämpökartat, kaaviot ja kirjajärjestykset.",
+        openStatsBegin: "Aloita avaamalla tilastotiedosto.",
+        selectBook: "Valitse kirja muokataksesi metatietoja ja lukupäiviä.",
+        noMatchingBooks: "Ei vastaavia kirjoja.",
+        noAuthor: "Ei tekijää",
+        readingHeatmap: "Lukemisen lämpökartta",
+        monthTotal: "Kuukauden yhteensä",
+        daysRead: "Lukupäivät",
+        bestDay: "Paras päivä",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Parhaat kirjat",
+        byTime: "Ajan mukaan",
+        noReadingTime: "Ei vielä lukuaikaa.",
+        monthlyReading: "Kuukausittainen lukeminen",
+        last12Months: "Viimeiset 12 kuukautta",
+        hoverValues: "Näytä tarkat arvot viemällä osoitin palkkien tai solujen päälle.",
+        details: "Tiedot",
+        readingDays: "Lukupäivät",
+        rawJson: "Raaka JSON",
+        title: "Otsikko",
+        author: "Tekijä",
+        path: "Polku",
+        bookId: "Kirjan ID",
+        knownPaths: "Tunnetut polut, yksi riville",
+        coverBmpPath: "BMP-kannen polku",
+        chapterTitle: "Luvun otsikko",
+        totalReadingMinutes: "Lukemisen kokonaisminuutit",
+        lastSessionMinutes: "Viimeisen istunnon minuutit",
+        bookProgress: "Kirjan edistyminen %",
+        chapterProgress: "Luvun edistyminen %",
+        firstReadAt: "Ensimmäinen luku",
+        lastReadAt: "Viimeisin luku",
+        completedAt: "Valmistunut",
+        markCompleted: "Merkitse valmiiksi",
+        applyChanges: "Käytä muutokset",
+        recalculateFromDays: "Laske uudelleen päivistä",
+        duplicateBook: "Monista kirja",
+        date: "Päiväys",
+        minutes: "Minuutit",
+        addDay: "Lisää päivä",
+        applyDays: "Käytä päivät",
+        noReadingDays: "Tällä kirjalla ei ole lukupäiviä.",
+        applyRawJson: "Käytä raakaa JSONia",
+        delete: "Poista",
+        deleteConfirm: "Poistetaanko \"{title}\" lukutilastoista?",
+        invalidJson: "Virheellinen JSON: {message}",
+        loadError: "Tilastotiedostoa ei voitu ladata: {message}"
+      },
+      fr: {
+        appTitle: "Éditeur de statistiques CPR-vCodex",
+        subtitle: "Éditeur local pour les statistiques exportées. Aucun envoi, aucun serveur.",
+        darkMode: "Mode sombre",
+        lightMode: "Mode clair",
+        openStats: "Ouvrir stats_exported",
+        newStats: "Nouvelles stats vides",
+        downloadStats: "Télécharger stats_exported",
+        importNotice: "Copiez le fichier exporté sur l'appareil sous <strong>/exports/stats_exported</strong>, puis utilisez <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Aperçu",
+        charts: "Graphiques",
+        booksEditor: "Livres et éditeur",
+        books: "Livres",
+        totalReadingTime: "Temps total de lecture",
+        sessions: "Sessions",
+        completed: "Terminés",
+        addBook: "Ajouter un livre",
+        editor: "Éditeur",
+        deleteBook: "Supprimer le livre",
+        searchPlaceholder: "Rechercher titre, auteur ou chemin",
+        noFileLoaded: "Aucun fichier chargé",
+        statsLoaded: "Statistiques chargées",
+        newStatsStatus: "nouvelles stats",
+        openCharts: "Ouvrez un fichier de statistiques pour voir les cartes de chaleur, graphiques et classements.",
+        openStatsBegin: "Ouvrez un fichier de statistiques pour commencer.",
+        selectBook: "Sélectionnez un livre pour modifier ses métadonnées et jours de lecture.",
+        noMatchingBooks: "Aucun livre correspondant.",
+        noAuthor: "Sans auteur",
+        readingHeatmap: "Carte de chaleur de lecture",
+        monthTotal: "Total du mois",
+        daysRead: "Jours lus",
+        bestDay: "Meilleur jour",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Meilleurs livres",
+        byTime: "Par temps",
+        noReadingTime: "Aucun temps de lecture pour l'instant.",
+        monthlyReading: "Lecture mensuelle",
+        last12Months: "12 derniers mois",
+        hoverValues: "Survolez les barres ou cellules pour voir les valeurs exactes.",
+        details: "Détails",
+        readingDays: "Jours de lecture",
+        rawJson: "JSON brut",
+        title: "Titre",
+        author: "Auteur",
+        path: "Chemin",
+        bookId: "ID du livre",
+        knownPaths: "Chemins connus, un par ligne",
+        coverBmpPath: "Chemin de couverture BMP",
+        chapterTitle: "Titre du chapitre",
+        totalReadingMinutes: "Minutes totales de lecture",
+        lastSessionMinutes: "Minutes de la dernière session",
+        bookProgress: "Progression du livre %",
+        chapterProgress: "Progression du chapitre %",
+        firstReadAt: "Première lecture",
+        lastReadAt: "Dernière lecture",
+        completedAt: "Terminé le",
+        markCompleted: "Marquer comme terminé",
+        applyChanges: "Appliquer les changements",
+        recalculateFromDays: "Recalculer depuis les jours",
+        duplicateBook: "Dupliquer le livre",
+        date: "Date",
+        minutes: "Minutes",
+        addDay: "Ajouter un jour",
+        applyDays: "Appliquer les jours",
+        noReadingDays: "Ce livre n'a aucun jour de lecture.",
+        applyRawJson: "Appliquer le JSON brut",
+        delete: "Supprimer",
+        deleteConfirm: "Supprimer \"{title}\" des statistiques de lecture ?",
+        invalidJson: "JSON invalide : {message}",
+        loadError: "Impossible de charger le fichier de statistiques : {message}"
+      },
+      de: {
+        appTitle: "CPR-vCodex Lesestatistik-Editor",
+        subtitle: "Lokaler Editor für exportierte Lesestatistiken. Kein Upload, kein Server.",
+        darkMode: "Dunkler Modus",
+        lightMode: "Heller Modus",
+        openStats: "stats_exported öffnen",
+        newStats: "Neue leere Statistik",
+        downloadStats: "stats_exported herunterladen",
+        importNotice: "Kopieren Sie die exportierte Datei als <strong>/exports/stats_exported</strong> zurück auf das Gerät und verwenden Sie dann <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Übersicht",
+        charts: "Diagramme",
+        booksEditor: "Bücher und Editor",
+        books: "Bücher",
+        totalReadingTime: "Gesamte Lesezeit",
+        sessions: "Sitzungen",
+        completed: "Abgeschlossen",
+        addBook: "Buch hinzufügen",
+        editor: "Editor",
+        deleteBook: "Buch löschen",
+        searchPlaceholder: "Titel, Autor oder Pfad suchen",
+        noFileLoaded: "Keine Datei geladen",
+        statsLoaded: "Statistik geladen",
+        newStatsStatus: "neue Statistik",
+        openCharts: "Öffnen Sie eine Statistikdatei, um Heatmaps, Diagramme und Buchranglisten zu sehen.",
+        openStatsBegin: "Öffnen Sie eine Statistikdatei, um zu beginnen.",
+        selectBook: "Wählen Sie ein Buch, um Metadaten und Lesetage zu bearbeiten.",
+        noMatchingBooks: "Keine passenden Bücher.",
+        noAuthor: "Kein Autor",
+        readingHeatmap: "Lese-Heatmap",
+        monthTotal: "Monat gesamt",
+        daysRead: "Lesetage",
+        bestDay: "Bester Tag",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Top-Bücher",
+        byTime: "Nach Zeit",
+        noReadingTime: "Noch keine Lesezeit.",
+        monthlyReading: "Monatliches Lesen",
+        last12Months: "Letzte 12 Monate",
+        hoverValues: "Bewegen Sie den Mauszeiger über Balken oder Heatmap-Zellen, um genaue Werte zu sehen.",
+        details: "Details",
+        readingDays: "Lesetage",
+        rawJson: "Rohes JSON",
+        title: "Titel",
+        author: "Autor",
+        path: "Pfad",
+        bookId: "Buch-ID",
+        knownPaths: "Bekannte Pfade, einer pro Zeile",
+        coverBmpPath: "BMP-Coverpfad",
+        chapterTitle: "Kapiteltitel",
+        totalReadingMinutes: "Gesamte Leseminuten",
+        lastSessionMinutes: "Minuten der letzten Sitzung",
+        bookProgress: "Buchfortschritt %",
+        chapterProgress: "Kapitelfortschritt %",
+        firstReadAt: "Zuerst gelesen",
+        lastReadAt: "Zuletzt gelesen",
+        completedAt: "Abgeschlossen am",
+        markCompleted: "Als abgeschlossen markieren",
+        applyChanges: "Änderungen anwenden",
+        recalculateFromDays: "Aus Tagen neu berechnen",
+        duplicateBook: "Buch duplizieren",
+        date: "Datum",
+        minutes: "Minuten",
+        addDay: "Tag hinzufügen",
+        applyDays: "Tage anwenden",
+        noReadingDays: "Dieses Buch hat keine Lesetage.",
+        applyRawJson: "Rohes JSON anwenden",
+        delete: "Löschen",
+        deleteConfirm: "\"{title}\" aus den Lesestatistiken löschen?",
+        invalidJson: "Ungültiges JSON: {message}",
+        loadError: "Statistikdatei konnte nicht geladen werden: {message}"
+      },
+      hu: {
+        appTitle: "CPR-vCodex olvasási statisztika szerkesztő",
+        subtitle: "Helyi szerkesztő exportált olvasási statisztikákhoz. Nincs feltöltés, nincs szerver.",
+        darkMode: "Sötét mód",
+        lightMode: "Világos mód",
+        openStats: "stats_exported megnyitása",
+        newStats: "Új üres statisztika",
+        downloadStats: "stats_exported letöltése",
+        importNotice: "Másold vissza az exportált fájlt az eszközre <strong>/exports/stats_exported</strong> néven, majd használd ezt: <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Áttekintés",
+        charts: "Diagramok",
+        booksEditor: "Könyvek és szerkesztő",
+        books: "Könyvek",
+        totalReadingTime: "Teljes olvasási idő",
+        sessions: "Munkamenetek",
+        completed: "Befejezve",
+        addBook: "Könyv hozzáadása",
+        editor: "Szerkesztő",
+        deleteBook: "Könyv törlése",
+        searchPlaceholder: "Cím, szerző vagy útvonal keresése",
+        noFileLoaded: "Nincs betöltött fájl",
+        statsLoaded: "Statisztika betöltve",
+        newStatsStatus: "új statisztika",
+        openCharts: "Nyiss meg egy statisztikafájlt a hőtérképek, diagramok és könyvrangsorok megtekintéséhez.",
+        openStatsBegin: "A kezdéshez nyiss meg egy statisztikafájlt.",
+        selectBook: "Válassz könyvet a metaadatok és olvasási napok szerkesztéséhez.",
+        noMatchingBooks: "Nincs találat.",
+        noAuthor: "Nincs szerző",
+        readingHeatmap: "Olvasási hőtérkép",
+        monthTotal: "Havi összesen",
+        daysRead: "Olvasott napok",
+        bestDay: "Legjobb nap",
+        legend1: "1p+",
+        legend10: "10p+",
+        legend30: "30p+",
+        legend60: "60p+",
+        topBooks: "Legjobb könyvek",
+        byTime: "Idő szerint",
+        noReadingTime: "Még nincs olvasási idő.",
+        monthlyReading: "Havi olvasás",
+        last12Months: "Utolsó 12 hónap",
+        hoverValues: "Pontos értékekhez vidd az egeret a sávokra vagy hőtérkép cellákra.",
+        details: "Részletek",
+        readingDays: "Olvasási napok",
+        rawJson: "Nyers JSON",
+        title: "Cím",
+        author: "Szerző",
+        path: "Útvonal",
+        bookId: "Könyvazonosító",
+        knownPaths: "Ismert útvonalak, soronként egy",
+        coverBmpPath: "BMP borító útvonala",
+        chapterTitle: "Fejezet címe",
+        totalReadingMinutes: "Összes olvasási perc",
+        lastSessionMinutes: "Utolsó munkamenet percei",
+        bookProgress: "Könyv előrehaladás %",
+        chapterProgress: "Fejezet előrehaladás %",
+        firstReadAt: "Első olvasás",
+        lastReadAt: "Utolsó olvasás",
+        completedAt: "Befejezve",
+        markCompleted: "Megjelölés befejezettként",
+        applyChanges: "Módosítások alkalmazása",
+        recalculateFromDays: "Újraszámítás napokból",
+        duplicateBook: "Könyv duplikálása",
+        date: "Dátum",
+        minutes: "Percek",
+        addDay: "Nap hozzáadása",
+        applyDays: "Napok alkalmazása",
+        noReadingDays: "Ehhez a könyvhöz nincs olvasási nap.",
+        applyRawJson: "Nyers JSON alkalmazása",
+        delete: "Törlés",
+        deleteConfirm: "Törlöd a(z) \"{title}\" könyvet az olvasási statisztikákból?",
+        invalidJson: "Érvénytelen JSON: {message}",
+        loadError: "Nem sikerült betölteni a statisztikafájlt: {message}"
+      },
+      it: {
+        appTitle: "Editor statistiche CPR-vCodex",
+        subtitle: "Editor locale per statistiche di lettura esportate. Nessun upload, nessun server.",
+        darkMode: "Modalità scura",
+        lightMode: "Modalità chiara",
+        openStats: "Apri stats_exported",
+        newStats: "Nuove statistiche vuote",
+        downloadStats: "Scarica stats_exported",
+        importNotice: "Copia il file esportato sul dispositivo come <strong>/exports/stats_exported</strong>, poi usa <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Panoramica",
+        charts: "Grafici",
+        booksEditor: "Libri ed editor",
+        books: "Libri",
+        totalReadingTime: "Tempo totale di lettura",
+        sessions: "Sessioni",
+        completed: "Completati",
+        addBook: "Aggiungi libro",
+        editor: "Editor",
+        deleteBook: "Elimina libro",
+        searchPlaceholder: "Cerca titolo, autore o percorso",
+        noFileLoaded: "Nessun file caricato",
+        statsLoaded: "Statistiche caricate",
+        newStatsStatus: "nuove statistiche",
+        openCharts: "Apri un file di statistiche per vedere heatmap, grafici e classifiche dei libri.",
+        openStatsBegin: "Apri un file di statistiche per iniziare.",
+        selectBook: "Seleziona un libro per modificarne metadati e giorni di lettura.",
+        noMatchingBooks: "Nessun libro corrispondente.",
+        noAuthor: "Nessun autore",
+        readingHeatmap: "Heatmap di lettura",
+        monthTotal: "Totale mese",
+        daysRead: "Giorni letti",
+        bestDay: "Giorno migliore",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Libri migliori",
+        byTime: "Per tempo",
+        noReadingTime: "Ancora nessun tempo di lettura.",
+        monthlyReading: "Lettura mensile",
+        last12Months: "Ultimi 12 mesi",
+        hoverValues: "Passa su barre o celle della heatmap per vedere i valori esatti.",
+        details: "Dettagli",
+        readingDays: "Giorni di lettura",
+        rawJson: "JSON grezzo",
+        title: "Titolo",
+        author: "Autore",
+        path: "Percorso",
+        bookId: "ID libro",
+        knownPaths: "Percorsi noti, uno per riga",
+        coverBmpPath: "Percorso copertina BMP",
+        chapterTitle: "Titolo capitolo",
+        totalReadingMinutes: "Minuti totali di lettura",
+        lastSessionMinutes: "Minuti ultima sessione",
+        bookProgress: "Avanzamento libro %",
+        chapterProgress: "Avanzamento capitolo %",
+        firstReadAt: "Prima lettura",
+        lastReadAt: "Ultima lettura",
+        completedAt: "Completato il",
+        markCompleted: "Segna come completato",
+        applyChanges: "Applica modifiche",
+        recalculateFromDays: "Ricalcola dai giorni",
+        duplicateBook: "Duplica libro",
+        date: "Data",
+        minutes: "Minuti",
+        addDay: "Aggiungi giorno",
+        applyDays: "Applica giorni",
+        noReadingDays: "Questo libro non ha giorni di lettura.",
+        applyRawJson: "Applica JSON grezzo",
+        delete: "Elimina",
+        deleteConfirm: "Eliminare \"{title}\" dalle statistiche di lettura?",
+        invalidJson: "JSON non valido: {message}",
+        loadError: "Impossibile caricare il file di statistiche: {message}"
+      },
+      kk: {
+        appTitle: "CPR-vCodex оқу статистикасы редакторы",
+        subtitle: "Экспортталған оқу статистикасына арналған жергілікті редактор. Жүктеу жоқ, сервер жоқ.",
+        darkMode: "Қараңғы режим",
+        lightMode: "Жарық режим",
+        openStats: "stats_exported ашу",
+        newStats: "Жаңа бос статистика",
+        downloadStats: "stats_exported жүктеп алу",
+        importNotice: "Экспортталған файлды құрылғыға <strong>/exports/stats_exported</strong> ретінде қайта көшіріңіз, содан кейін <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong> пайдаланыңыз.",
+        overview: "Шолу",
+        charts: "Графиктер",
+        booksEditor: "Кітаптар және редактор",
+        books: "Кітаптар",
+        totalReadingTime: "Жалпы оқу уақыты",
+        sessions: "Сессиялар",
+        completed: "Аяқталған",
+        addBook: "Кітап қосу",
+        editor: "Редактор",
+        deleteBook: "Кітапты жою",
+        searchPlaceholder: "Атауы, авторы немесе жолы бойынша іздеу",
+        noFileLoaded: "Файл жүктелмеген",
+        statsLoaded: "Статистика жүктелді",
+        newStatsStatus: "жаңа статистика",
+        openCharts: "Жылу карталарын, графиктерді және кітап рейтингтерін көру үшін статистика файлын ашыңыз.",
+        openStatsBegin: "Бастау үшін статистика файлын ашыңыз.",
+        selectBook: "Метадеректер мен оқу күндерін өңдеу үшін кітап таңдаңыз.",
+        noMatchingBooks: "Сәйкес кітаптар жоқ.",
+        noAuthor: "Автор жоқ",
+        readingHeatmap: "Оқу жылу картасы",
+        monthTotal: "Айлық жиынтық",
+        daysRead: "Оқылған күндер",
+        bestDay: "Ең жақсы күн",
+        legend1: "1м+",
+        legend10: "10м+",
+        legend30: "30м+",
+        legend60: "60м+",
+        topBooks: "Үздік кітаптар",
+        byTime: "Уақыты бойынша",
+        noReadingTime: "Әзірге оқу уақыты жоқ.",
+        monthlyReading: "Айлық оқу",
+        last12Months: "Соңғы 12 ай",
+        hoverValues: "Нақты мәндерді көру үшін бағандарға немесе жылу картасы ұяшықтарына меңзерді апарыңыз.",
+        details: "Мәліметтер",
+        readingDays: "Оқу күндері",
+        rawJson: "Шикі JSON",
+        title: "Атауы",
+        author: "Автор",
+        path: "Жол",
+        bookId: "Кітап ID",
+        knownPaths: "Белгілі жолдар, әр жолға біреу",
+        coverBmpPath: "BMP мұқаба жолы",
+        chapterTitle: "Тарау атауы",
+        totalReadingMinutes: "Жалпы оқу минуттары",
+        lastSessionMinutes: "Соңғы сессия минуттары",
+        bookProgress: "Кітап прогресі %",
+        chapterProgress: "Тарау прогресі %",
+        firstReadAt: "Алғаш оқылған",
+        lastReadAt: "Соңғы оқылған",
+        completedAt: "Аяқталған уақыты",
+        markCompleted: "Аяқталды деп белгілеу",
+        applyChanges: "Өзгерістерді қолдану",
+        recalculateFromDays: "Күндерден қайта есептеу",
+        duplicateBook: "Кітапты көшіру",
+        date: "Күні",
+        minutes: "Минуттар",
+        addDay: "Күн қосу",
+        applyDays: "Күндерді қолдану",
+        noReadingDays: "Бұл кітапта оқу күндері жоқ.",
+        applyRawJson: "Шикі JSON қолдану",
+        delete: "Жою",
+        deleteConfirm: "\"{title}\" оқу статистикасынан жойылсын ба?",
+        invalidJson: "Жарамсыз JSON: {message}",
+        loadError: "Статистика файлын жүктеу мүмкін болмады: {message}"
+      }
+    });
+
+    Object.assign(i18n, {
+      lt: {
+        appTitle: "CPR-vCodex skaitymo statistikos redaktorius",
+        subtitle: "Vietinis eksportuotos skaitymo statistikos redaktorius. Be įkėlimo, be serverio.",
+        darkMode: "Tamsus režimas",
+        lightMode: "Šviesus režimas",
+        openStats: "Atidaryti stats_exported",
+        newStats: "Nauja tuščia statistika",
+        downloadStats: "Atsisiųsti stats_exported",
+        importNotice: "Nukopijuokite eksportuotą failą atgal į įrenginį kaip <strong>/exports/stats_exported</strong>, tada naudokite <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Apžvalga",
+        charts: "Diagramos",
+        booksEditor: "Knygos ir redaktorius",
+        books: "Knygos",
+        totalReadingTime: "Bendras skaitymo laikas",
+        sessions: "Seansai",
+        completed: "Baigta",
+        addBook: "Pridėti knygą",
+        editor: "Redaktorius",
+        deleteBook: "Ištrinti knygą",
+        searchPlaceholder: "Ieškoti pavadinimo, autoriaus ar kelio",
+        noFileLoaded: "Failas neįkeltas",
+        statsLoaded: "Statistika įkelta",
+        newStatsStatus: "nauja statistika",
+        openCharts: "Atidarykite statistikos failą, kad matytumėte šilumos žemėlapius, diagramas ir knygų reitingus.",
+        openStatsBegin: "Norėdami pradėti, atidarykite statistikos failą.",
+        selectBook: "Pasirinkite knygą, kad redaguotumėte jos metaduomenis ir skaitymo dienas.",
+        noMatchingBooks: "Atitinkančių knygų nėra.",
+        noAuthor: "Nėra autoriaus",
+        readingHeatmap: "Skaitymo šilumos žemėlapis",
+        monthTotal: "Mėnesio suma",
+        daysRead: "Skaitymo dienos",
+        bestDay: "Geriausia diena",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Populiariausios knygos",
+        byTime: "Pagal laiką",
+        noReadingTime: "Skaitymo laiko dar nėra.",
+        monthlyReading: "Mėnesinis skaitymas",
+        last12Months: "Paskutiniai 12 mėnesių",
+        hoverValues: "Užveskite pelę ant stulpelių ar langelių, kad matytumėte tikslias reikšmes.",
+        details: "Informacija",
+        readingDays: "Skaitymo dienos",
+        rawJson: "Neapdorotas JSON",
+        title: "Pavadinimas",
+        author: "Autorius",
+        path: "Kelias",
+        bookId: "Knygos ID",
+        knownPaths: "Žinomi keliai, po vieną eilutėje",
+        coverBmpPath: "BMP viršelio kelias",
+        chapterTitle: "Skyriaus pavadinimas",
+        totalReadingMinutes: "Bendros skaitymo minutės",
+        lastSessionMinutes: "Paskutinio seanso minutės",
+        bookProgress: "Knygos progresas %",
+        chapterProgress: "Skyriaus progresas %",
+        firstReadAt: "Pirmas skaitymas",
+        lastReadAt: "Paskutinis skaitymas",
+        completedAt: "Baigta",
+        markCompleted: "Pažymėti kaip baigtą",
+        applyChanges: "Taikyti pakeitimus",
+        recalculateFromDays: "Perskaičiuoti iš dienų",
+        duplicateBook: "Dubliuoti knygą",
+        date: "Data",
+        minutes: "Minutės",
+        addDay: "Pridėti dieną",
+        applyDays: "Taikyti dienas",
+        noReadingDays: "Ši knyga neturi skaitymo dienų.",
+        applyRawJson: "Taikyti neapdorotą JSON",
+        delete: "Ištrinti",
+        deleteConfirm: "Ištrinti \"{title}\" iš skaitymo statistikos?",
+        invalidJson: "Netinkamas JSON: {message}",
+        loadError: "Nepavyko įkelti statistikos failo: {message}"
+      },
+      pl: {
+        appTitle: "Edytor statystyk CPR-vCodex",
+        subtitle: "Lokalny edytor wyeksportowanych statystyk czytania. Bez wysyłania, bez serwera.",
+        darkMode: "Tryb ciemny",
+        lightMode: "Tryb jasny",
+        openStats: "Otwórz stats_exported",
+        newStats: "Nowe puste statystyki",
+        downloadStats: "Pobierz stats_exported",
+        importNotice: "Skopiuj wyeksportowany plik z powrotem na urządzenie jako <strong>/exports/stats_exported</strong>, a następnie użyj <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Przegląd",
+        charts: "Wykresy",
+        booksEditor: "Książki i edytor",
+        books: "Książki",
+        totalReadingTime: "Łączny czas czytania",
+        sessions: "Sesje",
+        completed: "Ukończone",
+        addBook: "Dodaj książkę",
+        editor: "Edytor",
+        deleteBook: "Usuń książkę",
+        searchPlaceholder: "Szukaj tytułu, autora lub ścieżki",
+        noFileLoaded: "Nie wczytano pliku",
+        statsLoaded: "Statystyki wczytane",
+        newStatsStatus: "nowe statystyki",
+        openCharts: "Otwórz plik statystyk, aby zobaczyć mapy cieplne, wykresy i rankingi książek.",
+        openStatsBegin: "Otwórz plik statystyk, aby zacząć.",
+        selectBook: "Wybierz książkę, aby edytować metadane i dni czytania.",
+        noMatchingBooks: "Brak pasujących książek.",
+        noAuthor: "Brak autora",
+        readingHeatmap: "Mapa cieplna czytania",
+        monthTotal: "Suma miesiąca",
+        daysRead: "Dni czytania",
+        bestDay: "Najlepszy dzień",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Najlepsze książki",
+        byTime: "Według czasu",
+        noReadingTime: "Brak czasu czytania.",
+        monthlyReading: "Czytanie miesięczne",
+        last12Months: "Ostatnie 12 miesięcy",
+        hoverValues: "Najedź na słupki lub komórki mapy, aby zobaczyć dokładne wartości.",
+        details: "Szczegóły",
+        readingDays: "Dni czytania",
+        rawJson: "Surowy JSON",
+        title: "Tytuł",
+        author: "Autor",
+        path: "Ścieżka",
+        bookId: "ID książki",
+        knownPaths: "Znane ścieżki, po jednej w wierszu",
+        coverBmpPath: "Ścieżka okładki BMP",
+        chapterTitle: "Tytuł rozdziału",
+        totalReadingMinutes: "Łączne minuty czytania",
+        lastSessionMinutes: "Minuty ostatniej sesji",
+        bookProgress: "Postęp książki %",
+        chapterProgress: "Postęp rozdziału %",
+        firstReadAt: "Pierwsze czytanie",
+        lastReadAt: "Ostatnie czytanie",
+        completedAt: "Ukończono",
+        markCompleted: "Oznacz jako ukończone",
+        applyChanges: "Zastosuj zmiany",
+        recalculateFromDays: "Przelicz z dni",
+        duplicateBook: "Duplikuj książkę",
+        date: "Data",
+        minutes: "Minuty",
+        addDay: "Dodaj dzień",
+        applyDays: "Zastosuj dni",
+        noReadingDays: "Ta książka nie ma dni czytania.",
+        applyRawJson: "Zastosuj surowy JSON",
+        delete: "Usuń",
+        deleteConfirm: "Usunąć \"{title}\" ze statystyk czytania?",
+        invalidJson: "Nieprawidłowy JSON: {message}",
+        loadError: "Nie udało się wczytać pliku statystyk: {message}"
+      },
+      pt: {
+        appTitle: "Editor de estatísticas CPR-vCodex",
+        subtitle: "Editor local para estatísticas de leitura exportadas. Sem upload, sem servidor.",
+        darkMode: "Modo escuro",
+        lightMode: "Modo claro",
+        openStats: "Abrir stats_exported",
+        newStats: "Novas estatísticas vazias",
+        downloadStats: "Baixar stats_exported",
+        importNotice: "Copie o arquivo exportado de volta para o dispositivo como <strong>/exports/stats_exported</strong> e depois use <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Visão geral",
+        charts: "Gráficos",
+        booksEditor: "Livros e editor",
+        books: "Livros",
+        totalReadingTime: "Tempo total de leitura",
+        sessions: "Sessões",
+        completed: "Concluídos",
+        addBook: "Adicionar livro",
+        editor: "Editor",
+        deleteBook: "Excluir livro",
+        searchPlaceholder: "Buscar título, autor ou caminho",
+        noFileLoaded: "Nenhum arquivo carregado",
+        statsLoaded: "Estatísticas carregadas",
+        newStatsStatus: "novas estatísticas",
+        openCharts: "Abra um arquivo de estatísticas para ver mapas de calor, gráficos e rankings de livros.",
+        openStatsBegin: "Abra um arquivo de estatísticas para começar.",
+        selectBook: "Selecione um livro para editar metadados e dias de leitura.",
+        noMatchingBooks: "Nenhum livro correspondente.",
+        noAuthor: "Sem autor",
+        readingHeatmap: "Mapa de calor de leitura",
+        monthTotal: "Total do mês",
+        daysRead: "Dias lidos",
+        bestDay: "Melhor dia",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Principais livros",
+        byTime: "Por tempo",
+        noReadingTime: "Ainda não há tempo de leitura.",
+        monthlyReading: "Leitura mensal",
+        last12Months: "Últimos 12 meses",
+        hoverValues: "Passe o cursor sobre barras ou células para ver valores exatos.",
+        details: "Detalhes",
+        readingDays: "Dias de leitura",
+        rawJson: "JSON bruto",
+        title: "Título",
+        author: "Autor",
+        path: "Caminho",
+        bookId: "ID do livro",
+        knownPaths: "Caminhos conhecidos, um por linha",
+        coverBmpPath: "Caminho da capa BMP",
+        chapterTitle: "Título do capítulo",
+        totalReadingMinutes: "Minutos totais de leitura",
+        lastSessionMinutes: "Minutos da última sessão",
+        bookProgress: "Progresso do livro %",
+        chapterProgress: "Progresso do capítulo %",
+        firstReadAt: "Primeira leitura",
+        lastReadAt: "Última leitura",
+        completedAt: "Concluído em",
+        markCompleted: "Marcar como concluído",
+        applyChanges: "Aplicar alterações",
+        recalculateFromDays: "Recalcular a partir dos dias",
+        duplicateBook: "Duplicar livro",
+        date: "Data",
+        minutes: "Minutos",
+        addDay: "Adicionar dia",
+        applyDays: "Aplicar dias",
+        noReadingDays: "Este livro não tem dias de leitura.",
+        applyRawJson: "Aplicar JSON bruto",
+        delete: "Excluir",
+        deleteConfirm: "Excluir \"{title}\" das estatísticas de leitura?",
+        invalidJson: "JSON inválido: {message}",
+        loadError: "Não foi possível carregar o arquivo de estatísticas: {message}"
+      },
+      ro: {
+        appTitle: "Editor statistici CPR-vCodex",
+        subtitle: "Editor local pentru statistici de citire exportate. Fără încărcare, fără server.",
+        darkMode: "Mod întunecat",
+        lightMode: "Mod luminos",
+        openStats: "Deschide stats_exported",
+        newStats: "Statistici goale noi",
+        downloadStats: "Descarcă stats_exported",
+        importNotice: "Copiați fișierul exportat înapoi pe dispozitiv ca <strong>/exports/stats_exported</strong>, apoi folosiți <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Prezentare",
+        charts: "Grafice",
+        booksEditor: "Cărți și editor",
+        books: "Cărți",
+        totalReadingTime: "Timp total de citire",
+        sessions: "Sesiuni",
+        completed: "Finalizate",
+        addBook: "Adaugă carte",
+        editor: "Editor",
+        deleteBook: "Șterge cartea",
+        searchPlaceholder: "Caută titlu, autor sau cale",
+        noFileLoaded: "Niciun fișier încărcat",
+        statsLoaded: "Statistici încărcate",
+        newStatsStatus: "statistici noi",
+        openCharts: "Deschideți un fișier de statistici pentru a vedea hărți termice, grafice și clasamente de cărți.",
+        openStatsBegin: "Deschideți un fișier de statistici pentru a începe.",
+        selectBook: "Selectați o carte pentru a edita metadatele și zilele de citire.",
+        noMatchingBooks: "Nu există cărți potrivite.",
+        noAuthor: "Fără autor",
+        readingHeatmap: "Hartă termică de citire",
+        monthTotal: "Total lună",
+        daysRead: "Zile citite",
+        bestDay: "Cea mai bună zi",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Top cărți",
+        byTime: "După timp",
+        noReadingTime: "Încă nu există timp de citire.",
+        monthlyReading: "Citire lunară",
+        last12Months: "Ultimele 12 luni",
+        hoverValues: "Treceți peste bare sau celule pentru a vedea valorile exacte.",
+        details: "Detalii",
+        readingDays: "Zile de citire",
+        rawJson: "JSON brut",
+        title: "Titlu",
+        author: "Autor",
+        path: "Cale",
+        bookId: "ID carte",
+        knownPaths: "Căi cunoscute, una pe linie",
+        coverBmpPath: "Cale copertă BMP",
+        chapterTitle: "Titlu capitol",
+        totalReadingMinutes: "Minute totale de citire",
+        lastSessionMinutes: "Minute ultima sesiune",
+        bookProgress: "Progres carte %",
+        chapterProgress: "Progres capitol %",
+        firstReadAt: "Prima citire",
+        lastReadAt: "Ultima citire",
+        completedAt: "Finalizat la",
+        markCompleted: "Marchează ca finalizat",
+        applyChanges: "Aplică modificările",
+        recalculateFromDays: "Recalculează din zile",
+        duplicateBook: "Duplică cartea",
+        date: "Dată",
+        minutes: "Minute",
+        addDay: "Adaugă zi",
+        applyDays: "Aplică zilele",
+        noReadingDays: "Această carte nu are zile de citire.",
+        applyRawJson: "Aplică JSON brut",
+        delete: "Șterge",
+        deleteConfirm: "Ștergeți \"{title}\" din statisticile de citire?",
+        invalidJson: "JSON invalid: {message}",
+        loadError: "Nu s-a putut încărca fișierul de statistici: {message}"
+      },
+      ru: {
+        appTitle: "Редактор статистики CPR-vCodex",
+        subtitle: "Локальный редактор экспортированной статистики чтения. Без загрузки, без сервера.",
+        darkMode: "Тёмный режим",
+        lightMode: "Светлый режим",
+        openStats: "Открыть stats_exported",
+        newStats: "Новая пустая статистика",
+        downloadStats: "Скачать stats_exported",
+        importNotice: "Скопируйте экспортированный файл обратно на устройство как <strong>/exports/stats_exported</strong>, затем используйте <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Обзор",
+        charts: "Графики",
+        booksEditor: "Книги и редактор",
+        books: "Книги",
+        totalReadingTime: "Общее время чтения",
+        sessions: "Сеансы",
+        completed: "Завершено",
+        addBook: "Добавить книгу",
+        editor: "Редактор",
+        deleteBook: "Удалить книгу",
+        searchPlaceholder: "Искать название, автора или путь",
+        noFileLoaded: "Файл не загружен",
+        statsLoaded: "Статистика загружена",
+        newStatsStatus: "новая статистика",
+        openCharts: "Откройте файл статистики, чтобы увидеть тепловые карты, графики и рейтинги книг.",
+        openStatsBegin: "Откройте файл статистики, чтобы начать.",
+        selectBook: "Выберите книгу, чтобы редактировать метаданные и дни чтения.",
+        noMatchingBooks: "Нет подходящих книг.",
+        noAuthor: "Без автора",
+        readingHeatmap: "Тепловая карта чтения",
+        monthTotal: "Итого за месяц",
+        daysRead: "Дней чтения",
+        bestDay: "Лучший день",
+        legend1: "1м+",
+        legend10: "10м+",
+        legend30: "30м+",
+        legend60: "60м+",
+        topBooks: "Лучшие книги",
+        byTime: "По времени",
+        noReadingTime: "Пока нет времени чтения.",
+        monthlyReading: "Чтение по месяцам",
+        last12Months: "Последние 12 месяцев",
+        hoverValues: "Наведите курсор на столбцы или ячейки, чтобы увидеть точные значения.",
+        details: "Подробности",
+        readingDays: "Дни чтения",
+        rawJson: "Сырой JSON",
+        title: "Название",
+        author: "Автор",
+        path: "Путь",
+        bookId: "ID книги",
+        knownPaths: "Известные пути, по одному в строке",
+        coverBmpPath: "Путь к обложке BMP",
+        chapterTitle: "Название главы",
+        totalReadingMinutes: "Всего минут чтения",
+        lastSessionMinutes: "Минут последнего сеанса",
+        bookProgress: "Прогресс книги %",
+        chapterProgress: "Прогресс главы %",
+        firstReadAt: "Первое чтение",
+        lastReadAt: "Последнее чтение",
+        completedAt: "Завершено",
+        markCompleted: "Отметить как завершённую",
+        applyChanges: "Применить изменения",
+        recalculateFromDays: "Пересчитать по дням",
+        duplicateBook: "Дублировать книгу",
+        date: "Дата",
+        minutes: "Минуты",
+        addDay: "Добавить день",
+        applyDays: "Применить дни",
+        noReadingDays: "У этой книги нет дней чтения.",
+        applyRawJson: "Применить сырой JSON",
+        delete: "Удалить",
+        deleteConfirm: "Удалить \"{title}\" из статистики чтения?",
+        invalidJson: "Недопустимый JSON: {message}",
+        loadError: "Не удалось загрузить файл статистики: {message}"
+      },
+      si: {
+        appTitle: "Urejevalnik statistik CPR-vCodex",
+        subtitle: "Lokalni urejevalnik izvoženih bralnih statistik. Brez nalaganja, brez strežnika.",
+        darkMode: "Temni način",
+        lightMode: "Svetli način",
+        openStats: "Odpri stats_exported",
+        newStats: "Nove prazne statistike",
+        downloadStats: "Prenesi stats_exported",
+        importNotice: "Kopirajte izvoženo datoteko nazaj v napravo kot <strong>/exports/stats_exported</strong>, nato uporabite <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Pregled",
+        charts: "Grafi",
+        booksEditor: "Knjige in urejevalnik",
+        books: "Knjige",
+        totalReadingTime: "Skupni čas branja",
+        sessions: "Seje",
+        completed: "Dokončano",
+        addBook: "Dodaj knjigo",
+        editor: "Urejevalnik",
+        deleteBook: "Izbriši knjigo",
+        searchPlaceholder: "Išči naslov, avtorja ali pot",
+        noFileLoaded: "Nobena datoteka ni naložena",
+        statsLoaded: "Statistike naložene",
+        newStatsStatus: "nove statistike",
+        openCharts: "Odprite datoteko statistik za prikaz toplotnih kart, grafov in lestvic knjig.",
+        openStatsBegin: "Za začetek odprite datoteko statistik.",
+        selectBook: "Izberite knjigo za urejanje metapodatkov in bralnih dni.",
+        noMatchingBooks: "Ni ujemajočih se knjig.",
+        noAuthor: "Brez avtorja",
+        readingHeatmap: "Toplotna karta branja",
+        monthTotal: "Skupaj v mesecu",
+        daysRead: "Bralni dnevi",
+        bestDay: "Najboljši dan",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Naj knjige",
+        byTime: "Po času",
+        noReadingTime: "Bralnega časa še ni.",
+        monthlyReading: "Mesečno branje",
+        last12Months: "Zadnjih 12 mesecev",
+        hoverValues: "Za natančne vrednosti premaknite kazalec nad stolpce ali celice.",
+        details: "Podrobnosti",
+        readingDays: "Bralni dnevi",
+        rawJson: "Surovi JSON",
+        title: "Naslov",
+        author: "Avtor",
+        path: "Pot",
+        bookId: "ID knjige",
+        knownPaths: "Znane poti, ena na vrstico",
+        coverBmpPath: "Pot do BMP naslovnice",
+        chapterTitle: "Naslov poglavja",
+        totalReadingMinutes: "Skupne minute branja",
+        lastSessionMinutes: "Minute zadnje seje",
+        bookProgress: "Napredek knjige %",
+        chapterProgress: "Napredek poglavja %",
+        firstReadAt: "Prvo branje",
+        lastReadAt: "Zadnje branje",
+        completedAt: "Dokončano",
+        markCompleted: "Označi kot dokončano",
+        applyChanges: "Uporabi spremembe",
+        recalculateFromDays: "Preračunaj iz dni",
+        duplicateBook: "Podvoji knjigo",
+        date: "Datum",
+        minutes: "Minute",
+        addDay: "Dodaj dan",
+        applyDays: "Uporabi dneve",
+        noReadingDays: "Ta knjiga nima bralnih dni.",
+        applyRawJson: "Uporabi surovi JSON",
+        delete: "Izbriši",
+        deleteConfirm: "Izbrisati \"{title}\" iz bralnih statistik?",
+        invalidJson: "Neveljaven JSON: {message}",
+        loadError: "Datoteke statistik ni bilo mogoče naložiti: {message}"
+      }
+    });
+
+    Object.assign(i18n, {
+      sv: {
+        appTitle: "CPR-vCodex lässtatistikredigerare",
+        subtitle: "Lokal redigerare för exporterad lässtatistik. Ingen uppladdning, ingen server.",
+        darkMode: "Mörkt läge",
+        lightMode: "Ljust läge",
+        openStats: "Öppna stats_exported",
+        newStats: "Ny tom statistik",
+        downloadStats: "Ladda ner stats_exported",
+        importNotice: "Kopiera den exporterade filen tillbaka till enheten som <strong>/exports/stats_exported</strong> och använd sedan <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Översikt",
+        charts: "Diagram",
+        booksEditor: "Böcker och redigerare",
+        books: "Böcker",
+        totalReadingTime: "Total lästid",
+        sessions: "Sessioner",
+        completed: "Klart",
+        addBook: "Lägg till bok",
+        editor: "Redigerare",
+        deleteBook: "Radera bok",
+        searchPlaceholder: "Sök titel, författare eller sökväg",
+        noFileLoaded: "Ingen fil laddad",
+        statsLoaded: "Statistik laddad",
+        newStatsStatus: "ny statistik",
+        openCharts: "Öppna en statistikfil för att se värmekartor, diagram och bokrankningar.",
+        openStatsBegin: "Öppna en statistikfil för att börja.",
+        selectBook: "Välj en bok för att redigera metadata och läsdagar.",
+        noMatchingBooks: "Inga matchande böcker.",
+        noAuthor: "Ingen författare",
+        readingHeatmap: "Läsvärmekarta",
+        monthTotal: "Månad totalt",
+        daysRead: "Läsdagar",
+        bestDay: "Bästa dag",
+        legend1: "1m+",
+        legend10: "10m+",
+        legend30: "30m+",
+        legend60: "60m+",
+        topBooks: "Toppböcker",
+        byTime: "Efter tid",
+        noReadingTime: "Ingen lästid ännu.",
+        monthlyReading: "Månatlig läsning",
+        last12Months: "Senaste 12 månaderna",
+        hoverValues: "Håll över staplar eller celler för att se exakta värden.",
+        details: "Detaljer",
+        readingDays: "Läsdagar",
+        rawJson: "Rå JSON",
+        title: "Titel",
+        author: "Författare",
+        path: "Sökväg",
+        bookId: "Bok-ID",
+        knownPaths: "Kända sökvägar, en per rad",
+        coverBmpPath: "Sökväg till BMP-omslag",
+        chapterTitle: "Kapitelrubrik",
+        totalReadingMinutes: "Totala läsminuter",
+        lastSessionMinutes: "Minuter senaste sessionen",
+        bookProgress: "Bokförlopp %",
+        chapterProgress: "Kapitelförlopp %",
+        firstReadAt: "Först läst",
+        lastReadAt: "Senast läst",
+        completedAt: "Slutförd",
+        markCompleted: "Markera som slutförd",
+        applyChanges: "Tillämpa ändringar",
+        recalculateFromDays: "Räkna om från dagar",
+        duplicateBook: "Duplicera bok",
+        date: "Datum",
+        minutes: "Minuter",
+        addDay: "Lägg till dag",
+        applyDays: "Tillämpa dagar",
+        noReadingDays: "Den här boken har inga läsdagar.",
+        applyRawJson: "Tillämpa rå JSON",
+        delete: "Radera",
+        deleteConfirm: "Radera \"{title}\" från lässtatistiken?",
+        invalidJson: "Ogiltig JSON: {message}",
+        loadError: "Kunde inte läsa in statistikfilen: {message}"
+      },
+      tr: {
+        appTitle: "CPR-vCodex okuma istatistikleri düzenleyici",
+        subtitle: "Dışa aktarılan okuma istatistikleri için yerel düzenleyici. Yükleme yok, sunucu yok.",
+        darkMode: "Karanlık mod",
+        lightMode: "Aydınlık mod",
+        openStats: "stats_exported aç",
+        newStats: "Yeni boş istatistik",
+        downloadStats: "stats_exported indir",
+        importNotice: "Dışa aktarılan dosyayı cihaza <strong>/exports/stats_exported</strong> olarak geri kopyalayın, ardından <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong> kullanın.",
+        overview: "Genel bakış",
+        charts: "Grafikler",
+        booksEditor: "Kitaplar ve düzenleyici",
+        books: "Kitaplar",
+        totalReadingTime: "Toplam okuma süresi",
+        sessions: "Oturumlar",
+        completed: "Tamamlandı",
+        addBook: "Kitap ekle",
+        editor: "Düzenleyici",
+        deleteBook: "Kitabı sil",
+        searchPlaceholder: "Başlık, yazar veya yol ara",
+        noFileLoaded: "Dosya yüklenmedi",
+        statsLoaded: "İstatistikler yüklendi",
+        newStatsStatus: "yeni istatistik",
+        openCharts: "Isı haritaları, grafikler ve kitap sıralamalarını görmek için bir istatistik dosyası açın.",
+        openStatsBegin: "Başlamak için bir istatistik dosyası açın.",
+        selectBook: "Meta verileri ve okuma günlerini düzenlemek için bir kitap seçin.",
+        noMatchingBooks: "Eşleşen kitap yok.",
+        noAuthor: "Yazar yok",
+        readingHeatmap: "Okuma ısı haritası",
+        monthTotal: "Ay toplamı",
+        daysRead: "Okunan günler",
+        bestDay: "En iyi gün",
+        legend1: "1dk+",
+        legend10: "10dk+",
+        legend30: "30dk+",
+        legend60: "60dk+",
+        topBooks: "En iyi kitaplar",
+        byTime: "Süreye göre",
+        noReadingTime: "Henüz okuma süresi yok.",
+        monthlyReading: "Aylık okuma",
+        last12Months: "Son 12 ay",
+        hoverValues: "Kesin değerleri görmek için çubukların veya hücrelerin üzerine gelin.",
+        details: "Ayrıntılar",
+        readingDays: "Okuma günleri",
+        rawJson: "Ham JSON",
+        title: "Başlık",
+        author: "Yazar",
+        path: "Yol",
+        bookId: "Kitap ID",
+        knownPaths: "Bilinen yollar, her satıra bir tane",
+        coverBmpPath: "BMP kapak yolu",
+        chapterTitle: "Bölüm başlığı",
+        totalReadingMinutes: "Toplam okuma dakikası",
+        lastSessionMinutes: "Son oturum dakikası",
+        bookProgress: "Kitap ilerlemesi %",
+        chapterProgress: "Bölüm ilerlemesi %",
+        firstReadAt: "İlk okuma",
+        lastReadAt: "Son okuma",
+        completedAt: "Tamamlandı",
+        markCompleted: "Tamamlandı olarak işaretle",
+        applyChanges: "Değişiklikleri uygula",
+        recalculateFromDays: "Günlerden yeniden hesapla",
+        duplicateBook: "Kitabı çoğalt",
+        date: "Tarih",
+        minutes: "Dakika",
+        addDay: "Gün ekle",
+        applyDays: "Günleri uygula",
+        noReadingDays: "Bu kitapta okuma günü yok.",
+        applyRawJson: "Ham JSON uygula",
+        delete: "Sil",
+        deleteConfirm: "\"{title}\" okuma istatistiklerinden silinsin mi?",
+        invalidJson: "Geçersiz JSON: {message}",
+        loadError: "İstatistik dosyası yüklenemedi: {message}"
+      },
+      uk: {
+        appTitle: "Редактор статистики CPR-vCodex",
+        subtitle: "Локальний редактор експортованої статистики читання. Без завантаження, без сервера.",
+        darkMode: "Темний режим",
+        lightMode: "Світлий режим",
+        openStats: "Відкрити stats_exported",
+        newStats: "Нова порожня статистика",
+        downloadStats: "Завантажити stats_exported",
+        importNotice: "Скопіюйте експортований файл назад на пристрій як <strong>/exports/stats_exported</strong>, потім використайте <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Огляд",
+        charts: "Графіки",
+        booksEditor: "Книги і редактор",
+        books: "Книги",
+        totalReadingTime: "Загальний час читання",
+        sessions: "Сеанси",
+        completed: "Завершено",
+        addBook: "Додати книгу",
+        editor: "Редактор",
+        deleteBook: "Видалити книгу",
+        searchPlaceholder: "Шукати назву, автора або шлях",
+        noFileLoaded: "Файл не завантажено",
+        statsLoaded: "Статистику завантажено",
+        newStatsStatus: "нова статистика",
+        openCharts: "Відкрийте файл статистики, щоб побачити теплові карти, графіки та рейтинги книг.",
+        openStatsBegin: "Відкрийте файл статистики, щоб почати.",
+        selectBook: "Виберіть книгу, щоб редагувати метадані та дні читання.",
+        noMatchingBooks: "Немає відповідних книг.",
+        noAuthor: "Без автора",
+        readingHeatmap: "Теплова карта читання",
+        monthTotal: "Усього за місяць",
+        daysRead: "Днів читання",
+        bestDay: "Найкращий день",
+        legend1: "1хв+",
+        legend10: "10хв+",
+        legend30: "30хв+",
+        legend60: "60хв+",
+        topBooks: "Найкращі книги",
+        byTime: "За часом",
+        noReadingTime: "Поки немає часу читання.",
+        monthlyReading: "Читання за місяцями",
+        last12Months: "Останні 12 місяців",
+        hoverValues: "Наведіть курсор на стовпці або клітинки, щоб побачити точні значення.",
+        details: "Деталі",
+        readingDays: "Дні читання",
+        rawJson: "Сирий JSON",
+        title: "Назва",
+        author: "Автор",
+        path: "Шлях",
+        bookId: "ID книги",
+        knownPaths: "Відомі шляхи, по одному в рядку",
+        coverBmpPath: "Шлях до обкладинки BMP",
+        chapterTitle: "Назва розділу",
+        totalReadingMinutes: "Загальні хвилини читання",
+        lastSessionMinutes: "Хвилини останнього сеансу",
+        bookProgress: "Прогрес книги %",
+        chapterProgress: "Прогрес розділу %",
+        firstReadAt: "Перше читання",
+        lastReadAt: "Останнє читання",
+        completedAt: "Завершено",
+        markCompleted: "Позначити як завершену",
+        applyChanges: "Застосувати зміни",
+        recalculateFromDays: "Перерахувати за днями",
+        duplicateBook: "Дублювати книгу",
+        date: "Дата",
+        minutes: "Хвилини",
+        addDay: "Додати день",
+        applyDays: "Застосувати дні",
+        noReadingDays: "У цієї книги немає днів читання.",
+        applyRawJson: "Застосувати сирий JSON",
+        delete: "Видалити",
+        deleteConfirm: "Видалити \"{title}\" зі статистики читання?",
+        invalidJson: "Недійсний JSON: {message}",
+        loadError: "Не вдалося завантажити файл статистики: {message}"
+      },
+      vi: {
+        appTitle: "Trình sửa thống kê CPR-vCodex",
+        subtitle: "Trình sửa cục bộ cho thống kê đọc đã xuất. Không tải lên, không máy chủ.",
+        darkMode: "Chế độ tối",
+        lightMode: "Chế độ sáng",
+        openStats: "Mở stats_exported",
+        newStats: "Thống kê trống mới",
+        downloadStats: "Tải xuống stats_exported",
+        importNotice: "Sao chép tệp đã xuất trở lại thiết bị dưới dạng <strong>/exports/stats_exported</strong>, rồi dùng <strong>Settings &gt; Apps &gt; Reading Stats &gt; Import Reading Stats</strong>.",
+        overview: "Tổng quan",
+        charts: "Biểu đồ",
+        booksEditor: "Sách và trình sửa",
+        books: "Sách",
+        totalReadingTime: "Tổng thời gian đọc",
+        sessions: "Phiên đọc",
+        completed: "Đã hoàn thành",
+        addBook: "Thêm sách",
+        editor: "Trình sửa",
+        deleteBook: "Xóa sách",
+        searchPlaceholder: "Tìm tiêu đề, tác giả hoặc đường dẫn",
+        noFileLoaded: "Chưa tải tệp",
+        statsLoaded: "Đã tải thống kê",
+        newStatsStatus: "thống kê mới",
+        openCharts: "Mở tệp thống kê để xem bản đồ nhiệt, biểu đồ và xếp hạng sách.",
+        openStatsBegin: "Mở tệp thống kê để bắt đầu.",
+        selectBook: "Chọn sách để sửa siêu dữ liệu và ngày đọc.",
+        noMatchingBooks: "Không có sách phù hợp.",
+        noAuthor: "Không có tác giả",
+        readingHeatmap: "Bản đồ nhiệt đọc",
+        monthTotal: "Tổng tháng",
+        daysRead: "Ngày đã đọc",
+        bestDay: "Ngày tốt nhất",
+        legend1: "1p+",
+        legend10: "10p+",
+        legend30: "30p+",
+        legend60: "60p+",
+        topBooks: "Sách hàng đầu",
+        byTime: "Theo thời gian",
+        noReadingTime: "Chưa có thời gian đọc.",
+        monthlyReading: "Đọc theo tháng",
+        last12Months: "12 tháng gần nhất",
+        hoverValues: "Di chuột lên cột hoặc ô bản đồ nhiệt để xem giá trị chính xác.",
+        details: "Chi tiết",
+        readingDays: "Ngày đọc",
+        rawJson: "JSON thô",
+        title: "Tiêu đề",
+        author: "Tác giả",
+        path: "Đường dẫn",
+        bookId: "ID sách",
+        knownPaths: "Đường dẫn đã biết, mỗi dòng một mục",
+        coverBmpPath: "Đường dẫn bìa BMP",
+        chapterTitle: "Tiêu đề chương",
+        totalReadingMinutes: "Tổng phút đọc",
+        lastSessionMinutes: "Phút của phiên gần nhất",
+        bookProgress: "Tiến độ sách %",
+        chapterProgress: "Tiến độ chương %",
+        firstReadAt: "Đọc lần đầu",
+        lastReadAt: "Đọc lần cuối",
+        completedAt: "Hoàn thành lúc",
+        markCompleted: "Đánh dấu đã hoàn thành",
+        applyChanges: "Áp dụng thay đổi",
+        recalculateFromDays: "Tính lại từ ngày",
+        duplicateBook: "Nhân bản sách",
+        date: "Ngày",
+        minutes: "Phút",
+        addDay: "Thêm ngày",
+        applyDays: "Áp dụng ngày",
+        noReadingDays: "Sách này chưa có ngày đọc.",
+        applyRawJson: "Áp dụng JSON thô",
+        delete: "Xóa",
+        deleteConfirm: "Xóa \"{title}\" khỏi thống kê đọc?",
+        invalidJson: "JSON không hợp lệ: {message}",
+        loadError: "Không thể tải tệp thống kê: {message}"
+      }
+    });
+
+    if (!i18n[state.language]) state.language = "en";
+
+    const localeMap = {
+      be: "be",
+      ca: "ca",
+      cs: "cs",
+      da: "da",
+      nl: "nl",
+      en: "en",
+      fi: "fi",
+      fr: "fr",
+      de: "de",
+      hu: "hu",
+      it: "it",
+      kk: "kk",
+      lt: "lt",
+      pl: "pl",
+      pt: "pt-BR",
+      ro: "ro",
+      ru: "ru",
+      si: "sl",
+      es: "es",
+      sv: "sv",
+      tr: "tr",
+      uk: "uk",
+      vi: "vi"
+    };
+
+    function t(key, vars = {}) {
+      let text = (i18n[state.language] && i18n[state.language][key]) || i18n.en[key] || key;
+      for (const [name, value] of Object.entries(vars)) {
+        text = text.replaceAll(`{${name}}`, value);
+      }
+      return text;
+    }
+
+    function currentLocale() {
+      return localeMap[state.language] || "en";
+    }
+
+    function formatLocaleDate(date, options) {
+      return date.toLocaleDateString(currentLocale(), options);
+    }
+
+    function weekdayLabels() {
+      const formatter = new Intl.DateTimeFormat(currentLocale(), {weekday: "short"});
+      return Array.from({length: 7}, (_, index) => formatter.format(new Date(2023, 0, 1 + index)).replace(/\.$/, ""));
+    }
+
+    function applyTheme() {
+      document.body.dataset.theme = state.theme;
+      const nextModeKey = state.theme === "dark" ? "lightMode" : "darkMode";
+      els.themeIconUse.setAttribute("href", state.theme === "dark" ? "#icon-sun" : "#icon-moon");
+      els.themeToggleBtn.setAttribute("aria-label", t(nextModeKey));
+      els.themeToggleBtn.setAttribute("title", t(nextModeKey));
+    }
+
+    function applyLanguage() {
+      document.documentElement.lang = state.language;
+      els.languageSelect.value = state.language;
+      document.querySelectorAll("[data-i18n]").forEach(node => {
+        const key = node.dataset.i18n;
+        node.textContent = t(key);
+      });
+      document.querySelectorAll("[data-i18n-html]").forEach(node => {
+        node.innerHTML = t(node.dataset.i18nHtml);
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(node => {
+        node.placeholder = t(node.dataset.i18nPlaceholder);
+      });
+    }
+
+    els.themeToggleBtn.addEventListener("click", () => {
+      state.theme = state.theme === "dark" ? "light" : "dark";
+      localStorage.setItem("cprStatsTheme", state.theme);
+      applyTheme();
+    });
+
+    els.languageSelect.addEventListener("change", () => {
+      state.language = i18n[els.languageSelect.value] ? els.languageSelect.value : "en";
+      localStorage.setItem("cprStatsLanguage", state.language);
+      applyLanguage();
+      renderAll();
+    });
+
+    els.noticeCloseBtn.addEventListener("click", () => {
+      els.noticeCloseBtn.closest(".notice").classList.add("is-hidden");
+    });
+
+    document.querySelectorAll(".collapse-toggle").forEach(button => {
+      button.addEventListener("click", () => {
+        button.closest(".collapsible").classList.toggle("is-open");
+      });
+    });
+
+    document.querySelectorAll(".panel-title-toggle").forEach(button => {
+      button.addEventListener("click", () => {
+        button.closest(".inner-collapsible").classList.toggle("is-collapsed");
+      });
+    });
+
+    applyTheme();
+    applyLanguage();
+
+    function toUInt(value, fallback = 0) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0) return fallback;
+      return Math.floor(number);
+    }
+
+    function clampPercent(value) {
+      return Math.min(100, Math.max(0, toUInt(value)));
+    }
+
+    function msToMinutes(ms) {
+      return Math.round(toUInt(ms) / MS_PER_MINUTE);
+    }
+
+    function minutesToMs(minutes) {
+      return toUInt(minutes) * MS_PER_MINUTE;
+    }
+
+    function formatDuration(ms) {
+      const minutes = Math.round(toUInt(ms) / MS_PER_MINUTE);
+      const hours = Math.floor(minutes / 60);
+      const rem = minutes % 60;
+      if (hours <= 0) return `${rem}m`;
+      return rem ? `${hours}h ${rem}m` : `${hours}h`;
+    }
+
+    function formatDateLabelFromOrdinal(dayOrdinal) {
+      const dateValue = dateFromDayOrdinal(dayOrdinal);
+      if (!dateValue) return "";
+      const date = new Date(`${dateValue}T00:00:00`);
+      return formatLocaleDate(date, {month: "short", day: "numeric", year: "numeric"});
+    }
+
+    function dayOrdinalFromDate(value) {
+      if (!value) return 0;
+      const [year, month, day] = value.split("-").map(Number);
+      if (!year || !month || !day) return 0;
+      return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
+    }
+
+    function dateFromDayOrdinal(dayOrdinal) {
+      const ordinal = toUInt(dayOrdinal);
+      if (!ordinal) return "";
+      const date = new Date(ordinal * MS_PER_DAY);
+      return date.toISOString().slice(0, 10);
+    }
+
+    function datetimeLocalFromEpoch(seconds) {
+      const value = toUInt(seconds);
+      if (!value) return "";
+      const date = new Date(value * 1000);
+      const offsetMs = date.getTimezoneOffset() * 60000;
+      return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+    }
+
+    function epochFromDatetimeLocal(value) {
+      if (!value) return 0;
+      const ms = new Date(value).getTime();
+      return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
+    }
+
+    function normalizeDay(day) {
+      return {
+        dayOrdinal: toUInt(day && day.dayOrdinal),
+        readingMs: toUInt(day && day.readingMs)
+      };
+    }
+
+    function normalizeBook(book = {}) {
+      const knownPaths = Array.isArray(book.knownPaths) ? book.knownPaths : [];
+      const readingDays = Array.isArray(book.readingDays) ? book.readingDays : [];
+      const normalized = {
+        bookId: String(book.bookId || ""),
+        path: String(book.path || ""),
+        knownPaths: knownPaths.map(String).filter(Boolean),
+        title: String(book.title || ""),
+        author: String(book.author || ""),
+        coverBmpPath: String(book.coverBmpPath || ""),
+        chapterTitle: String(book.chapterTitle || ""),
+        readingDays: readingDays.map(normalizeDay).filter(day => day.dayOrdinal && day.readingMs),
+        totalReadingMs: toUInt(book.totalReadingMs),
+        sessions: toUInt(book.sessions),
+        lastSessionMs: toUInt(book.lastSessionMs),
+        firstReadAt: toUInt(book.firstReadAt),
+        lastReadAt: toUInt(book.lastReadAt),
+        completedAt: toUInt(book.completedAt),
+        lastProgressPercent: clampPercent(book.lastProgressPercent),
+        chapterProgressPercent: clampPercent(book.chapterProgressPercent),
+        completed: Boolean(book.completed)
+      };
+      if (!normalized.bookId) normalized.bookId = normalized.path;
+      if (!normalized.knownPaths.includes(normalized.path) && normalized.path) {
+        normalized.knownPaths.unshift(normalized.path);
+      }
+      return normalized;
+    }
+
+    function normalizeDoc(input) {
+      const doc = input && typeof input === "object" ? input : {};
+      const books = Array.isArray(doc.books) ? doc.books : [];
+      const sessionLog = Array.isArray(doc.sessionLog) ? doc.sessionLog : [];
+      const normalized = {
+        formatVersion: 5,
+        readingDays: [],
+        legacyReadingDays: [],
+        sessionLog: sessionLog.map(entry => ({
+          dayOrdinal: toUInt(entry && entry.dayOrdinal),
+          sessionMs: toUInt(entry && entry.sessionMs)
+        })).filter(entry => entry.dayOrdinal && entry.sessionMs),
+        books: books.map(normalizeBook).filter(book => book.path)
+      };
+      rebuildAggregatedDays(normalized);
+      return normalized;
+    }
+
+    function rebuildAggregatedDays(doc = state.data) {
+      if (!doc) return;
+      const totals = new Map();
+      for (const book of doc.books) {
+        book.readingDays = (book.readingDays || []).map(normalizeDay).filter(day => day.dayOrdinal && day.readingMs);
+        book.readingDays.sort((a, b) => a.dayOrdinal - b.dayOrdinal);
+        const merged = [];
+        for (const day of book.readingDays) {
+          const last = merged[merged.length - 1];
+          if (last && last.dayOrdinal === day.dayOrdinal) {
+            last.readingMs += day.readingMs;
+          } else {
+            merged.push({...day});
+          }
+          totals.set(day.dayOrdinal, (totals.get(day.dayOrdinal) || 0) + day.readingMs);
+        }
+        book.readingDays = merged;
+        book.totalReadingMs = book.readingDays.reduce((sum, day) => sum + toUInt(day.readingMs), 0);
+        book.lastProgressPercent = clampPercent(book.lastProgressPercent);
+        book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
+        if (book.completed && book.lastProgressPercent < 100) book.lastProgressPercent = 100;
+      }
+      doc.readingDays = Array.from(totals.entries())
+        .map(([dayOrdinal, readingMs]) => ({dayOrdinal, readingMs}))
+        .sort((a, b) => a.dayOrdinal - b.dayOrdinal);
+      doc.legacyReadingDays = doc.readingDays.map(day => ({...day}));
+      doc.formatVersion = 5;
+    }
+
+    function makeEmptyDoc() {
+      return {
+        formatVersion: 5,
+        readingDays: [],
+        legacyReadingDays: [],
+        sessionLog: [],
+        books: []
+      };
+    }
+
+    function makeEmptyBook() {
+      return normalizeBook({
+        bookId: `manual-${Date.now()}`,
+        path: "/Books/New book.epub",
+        knownPaths: ["/Books/New book.epub"],
+        title: "New book",
+        author: "",
+        coverBmpPath: "",
+        chapterTitle: "",
+        readingDays: [],
+        totalReadingMs: 0,
+        sessions: 0,
+        lastSessionMs: 0,
+        firstReadAt: 0,
+        lastReadAt: 0,
+        completedAt: 0,
+        lastProgressPercent: 0,
+        chapterProgressPercent: 0,
+        completed: false
+      });
+    }
+
+    function enableControls(enabled) {
+      els.exportBtn.disabled = !enabled;
+      els.addBookBtn.disabled = !enabled;
+      els.searchInput.disabled = !enabled;
+    }
+
+    function selectedBook() {
+      if (!state.data || state.selectedIndex < 0) return null;
+      return state.data.books[state.selectedIndex] || null;
+    }
+
+    function renderAll() {
+      enableControls(Boolean(state.data));
+      renderSummary();
+      renderVisuals();
+      renderBookList();
+      renderEditor();
+    }
+
+    function renderSummary() {
+      const books = state.data ? state.data.books : [];
+      const totalMs = books.reduce((sum, book) => sum + toUInt(book.totalReadingMs), 0);
+      const sessions = books.reduce((sum, book) => sum + toUInt(book.sessions), 0);
+      const completed = books.filter(book => book.completed).length;
+      els.summaryBooks.textContent = books.length;
+      els.summaryTime.textContent = formatDuration(totalMs);
+      els.summarySessions.textContent = sessions;
+      els.summaryCompleted.textContent = completed;
+      els.fileStatus.textContent = state.data
+        ? `${state.rawFileName || t("statsLoaded")} - format ${state.data.formatVersion}`
+        : t("noFileLoaded");
+    }
+
+    function renderVisuals() {
+      if (!state.data) {
+        els.visualDashboard.innerHTML = `
+          <div class="chart-card full">
+            <div class="empty">${escapeHtml(t("openCharts"))}</div>
+          </div>
+        `;
+        return;
+      }
+
+      const books = state.data.books;
+      const readingDays = state.data.readingDays || [];
+      els.visualDashboard.innerHTML = `
+        ${renderHeatmapCard(readingDays)}
+        ${renderTopBooksCard(books)}
+        ${renderMonthlyCard(readingDays)}
+      `;
+      els.visualDashboard.querySelectorAll("[data-heatmap-shift]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.heatmapMonthOffset += Number(button.dataset.heatmapShift);
+          renderVisuals();
+        });
+      });
+    }
+
+    function readingLevel(minutes) {
+      if (minutes <= 0) return 0;
+      if (minutes < 10) return 1;
+      if (minutes < 30) return 2;
+      if (minutes < 60) return 3;
+      return 4;
+    }
+
+    function addMonths(date, offset) {
+      return new Date(date.getFullYear(), date.getMonth() + offset, 1);
+    }
+
+    function monthLabel(date) {
+      return formatLocaleDate(date, {month: "2-digit", year: "numeric"});
+    }
+
+    function dayOrdinalFromDateParts(year, monthIndex, day) {
+      return Math.floor(Date.UTC(year, monthIndex, day) / MS_PER_DAY);
+    }
+
+    function getMonthReadingSummary(readingDays, monthDate) {
+      const year = monthDate.getFullYear();
+      const monthIndex = monthDate.getMonth();
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const dayMap = new Map(readingDays.map(day => [toUInt(day.dayOrdinal), toUInt(day.readingMs)]));
+      let totalMs = 0;
+      let daysRead = 0;
+      let bestDayOrdinal = 0;
+      let bestDayMs = 0;
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const ordinal = dayOrdinalFromDateParts(year, monthIndex, day);
+        const readingMs = dayMap.get(ordinal) || 0;
+        if (readingMs > 0) {
+          totalMs += readingMs;
+          daysRead += 1;
+          if (readingMs > bestDayMs) {
+            bestDayMs = readingMs;
+            bestDayOrdinal = ordinal;
+          }
+        }
+      }
+      return {dayMap, totalMs, daysRead, bestDayOrdinal, bestDayMs, daysInMonth, year, monthIndex};
+    }
+
+    function renderHeatmapCard(readingDays) {
+      const latestOrdinal = readingDays.length
+        ? Math.max(...readingDays.map(day => toUInt(day.dayOrdinal)))
+        : dayOrdinalFromDate(new Date().toISOString().slice(0, 10));
+      const latestDate = new Date(`${dateFromDayOrdinal(latestOrdinal)}T00:00:00`);
+      const monthDate = addMonths(latestDate, state.heatmapMonthOffset);
+      const {dayMap, totalMs, daysRead, bestDayOrdinal, bestDayMs, daysInMonth, year, monthIndex} =
+        getMonthReadingSummary(readingDays, monthDate);
+      const weekdayMarkup = weekdayLabels().map(label => `<span>${escapeHtml(label)}</span>`).join("");
+      const firstWeekday = new Date(year, monthIndex, 1).getDay();
+      const previousMonthDays = new Date(year, monthIndex, 0).getDate();
+      const totalCells = 42;
+      const cells = [];
+      for (let cell = 0; cell < totalCells; cell += 1) {
+        const monthDay = cell - firstWeekday + 1;
+        const outside = monthDay < 1 || monthDay > daysInMonth;
+        const displayDay = monthDay < 1 ? previousMonthDays + monthDay : (monthDay > daysInMonth ? monthDay - daysInMonth : monthDay);
+        const ordinalDate = new Date(year, monthIndex, monthDay);
+        const dayOrdinal = dayOrdinalFromDateParts(ordinalDate.getFullYear(), ordinalDate.getMonth(), ordinalDate.getDate());
+        const minutes = msToMinutes(dayMap.get(dayOrdinal) || 0);
+        const level = readingLevel(minutes);
+        const title = outside ? "" : `${formatDateLabelFromOrdinal(dayOrdinal)} - ${minutes} min`;
+        cells.push(`<span class="heat-cell l${outside ? 0 : level}${outside ? " outside" : ""}${level > 0 && !outside ? " has-value" : ""}" title="${escapeAttr(title)}">${displayDay}</span>`);
+      }
+
+      return `
+        <article class="chart-card wide">
+          <div class="chart-title">
+            <h2>${escapeHtml(t("readingHeatmap"))}</h2>
+            <span>${escapeHtml(monthLabel(monthDate))}</span>
+          </div>
+          <div class="heatmap-nav">
+            <button class="mini-button" type="button" data-heatmap-shift="-1" aria-label="Previous month">&lt;</button>
+            <div class="heatmap-month-label">${escapeHtml(monthLabel(monthDate))}</div>
+            <button class="mini-button" type="button" data-heatmap-shift="1" aria-label="Next month">&gt;</button>
+          </div>
+          <div class="heatmap-stats">
+            <div class="heatmap-stat"><strong>${escapeHtml(formatDuration(totalMs))}</strong><span>${escapeHtml(t("monthTotal"))}</span></div>
+            <div class="heatmap-stat"><strong>${daysRead}</strong><span>${escapeHtml(t("daysRead"))}</span></div>
+            <div class="heatmap-stat"><strong>${bestDayMs ? `${msToMinutes(bestDayMs)}m (${new Date(`${dateFromDayOrdinal(bestDayOrdinal)}T00:00:00`).getDate()})` : "0m"}</strong><span>${escapeHtml(t("bestDay"))}</span></div>
+          </div>
+          <div class="heatmap-calendar">
+            <div class="heatmap-weekdays">${weekdayMarkup}</div>
+            <div class="heatmap-grid">${cells.join("")}</div>
+          </div>
+          <div class="legend">
+            <span class="heat-cell l1"></span><span>${escapeHtml(t("legend1"))}</span>
+            <span class="heat-cell l2"></span><span>${escapeHtml(t("legend10"))}</span>
+            <span class="heat-cell l3"></span><span>${escapeHtml(t("legend30"))}</span>
+            <span class="heat-cell l4"></span><span>${escapeHtml(t("legend60"))}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderTopBooksCard(books) {
+      const ranked = [...books]
+        .filter(book => toUInt(book.totalReadingMs) > 0)
+        .sort((a, b) => toUInt(b.totalReadingMs) - toUInt(a.totalReadingMs))
+        .slice(0, 7);
+      const rows = ranked.map(book => {
+        const progress = clampPercent(book.lastProgressPercent);
+        return `
+          <div class="bar-row">
+            <span class="bar-label" title="${escapeAttr(bookDisplayTitle(book))}">${escapeHtml(bookDisplayTitle(book))}</span>
+            <span class="bar-track" title="${progress}%"><span class="bar-fill" style="width:${progress}%"></span></span>
+            <span class="bar-value">${formatDuration(book.totalReadingMs)}</span>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <article class="chart-card">
+          <div class="chart-title">
+            <h2>${escapeHtml(t("topBooks"))}</h2>
+            <span>${escapeHtml(t("byTime"))}</span>
+          </div>
+          <div class="bar-list">${rows || `<div class="empty">${escapeHtml(t("noReadingTime"))}</div>`}</div>
+        </article>
+      `;
+    }
+
+    function monthKeyFromOrdinal(dayOrdinal) {
+      const value = dateFromDayOrdinal(dayOrdinal);
+      return value ? value.slice(0, 7) : "";
+    }
+
+    function renderMonthlyCard(readingDays) {
+      const monthTotals = new Map();
+      for (const day of readingDays) {
+        const key = monthKeyFromOrdinal(day.dayOrdinal);
+        if (!key) continue;
+        monthTotals.set(key, (monthTotals.get(key) || 0) + toUInt(day.readingMs));
+      }
+
+      const sortedKeys = Array.from(monthTotals.keys()).sort();
+      const latestKey = sortedKeys[sortedKeys.length - 1] || new Date().toISOString().slice(0, 7);
+      const latestDate = new Date(`${latestKey}-01T00:00:00`);
+      const keys = [];
+      for (let i = 11; i >= 0; i -= 1) {
+        const date = new Date(latestDate.getFullYear(), latestDate.getMonth() - i, 1);
+        keys.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`);
+      }
+      const maxMs = Math.max(1, ...keys.map(key => monthTotals.get(key) || 0));
+      const bars = keys.map(key => {
+        const ms = monthTotals.get(key) || 0;
+        const height = Math.max(ms > 0 ? 3 : 0, Math.round(ms * 100 / maxMs));
+        const date = new Date(`${key}-01T00:00:00`);
+        const label = formatLocaleDate(date, {month: "short"});
+        return `
+          <div class="month-col" title="${escapeAttr(`${key} - ${formatDuration(ms)}`)}">
+            <div class="month-bar" style="height:${height}%"></div>
+            <div class="month-label">${escapeHtml(label)}</div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <article class="chart-card full">
+          <div class="chart-title">
+            <h2>${escapeHtml(t("monthlyReading"))}</h2>
+            <span>${escapeHtml(t("last12Months"))}</span>
+          </div>
+          <div class="month-bars">${bars}</div>
+          <div class="chart-note">${escapeHtml(t("hoverValues"))}</div>
+        </article>
+      `;
+    }
+
+    function bookDisplayTitle(book) {
+      return book.title || book.path || "Untitled";
+    }
+
+    function renderBookList() {
+      if (!state.data) {
+        els.bookList.innerHTML = `<div class="empty">${escapeHtml(t("openStatsBegin"))}</div>`;
+        return;
+      }
+      const query = els.searchInput.value.trim().toLowerCase();
+      const rows = [];
+      state.data.books.forEach((book, index) => {
+        const haystack = `${book.title} ${book.author} ${book.path}`.toLowerCase();
+        if (query && !haystack.includes(query)) return;
+        const selected = index === state.selectedIndex ? " selected" : "";
+        const progress = clampPercent(book.lastProgressPercent);
+        const complete = progress >= 100 ? " complete" : "";
+        rows.push(`
+          <button class="book-row${selected}" type="button" data-index="${index}">
+            <span>
+              <span class="book-title">${escapeHtml(bookDisplayTitle(book))}</span>
+              <span class="book-meta">${escapeHtml(book.author || book.path || t("noAuthor"))}</span>
+            </span>
+            <span class="pill${complete}">${progress}%</span>
+          </button>
+        `);
+      });
+      els.bookList.innerHTML = rows.length ? rows.join("") : `<div class="empty">${escapeHtml(t("noMatchingBooks"))}</div>`;
+      els.bookList.querySelectorAll(".book-row").forEach(button => {
+        button.addEventListener("click", () => {
+          state.selectedIndex = Number(button.dataset.index);
+          state.activeTab = "details";
+          renderAll();
+        });
+      });
+    }
+
+    function renderEditor() {
+      const book = selectedBook();
+      els.deleteBookBtn.disabled = !book;
+      if (!state.data) {
+        els.editorTitle.textContent = t("editor");
+        els.editorBody.innerHTML = `<div class="empty">${escapeHtml(t("openStatsBegin"))}</div>`;
+        return;
+      }
+      if (!book) {
+        els.editorTitle.textContent = t("editor");
+        els.editorBody.innerHTML = `<div class="empty">${escapeHtml(t("selectBook"))}</div>`;
+        return;
+      }
+
+      els.editorTitle.textContent = bookDisplayTitle(book);
+      const detailsActive = state.activeTab === "details" ? " active" : "";
+      const daysActive = state.activeTab === "days" ? " active" : "";
+      const rawActive = state.activeTab === "raw" ? " active" : "";
+      els.editorBody.innerHTML = `
+        <div class="tabs">
+          <button class="tab${detailsActive}" type="button" data-tab="details">${escapeHtml(t("details"))}</button>
+          <button class="tab${daysActive}" type="button" data-tab="days">${escapeHtml(t("readingDays"))}</button>
+          <button class="tab${rawActive}" type="button" data-tab="raw">${escapeHtml(t("rawJson"))}</button>
+        </div>
+        <div id="tabBody"></div>
+      `;
+      els.editorBody.querySelectorAll(".tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+          state.activeTab = tab.dataset.tab;
+          renderEditor();
+        });
+      });
+      renderActiveTab(book);
+    }
+
+    function renderActiveTab(book) {
+      const tabBody = document.getElementById("tabBody");
+      if (state.activeTab === "days") {
+        renderDaysTab(tabBody, book);
+      } else if (state.activeTab === "raw") {
+        renderRawTab(tabBody, book);
+      } else {
+        renderDetailsTab(tabBody, book);
+      }
+    }
+
+    function renderDetailsTab(container, book) {
+      container.innerHTML = `
+        <div class="form-grid">
+          ${textField("title", t("title"), book.title)}
+          ${textField("author", t("author"), book.author)}
+          ${textField("path", t("path"), book.path, "full")}
+          ${textField("bookId", t("bookId"), book.bookId, "full")}
+          ${textareaField("knownPaths", t("knownPaths"), book.knownPaths.join("\n"), "full")}
+          ${textField("coverBmpPath", t("coverBmpPath"), book.coverBmpPath)}
+          ${textField("chapterTitle", t("chapterTitle"), book.chapterTitle)}
+          ${numberField("totalReadingMinutes", t("totalReadingMinutes"), msToMinutes(book.totalReadingMs))}
+          ${numberField("sessions", t("sessions"), book.sessions)}
+          ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
+          ${numberField("lastProgressPercent", t("bookProgress"), book.lastProgressPercent)}
+          ${numberField("chapterProgressPercent", t("chapterProgress"), book.chapterProgressPercent)}
+          ${datetimeField("firstReadAt", t("firstReadAt"), datetimeLocalFromEpoch(book.firstReadAt))}
+          ${datetimeField("lastReadAt", t("lastReadAt"), datetimeLocalFromEpoch(book.lastReadAt))}
+          ${datetimeField("completedAt", t("completedAt"), datetimeLocalFromEpoch(book.completedAt))}
+          <div class="field">
+            <label>${escapeHtml(t("completed"))}</label>
+            <span class="inline-check"><input id="field-completed" type="checkbox" ${book.completed ? "checked" : ""}> ${escapeHtml(t("markCompleted"))}</span>
+          </div>
+        </div>
+        <div class="row-actions">
+          <button class="button primary" id="applyDetailsBtn" type="button">${iconMarkup("check")}${escapeHtml(t("applyChanges"))}</button>
+          <button class="button" id="recalcBookBtn" type="button">${iconMarkup("refresh")}${escapeHtml(t("recalculateFromDays"))}</button>
+          <button class="button" id="duplicateBookBtn" type="button">${iconMarkup("copy")}${escapeHtml(t("duplicateBook"))}</button>
+        </div>
+      `;
+
+      const completedInput = document.getElementById("field-completed");
+      completedInput.addEventListener("change", () => {
+        const progressInput = document.getElementById("field-lastProgressPercent");
+        const chapterInput = document.getElementById("field-chapterProgressPercent");
+        if (!progressInput) return;
+        if (completedInput.checked) {
+          if (clampPercent(progressInput.value) < 100) {
+            completedInput.dataset.previousProgress = String(clampPercent(progressInput.value));
+          }
+          progressInput.value = 100;
+        } else if (clampPercent(progressInput.value) >= 100) {
+          const previousProgress = completedInput.dataset.previousProgress;
+          const fallbackProgress = previousProgress !== undefined
+            ? previousProgress
+            : clampPercent(chapterInput ? chapterInput.value : 0);
+          progressInput.value = fallbackProgress;
+        }
+      });
+
+      document.getElementById("applyDetailsBtn").addEventListener("click", () => {
+        book.title = value("title");
+        book.author = value("author");
+        book.path = value("path").trim();
+        book.bookId = value("bookId").trim() || book.path;
+        book.knownPaths = Array.from(new Set(value("knownPaths").split(/\r?\n/).map(item => item.trim()).filter(Boolean)));
+        if (!book.knownPaths.includes(book.path) && book.path) book.knownPaths.unshift(book.path);
+        book.coverBmpPath = value("coverBmpPath");
+        book.chapterTitle = value("chapterTitle");
+        book.totalReadingMs = minutesToMs(value("totalReadingMinutes"));
+        book.sessions = toUInt(value("sessions"));
+        book.lastSessionMs = minutesToMs(value("lastSessionMinutes"));
+        book.lastProgressPercent = clampPercent(value("lastProgressPercent"));
+        book.chapterProgressPercent = clampPercent(value("chapterProgressPercent"));
+        book.firstReadAt = epochFromDatetimeLocal(value("firstReadAt"));
+        book.lastReadAt = epochFromDatetimeLocal(value("lastReadAt"));
+        book.completedAt = epochFromDatetimeLocal(value("completedAt"));
+        book.completed = document.getElementById("field-completed").checked;
+        if (book.completed && !book.completedAt) book.completedAt = book.lastReadAt || Math.floor(Date.now() / 1000);
+        if (!book.completed) book.completedAt = 0;
+        rebuildAggregatedDays();
+        renderAll();
+      });
+
+      document.getElementById("recalcBookBtn").addEventListener("click", () => {
+        book.totalReadingMs = (book.readingDays || []).reduce((sum, day) => sum + toUInt(day.readingMs), 0);
+        rebuildAggregatedDays();
+        renderAll();
+      });
+
+      document.getElementById("duplicateBookBtn").addEventListener("click", () => {
+        const copy = normalizeBook(JSON.parse(JSON.stringify(book)));
+        copy.bookId = `${copy.bookId || copy.path}-copy-${Date.now()}`;
+        copy.path = `${copy.path}.copy`;
+        copy.title = `${copy.title || "Book"} copy`;
+        state.data.books.splice(state.selectedIndex + 1, 0, copy);
+        state.selectedIndex += 1;
+        renderAll();
+      });
+    }
+
+    function renderDaysTab(container, book) {
+      const rows = (book.readingDays || []).map((day, index) => `
+        <tr>
+          <td><input type="date" value="${dateFromDayOrdinal(day.dayOrdinal)}" data-day-index="${index}" data-day-field="date"></td>
+          <td><input type="number" min="0" step="1" value="${msToMinutes(day.readingMs)}" data-day-index="${index}" data-day-field="minutes"></td>
+          <td><button class="button danger" type="button" data-delete-day="${index}">${iconMarkup("trash")}${escapeHtml(t("delete"))}</button></td>
+        </tr>
+      `).join("");
+      container.innerHTML = `
+        <table>
+          <thead><tr><th>${escapeHtml(t("date"))}</th><th>${escapeHtml(t("minutes"))}</th><th></th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="3">${escapeHtml(t("noReadingDays"))}</td></tr>`}</tbody>
+        </table>
+        <div class="row-actions">
+          <button class="button" id="addDayBtn" type="button">${iconMarkup("calendar")}${escapeHtml(t("addDay"))}</button>
+          <button class="button primary" id="applyDaysBtn" type="button">${iconMarkup("check")}${escapeHtml(t("applyDays"))}</button>
+        </div>
+      `;
+      container.querySelectorAll("[data-delete-day]").forEach(button => {
+        button.addEventListener("click", () => {
+          book.readingDays.splice(Number(button.dataset.deleteDay), 1);
+          rebuildAggregatedDays();
+          renderAll();
+          state.activeTab = "days";
+          renderEditor();
+        });
+      });
+      document.getElementById("addDayBtn").addEventListener("click", () => {
+        book.readingDays.push({dayOrdinal: dayOrdinalFromDate(new Date().toISOString().slice(0, 10)), readingMs: 30 * MS_PER_MINUTE});
+        renderEditor();
+      });
+      document.getElementById("applyDaysBtn").addEventListener("click", () => {
+        const nextDays = [];
+        const dateInputs = container.querySelectorAll('[data-day-field="date"]');
+        dateInputs.forEach(input => {
+          const index = input.dataset.dayIndex;
+          const minutes = container.querySelector(`[data-day-index="${index}"][data-day-field="minutes"]`);
+          const dayOrdinal = dayOrdinalFromDate(input.value);
+          const readingMs = minutesToMs(minutes ? minutes.value : 0);
+          if (dayOrdinal && readingMs) nextDays.push({dayOrdinal, readingMs});
+        });
+        book.readingDays = nextDays;
+        rebuildAggregatedDays();
+        renderAll();
+        state.activeTab = "days";
+        renderEditor();
+      });
+    }
+
+    function renderRawTab(container, book) {
+      container.innerHTML = `
+        <textarea class="raw-json" id="bookRawJson">${escapeHtml(JSON.stringify(book, null, 2))}</textarea>
+        <div class="row-actions">
+          <button class="button primary" id="applyRawBtn" type="button">${iconMarkup("check")}${escapeHtml(t("applyRawJson"))}</button>
+        </div>
+      `;
+      document.getElementById("applyRawBtn").addEventListener("click", () => {
+        try {
+          const parsed = JSON.parse(document.getElementById("bookRawJson").value);
+          state.data.books[state.selectedIndex] = normalizeBook(parsed);
+          rebuildAggregatedDays();
+          renderAll();
+        } catch (error) {
+          alert(t("invalidJson", {message: error.message}));
+        }
+      });
+    }
+
+    function textField(id, label, currentValue, className = "") {
+      return `
+        <div class="field ${className}">
+          <label for="field-${id}">${label}</label>
+          <input id="field-${id}" type="text" value="${escapeAttr(currentValue)}">
+        </div>
+      `;
+    }
+
+    function textareaField(id, label, currentValue, className = "") {
+      return `
+        <div class="field ${className}">
+          <label for="field-${id}">${label}</label>
+          <textarea id="field-${id}">${escapeHtml(currentValue)}</textarea>
+        </div>
+      `;
+    }
+
+    function numberField(id, label, currentValue) {
+      return `
+        <div class="field">
+          <label for="field-${id}">${label}</label>
+          <input id="field-${id}" type="number" min="0" step="1" value="${escapeAttr(currentValue)}">
+        </div>
+      `;
+    }
+
+    function datetimeField(id, label, currentValue) {
+      return `
+        <div class="field">
+          <label for="field-${id}">${label}</label>
+          <input id="field-${id}" type="datetime-local" value="${escapeAttr(currentValue)}">
+        </div>
+      `;
+    }
+
+    function value(id) {
+      const input = document.getElementById(`field-${id}`);
+      return input ? input.value : "";
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
+    }
+
+    function iconMarkup(name) {
+      return `<svg class="icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
+    }
+
+    function downloadText(name, text, type) {
+      const blob = new Blob([text], {type});
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    els.fileInput.addEventListener("change", async event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        state.data = normalizeDoc(JSON.parse(text));
+        state.rawFileName = file.name;
+        state.selectedIndex = state.data.books.length ? 0 : -1;
+        state.activeTab = "details";
+        renderAll();
+      } catch (error) {
+        alert(t("loadError", {message: error.message}));
+      } finally {
+        els.fileInput.value = "";
+      }
+    });
+
+    els.newBtn.addEventListener("click", () => {
+      state.data = makeEmptyDoc();
+        state.rawFileName = t("newStatsStatus");
+      state.selectedIndex = -1;
+      renderAll();
+    });
+
+    els.addBookBtn.addEventListener("click", () => {
+      state.data.books.push(makeEmptyBook());
+      state.selectedIndex = state.data.books.length - 1;
+      renderAll();
+    });
+
+    els.deleteBookBtn.addEventListener("click", () => {
+      if (!selectedBook()) return;
+      const title = bookDisplayTitle(selectedBook());
+      if (!confirm(t("deleteConfirm", {title}))) return;
+      state.data.books.splice(state.selectedIndex, 1);
+      state.selectedIndex = Math.min(state.selectedIndex, state.data.books.length - 1);
+      rebuildAggregatedDays();
+      renderAll();
+    });
+
+    els.exportBtn.addEventListener("click", () => {
+      rebuildAggregatedDays();
+      downloadText("stats_exported", JSON.stringify(state.data), "application/json");
+    });
+
+    els.searchInput.addEventListener("input", renderBookList);
+
+    renderAll();
+  </script>
+</body>
+</html>
