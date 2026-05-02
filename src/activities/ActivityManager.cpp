@@ -12,7 +12,9 @@
 #include "home/HomeActivity.h"
 #include "home/RecentBooksActivity.h"
 #include "network/CrossPointWebServerActivity.h"
+#include "reader/KOReaderSyncActivity.h"
 #include "reader/ReaderActivity.h"
+#include "../CrossPointState.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
@@ -198,6 +200,18 @@ void ActivityManager::goToBrowser() {
 
 void ActivityManager::goToReader(std::string path) {
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
+}
+
+void ActivityManager::goToKOReaderSync() {
+  const auto& sync = APP_STATE.koReaderSyncSession;
+  if (!sync.active || sync.epubPath.empty()) {
+    LOG_ERR("ACT", "Cannot launch KOReader sync without an active EPUB handoff");
+    goHome();
+    return;
+  }
+  replaceActivity(std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, sync.epubPath, sync.spineIndex,
+                                                         sync.page, sync.totalPagesInSpine, sync.paragraphIndex,
+                                                         sync.hasParagraphIndex, sync.xhtmlSeekHint, sync.intent));
 }
 
 void ActivityManager::goToEpubBookmark(std::string path, const int spineIndex, const uint32_t page) {

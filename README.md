@@ -18,7 +18,7 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.35-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.35-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.36-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.36-cpr-vcodex) |
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
@@ -69,6 +69,7 @@ This project is **not affiliated with Xteink**.
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - EPUB bookmarks plus a global bookmarks app
 - context-aware screenshot filenames that include the current book title when available
+- KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
 - configurable `Home` and `Apps` shortcuts
 - `Flashcards` with offline CSV decks, session summary, recents, stats and settings
 - `Text Darkness`, `Reader Refresh Mode`, `Lexend`, `X Small`

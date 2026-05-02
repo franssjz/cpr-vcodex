@@ -4,6 +4,7 @@
 #include <HalStorage.h>
 
 #include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "Epub.h"
 #include "EpubReaderActivity.h"
 #include "Txt.h"
@@ -106,6 +107,10 @@ void ReaderActivity::onEnter() {
   }
 
   currentBookPath = initialBookPath;
+  if (APP_STATE.koReaderSyncSession.active && APP_STATE.koReaderSyncSession.epubPath == initialBookPath) {
+    LOG_DBG("READER", "Opening EPUB with pending KOReader sync outcome=%d",
+            static_cast<int>(APP_STATE.koReaderSyncSession.outcome));
+  }
   if (isBmpFile(initialBookPath)) {
     onGoToBmpViewer(initialBookPath);
   } else if (isXtcFile(initialBookPath)) {

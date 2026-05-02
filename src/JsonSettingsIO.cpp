@@ -550,6 +550,26 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["lastKnownValidTimestamp"] = s.lastKnownValidTimestamp;
   doc["syncDayReminderStartCount"] = s.syncDayReminderStartCount;
   doc["syncDayReminderLatched"] = s.syncDayReminderLatched;
+  JsonObject sync = doc["koReaderSyncSession"].to<JsonObject>();
+  sync["active"] = s.koReaderSyncSession.active;
+  sync["epubPath"] = s.koReaderSyncSession.epubPath;
+  sync["spineIndex"] = s.koReaderSyncSession.spineIndex;
+  sync["page"] = s.koReaderSyncSession.page;
+  sync["totalPagesInSpine"] = s.koReaderSyncSession.totalPagesInSpine;
+  sync["paragraphIndex"] = s.koReaderSyncSession.paragraphIndex;
+  sync["hasParagraphIndex"] = s.koReaderSyncSession.hasParagraphIndex;
+  sync["xhtmlSeekHint"] = s.koReaderSyncSession.xhtmlSeekHint;
+  sync["intent"] = static_cast<uint8_t>(s.koReaderSyncSession.intent);
+  sync["outcome"] = static_cast<uint8_t>(s.koReaderSyncSession.outcome);
+  sync["resultSpineIndex"] = s.koReaderSyncSession.resultSpineIndex;
+  sync["resultPage"] = s.koReaderSyncSession.resultPage;
+  sync["resultParagraphIndex"] = s.koReaderSyncSession.resultParagraphIndex;
+  sync["resultHasParagraphIndex"] = s.koReaderSyncSession.resultHasParagraphIndex;
+  JsonObject jump = doc["pendingBookmarkJump"].to<JsonObject>();
+  jump["active"] = s.pendingBookmarkJump.active;
+  jump["bookPath"] = s.pendingBookmarkJump.bookPath;
+  jump["spineIndex"] = s.pendingBookmarkJump.spineIndex;
+  jump["pageNumber"] = s.pendingBookmarkJump.pageNumber;
   return saveJsonDocumentToFile("CPS", path, doc);
 }
 
@@ -583,6 +603,38 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   s.lastKnownValidTimestamp = doc["lastKnownValidTimestamp"] | static_cast<uint32_t>(0);
   s.syncDayReminderStartCount = doc["syncDayReminderStartCount"] | (uint8_t)0;
   s.syncDayReminderLatched = doc["syncDayReminderLatched"] | false;
+  {
+    JsonObjectConst sync = doc["koReaderSyncSession"];
+    if (!sync.isNull()) {
+      s.koReaderSyncSession.active = sync["active"] | false;
+      s.koReaderSyncSession.epubPath = sync["epubPath"] | std::string("");
+      s.koReaderSyncSession.spineIndex = sync["spineIndex"] | 0;
+      s.koReaderSyncSession.page = sync["page"] | 0;
+      s.koReaderSyncSession.totalPagesInSpine = sync["totalPagesInSpine"] | 0;
+      s.koReaderSyncSession.paragraphIndex = sync["paragraphIndex"] | static_cast<uint16_t>(0);
+      s.koReaderSyncSession.hasParagraphIndex = sync["hasParagraphIndex"] | false;
+      s.koReaderSyncSession.xhtmlSeekHint = sync["xhtmlSeekHint"] | static_cast<uint32_t>(0);
+      s.koReaderSyncSession.intent =
+          static_cast<KOReaderSyncIntentState>(sync["intent"] | static_cast<uint8_t>(0));
+      s.koReaderSyncSession.outcome =
+          static_cast<KOReaderSyncOutcomeState>(sync["outcome"] | static_cast<uint8_t>(0));
+      s.koReaderSyncSession.resultSpineIndex = sync["resultSpineIndex"] | 0;
+      s.koReaderSyncSession.resultPage = sync["resultPage"] | 0;
+      s.koReaderSyncSession.resultParagraphIndex = sync["resultParagraphIndex"] | static_cast<uint16_t>(0);
+      s.koReaderSyncSession.resultHasParagraphIndex = sync["resultHasParagraphIndex"] | false;
+    } else {
+      s.koReaderSyncSession.clear();
+    }
+    JsonObjectConst jump = doc["pendingBookmarkJump"];
+    if (!jump.isNull()) {
+      s.pendingBookmarkJump.active = jump["active"] | false;
+      s.pendingBookmarkJump.bookPath = jump["bookPath"] | std::string("");
+      s.pendingBookmarkJump.spineIndex = jump["spineIndex"] | static_cast<uint16_t>(0);
+      s.pendingBookmarkJump.pageNumber = jump["pageNumber"] | static_cast<uint16_t>(0);
+    } else {
+      s.pendingBookmarkJump.clear();
+    }
+  }
   return true;
 }
 

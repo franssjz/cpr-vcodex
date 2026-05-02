@@ -19,6 +19,30 @@ constexpr char STATE_FILE_BAK[] = "/.crosspoint/state.bin.bak";
 
 CrossPointState CrossPointState::instance;
 
+void KOReaderSyncSessionState::clear() {
+  active = false;
+  epubPath.clear();
+  spineIndex = 0;
+  page = 0;
+  totalPagesInSpine = 0;
+  paragraphIndex = 0;
+  hasParagraphIndex = false;
+  xhtmlSeekHint = 0;
+  intent = KOReaderSyncIntentState::COMPARE;
+  outcome = KOReaderSyncOutcomeState::NONE;
+  resultSpineIndex = 0;
+  resultPage = 0;
+  resultParagraphIndex = 0;
+  resultHasParagraphIndex = false;
+}
+
+void PendingBookmarkJumpState::clear() {
+  active = false;
+  bookPath.clear();
+  spineIndex = 0;
+  pageNumber = 0;
+}
+
 bool CrossPointState::isRecentSleep(const uint16_t idx, const uint8_t checkCount) const {
   const uint8_t effectiveCount = std::min(checkCount, recentSleepFill);
   for (uint8_t i = 0; i < effectiveCount; i++) {

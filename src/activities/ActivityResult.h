@@ -43,6 +43,8 @@ struct BookmarkResult {
 struct SyncResult {
   int spineIndex = 0;
   int page = 0;
+  uint16_t paragraphIndex = 0;
+  bool hasParagraphIndex = false;
 };
 
 enum class NetworkMode;

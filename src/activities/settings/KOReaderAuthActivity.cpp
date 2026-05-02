@@ -2,6 +2,7 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
 #include <WiFi.h>
 
 #include "KOReaderCredentialStore.h"
@@ -38,6 +39,12 @@ void KOReaderAuthActivity::performAuthentication() {
   {
     RenderLock lock(*this);
     if (result == KOReaderSyncClient::OK) {
+      if (KOReaderSyncClient::usesKosyncSubdirectory() &&
+          KOREADER_STORE.getMatchMethod() != DocumentMatchMethod::BINARY) {
+        KOREADER_STORE.setMatchMethod(DocumentMatchMethod::BINARY);
+        KOREADER_STORE.saveToFile();
+        LOG_INF("KOSync", "Detected CWA /kosync server, switched document matching to Binary");
+      }
       state = SUCCESS;
       statusMessage = tr(STR_AUTH_SUCCESS);
     } else {

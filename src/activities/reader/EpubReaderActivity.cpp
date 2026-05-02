@@ -151,6 +151,45 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
   }
 }
 
+bool writeReaderProgressCache(const std::string& cachePath, const int spineIndex, const int currentPage,
+                              const int pageCount) {
+  FsFile f;
+  const std::string progressPath = cachePath + "/progress.bin";
+  if (!Storage.openFileForWrite("ERS", progressPath, f)) {
+    LOG_ERR("ERS", "Failed to open progress cache for sync restore: %s", progressPath.c_str());
+    return false;
+  }
+  uint8_t data[6];
+  data[0] = spineIndex & 0xFF;
+  data[1] = (spineIndex >> 8) & 0xFF;
+  data[2] = currentPage & 0xFF;
+  data[3] = (currentPage >> 8) & 0xFF;
+  data[4] = pageCount & 0xFF;
+  data[5] = (pageCount >> 8) & 0xFF;
+  f.write(data, 6);
+  f.close();
+  return true;
+}
+
+bool writeReaderProgressFile(const std::string& progressPath, const int spineIndex, const int currentPage,
+                             const int pageCount) {
+  FsFile f;
+  if (!Storage.openFileForWrite("ERS", progressPath, f)) {
+    LOG_ERR("ERS", "Failed to open progress file: %s", progressPath.c_str());
+    return false;
+  }
+  uint8_t data[6];
+  data[0] = spineIndex & 0xFF;
+  data[1] = (spineIndex >> 8) & 0xFF;
+  data[2] = currentPage & 0xFF;
+  data[3] = (currentPage >> 8) & 0xFF;
+  data[4] = pageCount & 0xFF;
+  data[5] = (pageCount >> 8) & 0xFF;
+  f.write(data, 6);
+  f.close();
+  return true;
+}
+
 }  // namespace
 
 void EpubReaderActivity::onEnter() {
@@ -165,6 +204,7 @@ void EpubReaderActivity::onEnter() {
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
 
   epub->setupCacheDir();
+  applyPendingSyncSession();
   stableBookId = BookIdentity::resolveStableBookId(epub->getPath());
   bookmarkStore.load(epub->getCachePath(), stableBookId);
 
@@ -630,35 +670,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
       if (KOREADER_STORE.hasCredentials()) {
-        const int currentPage = section ? section->currentPage : nextPageNumber;
-        const int totalPages = section ? section->pageCount : cachedChapterTotalPageCount;
-        std::optional<uint16_t> paragraphIndex;
-        if (section && currentPage >= 0 && currentPage < section->pageCount) {
-          const uint16_t paragraphPage =
-              currentPage > 0 ? static_cast<uint16_t>(currentPage - 1) : static_cast<uint16_t>(currentPage);
-          if (const auto pIdx = section->getParagraphIndexForPage(paragraphPage)) {
-            paragraphIndex = *pIdx;
-          }
-        }
         READING_STATS.noteActivity();
-        startActivityForResult(
-            std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, epub, epub->getPath(), currentSpineIndex,
-                                                   currentPage, totalPages, paragraphIndex),
-            [this](const ActivityResult& result) {
-              READING_STATS.resumeSession();
-              if (!result.isCancelled) {
-                const auto& sync = std::get<SyncResult>(result.data);
-                if (currentSpineIndex != sync.spineIndex || (section && section->currentPage != sync.page)) {
-                  RenderLock lock(*this);
-                  currentSpineIndex = sync.spineIndex;
-                  nextPageNumber = sync.page;
-                  cachedChapterTotalPageCount = 0;
-                  pendingPageJump.reset();
-                  saveProgress(currentSpineIndex, nextPageNumber, 0);
-                  section.reset();
-                }
-              }
-            });
+        launchKOReaderSync(SyncLaunchMode::COMPARE);
       }
       break;
     }
@@ -849,6 +862,16 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       pendingAnchor.clear();
     }
 
+    if (pendingParagraphLookup) {
+      if (const auto page = section->getPageForParagraphIndex(pendingParagraphIndex)) {
+        section->currentPage = *page;
+        LOG_DBG("ERS", "Resolved paragraph %u to page %d", pendingParagraphIndex, *page);
+      } else {
+        LOG_DBG("ERS", "Paragraph %u not found in section %d", pendingParagraphIndex, currentSpineIndex);
+      }
+      pendingParagraphLookup = false;
+    }
+
     // handles changes in reader settings and reset to approximate position based on cached progress
     if (cachedChapterTotalPageCount > 0) {
       // only goes to relative position if spine index matches cached value
@@ -961,23 +984,13 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
   READING_STATS.updateProgress(static_cast<uint8_t>(progressPercent), progressPercent >= 100,
                                getStatsChapterTitle(*epub, spineIndex), getStatsChapterProgressPercent(currentPage, pageCount));
 
-  FsFile f;
   std::string progressPath = getStableProgressPath(stableBookId);
   if (!progressPath.empty()) {
     BookIdentity::ensureStableDataDir(stableBookId);
   } else {
     progressPath = getLegacyProgressPath(*epub);
   }
-  if (Storage.openFileForWrite("ERS", progressPath, f)) {
-    uint8_t data[6];
-    data[0] = spineIndex & 0xFF;
-    data[1] = (spineIndex >> 8) & 0xFF;
-    data[2] = currentPage & 0xFF;
-    data[3] = (currentPage >> 8) & 0xFF;
-    data[4] = pageCount & 0xFF;
-    data[5] = (pageCount >> 8) & 0xFF;
-    f.write(data, 6);
-    f.close();
+  if (writeReaderProgressFile(progressPath, spineIndex, currentPage, pageCount)) {
     LOG_DBG("ERS", "Progress saved: Chapter %d, Page %d", spineIndex, currentPage);
   } else {
     LOG_ERR("ERS", "Could not save progress!");
@@ -1217,4 +1230,109 @@ ScreenshotInfo EpubReaderActivity::getScreenshotInfo() const {
     }
   }
   return info;
+}
+
+void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode) {
+  if (!epub) {
+    return;
+  }
+
+  const int currentPage = section ? section->currentPage : 0;
+  const int totalPages = section ? section->pageCount : 0;
+  KOReaderSyncIntentState syncIntent = KOReaderSyncIntentState::COMPARE;
+  if (mode == SyncLaunchMode::PULL_REMOTE) {
+    syncIntent = KOReaderSyncIntentState::PULL_REMOTE;
+  } else if (mode == SyncLaunchMode::PUSH_LOCAL) {
+    syncIntent = KOReaderSyncIntentState::PUSH_LOCAL;
+  }
+
+  auto& sync = APP_STATE.koReaderSyncSession;
+  sync.active = true;
+  sync.epubPath = epub->getPath();
+  sync.spineIndex = currentSpineIndex;
+  sync.page = currentPage;
+  sync.totalPagesInSpine = totalPages;
+  if (section) {
+    if (const auto pIdx = section->getParagraphIndexForPage(static_cast<uint16_t>(currentPage))) {
+      sync.paragraphIndex = *pIdx;
+      sync.hasParagraphIndex = true;
+      sync.xhtmlSeekHint = 0;
+    } else {
+      sync.paragraphIndex = 0;
+      sync.hasParagraphIndex = false;
+      sync.xhtmlSeekHint = 0;
+    }
+  } else {
+    sync.paragraphIndex = 0;
+    sync.hasParagraphIndex = false;
+    sync.xhtmlSeekHint = 0;
+  }
+  sync.intent = syncIntent;
+  sync.outcome = KOReaderSyncOutcomeState::PENDING;
+  sync.resultSpineIndex = 0;
+  sync.resultPage = 0;
+  sync.resultParagraphIndex = 0;
+  sync.resultHasParagraphIndex = false;
+  APP_STATE.saveToFile();
+
+  LOG_DBG("ERS", "Standalone sync handoff: spine=%d page=%d/%d", currentSpineIndex, currentPage, totalPages);
+  activityManager.goToKOReaderSync();
+}
+
+void EpubReaderActivity::applyPendingSyncSession() {
+  auto& sync = APP_STATE.koReaderSyncSession;
+  if (!sync.active || !epub || sync.epubPath != epub->getPath()) {
+    return;
+  }
+
+  LOG_DBG("ERS", "Applying pending sync session outcome=%d path=%s", static_cast<int>(sync.outcome),
+          sync.epubPath.c_str());
+
+  if (sync.outcome == KOReaderSyncOutcomeState::UPLOAD_COMPLETE) {
+    LOG_DBG("ERS", "Upload-complete: keeping existing progress unchanged");
+    sync.clear();
+    APP_STATE.saveToFile();
+    return;
+  }
+
+  int restoreSpineIndex = sync.spineIndex;
+  int restorePage = sync.page;
+  pendingParagraphLookup = sync.hasParagraphIndex;
+  pendingParagraphIndex = sync.paragraphIndex;
+
+  if (sync.outcome == KOReaderSyncOutcomeState::APPLIED_REMOTE) {
+    restoreSpineIndex = sync.resultSpineIndex;
+    restorePage = sync.resultPage;
+    pendingParagraphLookup = sync.resultHasParagraphIndex;
+    pendingParagraphIndex = sync.resultParagraphIndex;
+    LOG_DBG("ERS", "Applying remote position: spine=%d page=%d paragraph=%u", restoreSpineIndex, restorePage,
+            pendingParagraphIndex);
+  } else {
+    LOG_DBG("ERS", "Restoring local pre-sync position: spine=%d page=%d paragraph=%u", restoreSpineIndex, restorePage,
+            pendingParagraphIndex);
+  }
+
+  const int restorePageCount = (restoreSpineIndex == sync.spineIndex) ? sync.totalPagesInSpine : 0;
+  const std::string restoreBookId = BookIdentity::resolveStableBookId(epub->getPath());
+  std::string restoreProgressPath = getStableProgressPath(restoreBookId);
+  if (!restoreProgressPath.empty()) {
+    BookIdentity::ensureStableDataDir(restoreBookId);
+  } else {
+    restoreProgressPath = getLegacyProgressPath(*epub);
+  }
+
+  if (writeReaderProgressFile(restoreProgressPath, restoreSpineIndex, restorePage, restorePageCount)) {
+    cachedSpineIndex = restoreSpineIndex;
+    cachedChapterTotalPageCount = restorePageCount;
+    LOG_DBG("ERS", "Prepared progress.bin for sync restore: spine=%d page=%d/%d", restoreSpineIndex, restorePage,
+            sync.totalPagesInSpine);
+  } else {
+    currentSpineIndex = restoreSpineIndex;
+    nextPageNumber = restorePage;
+    cachedSpineIndex = restoreSpineIndex;
+    cachedChapterTotalPageCount = restorePageCount;
+  }
+
+  sync.clear();
+  APP_STATE.saveToFile();
 }
