@@ -70,7 +70,7 @@
       flashSubtitle: "Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.",
       beforeFlash: "Before you flash",
       backupTitle: "Back up first",
-      backupText: "This OTA-style flash preserves bootloader, partition table, SD card and NVS settings, but backing up your SD card is still sensible.",
+      backupText: "Skip this step if you have flashed before. If this is your first time, keep a \"Save Full Flash\" backup from https://xteink.dve.al/.",
       cableTitle: "Use a data USB-C cable",
       cableText: "Connect the Xteink X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.",
       browserTitle: "Use Chrome or Edge on desktop",
@@ -129,7 +129,7 @@
       flashSubtitle: "Instala el último firmware CPR-vCodex en tu Xteink X4 desde Chrome o Edge usando Web Serial. Escribe la partición de app inactiva y luego arranca desde ella.",
       beforeFlash: "Antes de flashear",
       backupTitle: "Haz copia primero",
-      backupText: "Este flasheo tipo OTA conserva bootloader, tabla de particiones, tarjeta SD y ajustes NVS, pero hacer copia de la SD sigue siendo buena idea.",
+      backupText: "Ignora este paso si ya has flasheado otras veces. Si es la primera vez, recuerda tener un \"Save Full Flash\" en https://xteink.dve.al/.",
       cableTitle: "Usa un cable USB-C de datos",
       cableText: "Conecta el Xteink X4 al ordenador. Si no aparece el puerto serie, despierta y desbloquea el dispositivo y vuelve a conectarlo.",
       browserTitle: "Usa Chrome o Edge en escritorio",
@@ -423,11 +423,36 @@
   const localizedAutoFlash = {
     be: "Аўта Flash", ca: "Flash automàtic", cs: "Automatický flash", da: "Auto Flash", nl: "Auto Flash", fi: "Automaattinen flash", fr: "Flash automatique", de: "Auto-Flash", hu: "Automatikus flash", it: "Flash automatico", kk: "Авто Flash", lt: "Automatinis flash", pl: "Auto Flash", pt: "Flash automático", ro: "Flash automat", ru: "Авто Flash", si: "Samodejni flash", sv: "Auto Flash", tr: "Otomatik Flash", uk: "Авто Flash", vi: "Flash tự động"
   };
+  const localizedBackupText = {
+    be: "Прапусціце гэты крок, калі ўжо прашывалі раней. Калі гэта першы раз, зрабіце \"Save Full Flash\" на https://xteink.dve.al/.",
+    ca: "Ignora aquest pas si ja has flashejat altres vegades. Si és la primera vegada, recorda tenir un \"Save Full Flash\" a https://xteink.dve.al/.",
+    cs: "Tento krok přeskočte, pokud jste už flashovali dříve. Pokud je to poprvé, mějte \"Save Full Flash\" z https://xteink.dve.al/.",
+    da: "Spring dette trin over, hvis du har flashet før. Hvis det er første gang, så husk at have en \"Save Full Flash\" fra https://xteink.dve.al/.",
+    nl: "Sla deze stap over als je al eerder hebt geflasht. Als dit de eerste keer is, zorg dan voor een \"Save Full Flash\" van https://xteink.dve.al/.",
+    fi: "Ohita tämä vaihe, jos olet flashannut aiemmin. Jos tämä on ensimmäinen kerta, pidä \"Save Full Flash\" -varmuuskopio osoitteesta https://xteink.dve.al/.",
+    fr: "Ignorez cette étape si vous avez déjà flashé. Si c'est la première fois, gardez un \"Save Full Flash\" depuis https://xteink.dve.al/.",
+    de: "Überspringen Sie diesen Schritt, wenn Sie schon einmal geflasht haben. Wenn es das erste Mal ist, behalten Sie ein \"Save Full Flash\" von https://xteink.dve.al/.",
+    hu: "Hagyd ki ezt a lépést, ha már flasheltél korábban. Ha ez az első alkalom, legyen egy \"Save Full Flash\" mentésed innen: https://xteink.dve.al/.",
+    it: "Ignora questo passaggio se hai già fatto il flash altre volte. Se è la prima volta, tieni un \"Save Full Flash\" da https://xteink.dve.al/.",
+    kk: "Бұрын flash жасаған болсаңыз, бұл қадамды өткізіп жіберіңіз. Бірінші рет болса, https://xteink.dve.al/ сайтынан \"Save Full Flash\" сақтық көшірмесін сақтаңыз.",
+    lt: "Praleiskite šį žingsnį, jei jau esate flashinę anksčiau. Jei tai pirmas kartas, turėkite \"Save Full Flash\" iš https://xteink.dve.al/.",
+    pl: "Pomiń ten krok, jeśli już wcześniej flashowałeś. Jeśli to pierwszy raz, zachowaj \"Save Full Flash\" z https://xteink.dve.al/.",
+    pt: "Ignore este passo se já fez flash outras vezes. Se for a primeira vez, mantenha um \"Save Full Flash\" em https://xteink.dve.al/.",
+    ro: "Sari peste acest pas dacă ai mai făcut flash înainte. Dacă este prima dată, păstrează un \"Save Full Flash\" de la https://xteink.dve.al/.",
+    ru: "Пропустите этот шаг, если уже прошивали раньше. Если это первый раз, сохраните \"Save Full Flash\" с https://xteink.dve.al/.",
+    si: "Preskočite ta korak, če ste že flashali. Če je to prvič, imejte \"Save Full Flash\" iz https://xteink.dve.al/.",
+    es: "Ignora este paso si ya has flasheado otras veces. Si es la primera vez, recuerda tener un \"Save Full Flash\" en https://xteink.dve.al/.",
+    sv: "Hoppa över detta steg om du har flashat tidigare. Om det är första gången, ha en \"Save Full Flash\" från https://xteink.dve.al/.",
+    tr: "Daha önce flashladıysanız bu adımı atlayın. İlk kez yapıyorsanız https://xteink.dve.al/ üzerinden bir \"Save Full Flash\" yedeğiniz olsun.",
+    uk: "Пропустіть цей крок, якщо вже прошивали раніше. Якщо це перший раз, збережіть \"Save Full Flash\" з https://xteink.dve.al/.",
+    vi: "Bỏ qua bước này nếu bạn đã từng flash trước đó. Nếu đây là lần đầu, hãy giữ một bản \"Save Full Flash\" từ https://xteink.dve.al/."
+  };
   for (const [language, title] of Object.entries(localizedTitles)) {
     if (!messages[language]) continue;
     messages[language].homeTitle = title;
     messages[language].navFlash = localizedAutoFlash[language];
     messages[language].homeFlash = localizedAutoFlash[language];
+    messages[language].backupText = localizedBackupText[language] || messages.en.backupText;
   }
 
   function hasLanguage(language) {
