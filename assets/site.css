@@ -1,0 +1,123 @@
+:root {
+  --site-header-bg: var(--surface, #ffffff);
+  --site-text: var(--text, #111118);
+  --site-muted: var(--muted, #666672);
+  --site-line: var(--line, #e5e5e8);
+  --site-accent: var(--accent, #B621B4);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--site-line);
+  background: var(--site-header-bg);
+}
+
+.site-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(var(--site-width, 1040px), calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 12px 0;
+}
+
+.site-brand {
+  color: var(--site-text);
+  font-weight: 850;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.site-nav a,
+.site-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  border: 1px solid var(--site-line);
+  border-radius: 6px;
+  background: var(--site-header-bg);
+  color: var(--site-text);
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-nav a[aria-current="page"] {
+  border-color: var(--site-accent);
+  background: var(--site-accent);
+  color: #ffffff;
+}
+
+.site-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-control {
+  cursor: pointer;
+}
+
+.site-control.icon-only {
+  width: 38px;
+  min-width: 38px;
+  padding: 8px;
+}
+
+.site-select {
+  min-height: 38px;
+  max-width: 190px;
+  border: 1px solid var(--site-line);
+  border-radius: 6px;
+  background: var(--site-header-bg);
+  color: var(--site-text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.site-icon,
+.site-control svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+@media (max-width: 760px) {
+  .site-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .site-nav {
+    justify-content: flex-start;
+  }
+
+  .site-actions {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .site-select {
+    max-width: none;
+    width: 100%;
+  }
+}

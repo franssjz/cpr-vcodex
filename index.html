@@ -4,26 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CPR-vCodex Tools</title>
+  <link rel="stylesheet" href="assets/site.css">
   <style>
     :root {
-      color-scheme: light dark;
+      color-scheme: light;
       --accent: #B621B4;
       --bg: #f7f7f8;
       --surface: #ffffff;
+      --surface-2: #f1f1f4;
       --text: #111118;
       --muted: #666672;
       --line: #e5e5e8;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0f0f14;
-        --surface: #181820;
-        --text: #f4f4f6;
-        --muted: #aaa7b0;
-        --line: #30303a;
-      }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f0f14;
+      --surface: #181820;
+      --surface-2: #22222b;
+      --text: #f4f4f6;
+      --muted: #aaa7b0;
+      --line: #30303a;
     }
 
     * {
@@ -31,16 +33,23 @@
     }
 
     body {
-      display: grid;
       min-height: 100vh;
       margin: 0;
-      place-items: center;
-      background: var(--bg);
+      background: linear-gradient(180deg, var(--surface) 0, var(--bg) 360px);
       color: var(--text);
     }
 
     main {
-      width: min(680px, calc(100vw - 32px));
+      display: grid;
+      width: min(720px, calc(100vw - 32px));
+      min-height: calc(100vh - 72px);
+      margin: 0 auto;
+      place-items: center;
+      padding: 44px 0;
+    }
+
+    .home-card {
+      width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface);
@@ -50,7 +59,7 @@
 
     h1 {
       margin: 0 0 8px;
-      font-size: 28px;
+      font-size: 32px;
       letter-spacing: 0;
     }
 
@@ -78,7 +87,7 @@
       gap: 10px;
     }
 
-    a {
+    .tool-link {
       display: inline-flex;
       align-items: center;
       min-height: 40px;
@@ -90,7 +99,7 @@
       text-decoration: none;
     }
 
-    a.secondary {
+    .tool-link.secondary {
       border: 1px solid var(--line);
       background: transparent;
       color: var(--text);
@@ -98,14 +107,33 @@
   </style>
 </head>
 <body>
-  <main>
-    <h1>CPR-vCodex Tools</h1>
-    <p>Small browser tools for CPR-vCodex. Everything runs locally in your browser.</p>
-    <div class="version">Latest firmware: 1.2.0.37-cpr-vcodex</div>
-    <div class="links">
-      <a href="./flash.html">Auto Flash</a>
-      <a class="secondary" href="./reading-stats-editor/">Reading Stats Editor</a>
+  <header class="site-header">
+    <div class="site-topbar">
+      <a class="site-brand" href="./">CPR-vCodex Tools</a>
+      <nav class="site-nav" aria-label="Tools">
+        <a href="./" aria-current="page" data-site-i18n="navHome">Home</a>
+        <a href="./reading-stats-editor/" data-site-i18n="navStats">Reading Stats Editor</a>
+        <a href="./flash.html" data-site-i18n="navFlash">Auto Flash</a>
+      </nav>
+      <div class="site-actions">
+        <button class="site-control icon-only" data-role="theme-toggle" type="button" aria-label="Dark mode" title="Dark mode"><span data-role="theme-icon"></span></button>
+        <select class="site-select" data-role="language-select" aria-label="Language"></select>
+      </div>
     </div>
+  </header>
+
+  <main>
+    <section class="home-card">
+      <h1 data-site-i18n="homeTitle">CPR-vCodex Tools</h1>
+      <p data-site-i18n="homeSubtitle">Small browser tools for CPR-vCodex. Everything runs locally in your browser.</p>
+      <div class="version" data-site-i18n="latestFirmware">Latest firmware: 1.2.0.37-cpr-vcodex</div>
+      <div class="links">
+        <a class="tool-link" href="./flash.html" data-site-i18n="homeFlash">Auto Flash</a>
+        <a class="tool-link secondary" href="./reading-stats-editor/" data-site-i18n="homeStats">Reading Stats Editor</a>
+      </div>
+    </section>
   </main>
+
+  <script src="assets/site.js"></script>
 </body>
 </html>

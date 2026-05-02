@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-cpr-tools-autoinit="false">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CPR-vCodex Reading Stats Editor</title>
+  <link rel="stylesheet" href="../assets/site.css">
   <style>
     :root {
+      --site-width: 1280px;
       color-scheme: light;
       --page-top: #ffffff;
       --bg: #f7f7f8;
@@ -900,6 +902,18 @@
       font-size: 13px;
     }
 
+    .page-intro {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .page-intro .status-line {
+      flex: 0 0 auto;
+    }
+
     .collapsible {
       margin-bottom: 16px;
     }
@@ -923,7 +937,8 @@
         grid-column: auto;
       }
 
-      .topbar {
+      .topbar,
+      .page-intro {
         align-items: flex-start;
         flex-direction: column;
       }
@@ -1079,6 +1094,10 @@
       .notice {
         margin-top: 10px;
       }
+
+      .page-intro {
+        gap: 8px;
+      }
     }
   </style>
 </head>
@@ -1136,48 +1155,30 @@
       <path d="M18 6 6 18"></path><path d="m6 6 12 12"></path>
     </symbol>
   </svg>
-  <header>
-    <div class="topbar">
-      <div class="brand">
-        <div class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-book-open"></use></svg></div>
-        <div>
-          <h1 data-i18n="appTitle">CPR-vCodex Reading Stats Editor</h1>
-          <div class="subtitle" data-i18n="subtitle">Local editor for exported reading stats. No upload, no server.</div>
-        </div>
-      </div>
-      <div class="top-actions">
-        <button class="button icon-only" id="themeToggleBtn" type="button" aria-label="Dark mode" title="Dark mode"><svg class="icon" aria-hidden="true"><use id="themeIconUse" href="#icon-moon"></use></svg></button>
-        <select class="select" id="languageSelect" aria-label="Language">
-          <option value="be">Беларуская</option>
-          <option value="ca">Català</option>
-          <option value="cs">Čeština</option>
-          <option value="da">Dansk</option>
-          <option value="nl">Nederlands</option>
-          <option value="en">English</option>
-          <option value="fi">Suomi</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
-          <option value="hu">Magyar</option>
-          <option value="it">Italiano</option>
-          <option value="kk">Қазақша</option>
-          <option value="lt">Lietuvių</option>
-          <option value="pl">Polski</option>
-          <option value="pt">Português (Brasil)</option>
-          <option value="ro">Română</option>
-          <option value="ru">Русский</option>
-          <option value="si">Slovenščina</option>
-          <option value="es">Español</option>
-          <option value="sv">Svenska</option>
-          <option value="tr">Türkçe</option>
-          <option value="uk">Українська</option>
-          <option value="vi">Tiếng Việt</option>
-        </select>
-        <div class="status-line" id="fileStatus">No file loaded</div>
+  <header class="site-header">
+    <div class="site-topbar">
+      <a class="site-brand" href="../">CPR-vCodex Tools</a>
+      <nav class="site-nav" aria-label="Tools">
+        <a href="../" data-site-i18n="navHome">Home</a>
+        <a href="./" aria-current="page" data-site-i18n="navStats">Reading Stats Editor</a>
+        <a href="../flash.html" data-site-i18n="navFlash">Auto Flash</a>
+      </nav>
+      <div class="site-actions">
+        <button class="site-control icon-only" id="themeToggleBtn" data-role="theme-toggle" type="button" aria-label="Dark mode" title="Dark mode"><svg class="icon" aria-hidden="true"><use id="themeIconUse" href="#icon-moon"></use></svg></button>
+        <select class="site-select" id="languageSelect" data-role="language-select" aria-label="Language"></select>
       </div>
     </div>
   </header>
 
   <main>
+    <section class="page-intro">
+      <div>
+        <h1 data-i18n="appTitle">CPR-vCodex Reading Stats Editor</h1>
+        <div class="subtitle" data-i18n="subtitle">Local editor for exported reading stats. No upload, no server.</div>
+      </div>
+      <div class="status-line" id="fileStatus">No file loaded</div>
+    </section>
+
     <div class="notice">
       <span class="notice-icon"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg></span>
       <span data-i18n-html="importNotice">Copy the exported file back to the device as <strong>/exports/stats_exported</strong>, then use
@@ -1243,6 +1244,7 @@
 
   </main>
 
+  <script src="../assets/site.js"></script>
   <script>
     const MS_PER_MINUTE = 60000;
     const MS_PER_DAY = 86400000;
@@ -1253,8 +1255,8 @@
       rawFileName: "",
       activeTab: "details",
       heatmapMonthOffset: 0,
-      language: localStorage.getItem("cprStatsLanguage") || "en",
-      theme: localStorage.getItem("cprStatsTheme") || "light"
+      language: (window.CPRTools && window.CPRTools.getLanguage()) || localStorage.getItem("cprToolsLanguage") || localStorage.getItem("cprStatsLanguage") || "en",
+      theme: (window.CPRTools && window.CPRTools.getTheme()) || localStorage.getItem("cprToolsTheme") || localStorage.getItem("cprStatsTheme") || "light"
     };
 
     const els = {
@@ -1278,6 +1280,10 @@
       summaryCompleted: document.getElementById("summaryCompleted"),
       visualDashboard: document.getElementById("visualDashboard")
     };
+
+    if (window.CPRTools) {
+      window.CPRTools.init({wireControls: false});
+    }
 
     const i18n = {
       en: {
@@ -3043,16 +3049,19 @@
     }
 
     function applyTheme() {
+      document.documentElement.dataset.theme = state.theme;
       document.body.dataset.theme = state.theme;
       const nextModeKey = state.theme === "dark" ? "lightMode" : "darkMode";
       els.themeIconUse.setAttribute("href", state.theme === "dark" ? "#icon-sun" : "#icon-moon");
       els.themeToggleBtn.setAttribute("aria-label", t(nextModeKey));
       els.themeToggleBtn.setAttribute("title", t(nextModeKey));
+      if (window.CPRTools) window.CPRTools.applyTheme(state.theme);
     }
 
     function applyLanguage() {
       document.documentElement.lang = state.language;
       els.languageSelect.value = state.language;
+      if (window.CPRTools) window.CPRTools.applyI18n(state.language);
       document.querySelectorAll("[data-i18n]").forEach(node => {
         const key = node.dataset.i18n;
         node.textContent = t(key);
@@ -3067,12 +3076,14 @@
 
     els.themeToggleBtn.addEventListener("click", () => {
       state.theme = state.theme === "dark" ? "light" : "dark";
+      localStorage.setItem("cprToolsTheme", state.theme);
       localStorage.setItem("cprStatsTheme", state.theme);
       applyTheme();
     });
 
     els.languageSelect.addEventListener("change", () => {
       state.language = i18n[els.languageSelect.value] ? els.languageSelect.value : "en";
+      localStorage.setItem("cprToolsLanguage", state.language);
       localStorage.setItem("cprStatsLanguage", state.language);
       applyLanguage();
       renderAll();

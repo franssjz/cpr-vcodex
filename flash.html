@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X4 using a browser-based Web Serial installer.">
   <title>Auto Flash - CPR-vCodex</title>
+  <link rel="stylesheet" href="assets/site.css">
   <style>
     :root {
       color-scheme: light;
@@ -23,19 +24,17 @@
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        color-scheme: dark;
-        --bg: #0f0f14;
-        --surface: #181820;
-        --surface-2: #22222b;
-        --surface-3: #1d1d25;
-        --text: #f4f4f6;
-        --muted: #aaa7b0;
-        --line: #30303a;
-        --success: #53d978;
-        --warning: #ffb35c;
-      }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f0f14;
+      --surface: #181820;
+      --surface-2: #22222b;
+      --surface-3: #1d1d25;
+      --text: #f4f4f6;
+      --muted: #aaa7b0;
+      --line: #30303a;
+      --success: #53d978;
+      --warning: #ffb35c;
     }
 
     * {
@@ -55,24 +54,9 @@
       background: var(--surface);
     }
 
-    .topbar,
     main {
       width: min(1040px, calc(100vw - 32px));
       margin: 0 auto;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 14px 0;
-    }
-
-    .brand {
-      color: var(--text);
-      font-weight: 850;
-      text-decoration: none;
     }
 
     nav {
@@ -383,7 +367,7 @@
     }
 
     @media (max-width: 760px) {
-      .topbar {
+      .site-topbar {
         align-items: flex-start;
         flex-direction: column;
       }
@@ -395,50 +379,54 @@
   </style>
 </head>
 <body>
-  <header>
-    <div class="topbar">
-      <a class="brand" href="./">CPR-vCodex Tools</a>
-      <nav aria-label="Tools">
-        <a href="./">Home</a>
-        <a href="./reading-stats-editor/">Reading Stats Editor</a>
-        <a href="./flash.html" aria-current="page">Auto Flash</a>
+  <header class="site-header">
+    <div class="site-topbar">
+      <a class="site-brand" href="./">CPR-vCodex Tools</a>
+      <nav class="site-nav" aria-label="Tools">
+        <a href="./" data-site-i18n="navHome">Home</a>
+        <a href="./reading-stats-editor/" data-site-i18n="navStats">Reading Stats Editor</a>
+        <a href="./flash.html" aria-current="page" data-site-i18n="navFlash">Auto Flash</a>
       </nav>
+      <div class="site-actions">
+        <button class="site-control icon-only" data-role="theme-toggle" type="button" aria-label="Dark mode" title="Dark mode"><span data-role="theme-icon"></span></button>
+        <select class="site-select" data-role="language-select" aria-label="Language"></select>
+      </div>
     </div>
   </header>
 
   <main>
     <section class="hero">
-      <p class="eyebrow">Browser-based installer</p>
-      <h1>Flash CPR-vCodex</h1>
-      <p>Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
+      <p class="eyebrow" data-site-i18n="flashEyebrow">Browser-based installer</p>
+      <h1 data-site-i18n="flashTitle">Flash CPR-vCodex</h1>
+      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
     </section>
 
     <section class="grid">
       <article class="card">
-        <h2>Before you flash</h2>
+        <h2 data-site-i18n="beforeFlash">Before you flash</h2>
         <div class="steps">
           <div class="step">
             <div>
-              <h3>Back up first</h3>
-              <p>This OTA-style flash preserves bootloader, partition table, SD card and NVS settings, but backing up your SD card is still sensible.</p>
+              <h3 data-site-i18n="backupTitle">Back up first</h3>
+              <p data-site-i18n="backupText">This OTA-style flash preserves bootloader, partition table, SD card and NVS settings, but backing up your SD card is still sensible.</p>
             </div>
           </div>
           <div class="step">
             <div>
-              <h3>Use a data USB-C cable</h3>
-              <p>Connect the Xteink X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
+              <h3 data-site-i18n="cableTitle">Use a data USB-C cable</h3>
+              <p data-site-i18n="cableText">Connect the Xteink X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
             </div>
           </div>
           <div class="step">
             <div>
-              <h3>Use Chrome or Edge on desktop</h3>
-              <p>Firefox and Safari do not support Web Serial. The browser will ask you to choose the ESP32-C3 USB serial port.</p>
+              <h3 data-site-i18n="browserTitle">Use Chrome or Edge on desktop</h3>
+              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the ESP32-C3 USB serial port.</p>
             </div>
           </div>
           <div class="step">
             <div>
-              <h3>Do not unplug while flashing</h3>
-              <p>The page validates the partition table, writes the inactive OTA app slot, updates <code>otadata</code>, and resets the device when it finishes.</p>
+              <h3 data-site-i18n="unplugTitle">Do not unplug while flashing</h3>
+              <p data-site-i18n-html="unplugText">The page validates the partition table, writes the inactive OTA app slot, updates <code>otadata</code>, and resets the device when it finishes.</p>
             </div>
           </div>
         </div>
@@ -446,15 +434,15 @@
 
       <aside class="card flash-panel">
         <div class="version-box">
-          <span>Latest firmware package</span>
+          <span data-site-i18n="latestPackage">Latest firmware package</span>
           <strong id="firmware-version">1.2.0.37-cpr-vcodex</strong>
         </div>
 
-        <div class="warning">
+        <div class="warning" data-site-i18n="flashWarning">
           Use at your own risk. Flashing custom firmware can fail if the cable disconnects or the device loses power.
         </div>
 
-        <div class="unsupported" id="unsupported">
+        <div class="unsupported" id="unsupported" data-site-i18n="unsupported">
           Web Serial is not available in this browser. Use Chrome or Edge on a desktop computer, or use the manual download below.
         </div>
 
@@ -462,26 +450,26 @@
           <span id="error-message"></span>
         </div>
 
-        <button class="button primary" id="flash-button" type="button">Flash CPR-vCodex Firmware</button>
+        <button class="button primary" id="flash-button" type="button" data-site-i18n="flashButton">Flash CPR-vCodex Firmware</button>
 
         <div class="runner" id="runner" aria-live="polite">
           <ol id="step-list"></ol>
         </div>
 
-        <p class="status" id="status">Ready. Clicking Flash will open the browser serial device chooser.</p>
+        <p class="status" id="status" data-site-i18n="readyStatus">Ready. Clicking Flash will open the browser serial device chooser.</p>
 
         <div class="actions">
-          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.37-cpr-vcodex/1.2.0.37-cpr-vcodex.bin">Download .bin</a>
-          <a class="button" href="https://xteink.dve.al/" rel="noopener">Community flasher</a>
+          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.37-cpr-vcodex/1.2.0.37-cpr-vcodex.bin" data-site-i18n="downloadBin">Download .bin</a>
+          <a class="button" href="https://xteink.dve.al/" rel="noopener" data-site-i18n="communityFlasher">Community flasher</a>
         </div>
 
-        <p class="note">The automatic flasher uses the firmware copy published with this page. The download button uses the GitHub release asset.</p>
+        <p class="note" data-site-i18n="flashNote">The automatic flasher uses the firmware copy published with this page. The download button uses the GitHub release asset.</p>
       </aside>
     </section>
 
     <section class="card manual">
-      <h2>Manual PlatformIO flash</h2>
-      <p>For development builds, clone the repo, set the upload port, then use PlatformIO.</p>
+      <h2 data-site-i18n="manualTitle">Manual PlatformIO flash</h2>
+      <p data-site-i18n="manualText">For development builds, clone the repo, set the upload port, then use PlatformIO.</p>
       <pre><code>git clone https://github.com/franssjz/cpr-vcodex.git
 cd cpr-vcodex
 
@@ -489,6 +477,7 @@ pio run -e gh_release -t upload</code></pre>
     </section>
   </main>
 
+  <script src="assets/site.js"></script>
   <script type="module">
     import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
 
@@ -513,14 +502,14 @@ pio run -e gh_release -t upload</code></pre>
       "flash-otadata",
       "reset"
     ];
-    const STEP_LABELS = {
-      connect: "Connect to device",
-      partition: "Validate partition table",
-      download: "Download firmware",
-      "read-otadata": "Read otadata partition",
-      "flash-app": "Flash app partition",
-      "flash-otadata": "Flash otadata partition",
-      reset: "Reset device"
+    const STEP_LABEL_KEYS = {
+      connect: "stepConnect",
+      partition: "stepPartition",
+      download: "stepDownload",
+      "read-otadata": "stepReadOtadata",
+      "flash-app": "stepFlashApp",
+      "flash-otadata": "stepFlashOtadata",
+      reset: "stepReset"
     };
     const EXPECTED_PARTITION_TABLE = [
       {type: "data-nvs", offset: 36864, size: 20480},
@@ -597,7 +586,7 @@ pio run -e gh_release -t upload</code></pre>
     async function startFlash() {
       let loader = null;
       setError("");
-      setStatus("Choose the ESP32-C3 serial port in the browser prompt.");
+      setStatus(siteT("choosePort"));
       resetSteps();
       setRunning(true);
 
@@ -614,7 +603,7 @@ pio run -e gh_release -t upload</code></pre>
             enableTracing: false
           });
 
-          updateStep("connect", {detail: "Opening bootloader connection..."});
+          updateStep("connect", {detail: siteT("openingConnection")});
           await espLoader.main();
           return espLoader;
         });
@@ -622,11 +611,11 @@ pio run -e gh_release -t upload</code></pre>
         await runStep("partition", async () => {
           const table = parsePartitionTable(await readFlashBytes(loader, PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE));
           validatePartitionTable(table);
-          updateStep("partition", {detail: "Default CrossPoint/Xteink OTA partition table found."});
+          updateStep("partition", {detail: siteT("partitionOk")});
         });
 
         const firmwareData = await runStep("download", async () => {
-          updateStep("download", {detail: "Fetching firmware package..."});
+          updateStep("download", {detail: siteT("fetchingFirmware")});
           const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
           if (!response.ok) {
             throw new Error(`Firmware download failed: HTTP ${response.status}`);
@@ -685,12 +674,12 @@ pio run -e gh_release -t upload</code></pre>
           loader = null;
         });
 
-        setStatus("Flash complete. The device should reboot into CPR-vCodex.", "success");
+        setStatus(siteT("flashComplete"), "success");
       } catch (error) {
         console.error(error);
         const message = error && error.message ? error.message : "Unknown flash error";
         setError(message);
-        setStatus("Flash stopped. Check the message above before trying again.", "warning");
+        setStatus(siteT("flashStopped"), "warning");
         markRunningStepFailed(message);
       } finally {
         if (loader || currentTransport) {
@@ -713,8 +702,8 @@ pio run -e gh_release -t upload</code></pre>
         item.dataset.state = "pending";
         item.innerHTML = `
           <div class="run-step-header">
-            <span class="run-step-name">${STEP_LABELS[id]}</span>
-            <span class="run-step-state">Pending</span>
+            <span class="run-step-name">${stepLabel(id)}</span>
+            <span class="run-step-state">${siteT("stepPending")}</span>
           </div>
           <div class="progress-track" aria-hidden="true">
             <div class="progress-fill"></div>
@@ -756,10 +745,10 @@ pio run -e gh_release -t upload</code></pre>
       if (options.state) {
         node.item.dataset.state = options.state;
         node.state.textContent = {
-          pending: "Pending",
-          running: "Running",
-          done: "Done",
-          failed: "Failed"
+          pending: siteT("stepPending"),
+          running: siteT("stepRunning"),
+          done: siteT("stepDone"),
+          failed: siteT("stepFailed")
         }[options.state] || options.state;
       }
       if (Number.isFinite(options.progress)) {
@@ -996,7 +985,7 @@ pio run -e gh_release -t upload</code></pre>
 
     function setRunning(isRunning) {
       els.flashButton.disabled = isRunning;
-      els.flashButton.textContent = isRunning ? "Flashing..." : "Flash CPR-vCodex Firmware";
+      els.flashButton.textContent = isRunning ? siteT("flashing") : siteT("flashButton");
     }
 
     function setStatus(message, tone) {
@@ -1031,6 +1020,14 @@ pio run -e gh_release -t upload</code></pre>
 
     function hex(value) {
       return `0x${value.toString(16)}`;
+    }
+
+    function siteT(key) {
+      return window.CPRTools ? window.CPRTools.t(key) : key;
+    }
+
+    function stepLabel(id) {
+      return siteT(STEP_LABEL_KEYS[id] || id);
     }
   </script>
 </body>
