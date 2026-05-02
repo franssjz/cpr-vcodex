@@ -60,6 +60,24 @@
       line-height: 1.5;
     }
 
+    .version {
+      display: inline-flex;
+      margin: 0 0 22px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     a {
       display: inline-flex;
       align-items: center;
@@ -71,13 +89,23 @@
       font-weight: 750;
       text-decoration: none;
     }
+
+    a.secondary {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>CPR-vCodex Tools</h1>
     <p>Small browser tools for CPR-vCodex. Everything runs locally in your browser.</p>
-    <a href="./reading-stats-editor/">Open Reading Stats Editor</a>
+    <div class="version">Latest firmware: 1.2.0.37-cpr-vcodex</div>
+    <div class="links">
+      <a href="./flash.html">Auto Flash</a>
+      <a class="secondary" href="./reading-stats-editor/">Reading Stats Editor</a>
+    </div>
   </main>
 </body>
 </html>
