@@ -22,9 +22,9 @@
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`15e0d39`](https://github.com/crosspoint-reader/crosspoint-reader/commit/15e0d39d2cdd3c7649e3ad0eacf4dbbf2c06085e) |
-| Latest official commit incorporated | [`6c4e946`](https://github.com/crosspoint-reader/crosspoint-reader/commit/6c4e946e27954dd5dfc36feeebc50833ae2c3c20) plus selected earlier fixes after `e28918b` |
-| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39` |
+| Latest official commit reviewed | [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72) |
+| Latest official commit incorporated | [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72) plus selected fixes after `15e0d39` |
+| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`; X3-only tilt paging `5d2e559`; RoundedRaff theme `b8a5152` |
 
 ## Flashcards study modes
 
@@ -68,6 +68,7 @@ This project is **not affiliated with Xteink**.
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - EPUB bookmarks plus a global bookmarks app
+- context-aware screenshot filenames that include the current book title when available
 - configurable `Home` and `Apps` shortcuts
 - `Flashcards` with offline CSV decks, session summary, recents, stats and settings
 - `Text Darkness`, `Reader Refresh Mode`, `Lexend`, `X Small`
