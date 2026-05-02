@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-cpr-tools-autoinit="false">
+<html lang="en" data-theme="dark" data-cpr-tools-autoinit="false">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1134,7 +1134,7 @@
     }
   </style>
 </head>
-<body>
+<body data-theme="dark">
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
     <symbol id="icon-book-open" viewBox="0 0 24 24">
       <path d="M12 7v14"></path><path d="M3 5a7 7 0 0 1 9 2 7 7 0 0 1 9-2v14a7 7 0 0 0-9 2 7 7 0 0 0-9-2z"></path>
@@ -1297,7 +1297,7 @@
       heatmapMonthOffset: 0,
       dateFormat: localStorage.getItem("cprStatsDateFormat") || "ddmmyyyy",
       language: (window.CPRTools && window.CPRTools.getLanguage()) || localStorage.getItem("cprToolsLanguage") || localStorage.getItem("cprStatsLanguage") || "en",
-      theme: (window.CPRTools && window.CPRTools.getTheme()) || localStorage.getItem("cprToolsTheme") || localStorage.getItem("cprStatsTheme") || "light"
+      theme: (window.CPRTools && window.CPRTools.getTheme()) || localStorage.getItem("cprToolsTheme") || localStorage.getItem("cprStatsTheme") || "dark"
     };
 
     const els = {
