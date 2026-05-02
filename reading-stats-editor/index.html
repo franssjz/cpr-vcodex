@@ -3129,6 +3129,16 @@
       return `${day}/${month}/${year}`;
     }
 
+    function datePlaceholder() {
+      if (state.dateFormat === "mmddyyyy") return "MM/DD/YYYY";
+      if (state.dateFormat === "yyyymmdd") return "YYYY-MM-DD";
+      return "DD/MM/YYYY";
+    }
+
+    function datetimePlaceholder() {
+      return `${datePlaceholder()} HH:mm`;
+    }
+
     function formatMonthByPreference(date) {
       const month = pad2(date.getMonth() + 1);
       const year = date.getFullYear();
@@ -3251,6 +3261,59 @@
       return Math.floor(Date.UTC(year, month - 1, day) / MS_PER_DAY);
     }
 
+    function parseDateParts(value) {
+      const text = String(value || "").trim();
+      if (!text) return null;
+      const dateText = text.split(/[T\s]+/)[0];
+      const isoMatch = dateText.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+      let year = 0;
+      let month = 0;
+      let day = 0;
+
+      if (isoMatch) {
+        year = Number(isoMatch[1]);
+        month = Number(isoMatch[2]);
+        day = Number(isoMatch[3]);
+      } else {
+        const match = dateText.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+        if (!match) return null;
+        year = Number(match[3]);
+        if (state.dateFormat === "mmddyyyy") {
+          month = Number(match[1]);
+          day = Number(match[2]);
+        } else {
+          day = Number(match[1]);
+          month = Number(match[2]);
+        }
+      }
+
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+        return null;
+      }
+      return {year, month, day};
+    }
+
+    function parseTimeParts(value) {
+      const text = String(value || "").trim();
+      const match = text.match(/[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?$/i);
+      if (!match) return {hour: 0, minute: 0, second: 0};
+      let hour = Number(match[1]);
+      const minute = Number(match[2]);
+      const second = Number(match[3] || 0);
+      const meridiem = match[4] ? match[4].toLowerCase() : "";
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      if (meridiem === "am" && hour === 12) hour = 0;
+      if (hour > 23 || minute > 59 || second > 59) return null;
+      return {hour, minute, second};
+    }
+
+    function dayOrdinalFromDateInput(value) {
+      const parts = parseDateParts(value);
+      if (!parts) return 0;
+      return Math.floor(Date.UTC(parts.year, parts.month - 1, parts.day) / MS_PER_DAY);
+    }
+
     function dateFromDayOrdinal(dayOrdinal) {
       const ordinal = toUInt(dayOrdinal);
       if (!ordinal) return "";
@@ -3258,17 +3321,26 @@
       return date.toISOString().slice(0, 10);
     }
 
-    function datetimeLocalFromEpoch(seconds) {
+    function datetimeDisplayFromEpoch(seconds) {
       const value = toUInt(seconds);
       if (!value) return "";
       const date = new Date(value * 1000);
-      const offsetMs = date.getTimezoneOffset() * 60000;
-      return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+      return `${formatDateByPreference(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
     }
 
-    function epochFromDatetimeLocal(value) {
-      if (!value) return 0;
-      const ms = new Date(value).getTime();
+    function epochFromDatetimeInput(value) {
+      if (!String(value || "").trim()) return 0;
+      const dateParts = parseDateParts(value);
+      const timeParts = parseTimeParts(value);
+      if (!dateParts || !timeParts) return 0;
+      const ms = new Date(
+        dateParts.year,
+        dateParts.month - 1,
+        dateParts.day,
+        timeParts.hour,
+        timeParts.minute,
+        timeParts.second
+      ).getTime();
       return Number.isFinite(ms) ? Math.floor(ms / 1000) : 0;
     }
 
@@ -3717,9 +3789,9 @@
           ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
           ${numberField("lastProgressPercent", t("bookProgress"), book.lastProgressPercent)}
           ${numberField("chapterProgressPercent", t("chapterProgress"), book.chapterProgressPercent)}
-          ${datetimeField("firstReadAt", t("firstReadAt"), datetimeLocalFromEpoch(book.firstReadAt))}
-          ${datetimeField("lastReadAt", t("lastReadAt"), datetimeLocalFromEpoch(book.lastReadAt))}
-          ${datetimeField("completedAt", t("completedAt"), datetimeLocalFromEpoch(book.completedAt))}
+          ${datetimeField("firstReadAt", t("firstReadAt"), datetimeDisplayFromEpoch(book.firstReadAt))}
+          ${datetimeField("lastReadAt", t("lastReadAt"), datetimeDisplayFromEpoch(book.lastReadAt))}
+          ${datetimeField("completedAt", t("completedAt"), datetimeDisplayFromEpoch(book.completedAt))}
           <div class="field">
             <label>${escapeHtml(t("completed"))}</label>
             <span class="inline-check"><input id="field-completed" type="checkbox" ${book.completed ? "checked" : ""}> ${escapeHtml(t("markCompleted"))}</span>
@@ -3765,9 +3837,9 @@
         book.lastSessionMs = minutesToMs(value("lastSessionMinutes"));
         book.lastProgressPercent = clampPercent(value("lastProgressPercent"));
         book.chapterProgressPercent = clampPercent(value("chapterProgressPercent"));
-        book.firstReadAt = epochFromDatetimeLocal(value("firstReadAt"));
-        book.lastReadAt = epochFromDatetimeLocal(value("lastReadAt"));
-        book.completedAt = epochFromDatetimeLocal(value("completedAt"));
+        book.firstReadAt = epochFromDatetimeInput(value("firstReadAt"));
+        book.lastReadAt = epochFromDatetimeInput(value("lastReadAt"));
+        book.completedAt = epochFromDatetimeInput(value("completedAt"));
         book.completed = document.getElementById("field-completed").checked;
         if (book.completed && !book.completedAt) book.completedAt = book.lastReadAt || Math.floor(Date.now() / 1000);
         if (!book.completed) book.completedAt = 0;
@@ -3795,7 +3867,7 @@
     function renderDaysTab(container, book) {
       const rows = (book.readingDays || []).map((day, index) => `
         <tr>
-          <td><input type="date" value="${dateFromDayOrdinal(day.dayOrdinal)}" data-day-index="${index}" data-day-field="date"></td>
+          <td><input type="text" inputmode="numeric" placeholder="${escapeAttr(datePlaceholder())}" value="${escapeAttr(formatDateLabelFromOrdinal(day.dayOrdinal))}" data-day-index="${index}" data-day-field="date"></td>
           <td><input type="number" min="0" step="1" value="${msToMinutes(day.readingMs)}" data-day-index="${index}" data-day-field="minutes"></td>
           <td><button class="button danger" type="button" data-delete-day="${index}">${iconMarkup("trash")}${escapeHtml(t("delete"))}</button></td>
         </tr>
@@ -3829,7 +3901,7 @@
         dateInputs.forEach(input => {
           const index = input.dataset.dayIndex;
           const minutes = container.querySelector(`[data-day-index="${index}"][data-day-field="minutes"]`);
-          const dayOrdinal = dayOrdinalFromDate(input.value);
+          const dayOrdinal = dayOrdinalFromDateInput(input.value);
           const readingMs = minutesToMs(minutes ? minutes.value : 0);
           if (dayOrdinal && readingMs) nextDays.push({dayOrdinal, readingMs});
         });
@@ -3891,7 +3963,7 @@
       return `
         <div class="field">
           <label for="field-${id}">${label}</label>
-          <input id="field-${id}" type="datetime-local" value="${escapeAttr(currentValue)}">
+          <input id="field-${id}" type="text" inputmode="numeric" placeholder="${escapeAttr(datetimePlaceholder())}" value="${escapeAttr(currentValue)}">
         </div>
       `;
     }
