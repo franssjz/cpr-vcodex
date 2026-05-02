@@ -3857,7 +3857,7 @@
 
     els.exportBtn.addEventListener("click", () => {
       rebuildAggregatedDays();
-      downloadText("stats_exported", JSON.stringify(state.data), "application/json");
+      downloadText("stats_exported", JSON.stringify(state.data), "application/octet-stream");
     });
 
     els.searchInput.addEventListener("input", renderBookList);
