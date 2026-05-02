@@ -26,6 +26,10 @@
 | Latest official commit incorporated | [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72) plus selected fixes after `15e0d39` |
 | Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`; X3-only tilt paging `5d2e559`; RoundedRaff theme `b8a5152` |
 
+## Web tools
+
+- [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
+
 ## Flashcards study modes
 
 `Flashcards` currently offers three review modes:
