@@ -67,26 +67,8 @@ void WifiSelectionActivity::onEnter() {
   // Trigger first update to show scanning message
   requestUpdate();
 
-  // Attempt to auto-connect to the last network
-  if (allowAutoConnect) {
-    const std::string lastSsid = WIFI_STORE.getLastConnectedSsid();
-    if (!lastSsid.empty()) {
-      const auto* cred = WIFI_STORE.findCredential(lastSsid);
-      if (cred) {
-        LOG_DBG("WIFI", "Attempting to auto-connect to %s", lastSsid.c_str());
-        selectedSSID = cred->ssid;
-        enteredPassword = cred->password;
-        selectedRequiresPassword = !cred->password.empty();
-        usedSavedPassword = true;
-        autoConnecting = true;
-        attemptConnection();
-        requestUpdate();
-        return;
-      }
-    }
-  }
-
-  // Fallback to scanning
+  // Auto mode always scans first so we only attempt remembered networks that
+  // are actually in range.
   startWifiScan();
 }
 
@@ -180,15 +162,32 @@ void WifiSelectionActivity::processWifiScanResults() {
   WiFi.scanDelete();
 
   // Auto-connect to the best saved-password network if one is in range and the
-  // parent flow explicitly allows automatic selection.
-  // Networks are already sorted: saved-password first, then by RSSI descending,
-  // so networks[0] is always the best candidate.
-  if (allowAutoConnect && !networks.empty() && networks[0].hasSavedPassword) {
-    LOG_DBG("WIFI", "Found saved network in range: %s (RSSI: %d) - auto-connecting", networks[0].ssid.c_str(),
-            networks[0].rssi);
-    selectedNetworkIndex = 0;
-    selectNetwork(0);
-    return;
+  // parent flow explicitly allows automatic selection. Prefer the last
+  // connected SSID when it is present in scan results; otherwise fall back to
+  // the strongest saved network because the list is already sorted with saved
+  // networks first and RSSI descending inside each group.
+  if (allowAutoConnect && !networks.empty()) {
+    const std::string lastSsid = WIFI_STORE.getLastConnectedSsid();
+    if (!lastSsid.empty()) {
+      const auto remembered = std::find_if(networks.begin(), networks.end(), [&lastSsid](const WifiNetworkInfo& network) {
+        return network.ssid == lastSsid && network.hasSavedPassword;
+      });
+      if (remembered != networks.end()) {
+        selectedNetworkIndex = static_cast<size_t>(std::distance(networks.begin(), remembered));
+        LOG_DBG("WIFI", "Found last connected network in range: %s (RSSI: %d) - auto-connecting", remembered->ssid.c_str(),
+                remembered->rssi);
+        connectUsingSavedCredential(*remembered, true);
+        return;
+      }
+    }
+
+    if (networks[0].hasSavedPassword) {
+      selectedNetworkIndex = 0;
+      LOG_DBG("WIFI", "Found saved network in range: %s (RSSI: %d) - auto-connecting", networks[0].ssid.c_str(),
+              networks[0].rssi);
+      connectUsingSavedCredential(networks[0], true);
+      return;
+    }
   }
 
   state = WifiSelectionState::NETWORK_LIST;
@@ -208,14 +207,7 @@ void WifiSelectionActivity::selectNetwork(const int index) {
   enteredPassword.clear();
   autoConnecting = false;
 
-  // Check if we have saved credentials for this network
-  const auto* savedCred = WIFI_STORE.findCredential(selectedSSID);
-  if (savedCred && !savedCred->password.empty()) {
-    // Use saved password - connect directly
-    enteredPassword = savedCred->password;
-    usedSavedPassword = true;
-    LOG_DBG("WiFi", "Using saved password for %s, length: %zu", selectedSSID.c_str(), enteredPassword.size());
-    attemptConnection();
+  if (connectUsingSavedCredential(network, false)) {
     return;
   }
 
@@ -239,6 +231,22 @@ void WifiSelectionActivity::selectNetwork(const int index) {
     // Connect directly for open networks
     attemptConnection();
   }
+}
+
+bool WifiSelectionActivity::connectUsingSavedCredential(const WifiNetworkInfo& network, const bool isAutoConnectAttempt) {
+  const auto* savedCred = WIFI_STORE.findCredential(network.ssid);
+  if (!savedCred || savedCred->password.empty()) {
+    return false;
+  }
+
+  selectedSSID = network.ssid;
+  selectedRequiresPassword = network.isEncrypted;
+  enteredPassword = savedCred->password;
+  usedSavedPassword = true;
+  autoConnecting = isAutoConnectAttempt;
+  LOG_DBG("WiFi", "Using saved password for %s, length: %zu", selectedSSID.c_str(), enteredPassword.size());
+  attemptConnection();
+  return true;
 }
 
 void WifiSelectionActivity::attemptConnection() {

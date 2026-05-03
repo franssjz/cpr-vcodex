@@ -91,6 +91,7 @@ class WifiSelectionActivity final : public Activity {
   void startWifiScan();
   void processWifiScanResults();
   void selectNetwork(int index);
+  bool connectUsingSavedCredential(const WifiNetworkInfo& network, bool isAutoConnectAttempt);
   void attemptConnection();
   void checkConnectionStatus();
   std::string getSignalStrengthIndicator(int32_t rssi) const;
