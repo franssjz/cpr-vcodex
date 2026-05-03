@@ -176,8 +176,9 @@ void WifiSelectionActivity::processWifiScanResults() {
         selectedNetworkIndex = static_cast<size_t>(std::distance(networks.begin(), remembered));
         LOG_DBG("WIFI", "Found last connected network in range: %s (RSSI: %d) - auto-connecting", remembered->ssid.c_str(),
                 remembered->rssi);
-        connectUsingSavedCredential(*remembered, true);
-        return;
+        if (connectUsingSavedCredential(*remembered, true)) {
+          return;
+        }
       }
     }
 
@@ -185,8 +186,9 @@ void WifiSelectionActivity::processWifiScanResults() {
       selectedNetworkIndex = 0;
       LOG_DBG("WIFI", "Found saved network in range: %s (RSSI: %d) - auto-connecting", networks[0].ssid.c_str(),
               networks[0].rssi);
-      connectUsingSavedCredential(networks[0], true);
-      return;
+      if (connectUsingSavedCredential(networks[0], true)) {
+        return;
+      }
     }
   }
 
@@ -235,7 +237,7 @@ void WifiSelectionActivity::selectNetwork(const int index) {
 
 bool WifiSelectionActivity::connectUsingSavedCredential(const WifiNetworkInfo& network, const bool isAutoConnectAttempt) {
   const auto* savedCred = WIFI_STORE.findCredential(network.ssid);
-  if (!savedCred || savedCred->password.empty()) {
+  if (!savedCred || (network.isEncrypted && savedCred->password.empty())) {
     return false;
   }
 
@@ -244,7 +246,7 @@ bool WifiSelectionActivity::connectUsingSavedCredential(const WifiNetworkInfo& n
   enteredPassword = savedCred->password;
   usedSavedPassword = true;
   autoConnecting = isAutoConnectAttempt;
-  LOG_DBG("WiFi", "Using saved password for %s, length: %zu", selectedSSID.c_str(), enteredPassword.size());
+  LOG_DBG("WiFi", "Using saved credential for %s, password length: %zu", selectedSSID.c_str(), enteredPassword.size());
   attemptConnection();
   return true;
 }
