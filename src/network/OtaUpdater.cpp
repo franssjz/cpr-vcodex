@@ -1,7 +1,7 @@
 #include "OtaUpdater.h"
 
-#include <ArduinoJson.h>
 #include <Logging.h>
+#include <ReleaseJsonParser.h>
 #include <cctype>
 #include <cstring>
 
@@ -11,7 +11,15 @@
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/franssjz/cpr-vcodex/releases/latest";
-constexpr char legacyFirmwareAssetName[] = "firmware.bin";
+
+/*
+ * When esp_crt_bundle.h is included here, Arduino's include path can resolve
+ * the wrong header. Keep the upstream streaming OTA implementation but retain
+ * the explicit declaration that already worked in CPR-vCodex.
+ */
+extern "C" {
+extern esp_err_t esp_crt_bundle_attach(void* conf);
+}
 
 struct ParsedVersion {
   int parts[4] = {0, 0, 0, 0};
@@ -29,10 +37,6 @@ const char* currentVersionString() {
 }
 
 std::string buildUserAgent() { return std::string("CrossPoint-ESP32-") + currentVersionString(); }
-
-bool isSupportedFirmwareAsset(const std::string& assetName, const std::string& releaseFirmwareAssetName) {
-  return assetName == releaseFirmwareAssetName || assetName == legacyFirmwareAssetName;
-}
 
 ParsedVersion parseVersion(const char* version) {
   ParsedVersion parsedVersion;
@@ -70,61 +74,26 @@ ParsedVersion parseVersion(const char* version) {
   return parsedVersion;
 }
 
-/* This is buffer and size holder to keep upcoming data from latestReleaseUrl */
-char* local_buf;
-int output_len;
-
-/*
- * When esp_crt_bundle.h included, it is pointing wrong header file
- * which is something under WifiClientSecure because of our framework based on arduno platform.
- * To manage this obstacle, don't include anything, just extern and it will point correct one.
- */
-extern "C" {
-extern esp_err_t esp_crt_bundle_attach(void* conf);
-}
-
 esp_err_t http_client_set_header_cb(esp_http_client_handle_t http_client) {
   const std::string userAgent = buildUserAgent();
   return esp_http_client_set_header(http_client, "User-Agent", userAgent.c_str());
 }
 
+size_t totalBytesReceived = 0;
+
 esp_err_t event_handler(esp_http_client_event_t* event) {
-  /* We do interested in only HTTP_EVENT_ON_DATA event only */
   if (event->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
-
-  if (!esp_http_client_is_chunked_response(event->client)) {
-    int content_len = esp_http_client_get_content_length(event->client);
-    int copy_len = 0;
-
-    if (local_buf == NULL) {
-      /* local_buf life span is tracked by caller checkForUpdate */
-      local_buf = static_cast<char*>(calloc(content_len + 1, sizeof(char)));
-      output_len = 0;
-      if (local_buf == NULL) {
-        LOG_ERR("OTA", "HTTP Client Out of Memory Failed, Allocation %d", content_len);
-        return ESP_ERR_NO_MEM;
-      }
-    }
-    copy_len = min(event->data_len, (content_len - output_len));
-    if (copy_len) {
-      memcpy(local_buf + output_len, event->data, copy_len);
-    }
-    output_len += copy_len;
-  } else {
-    /* Code might be hits here, It happened once (for version checking) but I need more logs to handle that */
-    int chunked_len;
-    esp_http_client_get_chunk_length(event->client, &chunked_len);
-    LOG_DBG("OTA", "esp_http_client_is_chunked_response failed, chunked_len: %d", chunked_len);
-  }
-
+  totalBytesReceived += event->data_len;
+  LOG_DBG("OTA", "HTTP chunk: %d bytes (total: %zu)", event->data_len, totalBytesReceived);
+  auto* parser = static_cast<ReleaseJsonParser*>(event->user_data);
+  parser->feed(static_cast<const char*>(event->data), event->data_len);
   return ESP_OK;
-} /* event_handler */
-} /* namespace */
+}
+}  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
-  JsonDocument filter;
   esp_err_t esp_err;
-  JsonDocument doc;
+  ReleaseJsonParser releaseParser;
 
   updateAvailable = false;
   latestVersion.clear();
@@ -132,29 +101,20 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   otaSize = 0;
   processedSize = 0;
   totalSize = 0;
-  output_len = 0;
 
   esp_http_client_config_t client_config = {
       .url = latestReleaseUrl,
       .event_handler = event_handler,
-      /* Default HTTP client buffer size 512 byte only */
       .buffer_size = 8192,
       .buffer_size_tx = 8192,
+      .user_data = &releaseParser,
       .skip_cert_common_name_check = true,
       .crt_bundle_attach = esp_crt_bundle_attach,
       .keep_alive_enable = true,
   };
 
-  /* To track life time of local_buf, dtor will be called on exit from that function */
-  struct localBufCleaner {
-    char** bufPtr;
-    ~localBufCleaner() {
-      if (*bufPtr) {
-        free(*bufPtr);
-        *bufPtr = NULL;
-      }
-    }
-  } localBufCleaner = {&local_buf};
+  totalBytesReceived = 0;
+  LOG_DBG("OTA", "Checking for update (current: %s)", CROSSPOINT_VERSION);
 
   esp_http_client_handle_t client_handle = esp_http_client_init(&client_config);
   if (!client_handle) {
@@ -177,59 +137,34 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
     return HTTP_ERROR;
   }
 
-  /* esp_http_client_close will be called inside cleanup as well*/
   esp_err = esp_http_client_cleanup(client_handle);
   if (esp_err != ESP_OK) {
     LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
     return INTERNAL_UPDATE_ERROR;
   }
 
-  filter["tag_name"] = true;
-  filter["assets"][0]["name"] = true;
-  filter["assets"][0]["browser_download_url"] = true;
-  filter["assets"][0]["size"] = true;
-  const DeserializationError error = deserializeJson(doc, local_buf, DeserializationOption::Filter(filter));
-  if (error) {
-    LOG_ERR("OTA", "JSON parse failed: %s", error.c_str());
+  LOG_DBG("OTA", "Response received: %zu bytes total", totalBytesReceived);
+  LOG_DBG("OTA", "Parser results: tag=%s firmware=%s", releaseParser.foundTag() ? "yes" : "no",
+          releaseParser.foundFirmware() ? "yes" : "no");
+
+  if (!releaseParser.foundTag()) {
+    LOG_ERR("OTA", "No tag_name in release JSON");
     return JSON_PARSE_ERROR;
   }
 
-  if (!doc["tag_name"].is<std::string>()) {
-    LOG_ERR("OTA", "No tag_name found");
-    return JSON_PARSE_ERROR;
-  }
-
-  if (!doc["assets"].is<JsonArray>()) {
-    LOG_ERR("OTA", "No assets found");
-    return JSON_PARSE_ERROR;
-  }
-
-  latestVersion = doc["tag_name"].as<std::string>();
-  const std::string releaseFirmwareAssetName = latestVersion + ".bin";
-
-  for (int i = 0; i < doc["assets"].size(); i++) {
-    if (!doc["assets"][i]["name"].is<std::string>()) continue;
-    const std::string assetName = doc["assets"][i]["name"].as<std::string>();
-    if (!isSupportedFirmwareAsset(assetName, releaseFirmwareAssetName)) continue;
-
-    otaUrl = doc["assets"][i]["browser_download_url"].as<std::string>();
-    otaSize = doc["assets"][i]["size"].as<size_t>();
-    totalSize = otaSize;
-    updateAvailable = true;
-
-    // Prefer the release-tagged artifact, but keep accepting legacy
-    // firmware.bin releases for compatibility.
-    if (assetName == releaseFirmwareAssetName) {
-      break;
-    }
-  }
-
-  if (!updateAvailable) {
+  if (!releaseParser.foundFirmware()) {
     LOG_ERR("OTA", "No OTA firmware asset found");
     return NO_UPDATE;
   }
 
-  LOG_DBG("OTA", "Found update: %s", latestVersion.c_str());
+  latestVersion = releaseParser.getTagName();
+  otaUrl = releaseParser.getFirmwareUrl();
+  otaSize = releaseParser.getFirmwareSize();
+  totalSize = otaSize;
+  updateAvailable = true;
+
+  LOG_DBG("OTA", "Found update: tag=%s size=%zu", latestVersion.c_str(), otaSize);
+  LOG_DBG("OTA", "Firmware URL: %s", otaUrl.c_str());
   return OK;
 }
 
