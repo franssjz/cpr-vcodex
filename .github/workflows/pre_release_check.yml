@@ -20,11 +20,11 @@ jobs:
   pre-release-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
 
@@ -44,7 +44,7 @@ jobs:
             --flash-budget-percent "${{ inputs.flash_budget_percent }}"
 
       - name: Upload firmware budget report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: CPR-vCodex-${{ inputs.tag }}-firmware-budget
           path: |
