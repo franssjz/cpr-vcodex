@@ -22,7 +22,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
+
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
 
       - uses: actions/setup-python@v5
         with:
