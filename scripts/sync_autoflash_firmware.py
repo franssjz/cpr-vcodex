@@ -138,7 +138,7 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None) -> str:
     }
     (firmware_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
-    for relative in ("docs/assets/site.js", "docs/index.html", "docs/flash.html"):
+    for relative in ("README.md", "docs/assets/site.js", "docs/index.html", "docs/flash.html"):
         update_text_file(project_dir / relative, tag, download_url)
 
     env_path = os.environ.get("GITHUB_ENV")
