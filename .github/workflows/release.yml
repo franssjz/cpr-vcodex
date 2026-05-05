@@ -11,25 +11,21 @@ jobs:
   build-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Checkout submodules
-        run: git submodule update --init --recursive
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-          enable-cache: false
+      - name: Checkout repository
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_REF}"
+          git checkout --force FETCH_HEAD
+          git submodule update --init --recursive
 
       - name: Install PlatformIO Core
-        run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip || \
+            python3 -m pip install --user --break-system-packages -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build CPR-vCodex release
         env:
@@ -41,7 +37,7 @@ jobs:
 
       - name: Report firmware budget
         run: |
-          python scripts/firmware_budget_report.py \
+          python3 scripts/firmware_budget_report.py \
             --tag "${GITHUB_REF_NAME}" \
             --build-log "artifacts/${GITHUB_REF_NAME}-build.log" \
             --fail-over-budget
@@ -111,20 +107,3 @@ jobs:
               --title "${tag}" \
               --notes-file "${notes_file}"
           fi
-
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: CPR-vCodex-${{ github.ref_name }}
-          path: |
-            artifacts/${{ github.ref_name }}.bin
-            artifacts/${{ github.ref_name }}.json
-            artifacts/${{ github.ref_name }}-build.log
-            artifacts/${{ github.ref_name }}-firmware-budget.json
-            artifacts/${{ github.ref_name }}-firmware-budget.md
-            .pio/build/gh_release/bootloader.bin
-            .pio/build/gh_release/firmware.bin
-            .pio/build/gh_release/firmware.elf
-            .pio/build/gh_release/firmware.map
-            .pio/build/gh_release/partitions.bin
-          if-no-files-found: error

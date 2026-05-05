@@ -13,19 +13,21 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (!github.event.release.draft && !github.event.release.prerelease)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: master
-          submodules: false
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
+      - name: Checkout repository
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin master
+          git checkout --force FETCH_HEAD
+          git switch -C master
 
       - name: Sync firmware copy from latest stable release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/sync_autoflash_firmware.py --repo "${GITHUB_REPOSITORY}"
+        run: python3 scripts/sync_autoflash_firmware.py --repo "${GITHUB_REPOSITORY}"
 
       - name: Commit synchronized auto-flash firmware
         run: |
