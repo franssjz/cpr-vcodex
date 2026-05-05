@@ -99,6 +99,29 @@ def build_release(project_dir: Path, tag: str, jobs: int) -> str:
     return result.stdout
 
 
+def write_budget_report(project_dir: Path, tag: str, output: str, flash_budget_percent: float) -> None:
+    artifacts_dir = project_dir / "artifacts"
+    artifacts_dir.mkdir(exist_ok=True)
+    build_log = artifacts_dir / f"{tag}-build.log"
+    build_log.write_text(output, encoding="utf-8", newline="\n")
+
+    cmd = [
+        sys.executable,
+        str(project_dir / "scripts" / "firmware_budget_report.py"),
+        "--tag",
+        tag,
+        "--build-log",
+        str(build_log),
+        "--flash-budget-percent",
+        str(flash_budget_percent),
+        "--fail-over-budget",
+    ]
+    result = run(cmd)
+    print(result.stdout, end="")
+    if result.returncode != 0:
+        fail("Firmware budget report generation failed")
+
+
 def validate_budget(output: str, flash_budget_percent: float) -> None:
     flash_used, flash_total = parse_size(FLASH_RE, output, "flash")
     ram_used, ram_total = parse_size(RAM_RE, output, "RAM")
@@ -183,6 +206,7 @@ def main() -> int:
         else:
             output = build_release(project_dir, args.tag, args.jobs)
             validate_budget(output, args.flash_budget_percent)
+            write_budget_report(project_dir, args.tag, output, args.flash_budget_percent)
 
         validate_artifacts(project_dir, args.tag, release_seq, base_version)
         validate_autoflash_manifest(project_dir)

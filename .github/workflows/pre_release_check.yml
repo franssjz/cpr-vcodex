@@ -42,3 +42,13 @@ jobs:
           python scripts/pre_release_check.py \
             --tag "${{ inputs.tag }}" \
             --flash-budget-percent "${{ inputs.flash_budget_percent }}"
+
+      - name: Upload firmware budget report
+        uses: actions/upload-artifact@v6
+        with:
+          name: CPR-vCodex-${{ inputs.tag }}-firmware-budget
+          path: |
+            artifacts/${{ inputs.tag }}-build.log
+            artifacts/${{ inputs.tag }}-firmware-budget.json
+            artifacts/${{ inputs.tag }}-firmware-budget.md
+          if-no-files-found: error

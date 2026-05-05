@@ -120,6 +120,8 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None) -> str:
             "repo": repo,
             "tag": tag,
             "asset": asset.get("name"),
+            "publishedAt": release.get("published_at"),
+            "assetUpdatedAt": asset.get("updated_at"),
         },
         "new_install_prompt_erase": False,
         "builds": [

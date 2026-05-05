@@ -209,6 +209,41 @@
       font-size: 18px;
     }
 
+    .firmware-details {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      padding: 0;
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 0.46fr) minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    .detail-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .detail-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .detail-value code {
+      font-size: 12px;
+    }
+
     .warning {
       border-left: 4px solid var(--danger);
       background: color-mix(in srgb, var(--danger) 8%, transparent);
@@ -428,6 +463,24 @@
         <div class="version-box">
           <span data-site-i18n="latestPackage">Latest firmware package</span>
           <strong id="firmware-version">1.2.0.38-cpr-vcodex</strong>
+          <dl class="firmware-details">
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSource">Source</dt>
+              <dd class="detail-value" id="firmware-source">GitHub release</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareAsset">Asset</dt>
+              <dd class="detail-value" id="firmware-asset">1.2.0.38-cpr-vcodex.bin</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSize">Size</dt>
+              <dd class="detail-value" id="firmware-size">Loading...</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSha256">SHA-256</dt>
+              <dd class="detail-value"><code id="firmware-sha">Loading...</code></dd>
+            </div>
+          </dl>
         </div>
 
         <div class="warning" data-site-i18n="flashWarning">
@@ -539,7 +592,13 @@ pio run -e gh_release -t upload</code></pre>
       firmwareUrl: "firmware/firmware.bin",
       downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.38-cpr-vcodex/1.2.0.38-cpr-vcodex.bin",
       size: 0,
-      sha256: ""
+      sha256: "",
+      source: {
+        type: "github-release",
+        repo: "franssjz/cpr-vcodex",
+        tag: "1.2.0.38-cpr-vcodex",
+        asset: "1.2.0.38-cpr-vcodex.bin"
+      }
     };
 
     const els = {
@@ -548,6 +607,10 @@ pio run -e gh_release -t upload</code></pre>
       stepList: document.getElementById("step-list"),
       status: document.getElementById("status"),
       version: document.getElementById("firmware-version"),
+      source: document.getElementById("firmware-source"),
+      asset: document.getElementById("firmware-asset"),
+      size: document.getElementById("firmware-size"),
+      sha: document.getElementById("firmware-sha"),
       downloadLink: document.getElementById("download-link"),
       unsupported: document.getElementById("unsupported"),
       errorBox: document.getElementById("error-box"),
@@ -572,10 +635,12 @@ pio run -e gh_release -t upload</code></pre>
         firmware.downloadUrl = manifest.downloadUrl || firmware.downloadUrl;
         firmware.size = manifest.size || firmware.size;
         firmware.sha256 = manifest.sha256 || firmware.sha256;
-        els.version.textContent = firmware.version;
-        els.downloadLink.href = firmware.downloadUrl;
+        firmware.source = manifest.source || firmware.source;
+        updateFirmwareDetails();
       })
-      .catch(() => {});
+      .catch(() => updateFirmwareDetails());
+
+    updateFirmwareDetails();
 
     els.flashButton.addEventListener("click", startFlash);
 
@@ -635,7 +700,7 @@ pio run -e gh_release -t upload</code></pre>
               throw new Error(siteT("firmwareHashMismatch"));
             }
           }
-          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}`});
+          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}, SHA-256 ${shortSha(firmware.sha256)}`});
           return data;
         });
 
@@ -1024,6 +1089,25 @@ pio run -e gh_release -t upload</code></pre>
         return `${Math.round(bytes / 1024)} KB`;
       }
       return `${bytes} B`;
+    }
+
+    function updateFirmwareDetails() {
+      const source = firmware.source || {};
+      const sourceTag = source.tag || firmware.version;
+      const sourceRepo = source.repo || "franssjz/cpr-vcodex";
+      els.version.textContent = firmware.version;
+      els.source.textContent = source.type === "github-release"
+        ? `${sourceRepo}@${sourceTag}`
+        : siteT("firmwareSourceUnknown");
+      els.asset.textContent = source.asset || firmware.downloadUrl.split("/").pop() || siteT("firmwareSourceUnknown");
+      els.size.textContent = firmware.size ? formatBytes(firmware.size) : siteT("firmwareSizeUnknown");
+      els.sha.textContent = firmware.sha256 ? shortSha(firmware.sha256) : siteT("firmwareSourceUnknown");
+      els.sha.title = firmware.sha256 || "";
+      els.downloadLink.href = firmware.downloadUrl;
+    }
+
+    function shortSha(value) {
+      return value ? `${value.slice(0, 12)}...${value.slice(-8)}` : "";
     }
 
     function hex(value) {
