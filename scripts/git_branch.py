@@ -79,6 +79,49 @@ def _read_counter(counter_path, default_value):
     return current_value
 
 
+def _extract_release_number(base_version, text):
+    match = re.search(rf"{re.escape(base_version)}\.(\d+)-cpr-vcodex", text)
+    return int(match.group(1)) if match else None
+
+
+def _latest_tag_release_number(project_dir, base_version):
+    try:
+        tags = subprocess.check_output(
+            ["git", "tag", "--list", f"{base_version}.*-cpr-vcodex"],
+            text=True,
+            stderr=subprocess.PIPE,
+            cwd=project_dir,
+        ).splitlines()
+    except FileNotFoundError:
+        return None
+    except subprocess.CalledProcessError as e:
+        warn(f"git tag lookup failed (exit {e.returncode}): {e.stderr.strip()}")
+        return None
+    except OSError as e:
+        warn(f"OS error reading git tags: {e}")
+        return None
+
+    release_numbers = []
+    for tag in tags:
+        release_number = _extract_release_number(base_version, tag)
+        if release_number is not None:
+            release_numbers.append(release_number)
+    return max(release_numbers) if release_numbers else None
+
+
+def _readme_release_number(project_dir, base_version):
+    readme_path = os.path.join(project_dir, "README.md")
+    if not os.path.isfile(readme_path):
+        return None
+
+    try:
+        with open(readme_path, "r", encoding="utf-8") as file:
+            return _extract_release_number(base_version, file.read())
+    except OSError as e:
+        warn(f"Failed to read {readme_path}: {e}")
+        return None
+
+
 def _write_counter(counter_path, value):
     temp_path = counter_path + ".tmp"
     try:
@@ -89,14 +132,27 @@ def _write_counter(counter_path, value):
         warn(f"Failed to persist counter {counter_path}: {e}")
 
 
-def get_current_release_number(project_dir):
+def get_current_release_number(project_dir, base_version):
     counter_dir = _ensure_counter_dir(project_dir)
     counter_path = os.path.join(counter_dir, RELEASE_COUNTER_FILE)
-    return _read_counter(counter_path, INITIAL_RELEASE_NUMBER), counter_path
+    counter_value = _read_counter(counter_path, INITIAL_RELEASE_NUMBER)
+    published_values = [
+        value
+        for value in (
+            _latest_tag_release_number(project_dir, base_version),
+            _readme_release_number(project_dir, base_version),
+        )
+        if value is not None
+    ]
+    release_number = max([counter_value, *published_values])
+    source = counter_path
+    if release_number != counter_value:
+        source = f"{counter_path} (raised by published release metadata)"
+    return release_number, source
 
 
-def preview_next_release_number(project_dir):
-    current_release, counter_path = get_current_release_number(project_dir)
+def preview_next_release_number(project_dir, base_version):
+    current_release, counter_path = get_current_release_number(project_dir, base_version)
     next_release = current_release + 1
     return next_release, counter_path
 
@@ -131,7 +187,7 @@ def inject_version(env):
     base_version = get_base_version(project_dir)
 
     if env_name == "default":
-        release_number, release_counter_path = get_current_release_number(project_dir)
+        release_number, release_counter_path = get_current_release_number(project_dir, base_version)
         build_counter, counter_path = next_dev_counter(project_dir, release_number)
         short_sha = get_git_short_sha(project_dir)
         version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
@@ -143,7 +199,7 @@ def inject_version(env):
             release_number, tag = tagged_release
             counter_path = f"release tag {tag}"
         else:
-            release_number, counter_path = preview_next_release_number(project_dir)
+            release_number, counter_path = preview_next_release_number(project_dir, base_version)
         build_counter = release_number
         version_string = f"{base_version}.{release_number}"
         build_kind = "release"

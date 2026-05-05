@@ -137,6 +137,10 @@ void XtcReaderActivity::onExit() {
 
 void XtcReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  if (!xtc) {
+    return;
+  }
+
   const unsigned long nowMs = millis();
 
   if (waitingForConfirmSecondClick && ReaderUtils::hasNonConfirmNavigationInput(mappedInput)) {
@@ -179,7 +183,7 @@ void XtcReaderActivity::loop() {
 
   // Short press BACK goes directly to home
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
-    exitReaderToHomeOrStats(renderer, mappedInput, xtc ? xtc->getPath() : "");
+    exitReaderToHomeOrStats(renderer, mappedInput, xtc->getPath());
     return;
   }
 
@@ -204,7 +208,7 @@ void XtcReaderActivity::loop() {
   // At end of the book, forward button goes home and back button returns to last page
   if (currentPage >= xtc->getPageCount()) {
     if (nextTriggered) {
-      exitReaderToHomeOrStats(renderer, mappedInput, xtc ? xtc->getPath() : "");
+      exitReaderToHomeOrStats(renderer, mappedInput, xtc->getPath());
     } else {
       currentPage = xtc->getPageCount() - 1;
       requestUpdate();
