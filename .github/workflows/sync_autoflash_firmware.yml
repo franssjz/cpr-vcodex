@@ -1,8 +1,6 @@
 name: Sync Auto Flash Firmware
 
 on:
-  release:
-    types: [published, released]
   workflow_dispatch:
 
 permissions:
@@ -10,7 +8,6 @@ permissions:
 
 jobs:
   sync-autoflash-firmware:
-    if: github.event_name == 'workflow_dispatch' || (!github.event.release.draft && !github.event.release.prerelease)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

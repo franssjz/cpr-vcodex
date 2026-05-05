@@ -106,4 +106,28 @@ jobs:
               --verify-tag \
               --title "${tag}" \
               --notes-file "${notes_file}"
+
+      - name: Sync auto-flash firmware on master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          workdir="$(mktemp -d)"
+
+          git clone --depth=1 "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "${workdir}"
+          cd "${workdir}"
+
+          python3 scripts/sync_autoflash_firmware.py --repo "${GITHUB_REPOSITORY}"
+
+          if git diff --quiet; then
+            echo "Auto-flash firmware is already synchronized."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware/firmware.bin docs/firmware/manifest.json
+          git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION:-${tag}}"
+          git push origin master
           fi
