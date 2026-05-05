@@ -455,7 +455,7 @@
           <a class="button" href="https://xteink.dve.al/" rel="noopener" data-site-i18n="communityFlasher">Community flasher</a>
         </div>
 
-        <p class="note" data-site-i18n="flashNote">The automatic flasher uses the firmware copy published with this page. The download button uses the GitHub release asset.</p>
+        <p class="note" data-site-i18n="flashNote">The automatic flasher uses a local firmware copy synchronized from the latest published GitHub release.</p>
       </aside>
     </section>
 
@@ -537,7 +537,9 @@ pio run -e gh_release -t upload</code></pre>
     const FALLBACK_RELEASE = {
       version: "1.2.0.38-cpr-vcodex",
       firmwareUrl: "firmware/firmware.bin",
-      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.38-cpr-vcodex/1.2.0.38-cpr-vcodex.bin"
+      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.38-cpr-vcodex/1.2.0.38-cpr-vcodex.bin",
+      size: 0,
+      sha256: ""
     };
 
     const els = {
@@ -568,6 +570,8 @@ pio run -e gh_release -t upload</code></pre>
         firmware.version = manifest.version || firmware.version;
         firmware.firmwareUrl = manifest.firmwareUrl || firmware.firmwareUrl;
         firmware.downloadUrl = manifest.downloadUrl || firmware.downloadUrl;
+        firmware.size = manifest.size || firmware.size;
+        firmware.sha256 = manifest.sha256 || firmware.sha256;
         els.version.textContent = firmware.version;
         els.downloadLink.href = firmware.downloadUrl;
       })
@@ -618,6 +622,18 @@ pio run -e gh_release -t upload</code></pre>
           }
           if (data.length < APP_MIN_SIZE) {
             throw new Error(siteT("firmwareTooSmall"));
+          }
+          if (firmware.size && data.length !== firmware.size) {
+            throw new Error(siteT("firmwareSizeMismatch", {expected: formatBytes(firmware.size), actual: formatBytes(data.length)}));
+          }
+          if (firmware.sha256) {
+            if (!crypto.subtle) {
+              throw new Error(siteT("firmwareHashUnavailable"));
+            }
+            const digest = await sha256Hex(data);
+            if (digest !== firmware.sha256.toLowerCase()) {
+              throw new Error(siteT("firmwareHashMismatch"));
+            }
           }
           updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}`});
           return data;
@@ -1012,6 +1028,11 @@ pio run -e gh_release -t upload</code></pre>
 
     function hex(value) {
       return `0x${value.toString(16)}`;
+    }
+
+    async function sha256Hex(bytes) {
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     }
 
     function siteT(key, vars) {

@@ -1,0 +1,42 @@
+name: Sync Auto Flash Firmware
+
+on:
+  release:
+    types: [published, released]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-autoflash-firmware:
+    if: github.event_name == 'workflow_dispatch' || (!github.event.release.draft && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+          submodules: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Sync firmware copy from latest stable release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/sync_autoflash_firmware.py --repo "${GITHUB_REPOSITORY}"
+
+      - name: Commit synchronized auto-flash firmware
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Auto-flash firmware is already synchronized."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware/firmware.bin docs/firmware/manifest.json
+          git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION}"
+          git push
