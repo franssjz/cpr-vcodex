@@ -22,9 +22,9 @@
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72) |
-| Latest official commit incorporated | [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72) plus selected fixes after `15e0d39` |
-| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`; X3-only tilt paging `5d2e559`; RoundedRaff theme `b8a5152` |
+| Latest official commit reviewed | [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
+| Latest official commit incorporated | Selected stability and low-risk updates through [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
+| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`/`64ecfe2`; X3-only tilt paging `5d2e559`; RoundedRaff theme `b8a5152`/`22701cc`; page-turn orientation setting `2e2ea6a`; SD firmware update/X3 bootloader flow `5717374` |
 
 ## Web tools
 
