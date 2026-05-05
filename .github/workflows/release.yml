@@ -2,7 +2,10 @@ name: Compile Release
 on:
   push:
     tags:
-      - '*'
+      - '*-cpr-vcodex'
+
+permissions:
+  contents: write
 
 jobs:
   build-release:
@@ -25,16 +28,78 @@ jobs:
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
-      - name: Build CrossPoint
+      - name: Build CPR-vCodex release
+        env:
+          VCODEX_RELEASE_TAG: ${{ github.ref_name }}
         run: pio run -e gh_release
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Validate packaged release artifact
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          artifact="artifacts/${tag}.bin"
+          metadata="artifacts/${tag}.json"
+
+          test -f "${artifact}" || {
+            echo "Expected packaged firmware ${artifact} was not created."
+            echo "Available artifacts:"
+            find artifacts -maxdepth 1 -type f -print || true
+            exit 1
+          }
+          test -f "${metadata}" || {
+            echo "Expected metadata ${metadata} was not created."
+            exit 1
+          }
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          metadata = json.loads(Path(f"artifacts/{tag}.json").read_text(encoding="utf-8"))
+          if metadata.get("artifactName") != f"{tag}.bin":
+              raise SystemExit(f"metadata artifactName mismatch: {metadata.get('artifactName')} != {tag}.bin")
+          if metadata.get("environment") != "gh_release":
+              raise SystemExit(f"unexpected release environment: {metadata.get('environment')}")
+          print(f"Validated {metadata['artifactName']} ({metadata['firmwareBytes']} bytes)")
+          PY
+
+      - name: Publish GitHub Release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          artifact="artifacts/${tag}.bin"
+          metadata="artifacts/${tag}.json"
+          notes_file="$(mktemp)"
+
+          {
+            echo "CPR-vCodex firmware release ${tag}."
+            echo
+            echo "The browser auto-flash page synchronizes its local firmware copy from this release asset."
+          } > "${notes_file}"
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${artifact}#${tag}.bin" "${metadata}#${tag}.json" --clobber
+          else
+            gh release create "${tag}" "${artifact}#${tag}.bin" "${metadata}#${tag}.json" \
+              --verify-tag \
+              --title "${tag}" \
+              --notes-file "${notes_file}"
+          fi
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v6
         with:
-          name: CrossPoint-${{ github.ref_name }}
+          name: CPR-vCodex-${{ github.ref_name }}
           path: |
+            artifacts/${{ github.ref_name }}.bin
+            artifacts/${{ github.ref_name }}.json
             .pio/build/gh_release/bootloader.bin
             .pio/build/gh_release/firmware.bin
             .pio/build/gh_release/firmware.elf
             .pio/build/gh_release/firmware.map
             .pio/build/gh_release/partitions.bin
+          if-no-files-found: error

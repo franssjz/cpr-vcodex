@@ -12,6 +12,7 @@ after firmware.bin exists, so failed release builds cannot burn release numbers.
 
 import configparser
 import os
+import re
 import subprocess
 import sys
 
@@ -100,6 +101,18 @@ def preview_next_release_number(project_dir):
     return next_release, counter_path
 
 
+def release_number_from_tag(base_version):
+    tag = os.environ.get("VCODEX_RELEASE_TAG") or os.environ.get("GITHUB_REF_NAME")
+    if not tag:
+        return None
+
+    match = re.fullmatch(rf"{re.escape(base_version)}\.(\d+)-cpr-vcodex", tag)
+    if not match:
+        raise ValueError(f"Release tag {tag!r} does not match expected pattern {base_version}.<release>-cpr-vcodex")
+
+    return int(match.group(1)), tag
+
+
 def next_dev_counter(project_dir, release_number):
     counter_dir = _ensure_counter_dir(project_dir)
     counter_path = os.path.join(counter_dir, DEV_COUNTER_FILE_TEMPLATE.format(release=release_number))
@@ -125,7 +138,12 @@ def inject_version(env):
         build_kind = "dev"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
     else:
-        release_number, counter_path = preview_next_release_number(project_dir)
+        tagged_release = release_number_from_tag(base_version)
+        if tagged_release:
+            release_number, tag = tagged_release
+            counter_path = f"release tag {tag}"
+        else:
+            release_number, counter_path = preview_next_release_number(project_dir)
         build_counter = release_number
         version_string = f"{base_version}.{release_number}"
         build_kind = "release"
@@ -145,6 +163,9 @@ def inject_version(env):
 try:
     Import("env")  # noqa: F821  # type: ignore[name-defined]
     inject_version(env)  # noqa: F821  # type: ignore[name-defined]
+except ValueError as e:
+    print(f"ERROR [git_branch.py]: {e}", file=sys.stderr)
+    sys.exit(1)
 except NameError:
     class _Env(dict):
         def Append(self, **_):

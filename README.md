@@ -478,6 +478,16 @@ Versioning rules:
 - release builds: `1.2.0.<release>-cpr-vcodex.bin`
 - dev builds: `1.2.0.<release>.dev<build>-cpr-vcodex.bin`
 
+Release publishing:
+
+- push a stable tag named like `1.2.0.39-cpr-vcodex`
+- the release workflow builds `gh_release`, validates that the packaged artifact
+  name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
+- tagged CI release builds derive the firmware release number from the tag, not
+  from a local counter file
+- the auto-flash sync workflow then mirrors that published release asset into
+  `docs/firmware/firmware.bin` and updates `docs/firmware/manifest.json`
+
 ## Credits
 
 Huge credit goes to:
