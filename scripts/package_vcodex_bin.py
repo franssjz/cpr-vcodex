@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -8,6 +9,8 @@ from pathlib import Path
 Import("env")
 
 README_PATH = "README.md"
+RELEASE_COUNTER_PATH = Path("artifacts") / ".release-counter.txt"
+RELEASE_DRY_RUN_ENV = "VCODEX_RELEASE_DRY_RUN"
 
 
 def extract_define(name: str) -> str:
@@ -58,6 +61,19 @@ def update_readme_release_version(project_dir: Path, artifact_name: str) -> None
         print(f"Updated README current release to {artifact_name[:-4]}")
 
 
+def persist_release_counter(project_dir: Path, build_seq: int | None) -> None:
+    if build_seq is None:
+        print("Release counter update skipped: missing VCODEX_BUILD_SEQ")
+        return
+
+    counter_path = project_dir / RELEASE_COUNTER_PATH
+    counter_path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = counter_path.with_suffix(counter_path.suffix + ".tmp")
+    temp_path.write_text(f"{build_seq}\n", encoding="utf-8")
+    temp_path.replace(counter_path)
+    print(f"Advanced release counter to {build_seq} ({counter_path})")
+
+
 def package_vcodex_bin(source, target, env):
     build_dir = Path(env.subst("$BUILD_DIR"))
     progname = env.subst("$PROGNAME")
@@ -93,7 +109,10 @@ def package_vcodex_bin(source, target, env):
     metadata_path = output_dir / f"{safe_version}-cpr-vcodex.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    if env.subst("$PIOENV") == "gh_release":
+    if env.subst("$PIOENV") == "gh_release" and os.environ.get(RELEASE_DRY_RUN_ENV) == "1":
+        print(f"Release metadata update skipped: {RELEASE_DRY_RUN_ENV}=1")
+    elif env.subst("$PIOENV") == "gh_release":
+        persist_release_counter(project_dir, build_seq)
         update_readme_release_version(project_dir, artifact_name)
 
     print(f"Packaged vcodex artifact: {artifact_path}")

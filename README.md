@@ -450,6 +450,23 @@ Use the project build wrapper:
 .\bin\build-vcodex.ps1
 ```
 
+The wrapper forces UTF-8 Python/console output for PlatformIO on Windows and
+uses one build job by default for more repeatable local diagnostics. You can
+still pass another environment or job count explicitly:
+
+```powershell
+.\bin\build-vcodex.ps1 -Environment gh_release_rc -Jobs 2
+```
+
+To verify the `gh_release` environment locally without advancing the release
+counter or rewriting this README:
+
+```powershell
+$env:VCODEX_RELEASE_DRY_RUN = "1"
+.\bin\build-vcodex.ps1 -Environment gh_release
+Remove-Item Env:\VCODEX_RELEASE_DRY_RUN
+```
+
 This generates a packaged firmware artifact under:
 
 ```text

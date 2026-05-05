@@ -4,6 +4,10 @@ PlatformIO pre-build script for CPR-vCodex versioning.
 Version scheme:
   - default/dev builds:  <base>.<release>.dev<dev_counter>
   - gh_release builds:   <base>.<release>
+
+Release builds intentionally do not persist the release counter in this
+pre-build script. The post-build packaging script advances the counter only
+after firmware.bin exists, so failed release builds cannot burn release numbers.
 """
 
 import configparser
@@ -90,10 +94,9 @@ def get_current_release_number(project_dir):
     return _read_counter(counter_path, INITIAL_RELEASE_NUMBER), counter_path
 
 
-def next_release_number(project_dir):
+def preview_next_release_number(project_dir):
     current_release, counter_path = get_current_release_number(project_dir)
     next_release = current_release + 1
-    _write_counter(counter_path, next_release)
     return next_release, counter_path
 
 
@@ -122,7 +125,7 @@ def inject_version(env):
         build_kind = "dev"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
     else:
-        release_number, counter_path = next_release_number(project_dir)
+        release_number, counter_path = preview_next_release_number(project_dir)
         build_counter = release_number
         version_string = f"{base_version}.{release_number}"
         build_kind = "release"

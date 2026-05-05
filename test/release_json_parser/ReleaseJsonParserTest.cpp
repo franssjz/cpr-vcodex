@@ -717,6 +717,59 @@ void testFirmwareBinExactMatch() {
   PASS();
 }
 
+void testVcodexTagNamedAsset() {
+  printf("testVcodexTagNamedAsset...\n");
+
+  const char* json = R"({
+      "tag_name": "1.2.0.39-cpr-vcodex",
+      "assets": [
+        {
+          "name": "1.2.0.39-cpr-vcodex.bin",
+          "browser_download_url": "https://example.com/1.2.0.39-cpr-vcodex.bin",
+          "size": 6329000
+        }
+      ]
+    })";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  ASSERT_TRUE(p.foundTag());
+  ASSERT_TRUE(p.foundFirmware());
+  ASSERT_STREQ(p.getTagName(), "1.2.0.39-cpr-vcodex");
+  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/1.2.0.39-cpr-vcodex.bin");
+  ASSERT_EQ(p.getFirmwareSize(), 6329000u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testVcodexTagNamedAssetPreferredOverLegacy() {
+  printf("testVcodexTagNamedAssetPreferredOverLegacy...\n");
+
+  const char* json = R"({
+      "tag_name": "1.2.0.39-cpr-vcodex",
+      "assets": [
+        {"name": "firmware.bin", "browser_download_url": "https://example.com/legacy.bin", "size": 1},
+        {
+          "name": "1.2.0.39-cpr-vcodex.bin",
+          "browser_download_url": "https://example.com/tagged.bin",
+          "size": 2
+        }
+      ]
+    })";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  ASSERT_TRUE(p.foundFirmware());
+  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/tagged.bin");
+  ASSERT_EQ(p.getFirmwareSize(), 2u);
+
+  printf("  passed\n");
+  PASS();
+}
+
 void testLargeSize() {
   printf("testLargeSize...\n");
 
@@ -823,6 +876,8 @@ int main() {
   testResetClearsState();
   testPartialAssetNameMatch();
   testFirmwareBinExactMatch();
+  testVcodexTagNamedAsset();
+  testVcodexTagNamedAssetPreferredOverLegacy();
   testLargeSize();
   testSizeZero();
   testMinimalValidJson();
