@@ -480,6 +480,12 @@ Versioning rules:
 
 Release publishing:
 
+- before tagging, run:
+
+```powershell
+python scripts/pre_release_check.py --tag 1.2.0.39-cpr-vcodex
+```
+
 - push a stable tag named like `1.2.0.39-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release

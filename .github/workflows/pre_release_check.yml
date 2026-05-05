@@ -1,0 +1,44 @@
+name: Pre-release Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Candidate release tag, e.g. 1.2.0.39-cpr-vcodex"
+        required: true
+        type: string
+      flash_budget_percent:
+        description: "Maximum gh_release flash usage percent"
+        required: false
+        default: "97.5"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  pre-release-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          enable-cache: false
+
+      - name: Install PlatformIO Core
+        run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
+
+      - name: Run pre-release check
+        run: |
+          python scripts/pre_release_check.py \
+            --tag "${{ inputs.tag }}" \
+            --flash-budget-percent "${{ inputs.flash_budget_percent }}"
