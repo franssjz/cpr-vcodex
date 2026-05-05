@@ -10,14 +10,12 @@
 #include "ReadingStatsDetailActivity.h"
 #include "ReadingStatsExtendedActivity.h"
 #include "ReadingStatsStore.h"
-#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ReadingStatsAnalytics.h"
 
 namespace {
-constexpr unsigned long DELETE_STATS_HOLD_MS = 1000;
 constexpr int SUMMARY_CARD_HEIGHT = 76;
 constexpr int SUMMARY_GAP = 10;
 constexpr int DETAILS_BUTTON_HEIGHT = 58;
@@ -83,8 +81,8 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   const int subtitleY = innerY + 26;
   const int progressBarY = rect.y + rect.height - 14;
 
-  const std::string title = renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4,
-                                                   EpdFontFamily::BOLD);
+  const std::string title =
+      renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4, EpdFontFamily::BOLD);
   renderer.drawText(UI_12_FONT_ID, innerX, titleY, title.c_str(), true, EpdFontFamily::BOLD);
 
   const std::string subtitle =
@@ -101,8 +99,7 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   renderer.drawText(UI_12_FONT_ID, progressX, titleY, progressText.c_str(), true, EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, timeX, subtitleY, totalTimeText.c_str());
 
-  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9},
-                      book.lastProgressPercent);
+  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9}, book.lastProgressPercent);
 }
 }  // namespace
 
@@ -110,6 +107,7 @@ void ReadingStatsActivity::onEnter() {
   Activity::onEnter();
   selectedIndex = READING_STATS.getBooks().empty() ? 0 : 1;
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+  waitForBackRelease = false;
   requestUpdate();
 }
 
@@ -117,6 +115,14 @@ void ReadingStatsActivity::loop() {
   const int bookCount = static_cast<int>(READING_STATS.getBooks().size());
   const int selectableCount = bookCount + 1;
   const int pageItems = BOOKS_PER_PAGE;
+
+  if (waitForBackRelease) {
+    if (!mappedInput.isPressed(MappedInputManager::Button::Back) &&
+        !mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      waitForBackRelease = false;
+    }
+    return;
+  }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     finish();
@@ -178,38 +184,25 @@ void ReadingStatsActivity::openSelectedEntry() {
   const auto& books = READING_STATS.getBooks();
   if (selectedIndex == 0) {
     startActivityForResult(std::make_unique<ReadingStatsExtendedActivity>(renderer, mappedInput),
-                           [this](const ActivityResult&) { requestUpdate(); });
+                           [this](const ActivityResult&) {
+                             guardBackReturn();
+                             requestUpdate();
+                           });
     return;
   }
-
   const int bookIndex = selectedIndex - 1;
   if (bookIndex < 0 || bookIndex >= static_cast<int>(books.size())) {
     return;
   }
 
-  const auto& selectedBook = books[bookIndex];
-  if (mappedInput.getHeldTime() >= DELETE_STATS_HOLD_MS) {
-    const std::string selectedPath = selectedBook.path;
-    auto handler = [this, selectedPath](const ActivityResult& result) {
-      if (!result.isCancelled) {
-        READING_STATS.removeBook(selectedPath);
-        const int remainingBooks = static_cast<int>(READING_STATS.getBooks().size());
-        if (selectedIndex > remainingBooks) {
-          selectedIndex = remainingBooks > 0 ? remainingBooks : 0;
-        }
-      }
-      requestUpdate();
-    };
-
-    startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_STATS_ENTRY),
-                                                                  getBookTitle(selectedBook)),
-                           handler);
-    return;
-  }
-
-  startActivityForResult(std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, selectedBook.path),
-                         [this](const ActivityResult&) { requestUpdate(); });
+  startActivityForResult(std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, books[bookIndex].path),
+                         [this](const ActivityResult&) {
+                           guardBackReturn();
+                           requestUpdate();
+                         });
 }
+
+void ReadingStatsActivity::guardBackReturn() { waitForBackRelease = true; }
 
 void ReadingStatsActivity::render(RenderLock&&) {
   renderer.clearScreen();
@@ -221,9 +214,8 @@ void ReadingStatsActivity::render(RenderLock&&) {
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int detailsTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
-  const std::string dailyGoalValue =
-      ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
-      ReadingStatsAnalytics::formatDurationHm(getDailyReadingGoalMs());
+  const std::string dailyGoalValue = ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
+                                     ReadingStatsAnalytics::formatDurationHm(getDailyReadingGoalMs());
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
@@ -231,16 +223,16 @@ void ReadingStatsActivity::render(RenderLock&&) {
                  std::to_string(READING_STATS.getCurrentStreakDays()));
   drawMetricCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_MAX_STREAK), std::to_string(READING_STATS.getMaxStreakDays()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
+  drawMetricCard(renderer,
+                 Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_DAILY_GOAL), dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
                       SUMMARY_CARD_HEIGHT},
                  tr(STR_READING_TIME), ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth,
-                                SUMMARY_CARD_HEIGHT},
-                 tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
+  drawMetricCard(
+      renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth, SUMMARY_CARD_HEIGHT},
+      tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
   drawMetricCard(renderer,
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2,
                       cardWidth, SUMMARY_CARD_HEIGHT},

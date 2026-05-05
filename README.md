@@ -18,7 +18,7 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.39-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.39-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.40-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.40-cpr-vcodex) |
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
@@ -70,6 +70,7 @@ This project is **not affiliated with Xteink**.
 
 - stable upstream-based reader baseline kept fast on large EPUBs
 - richer on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
+- manual per-book reading-time corrections for missed or accidental sessions
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - EPUB bookmarks plus a global bookmarks app
@@ -145,6 +146,7 @@ That is enough to start using the core `vcodex` additions: coherent day-based an
 | Feature | What it adds | More info |
 |---|---|---|
 | `Reading Stats` | totals, streaks, goal tracking, started books, finished books, and per-book detail | [Reading analytics suite](#reading-analytics-suite) |
+| `Manual stats correction` | add or subtract per-book minutes for a selected date without typing on the device | [Reading analytics suite](#reading-analytics-suite) |
 | `Reading Heatmap` | monthly calendar of reading intensity | [Reading analytics suite](#reading-analytics-suite) |
 | `Reading Day` | one-day drill-down from the heatmap | [Reading analytics suite](#reading-analytics-suite) |
 | `Reading Profile` | weekly reading behavior summary | [Reading analytics suite](#reading-analytics-suite) |
@@ -240,6 +242,15 @@ That means these views stay coherent with each other:
 | `Reading Day` | one-day detail view opened from the heatmap |
 | `Reading Profile` | summary of recent reading behavior |
 | `Per-book stats detail` | cover, progress, sessions, time and last-read info for one book |
+
+Per-book detail also includes a small settings button under the cover. It opens a correction screen for missed or accidental reading time:
+
+- choose `Add` or `Subtract`
+- choose the exact date with the same numeric picker style used by `Sync Day`
+- choose 15, 30, 45, or 60 minutes
+- subtracting is capped so a day can never go below zero
+
+Manual corrections update the same daily totals used by streaks, heatmaps and achievements.
 
 ## Achievements
 
@@ -483,10 +494,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.39-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.40-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.39-cpr-vcodex`
+- push a stable tag named like `1.2.0.40-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

@@ -1,10 +1,10 @@
 #include "SettingsActivity.h"
 
 #include <Arduino.h>
-#include <HalStorage.h>
-#include <Utf8.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <Logging.h>
+#include <Utf8.h>
 #include <WiFi.h>
 
 #include <algorithm>
@@ -13,6 +13,20 @@
 
 #include "AchievementsStore.h"
 #include "ButtonRemapActivity.h"
+#include "ClearCacheActivity.h"
+#include "CrossPointSettings.h"
+#include "KOReaderSettingsActivity.h"
+#include "LanguageSelectActivity.h"
+#include "MappedInputManager.h"
+#include "OpdsServerListActivity.h"
+#include "OtaUpdateActivity.h"
+#include "ReadingStatsStore.h"
+#include "SettingsList.h"
+#include "ShortcutLocationActivity.h"
+#include "ShortcutOrderActivity.h"
+#include "ShortcutVisibilityActivity.h"
+#include "StatusBarSettingsActivity.h"
+#include "TimeZoneSelectActivity.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
 #include "activities/apps/FavoritesAppActivity.h"
@@ -23,33 +37,18 @@
 #include "activities/apps/ReadingStatsActivity.h"
 #include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
-#include "ClearCacheActivity.h"
-#include "CrossPointSettings.h"
-#include "KOReaderSettingsActivity.h"
-#include "LanguageSelectActivity.h"
-#include "MappedInputManager.h"
-#include "OpdsServerListActivity.h"
-#include "OtaUpdateActivity.h"
-#include "ReadingStatsStore.h"
-#include "ShortcutLocationActivity.h"
-#include "ShortcutOrderActivity.h"
-#include "ShortcutVisibilityActivity.h"
-#include "SettingsList.h"
-#include "StatusBarSettingsActivity.h"
-#include "TimeZoneSelectActivity.h"
-#include "activities/util/ConfirmationActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/HeaderDateUtils.h"
 #include "util/ShortcutRegistry.h"
 #include "util/ShortcutUiMetadata.h"
-#include "util/HeaderDateUtils.h"
 #include "util/SleepImageUtils.h"
 #include "util/TimeUtils.h"
 
-const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
-                                                              StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM,
-                                                              StrId::STR_APPS};
+const StrId SettingsActivity::categoryNames[categoryCount] = {
+    StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER, StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM, StrId::STR_APPS};
 
 namespace {
 constexpr size_t SETTINGS_TAB_MAX_CHARS = 10;
@@ -82,9 +81,9 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
   static const std::vector<SettingInfo> settings = {
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                         {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND}),
-      SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
-                        {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
-                         StrId::STR_X_LARGE}),
+      SettingInfo::Enum(
+          StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
+          {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}),
       SettingInfo::Enum(StrId::STR_LINE_SPACING, &CrossPointSettings::lineSpacing,
                         {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE}),
       SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}),
@@ -170,9 +169,9 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
       SettingInfo::Enum(StrId::STR_SYNC_DAY_REMINDER_EVERY, &CrossPointSettings::syncDayReminderStarts,
                         {StrId::STR_STATE_OFF, StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30,
                          StrId::STR_NUM_40, StrId::STR_NUM_50, StrId::STR_NUM_60}),
-      SettingInfo::Enum(StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
-                        {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
-                         StrId::STR_DATE_FORMAT_YYYY_MM_DD}),
+      SettingInfo::Enum(
+          StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
+          {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY, StrId::STR_DATE_FORMAT_YYYY_MM_DD}),
       SettingInfo::Section(StrId::STR_READING_STATS),
       SettingInfo::Action(StrId::STR_READING_STATS, SettingAction::ReadingStats),
       SettingInfo::Enum(StrId::STR_DAILY_GOAL, &CrossPointSettings::dailyGoalTarget,
@@ -216,9 +215,7 @@ const std::vector<SettingInfo>& getDeviceOnlyReaderSettings() {
   return settings;
 }
 
-std::string getReadingStatsExportPath() {
-  return "/exports/stats_exported";
-}
+std::string getReadingStatsExportPath() { return "/exports/stats_exported"; }
 
 std::string fileNameFromPath(const std::string& path) {
   const size_t pos = path.find_last_of('/');
@@ -613,14 +610,14 @@ void SettingsActivity::toggleCurrentSetting() {
         startActivityForResult(std::make_unique<ReadingStatsActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::ResetReadingStats:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_RESET_READING_STATS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   READING_STATS.reset();
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RESET_READING_STATS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                READING_STATS.reset();
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::ExportReadingStats: {
         showTransientPopup(tr(STR_EXPORTING), 20, 120);
@@ -636,22 +633,25 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       }
       case SettingAction::ImportReadingStats:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_IMPORT_READING_STATS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   const std::string importPath = getLatestReadingStatsImportPath();
-                                   if (importPath.empty()) {
-                                     showTransientPopup(tr(STR_NO_READING_STATS_EXPORT), -1, 700);
-                                   } else {
-                                     showTransientPopup(tr(STR_IMPORTING), 20, 120);
-                                     const bool imported = READING_STATS.importFromFile(importPath);
-                                     showTransientPopup(imported ? tr(STR_IMPORT_DONE) : tr(STR_IMPORT_FAILED),
-                                                        imported ? 100 : -1, imported ? 350 : 700);
-                                   }
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_IMPORT_READING_STATS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                const std::string importPath = getLatestReadingStatsImportPath();
+                if (importPath.empty()) {
+                  showTransientPopup(tr(STR_NO_READING_STATS_EXPORT), -1, 700);
+                } else {
+                  showTransientPopup(tr(STR_IMPORTING), 20, 120);
+                  const bool imported = READING_STATS.importFromFile(importPath);
+                  if (imported) {
+                    ACHIEVEMENTS.rebuildProgressFromCurrentStats();
+                  }
+                  showTransientPopup(imported ? tr(STR_IMPORT_DONE) : tr(STR_IMPORT_FAILED), imported ? 100 : -1,
+                                     imported ? 350 : 700);
+                }
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::ReadingHeatmap:
         startActivityForResult(std::make_unique<ReadingHeatmapActivity>(renderer, mappedInput), resultHandler);
@@ -677,14 +677,14 @@ void SettingsActivity::toggleCurrentSetting() {
                                resultHandler);
         break;
       case SettingAction::ResetAchievements:
-        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
-                                                                      tr(STR_RESET_ACHIEVEMENTS_CONFIRM), ""),
-                               [this](const ActivityResult& result) {
-                                 if (!result.isCancelled) {
-                                   ACHIEVEMENTS.reset();
-                                 }
-                                 requestUpdate(true);
-                               });
+        startActivityForResult(
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_RESET_ACHIEVEMENTS_CONFIRM), ""),
+            [this](const ActivityResult& result) {
+              if (!result.isCancelled) {
+                ACHIEVEMENTS.reset();
+              }
+              requestUpdate(true);
+            });
         break;
       case SettingAction::SyncAchievementsFromStats:
         showTransientPopup(tr(STR_SYNC_WITH_PREV_STATS), 20, 120);
@@ -804,10 +804,13 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
     }
 
     const std::string valueText = getSettingValueText(*setting);
-    const bool showExportFileName = setting->type == SettingType::ACTION && setting->action == SettingAction::ExportReadingStats;
-    const bool showImportFileName = setting->type == SettingType::ACTION && setting->action == SettingAction::ImportReadingStats;
-    const std::string sideNote =
-        showExportFileName ? getReadingStatsExportFileName() : (showImportFileName ? getLatestReadingStatsImportFileName() : std::string());
+    const bool showExportFileName =
+        setting->type == SettingType::ACTION && setting->action == SettingAction::ExportReadingStats;
+    const bool showImportFileName =
+        setting->type == SettingType::ACTION && setting->action == SettingAction::ImportReadingStats;
+    const std::string sideNote = showExportFileName
+                                     ? getReadingStatsExportFileName()
+                                     : (showImportFileName ? getLatestReadingStatsImportFileName() : std::string());
     const int valueWidth =
         valueText.empty() ? 0 : renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str(), EpdFontFamily::REGULAR);
     const int leftPadding = 12;
@@ -815,10 +818,13 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
     if (showExportFileName || showImportFileName) {
       const int sideNoteMaxWidth = rowRect.width / 2 - leftPadding - rightPadding;
       const std::string truncatedSideNote =
-          sideNote.empty() ? std::string()
-                           : renderer.truncatedText(SMALL_FONT_ID, sideNote.c_str(), sideNoteMaxWidth, EpdFontFamily::REGULAR);
+          sideNote.empty()
+              ? std::string()
+              : renderer.truncatedText(SMALL_FONT_ID, sideNote.c_str(), sideNoteMaxWidth, EpdFontFamily::REGULAR);
       const int sideNoteWidth =
-          truncatedSideNote.empty() ? 0 : renderer.getTextWidth(SMALL_FONT_ID, truncatedSideNote.c_str(), EpdFontFamily::REGULAR);
+          truncatedSideNote.empty()
+              ? 0
+              : renderer.getTextWidth(SMALL_FONT_ID, truncatedSideNote.c_str(), EpdFontFamily::REGULAR);
 
       const int labelWidth = rowRect.width - leftPadding - rightPadding - (sideNoteWidth > 0 ? sideNoteWidth + 12 : 0);
       const std::string titleText =
@@ -831,8 +837,8 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
       }
     } else {
       const int labelWidth = rowRect.width - leftPadding - rightPadding - (valueWidth > 0 ? valueWidth + 12 : 0);
-      const std::string titleText = renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth,
-                                                           EpdFontFamily::REGULAR);
+      const std::string titleText =
+          renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
 
       renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 9, titleText.c_str(), true,
                         EpdFontFamily::REGULAR);
@@ -878,8 +884,7 @@ void SettingsActivity::render(RenderLock&&) {
   const int titleWidth = renderer.getTextWidth(UI_12_FONT_ID, settingsTitle, EpdFontFamily::BOLD);
   const int categoryGap = 10;
   const int categoryX = titleX + titleWidth + categoryGap;
-  const int versionWidth =
-      renderer.getTextWidth(SMALL_FONT_ID, firmwareVersion, EpdFontFamily::REGULAR);
+  const int versionWidth = renderer.getTextWidth(SMALL_FONT_ID, firmwareVersion, EpdFontFamily::REGULAR);
   const int versionX = pageWidth - metrics.contentSidePadding - versionWidth;
   const int versionGap = 12;
   const int categoryMaxWidth = std::max(0, versionX - categoryX - versionGap);
@@ -889,9 +894,10 @@ void SettingsActivity::render(RenderLock&&) {
     if (!headerCategory.empty()) {
       const std::string categoryPrefix = "/ ";
       renderer.drawText(SMALL_FONT_ID, categoryX, titleY + 4, categoryPrefix.c_str(), true, EpdFontFamily::REGULAR);
-      renderer.drawText(SMALL_FONT_ID,
-                        categoryX + renderer.getTextWidth(SMALL_FONT_ID, categoryPrefix.c_str(), EpdFontFamily::REGULAR),
-                        titleY + 4, headerCategory.c_str(), true, EpdFontFamily::REGULAR);
+      renderer.drawText(
+          SMALL_FONT_ID,
+          categoryX + renderer.getTextWidth(SMALL_FONT_ID, categoryPrefix.c_str(), EpdFontFamily::REGULAR), titleY + 4,
+          headerCategory.c_str(), true, EpdFontFamily::REGULAR);
     }
   }
   renderer.drawText(SMALL_FONT_ID, versionX, titleY + 4, firmwareVersion, true, EpdFontFamily::REGULAR);
@@ -920,9 +926,10 @@ void SettingsActivity::render(RenderLock&&) {
   if (selectedCategoryIndex == 4) {
     renderAppSettingsList(listRect);
   } else {
-    GUI.drawList(renderer, listRect, settingsCount, selectedSettingIndex - 1,
-                 [&settings](int index) { return std::string(getSettingNameText(*settings[index])); }, nullptr, nullptr,
-                 [&settings](int i) { return getSettingValueText(*settings[i]); }, true);
+    GUI.drawList(
+        renderer, listRect, settingsCount, selectedSettingIndex - 1,
+        [&settings](int index) { return std::string(getSettingNameText(*settings[index])); }, nullptr, nullptr,
+        [&settings](int i) { return getSettingValueText(*settings[i]); }, true);
   }
 
   // Draw help text

@@ -199,12 +199,12 @@ const std::array<AchievementDefinition, static_cast<size_t>(AchievementId::_COUN
                             30ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_THIRTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::FortyFiveMinuteSession, AchievementMetric::MaxSessionMs,
                             45ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_FORTY_FIVE_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs,
-                            60ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
+      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs, 60ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::NinetyMinuteSession, AchievementMetric::MaxSessionMs,
                             90ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_NINETY_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs,
-                            120ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
+      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs, 120ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
   };
   return items;
 }
@@ -624,5 +624,10 @@ void AchievementsStore::syncWithPreviousStats() {
 
   markDirty();
   evaluateProgress(false);
+  saveToFile();
+}
+
+void AchievementsStore::rebuildProgressFromCurrentStats() {
+  bootstrapFromCurrentStats();
   saveToFile();
 }

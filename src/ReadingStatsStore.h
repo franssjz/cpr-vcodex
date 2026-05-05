@@ -132,14 +132,15 @@ class ReadingStatsStore {
   static ReadingStatsStore& getInstance() { return instance; }
 
   void beginSession(const std::string& path, const std::string& title, const std::string& author,
-                    const std::string& coverBmpPath, uint8_t progressPercent = 0,
-                    const std::string& chapterTitle = "", uint8_t chapterProgressPercent = 0);
+                    const std::string& coverBmpPath, uint8_t progressPercent = 0, const std::string& chapterTitle = "",
+                    uint8_t chapterProgressPercent = 0);
   void noteActivity();
   void tickActiveSession();
   void resumeSession();
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
+  bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,
                           const std::string& coverBmpPath);
   bool removeBook(const std::string& path);
