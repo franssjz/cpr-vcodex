@@ -73,7 +73,9 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30}),
       SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM}),
+                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_CAROUSEL}),
+      SettingInfo::Enum(StrId::STR_HOME_CAROUSEL, &CrossPointSettings::homeCarouselSource,
+                        {StrId::STR_RECENTS, StrId::STR_FAVORITES}),
       SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix),
   };

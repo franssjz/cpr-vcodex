@@ -170,9 +170,12 @@ class CrossPointSettings {
   };
 
   // UI Theme
-  // Value 2 used to be Lyra Carousel; keep it invalid so old settings
-  // migrate back to the default theme.
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, UI_THEME_COUNT = 2 };
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
+  enum HOME_CAROUSEL_SOURCE {
+    HOME_CAROUSEL_RECENTS = 0,
+    HOME_CAROUSEL_FAVORITES = 1,
+    HOME_CAROUSEL_SOURCE_COUNT
+  };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -293,6 +296,7 @@ class CrossPointSettings {
   uint8_t longPressButtonBehavior = LONG_PRESS_CHAPTER_SKIP;
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
+  uint8_t homeCarouselSource = HOME_CAROUSEL_RECENTS;
   // Experimental global dark mode for the device UI and supported readers.
   uint8_t darkMode = 0;
   // Home/apps helpers
