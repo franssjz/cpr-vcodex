@@ -22,6 +22,7 @@
 #include "components/icons/image24.h"
 #include "components/icons/library.h"
 #include "components/icons/recent.h"
+#include "components/icons/settings.h"
 #include "components/icons/settings2.h"
 #include "components/icons/text24.h"
 #include "components/icons/trophy.h"
@@ -78,6 +79,8 @@ const uint8_t* iconForName(UIIcon icon, int size) {
         return RecentIcon;
       case UIIcon::Settings:
         return Settings2Icon;
+      case UIIcon::Apps:
+        return SettingsIcon;
       case UIIcon::Transfer:
         return TransferIcon;
       case UIIcon::Library:
@@ -140,10 +143,16 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     bool hasCover = false;
     if (!book.coverBmpPath.empty()) {
       std::string thumbPath = UITheme::getCoverThumbPath(book.coverBmpPath, maxW, maxH);
+      const std::string centerThumbPath =
+          UITheme::getCoverThumbPath(book.coverBmpPath, kCenterCoverW, kCenterCoverH);
       const std::string legacyThumbPath =
           UITheme::getCoverThumbPath(book.coverBmpPath, LyraCarouselMetrics::values.homeCoverHeight);
-      if (!Storage.exists(thumbPath.c_str()) && Storage.exists(legacyThumbPath.c_str())) {
-        thumbPath = legacyThumbPath;
+      if (!Storage.exists(thumbPath.c_str())) {
+        if (Storage.exists(centerThumbPath.c_str())) {
+          thumbPath = centerThumbPath;
+        } else if (Storage.exists(legacyThumbPath.c_str())) {
+          thumbPath = legacyThumbPath;
+        }
       }
       FsFile file;
       if (Storage.openFileForRead("HOME", thumbPath, file)) {

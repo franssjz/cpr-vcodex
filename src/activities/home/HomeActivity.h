@@ -22,6 +22,7 @@ class HomeActivity final : public Activity {
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
   int lastCarouselBookIndex = 0;
+  std::string carouselCoverLoadAttemptPath;
   uint8_t* carouselFrames[3] = {nullptr, nullptr, nullptr};
   int carouselFrameBookIdx[3] = {-1, -1, -1};
   bool carouselFramesReady = false;
