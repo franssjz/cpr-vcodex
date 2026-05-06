@@ -18,7 +18,7 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.40-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.40-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.41-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.41-cpr-vcodex) |
 | Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
@@ -73,6 +73,7 @@ This project is **not affiliated with Xteink**.
 - manual per-book reading-time corrections for missed or accidental sessions
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
+- optional `Lyra Carousel` Home theme with a 3-book cover carousel and SD-backed frame cache
 - EPUB bookmarks plus a global bookmarks app
 - context-aware screenshot filenames that include the current book title when available
 - KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
@@ -153,7 +154,7 @@ That is enough to start using the core `vcodex` additions: coherent day-based an
 | `Achievements` | console-style milestones and optional popups | [Achievements](#achievements) |
 | `Flashcards` | offline deck study with `Scheduled` and `Infinite` session modes | [Flashcards](#flashcards) |
 | `Sync Day` | manual Wi-Fi date sync and fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
-| `Home + Apps shortcuts` | configurable placement, visibility, and ordering | [Home and Apps](#home-and-apps) |
+| `Home + Apps shortcuts` | configurable placement, visibility, ordering, and optional `Lyra Carousel` cover Home | [Home and Apps](#home-and-apps) |
 | `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
 | `Sleep tools` | folder selection, preview, cache, sequential and shuffle behavior | [Sleep](#sleep) |
 | `Text Darkness` | global `Normal / Dark / Extra Dark` text rendering control, based on the idea first seen in `crosspet` | [Settings](#settings) |
@@ -177,6 +178,7 @@ Notable launcher behavior:
 - ordering is configurable
 - stats-related shortcuts show useful live metadata
 - `Apps` paginates long lists and supports page-jump navigation
+- the optional `Lyra Carousel` Home theme shows up to 3 recent/favorite books as a cover carousel, caches rendered frames on the SD card, and keeps its shortcut row readable in dark mode
 
 Management lives in:
 
@@ -494,10 +496,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.40-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.41-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.40-cpr-vcodex`
+- push a stable tag named like `1.2.0.41-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

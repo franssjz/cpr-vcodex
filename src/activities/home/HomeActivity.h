@@ -39,6 +39,8 @@ class HomeActivity final : public Activity {
   void preRenderCarouselFrames();
   void freeCarouselFrames();
   void renderCarouselFrame(int slot, int bookIndex);
+  bool loadCarouselFrameFromStorage(int slot, int bookIndex);
+  bool saveCarouselFrameToStorage(int bookIndex);
   void updateSlidingWindowCache(int centerIdx, int bookCount);
   void scheduleCarouselCoverLoadIfNeeded();
   void loadHomeCarouselBooks(int maxBooks);

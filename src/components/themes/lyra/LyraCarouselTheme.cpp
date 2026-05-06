@@ -42,7 +42,6 @@ constexpr int kSelectionLineW = 3;
 constexpr int kCenterOutlineW = 4;
 constexpr int kMenuIconSize = 32;
 constexpr int kMenuIconPad = 14;
-constexpr int kHighlightPad = 12;
 
 int lastCarouselSelectorIndex = -1;
 
@@ -96,6 +95,20 @@ const uint8_t* iconForName(UIIcon icon, int size) {
   }
 
   return nullptr;
+}
+
+void drawTransparentIcon(GfxRenderer& renderer, const uint8_t* bitmap, const int x, const int y, const int width,
+                         const int height) {
+  const int stride = (width + 7) / 8;
+  for (int py = 0; py < height; ++py) {
+    for (int px = 0; px < width; ++px) {
+      const uint8_t byte = bitmap[py * stride + px / 8];
+      const bool inkPixel = (byte & (0x80 >> (px % 8))) == 0;
+      if (inkPixel) {
+        renderer.drawPixel(x + width - 1 - py, y + px, true);
+      }
+    }
+  }
 }
 
 void drawCoverPlaceholder(GfxRenderer& renderer, int x, int y, int maxW, int maxH) {
@@ -237,30 +250,25 @@ void LyraCarouselTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int but
   if (buttonCount <= 0) return;
 
   const int tileH = kMenuIconPad + kMenuIconSize + kMenuIconPad;
-  const int tileW = renderer.getScreenWidth() / buttonCount;
+  const int pageWidth = renderer.getScreenWidth();
+  const int tileW = pageWidth / buttonCount;
   const int rowY = renderer.getScreenHeight() - LyraCarouselMetrics::values.buttonHintsHeight - tileH;
+  renderer.fillRect(0, rowY, pageWidth, tileH, false);
 
   for (int i = 0; i < buttonCount; ++i) {
     const int tileX = i * tileW;
     const int iconX = tileX + (tileW - kMenuIconSize) / 2;
     const int iconY = rowY + kMenuIconPad;
 
-    if (selectedIndex == i) {
-      const int highlightSize = kMenuIconSize + 2 * kHighlightPad;
-      const int highlightY = rowY + (tileH - highlightSize) / 2;
-      renderer.fillRoundedRect(iconX - kHighlightPad, highlightY, highlightSize, highlightSize, kCornerRadius,
-                               Color::Black);
-    }
-
     if (rowIcon != nullptr) {
       const uint8_t* bmp = iconForName(rowIcon(i), kMenuIconSize);
       if (bmp != nullptr) {
-        if (selectedIndex == i) {
-          renderer.drawIconInverted(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
-        } else {
-          renderer.drawIcon(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
-        }
+        drawTransparentIcon(renderer, bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
       }
+    }
+
+    if (selectedIndex == i) {
+      renderer.fillRect(iconX + 5, iconY + kMenuIconSize + 7, kMenuIconSize - 10, kSelectionLineW, true);
     }
   }
 }

@@ -149,7 +149,7 @@ The Settings screen allows you to configure the device's behavior. There are a f
 - **UI Theme**: Set which UI theme to use:
   - "Lyra" - The new theme for Crosspoint featuring rounded elements and menu icons
   - "Lyra vCodex" - CPR-vCodex's 3-book Home carousel with reading progress
-  - "Lyra Carousel" - Experimental 5-book carousel test theme
+  - "Lyra Carousel" - cover-focused 3-book Home carousel with recent/favorite book source
 - **Sunlight Fading Fix**: Configure whether to enable a software-fix for the issue where white X4 models may fade when used in direct sunlight:
   - "OFF" (default) - Disable the fix
   - "ON" - Enable the fix
