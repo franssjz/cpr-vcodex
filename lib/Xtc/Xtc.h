@@ -25,6 +25,7 @@ class Xtc {
   std::string cachePath;
   std::unique_ptr<xtc::XtcParser> parser;
   bool loaded;
+  bool generateThumbBmpToPath(int width, int height, const std::string& thumbPath) const;
 
  public:
   explicit Xtc(std::string filepath, const std::string& cacheDir) : filepath(std::move(filepath)), loaded(false) {
@@ -66,7 +67,9 @@ class Xtc {
   // Thumbnail support (for Continue Reading card)
   std::string getThumbBmpPath() const;
   std::string getThumbBmpPath(int height) const;
+  std::string getThumbBmpPath(int width, int height) const;
   bool generateThumbBmp(int height) const;
+  bool generateThumbBmp(int width, int height) const;
 
   // Page access
   uint32_t getPageCount() const;

@@ -20,6 +20,10 @@ class HomeActivity final : public Activity {
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
+  int lastCarouselBookIndex = 0;
+  uint8_t* carouselFrames[3] = {nullptr, nullptr, nullptr};
+  int carouselFrameBookIdx[3] = {-1, -1, -1};
+  bool carouselFramesReady = false;
   std::vector<RecentBook> recentBooks;
   void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
@@ -32,11 +36,18 @@ class HomeActivity final : public Activity {
   bool storeCoverBuffer();    // Store frame buffer for cover image
   bool restoreCoverBuffer();  // Restore frame buffer from stored cover
   void freeCoverBuffer();     // Free the stored cover buffer
+  void preRenderCarouselFrames();
+  void freeCarouselFrames();
+  void renderCarouselFrame(int slot, int bookIndex);
+  void updateSlidingWindowCache(int centerIdx, int bookCount);
+  void scheduleCarouselCoverLoadIfNeeded();
   void loadHomeCarouselBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);
   bool needsRecentCoverLoad(int coverHeight) const;
 
  public:
+  static constexpr int kCarouselFrameCount = 3;
+
   explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
       : Activity("Home", renderer, mappedInput) {}
   void onEnter() override;
