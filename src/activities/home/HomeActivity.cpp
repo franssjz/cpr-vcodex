@@ -154,7 +154,7 @@ std::string getHomeShortcutSubtitle(const HomeShortcutEntry& entry) {
 
 UIIcon getHomeShortcutIcon(const HomeShortcutEntry& entry) {
   if (entry.isAppsHub) {
-    return UIIcon::Book;
+    return UIIcon::Apps;
   }
   return entry.definition ? entry.definition->icon : UIIcon::Folder;
 }
@@ -193,10 +193,41 @@ uint32_t fnv1aU32(uint32_t hash, const uint32_t value) {
   return fnv1aByte(hash, static_cast<uint8_t>((value >> 24) & 0xFF));
 }
 
+std::string getCarouselCenterThumbPath(const RecentBook& book) {
+  return UITheme::getCoverThumbPath(book.coverBmpPath, LyraCarouselTheme::kCenterCoverW,
+                                    LyraCarouselTheme::kCenterCoverH);
+}
+
+std::string getCarouselLegacyThumbPath(const RecentBook& book) {
+  return UITheme::getCoverThumbPath(book.coverBmpPath, LyraCarouselMetrics::values.homeCoverHeight);
+}
+
+bool hasCarouselUsableThumb(const RecentBook& book) {
+  if (book.coverBmpPath.empty()) {
+    return true;
+  }
+  const std::string centerCoverPath = getCarouselCenterThumbPath(book);
+  if (Storage.exists(centerCoverPath.c_str())) {
+    return true;
+  }
+  const std::string legacyCoverPath = getCarouselLegacyThumbPath(book);
+  return Storage.exists(legacyCoverPath.c_str());
+}
+
+uint32_t hashCarouselThumbState(uint32_t hash, const RecentBook& book) {
+  if (book.coverBmpPath.empty()) {
+    return fnv1aByte(hash, 0);
+  }
+  const std::string centerCoverPath = getCarouselCenterThumbPath(book);
+  const std::string legacyCoverPath = getCarouselLegacyThumbPath(book);
+  hash = fnv1aByte(hash, Storage.exists(centerCoverPath.c_str()) ? 1 : 0);
+  return fnv1aByte(hash, Storage.exists(legacyCoverPath.c_str()) ? 1 : 0);
+}
+
 uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int centerIdx, const int screenWidth,
                               const int screenHeight, const size_t bufferSize, const bool darkMode) {
   uint32_t hash = FNV1A_OFFSET;
-  hash = fnv1aString(hash, "lyra-carousel-frame-v4-dark-clean");
+  hash = fnv1aString(hash, "lyra-carousel-frame-v6-carousel-thumb-only");
   hash = fnv1aU32(hash, static_cast<uint32_t>(screenWidth));
   hash = fnv1aU32(hash, static_cast<uint32_t>(screenHeight));
   hash = fnv1aU32(hash, static_cast<uint32_t>(bufferSize));
@@ -211,6 +242,7 @@ uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int ce
     hash = fnv1aString(hash, book.title);
     hash = fnv1aString(hash, book.author);
     hash = fnv1aString(hash, book.coverBmpPath);
+    hash = hashCarouselThumbState(hash, book);
   }
 
   return hash;
@@ -225,14 +257,6 @@ std::string getCarouselFrameCachePath(const std::vector<RecentBook>& books, cons
   return filename;
 }
 
-bool hasLegacyHomeThumb(const RecentBook& book) {
-  if (book.coverBmpPath.empty()) {
-    return true;
-  }
-  const std::string coverPath =
-      UITheme::getCoverThumbPath(book.coverBmpPath, LyraCarouselMetrics::values.homeCoverHeight);
-  return Storage.exists(coverPath.c_str());
-}
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
@@ -281,7 +305,7 @@ bool HomeActivity::needsRecentCoverLoad(const int coverHeight) const {
     }
 
     const bool missingThumb = isLyraCarouselTheme()
-                                  ? !hasLegacyHomeThumb(book)
+                                  ? !hasCarouselUsableThumb(book)
                                   : !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
     if (missingThumb && (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path))) {
       return true;
@@ -304,9 +328,12 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
     }
     if (!book.coverBmpPath.empty()) {
       const bool missingThumb =
-          isLyraCarouselTheme() ? !hasLegacyHomeThumb(book)
+          isLyraCarouselTheme() ? !hasCarouselUsableThumb(book)
                                 : !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
       if (missingThumb) {
+        if (isLyraCarouselTheme()) {
+          carouselCoverLoadAttemptPath = book.path;
+        }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
           epub.load(isLyraCarouselTheme(), true);
@@ -317,8 +344,11 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
           }
           GUI.fillPopupProgress(renderer, popupRect,
                                 10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-          const bool success = epub.generateThumbBmp(coverHeight);
-          if (!success) {
+          const bool success = isLyraCarouselTheme()
+                                   ? epub.generateThumbBmp(LyraCarouselTheme::kCenterCoverW,
+                                                          LyraCarouselTheme::kCenterCoverH)
+                                   : epub.generateThumbBmp(coverHeight);
+          if (!success && !isLyraCarouselTheme()) {
             RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
             book.coverBmpPath = "";
           }
@@ -333,8 +363,11 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
             }
             GUI.fillPopupProgress(renderer, popupRect,
                                   10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-            const bool success = xtc.generateThumbBmp(coverHeight);
-            if (!success) {
+            const bool success = isLyraCarouselTheme()
+                                     ? xtc.generateThumbBmp(LyraCarouselTheme::kCenterCoverW,
+                                                            LyraCarouselTheme::kCenterCoverH)
+                                     : xtc.generateThumbBmp(coverHeight);
+            if (!success && !isLyraCarouselTheme()) {
               RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
               book.coverBmpPath = "";
             }
@@ -365,7 +398,7 @@ void HomeActivity::scheduleCarouselCoverLoadIfNeeded() {
     return;
   }
   const RecentBook& book = recentBooks[lastCarouselBookIndex];
-  if (!book.coverBmpPath.empty() && !hasLegacyHomeThumb(book) &&
+  if (!book.coverBmpPath.empty() && book.path != carouselCoverLoadAttemptPath && !hasCarouselUsableThumb(book) &&
       (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path))) {
     recentsLoaded = false;
     requestUpdate();
@@ -383,6 +416,7 @@ void HomeActivity::onEnter() {
   recentsLoaded = false;
   lastCarouselBookIndex = 0;
   carouselFramesReady = false;
+  carouselCoverLoadAttemptPath.clear();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadHomeCarouselBooks(metrics.homeRecentBooksCount);

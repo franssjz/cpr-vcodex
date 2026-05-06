@@ -70,7 +70,7 @@ struct ThemeMetrics {
   int keyboardWidthPercent;
 };
 
-enum UIIcon { Folder, Text, Image, Book, File, Recent, Settings, Transfer, Library, Trophy, Wifi, Hotspot, Heart };
+enum UIIcon { Folder, Text, Image, Book, File, Recent, Settings, Apps, Transfer, Library, Trophy, Wifi, Hotspot, Heart };
 enum class KeyboardKeyType { Normal, Shift, Mode, Space, Del, Ok, Disabled };
 
 // Default theme implementation (Classic Theme)
