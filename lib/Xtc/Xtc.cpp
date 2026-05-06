@@ -262,10 +262,21 @@ bool Xtc::generateCoverBmp() const {
 
 std::string Xtc::getThumbBmpPath() const { return cachePath + "/thumb_[HEIGHT].bmp"; }
 std::string Xtc::getThumbBmpPath(int height) const { return cachePath + "/thumb_" + std::to_string(height) + ".bmp"; }
+std::string Xtc::getThumbBmpPath(int width, int height) const {
+  return cachePath + "/thumb_" + std::to_string(width) + "x" + std::to_string(height) + ".bmp";
+}
 
 bool Xtc::generateThumbBmp(int height) const {
+  return generateThumbBmpToPath(static_cast<int>(height * 0.6f), height, getThumbBmpPath(height));
+}
+
+bool Xtc::generateThumbBmp(int width, int height) const {
+  return generateThumbBmpToPath(width, height, getThumbBmpPath(width, height));
+}
+
+bool Xtc::generateThumbBmpToPath(int width, int height, const std::string& thumbPath) const {
   // Already generated
-  if (Storage.exists(getThumbBmpPath(height).c_str())) {
+  if (Storage.exists(thumbPath.c_str())) {
     return true;
   }
 
@@ -293,7 +304,7 @@ bool Xtc::generateThumbBmp(int height) const {
   const uint8_t bitDepth = parser->getBitDepth();
 
   // Calculate target dimensions for thumbnail (fit within 240x400 Continue Reading card)
-  int THUMB_TARGET_WIDTH = height * 0.6;
+  int THUMB_TARGET_WIDTH = width;
   int THUMB_TARGET_HEIGHT = height;
 
   // Calculate scale factor
@@ -308,7 +319,7 @@ bool Xtc::generateThumbBmp(int height) const {
     if (generateCoverBmp()) {
       FsFile src, dst;
       if (Storage.openFileForRead("XTC", getCoverBmpPath(), src)) {
-        if (Storage.openFileForWrite("XTC", getThumbBmpPath(height), dst)) {
+        if (Storage.openFileForWrite("XTC", thumbPath, dst)) {
           uint8_t buffer[512];
           while (src.available()) {
             size_t bytesRead = src.read(buffer, sizeof(buffer));
@@ -317,7 +328,7 @@ bool Xtc::generateThumbBmp(int height) const {
         }
       }
       LOG_DBG("XTC", "Copied cover to thumb (no scaling needed)");
-      return Storage.exists(getThumbBmpPath(height).c_str());
+      return Storage.exists(thumbPath.c_str());
     }
     return false;
   }
@@ -351,7 +362,7 @@ bool Xtc::generateThumbBmp(int height) const {
 
   // Create thumbnail BMP file - use 1-bit format for fast home screen rendering (no gray passes)
   FsFile thumbBmp;
-  if (!Storage.openFileForWrite("XTC", getThumbBmpPath(height), thumbBmp)) {
+  if (!Storage.openFileForWrite("XTC", thumbPath, thumbBmp)) {
     LOG_DBG("XTC", "Failed to create thumb BMP file");
     free(pageBuffer);
     return false;
@@ -476,7 +487,7 @@ bool Xtc::generateThumbBmp(int height) const {
   free(rowBuffer);
   free(pageBuffer);
 
-  LOG_DBG("XTC", "Generated thumb BMP (%dx%d): %s", thumbWidth, thumbHeight, getThumbBmpPath(height).c_str());
+  LOG_DBG("XTC", "Generated thumb BMP (%dx%d): %s", thumbWidth, thumbHeight, thumbPath.c_str());
   return true;
 }
 

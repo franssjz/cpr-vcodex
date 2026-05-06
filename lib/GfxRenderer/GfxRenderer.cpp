@@ -547,6 +547,43 @@ void GfxRenderer::fillRoundedRect(const int x, const int y, const int width, con
   fillRoundedRect(x, y, width, height, cornerRadius, true, true, true, true, color);
 }
 
+void GfxRenderer::maskRoundedRectOutsideCorners(const int x, const int y, const int width, const int height,
+                                                const int radius, const Color color) const {
+  if (radius <= 0 || color == Color::Clear) {
+    return;
+  }
+
+  const int rr = radius - 1;
+  const int rr2 = rr * rr;
+  for (int dy = 0; dy < radius; dy++) {
+    for (int dx = 0; dx < radius; dx++) {
+      const int tx = rr - dx;
+      const int ty = rr - dy;
+      if (tx * tx + ty <= rr2) {
+        continue;
+      }
+
+      if (color == Color::White || color == Color::Black) {
+        const bool state = color == Color::Black;
+        drawPixel(x + dx, y + dy, state);
+        drawPixel(x + width - 1 - dx, y + dy, state);
+        drawPixel(x + dx, y + height - 1 - dy, state);
+        drawPixel(x + width - 1 - dx, y + height - 1 - dy, state);
+      } else if (color == Color::LightGray) {
+        drawPixelDither<Color::LightGray>(x + dx, y + dy);
+        drawPixelDither<Color::LightGray>(x + width - 1 - dx, y + dy);
+        drawPixelDither<Color::LightGray>(x + dx, y + height - 1 - dy);
+        drawPixelDither<Color::LightGray>(x + width - 1 - dx, y + height - 1 - dy);
+      } else if (color == Color::DarkGray) {
+        drawPixelDither<Color::DarkGray>(x + dx, y + dy);
+        drawPixelDither<Color::DarkGray>(x + width - 1 - dx, y + dy);
+        drawPixelDither<Color::DarkGray>(x + dx, y + height - 1 - dy);
+        drawPixelDither<Color::DarkGray>(x + width - 1 - dx, y + height - 1 - dy);
+      }
+    }
+  }
+}
+
 void GfxRenderer::fillRoundedRect(const int x, const int y, const int width, const int height, const int cornerRadius,
                                   bool roundTopLeft, bool roundTopRight, bool roundBottomLeft, bool roundBottomRight,
                                   const Color color) const {
@@ -649,6 +686,57 @@ void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, con
   const size_t imageWidthBytes = (static_cast<size_t>(height) + 7U) / 8U;
   auto invertedBitmap = invertMonochromeBitmap(bitmap, imageWidthBytes * width);
   display.drawImage(invertedBitmap.data(), destX, destY, height, width);
+}
+
+void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const int y, const int width,
+                                   const int height) const {
+  const int physX = y;
+  const int physY = getScreenWidth() - width - x;
+  const int imgW = height;
+  const int imgH = width;
+  const int srcStride = (imgW + 7) / 8;
+
+  if (physX + imgW <= 0 || physX >= HalDisplay::DISPLAY_WIDTH) return;
+  if (physY + imgH <= 0 || physY >= HalDisplay::DISPLAY_HEIGHT) return;
+
+  const int baseByte = (physX >= 0) ? (physX >> 3) : -(((-physX) + 7) >> 3);
+  const int bitShift = ((physX % 8) + 8) % 8;
+  const int trail = srcStride * 8 - imgW;
+  const uint8_t trailMask = static_cast<uint8_t>(0xFF << trail);
+  const int lastCol = srcStride - 1;
+
+  for (int row = 0; row < imgH; ++row) {
+    const int destY = physY + row;
+    if (destY < 0 || destY >= HalDisplay::DISPLAY_HEIGHT) continue;
+    const int rowBase = destY * HalDisplay::DISPLAY_WIDTH_BYTES;
+    const int srcOffset = row * srcStride;
+
+    if (bitShift == 0) {
+      for (int col = 0; col < srcStride; ++col) {
+        const int dst = baseByte + col;
+        if (dst < 0) continue;
+        if (dst >= HalDisplay::DISPLAY_WIDTH_BYTES) break;
+        uint8_t inv = ~bitmap[srcOffset + col];
+        if (col == lastCol && trail > 0) inv &= trailMask;
+        frameBuffer[rowBase + dst] |= inv;
+      }
+    } else {
+      const int rsh = bitShift;
+      const int lsh = 8 - bitShift;
+      for (int col = 0; col < srcStride; ++col) {
+        uint8_t inv = ~bitmap[srcOffset + col];
+        if (col == lastCol && trail > 0) inv &= trailMask;
+        const int dstHi = baseByte + col;
+        const int dstLo = dstHi + 1;
+        if (dstHi >= 0 && dstHi < HalDisplay::DISPLAY_WIDTH_BYTES) {
+          frameBuffer[rowBase + dstHi] |= static_cast<uint8_t>(inv >> rsh);
+        }
+        if (dstLo >= 0 && dstLo < HalDisplay::DISPLAY_WIDTH_BYTES) {
+          frameBuffer[rowBase + dstLo] |= static_cast<uint8_t>(inv << lsh);
+        }
+      }
+    }
+  }
 }
 
 void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, const int maxWidth, const int maxHeight,
