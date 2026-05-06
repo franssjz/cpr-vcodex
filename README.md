@@ -19,7 +19,7 @@
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
 | Current release (CPR-vCodex) build | [`1.2.0.41-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.41-cpr-vcodex) |
-| Latest Open Dyslexic font build | [`1.2.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.25-cpr-vcodex) |
+| Latest Open Dyslexic font build | [`1.2.0.41-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.41-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
@@ -428,7 +428,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.2.dev1-cpr-vcodex`
+- current dev build style: `1.2.0.41-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
