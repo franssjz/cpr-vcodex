@@ -106,6 +106,7 @@ jobs:
               --verify-tag \
               --title "${tag}" \
               --notes-file "${notes_file}"
+          fi
 
       - name: Sync auto-flash firmware on master
         env:
@@ -130,4 +131,3 @@ jobs:
           git add README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware/firmware.bin docs/firmware/manifest.json
           git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION:-${tag}}"
           git push origin master
-          fi
