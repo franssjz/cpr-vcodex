@@ -1073,6 +1073,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     } else {
       page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
     }
+    renderStatusBar();
     renderer.copyGrayscaleLsbBuffers();
     const auto tGrayLsb = millis();
 
@@ -1084,6 +1085,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     } else {
       page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
     }
+    renderStatusBar();
     renderer.copyGrayscaleMsbBuffers();
     const auto tGrayMsb = millis();
 
