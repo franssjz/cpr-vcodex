@@ -3,15 +3,15 @@
   "version": "1.2.0.42-cpr-vcodex",
   "firmwareUrl": "firmware/firmware.bin",
   "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.2.0.42-cpr-vcodex/1.2.0.42-cpr-vcodex.bin",
-  "size": 6131200,
-  "sha256": "cc82a5d93602c8bb760fbc8aaedf23c121acb08a19d0b00f20dedff3b5ce6507",
+  "size": 6131024,
+  "sha256": "473f46ae30f8671ba869464b378099e934cea022397588e7ec44634f9a2588d1",
   "source": {
     "type": "github-release",
     "repo": "franssjz/cpr-vcodex",
     "tag": "1.2.0.42-cpr-vcodex",
     "asset": "1.2.0.42-cpr-vcodex.bin",
-    "publishedAt": null,
-    "assetUpdatedAt": null
+    "publishedAt": "2026-05-08T14:23:03Z",
+    "assetUpdatedAt": "2026-05-08T14:23:03Z"
   },
   "new_install_prompt_erase": false,
   "builds": [
