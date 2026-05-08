@@ -18,6 +18,15 @@ struct JpegReadContext {
   size_t bufferFilled;
 };
 
+// Minimum free heap required before starting a JPEG decode.
+// picojpeg internal state ≈ 4 KB; MCU row buffer up to ~24 KB for large source
+// images; ditherer + scaling buffers ≈ 6 KB; leaving 8 KB headroom.
+// On the carousel theme up to ~192 KB is already allocated for frame buffers,
+// so an explicit pre-flight check avoids silent OOM crashes on ESP32-C3.
+constexpr size_t PJPEG_INTERNAL_SIZE = 8 * 1024;
+constexpr size_t JPEG_WORKING_MEMORY = 32 * 1024;
+constexpr size_t MIN_FREE_HEAP_FOR_JPEG = PJPEG_INTERNAL_SIZE + JPEG_WORKING_MEMORY;
+
 // ============================================================================
 // IMAGE PROCESSING OPTIONS - Toggle these to test different configurations
 // ============================================================================
@@ -201,6 +210,16 @@ unsigned char JpegToBmpConverter::jpegReadCallback(unsigned char* pBuf, const un
 bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bmpOut, int targetWidth, int targetHeight,
                                                      bool oneBit, bool crop) {
   LOG_DBG("JPG", "Converting JPEG to %s BMP (target: %dx%d)", oneBit ? "1-bit" : "2-bit", targetWidth, targetHeight);
+
+  // Pre-flight heap check: fail gracefully rather than crashing mid-decode.
+  // Carousel frame caching and cover buffers can leave the ESP32-C3 heap tight;
+  // better to skip cover generation and show a placeholder than to OOM.
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  if (freeHeap < MIN_FREE_HEAP_FOR_JPEG) {
+    LOG_ERR("JPG", "Not enough heap for JPEG decode (%lu free, need %zu)", static_cast<unsigned long>(freeHeap),
+            MIN_FREE_HEAP_FOR_JPEG);
+    return false;
+  }
 
   // Setup context for picojpeg callback
   JpegReadContext context = {.file = jpegFile, .bufferPos = 0, .bufferFilled = 0};
