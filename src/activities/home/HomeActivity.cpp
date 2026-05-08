@@ -661,9 +661,13 @@ void HomeActivity::updateSlidingWindowCache(int centerIdx, int bookCount) {
     if (slotToUse < 0) {
       slotToUse = offset < 0 ? 2 : 0;
     }
-    if (!loadCarouselFrameFromStorage(slotToUse, bookIdx)) {
-      renderCarouselFrame(slotToUse, bookIdx);
-    }
+    // Best-effort SD load only. Do NOT render here: renderCarouselFrame takes
+    // ~300-500 ms per frame (cover BMP read + 48 KB SD write), and running it
+    // for two adjacent books in the same render call freezes loop() for ~1 s
+    // after every home-screen entry, making Left/Right navigation unresponsive.
+    // Frames missing from the SD cache are rendered on demand in render() when
+    // the user actually scrolls to that position.
+    loadCarouselFrameFromStorage(slotToUse, bookIdx);
   }
 
   carouselFramesReady = carouselFrames[0] || carouselFrames[1] || carouselFrames[2];
