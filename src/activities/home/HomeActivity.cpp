@@ -303,6 +303,12 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
       if (missingThumb) {
         if (isLyraCarouselTheme()) {
           carouselCoverLoadAttemptPath = book.path;
+          // Free carousel frame buffers (~3 × 48 KB on ESP32-C3) before JPEG
+          // thumbnail generation. With all three slots allocated the remaining
+          // heap falls below the JPEG decoder pre-flight guard and the decode
+          // silently fails. Frames are re-rendered in the needsRefresh path.
+          carouselFramesReady = false;
+          freeCarouselFrames();
         }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
