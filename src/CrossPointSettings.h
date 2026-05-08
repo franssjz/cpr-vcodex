@@ -154,12 +154,9 @@ class CrossPointSettings {
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // UI Theme
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
-  enum HOME_CAROUSEL_SOURCE {
-    HOME_CAROUSEL_RECENTS = 0,
-    HOME_CAROUSEL_FAVORITES = 1,
-    HOME_CAROUSEL_SOURCE_COUNT
-  };
+  // Value 2 used to be Lyra Carousel; keep it invalid so old settings
+  // migrate back to the default theme.
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, UI_THEME_COUNT = 2 };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -279,7 +276,6 @@ class CrossPointSettings {
   // Experimental global dark mode for the device UI and supported readers.
   uint8_t darkMode = 0;
   // Home/apps helpers
-  uint8_t homeCarouselSource = HOME_CAROUSEL_RECENTS;
   uint8_t displayDay = 1;
   uint8_t autoSyncDay = 1;
   uint8_t syncDayWifiChoice = SYNC_DAY_WIFI_AUTO;

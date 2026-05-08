@@ -24,6 +24,10 @@ constexpr const char* AP_PASSWORD = nullptr;  // Open network for ease of use
 constexpr const char* AP_HOSTNAME = "crosspoint";
 constexpr uint8_t AP_CHANNEL = 1;
 constexpr uint8_t AP_MAX_CONNECTIONS = 4;
+const IPAddress AP_LOCAL_IP(192, 168, 4, 1);
+const IPAddress AP_GATEWAY(192, 168, 4, 1);
+const IPAddress AP_SUBNET(255, 255, 255, 0);
+const IPAddress AP_DHCP_START(192, 168, 4, 2);
 constexpr int QR_CODE_WIDTH = 198;
 constexpr int QR_CODE_HEIGHT = 198;
 
@@ -198,6 +202,10 @@ void CrossPointWebServerActivity::startAccessPoint() {
   // Configure and start the AP
   WiFi.mode(WIFI_AP);
   delay(100);
+
+  if (!WiFi.softAPConfig(AP_LOCAL_IP, AP_GATEWAY, AP_SUBNET, AP_DHCP_START, AP_LOCAL_IP)) {
+    LOG_DBG("WEBACT", "WARNING: Failed to configure AP DHCP lease range");
+  }
 
   // Start soft AP
   bool apStarted;

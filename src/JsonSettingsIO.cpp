@@ -380,8 +380,6 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
-  s.homeCarouselSource =
-      clamp(doc["homeCarouselSource"] | s.homeCarouselSource, S::HOME_CAROUSEL_SOURCE_COUNT, s.homeCarouselSource);
   s.displayDay = clamp(doc["displayDay"] | s.displayDay, static_cast<uint8_t>(2), s.displayDay);
   s.autoSyncDay = clamp(doc["autoSyncDay"] | s.autoSyncDay, static_cast<uint8_t>(2), s.autoSyncDay);
   s.syncDayWifiChoice =
@@ -679,7 +677,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepTimeout"] = s.sleepTimeout;
   doc["showHiddenFiles"] = s.showHiddenFiles;
 
-  doc["homeCarouselSource"] = s.homeCarouselSource;
   doc["displayDay"] = s.displayDay;
   doc["syncDayWifiChoice"] = s.syncDayWifiChoice;
   doc["syncDayReminderStarts"] = s.syncDayReminderStarts;
@@ -861,8 +858,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
-  s.homeCarouselSource =
-      clamp(doc["homeCarouselSource"] | s.homeCarouselSource, S::HOME_CAROUSEL_SOURCE_COUNT, s.homeCarouselSource);
   s.displayDay = clamp(doc["displayDay"] | s.displayDay, static_cast<uint8_t>(2), s.displayDay);
   s.autoSyncDay = clamp(doc["autoSyncDay"] | s.autoSyncDay, static_cast<uint8_t>(2), s.autoSyncDay);
   s.syncDayWifiChoice =

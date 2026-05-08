@@ -8,7 +8,6 @@
 
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
-#include "components/themes/lyra/LyraCarouselTheme.h"
 #include "components/themes/lyra/LyraCustomTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
 
@@ -34,11 +33,6 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra theme");
       currentTheme = std::make_unique<LyraTheme>();
       currentMetrics = &LyraMetrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::LYRA_CAROUSEL:
-      LOG_DBG("UI", "Using Lyra Carousel theme");
-      currentTheme = std::make_unique<LyraCarouselTheme>();
-      currentMetrics = &LyraCarouselMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_CUSTOM:
     default:
@@ -72,27 +66,6 @@ std::string UITheme::getCoverThumbPath(std::string coverBmpPath, int coverHeight
   if (pos != std::string::npos) {
     coverBmpPath.replace(pos, 8, std::to_string(coverHeight));
   }
-  return coverBmpPath;
-}
-
-std::string UITheme::getCoverThumbPath(std::string coverBmpPath, int coverWidth, int coverHeight) {
-  size_t widthPos = coverBmpPath.find("[WIDTH]", 0);
-  if (widthPos != std::string::npos) {
-    coverBmpPath.replace(widthPos, 7, std::to_string(coverWidth));
-  }
-
-  size_t heightPos = coverBmpPath.find("[HEIGHT]", 0);
-  if (heightPos != std::string::npos) {
-    const std::string legacyToken = "thumb_[HEIGHT].bmp";
-    const size_t legacyPos = coverBmpPath.find(legacyToken, 0);
-    if (widthPos == std::string::npos && legacyPos != std::string::npos) {
-      coverBmpPath.replace(legacyPos, legacyToken.length(),
-                           "thumb_" + std::to_string(coverWidth) + "x" + std::to_string(coverHeight) + ".bmp");
-    } else {
-      coverBmpPath.replace(heightPos, 8, std::to_string(coverHeight));
-    }
-  }
-
   return coverBmpPath;
 }
 

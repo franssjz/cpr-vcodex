@@ -23,6 +23,9 @@ class ReadingStatsDetailActivity final : public Activity {
   uint8_t* baseScreenBuffer = nullptr;
   std::string baseScreenBookPath;
   std::string baseScreenCoverPath;
+  int baseScreenScrollOffset = -1;
+  int scrollOffset = 0;
+  int maxScrollOffset = 0;
 
   void openAdjustment();
   void guardChildReturn();
