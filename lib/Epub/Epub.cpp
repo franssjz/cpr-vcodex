@@ -665,8 +665,9 @@ bool Epub::generateThumbBmpToPath(int width, int height, const std::string& thum
     // Generate 1-bit BMP for fast home screen rendering (no gray passes needed)
     int THUMB_TARGET_WIDTH = width;
     int THUMB_TARGET_HEIGHT = height;
+    bool permanentJpegFailure = false;
     const bool success = JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(coverJpg, thumbBmp, THUMB_TARGET_WIDTH,
-                                                                             THUMB_TARGET_HEIGHT);
+                                                                             THUMB_TARGET_HEIGHT, &permanentJpegFailure);
     // Explicitly close() files before calling Storage.remove()
     coverJpg.close();
     thumbBmp.close();
@@ -675,9 +676,19 @@ bool Epub::generateThumbBmpToPath(int width, int height, const std::string& thum
     if (!success) {
       LOG_ERR("EBP", "Failed to generate thumb BMP from JPG cover image");
       Storage.remove(thumbPath.c_str());
+      if (!permanentJpegFailure) {
+        // Transient failure (e.g. OOM) — leave no sentinel so the device retries next time.
+        return false;
+      }
+      // Permanent failure (e.g. progressive JPEG, image too large, corrupt data) —
+      // write an empty sentinel so the device never retries this cover.
+      LOG_DBG("EBP", "Permanent JPEG failure, writing sentinel to suppress future attempts");
+      FsFile sentinel;
+      Storage.openFileForWrite("EBP", thumbPath, sentinel);
+      return false;
     }
-    LOG_DBG("EBP", "Generated thumb BMP from JPG cover image, success: %s", success ? "yes" : "no");
-    return success;
+    LOG_DBG("EBP", "Generated thumb BMP from JPG cover image");
+    return true;
   } else if (FsHelpers::hasPngExtension(coverImageHref)) {
     LOG_DBG("EBP", "Generating thumb BMP from PNG cover image");
     const auto coverPngTempPath = getCachePath() + "/.cover.png";
@@ -710,9 +721,15 @@ bool Epub::generateThumbBmpToPath(int width, int height, const std::string& thum
     if (!success) {
       LOG_ERR("EBP", "Failed to generate thumb BMP from PNG cover image");
       Storage.remove(thumbPath.c_str());
+      // PNG decode failures are always permanent (corrupt data or unsupported format) —
+      // write a sentinel so the device never retries this cover.
+      LOG_DBG("EBP", "PNG failure, writing sentinel to suppress future attempts");
+      FsFile sentinel;
+      Storage.openFileForWrite("EBP", thumbPath, sentinel);
+      return false;
     }
-    LOG_DBG("EBP", "Generated thumb BMP from PNG cover image, success: %s", success ? "yes" : "no");
-    return success;
+    LOG_DBG("EBP", "Generated thumb BMP from PNG cover image");
+    return true;
   } else {
     LOG_ERR("EBP", "Cover image is not a supported format, skipping thumbnail");
   }
