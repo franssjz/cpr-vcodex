@@ -377,11 +377,16 @@ int bmpDrawCallback(JPEGDRAW* pDraw) {
 
 // Internal implementation with configurable target size and bit depth
 bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bmpOut, int targetWidth, int targetHeight,
-                                                     bool oneBit, bool crop) {
+                                                     bool oneBit, bool crop, bool* permanentFailure) {
+  // Helper: mark a failure as permanent (bad JPEG data) or transient (OOM).
+  // Permanent = the same JPEG bytes will always fail; writing a sentinel stops endless retries.
+  // Transient = might succeed later if memory frees up; no sentinel should be written.
+  auto setPermanent = [&](bool permanent) { if (permanentFailure) *permanentFailure = permanent; };
   LOG_DBG("JPG", "Converting JPEG to %s BMP (target: %dx%d)", oneBit ? "1-bit" : "2-bit", targetWidth, targetHeight);
 
   if (ESP.getFreeHeap() < MIN_FREE_HEAP) {
     LOG_ERR("JPG", "Not enough heap for JPEG decoder (%u free, need %u)", ESP.getFreeHeap(), MIN_FREE_HEAP);
+    setPermanent(false);  // transient: might succeed once memory is freed
     return false;
   }
 
@@ -390,6 +395,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   JPEGDEC* jpeg = new (std::nothrow) JPEGDEC();
   if (!jpeg) {
     LOG_ERR("JPG", "Failed to allocate JPEG decoder");
+    setPermanent(false);  // transient: OOM
     return false;
   }
 
@@ -397,6 +403,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   if (rc != 1) {
     LOG_ERR("JPG", "JPEG open failed (err=%d)", jpeg->getLastError());
     delete jpeg;
+    setPermanent(true);  // permanent: this JPEG data failed to parse/open
     return false;
   }
 
@@ -413,6 +420,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
             MAX_IMAGE_HEIGHT);
     jpeg->close();
     delete jpeg;
+    setPermanent(true);  // permanent: the image dimensions won't change
     return false;
   }
 
@@ -493,6 +501,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   ctx.mcuBuf = static_cast<uint8_t*>(malloc(MAX_MCU_HEIGHT * srcWidth));
   if (!ctx.mcuBuf) {
     LOG_ERR("JPG", "Failed to allocate MCU buffer (%d bytes)", MAX_MCU_HEIGHT * srcWidth);
+    setPermanent(false);  // transient: OOM
     return false;
   }
   memset(ctx.mcuBuf, 0, MAX_MCU_HEIGHT * srcWidth);
@@ -500,6 +509,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   ctx.bmpRow = static_cast<uint8_t*>(malloc(bytesPerRow));
   if (!ctx.bmpRow) {
     LOG_ERR("JPG", "Failed to allocate BMP row buffer");
+    setPermanent(false);  // transient: OOM
     return false;
   }
 
@@ -508,6 +518,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
     ctx.rowCount = new (std::nothrow) uint32_t[outWidth]();
     if (!ctx.rowAccum || !ctx.rowCount) {
       LOG_ERR("JPG", "Failed to allocate scaling buffers");
+      setPermanent(false);  // transient: OOM
       return false;
     }
     ctx.nextOutY_srcStart = scaleY_fp;
@@ -530,6 +541,7 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
 
   if (rc != 1 || ctx.error) {
     LOG_ERR("JPG", "JPEG decode failed (rc=%d, err=%d)", rc, jpeg->getLastError());
+    setPermanent(true);  // permanent: corrupt, unsupported, or truncated JPEG data
     return false;
   }
 
@@ -553,6 +565,6 @@ bool JpegToBmpConverter::jpegFileToBmpStreamWithSize(FsFile& jpegFile, Print& bm
 
 // Convert to 1-bit BMP (black and white only, no grays) for fast home screen rendering
 bool JpegToBmpConverter::jpegFileTo1BitBmpStreamWithSize(FsFile& jpegFile, Print& bmpOut, int targetMaxWidth,
-                                                         int targetMaxHeight) {
-  return jpegFileToBmpStreamInternal(jpegFile, bmpOut, targetMaxWidth, targetMaxHeight, true, true);
+                                                         int targetMaxHeight, bool* permanentFailure) {
+  return jpegFileToBmpStreamInternal(jpegFile, bmpOut, targetMaxWidth, targetMaxHeight, true, true, permanentFailure);
 }
