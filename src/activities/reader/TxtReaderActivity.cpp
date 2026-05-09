@@ -355,9 +355,13 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  auto [prevTriggered, nextTriggered] = ReaderUtils::detectPageTurn(mappedInput);
+  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
   if (!prevTriggered && !nextTriggered) {
     return;
+  }
+  if (fromTilt) {
+    waitingForConfirmSecondClick = false;
+    firstConfirmClickMs = 0UL;
   }
 
   if (prevTriggered && currentPage > 0) {

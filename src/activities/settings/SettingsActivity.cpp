@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <HalTiltSensor.h>
 #include <Logging.h>
 #include <Utf8.h>
 #include <WiFi.h>
@@ -109,14 +110,21 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
 }
 
 const std::vector<SettingInfo>& getDeviceControlsSettings() {
-  static const std::vector<SettingInfo> settings = {
-      SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons),
-      SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
-                        {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}),
-      SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip),
-      SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                        {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH}),
-  };
+  static const std::vector<SettingInfo> settings = [] {
+    std::vector<SettingInfo> result = {
+        SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons),
+        SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
+                          {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}),
+        SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip),
+        SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
+                          {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH}),
+    };
+    if (halTiltSensor.isAvailable()) {
+      result.push_back(SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
+                                         {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}));
+    }
+    return result;
+  }();
   return settings;
 }
 

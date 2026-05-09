@@ -18,13 +18,13 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.42-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.42-cpr-vcodex) |
-| Latest Open Dyslexic font build | [`1.2.0.42-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.42-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.43-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.43-cpr-vcodex) |
+| Latest Open Dyslexic font build | [`1.2.0.43-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.43-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
 | Latest official commit incorporated | Selected stability and low-risk updates through [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
-| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`/`64ecfe2`; X3-only tilt paging `5d2e559`; RoundedRaff theme `b8a5152`/`22701cc`; page-turn orientation setting `2e2ea6a`; SD firmware update/X3 bootloader flow `5717374` |
+| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`/`64ecfe2`; RoundedRaff theme `b8a5152`/`22701cc`; page-turn orientation setting `2e2ea6a`; SD firmware update/X3 bootloader flow `5717374` |
 
 ## Web tools
 
@@ -62,7 +62,7 @@ Sample deck ready to copy to the SD card:
 
 The official `crosspoint-reader` project is treated as the stable reference. `vcodex` only carries forward upstream work when it is useful on the X4 and safe enough to keep the reader fast and reliable.
 
-There may be some **involuntary or incidental X3 compatibility** because parts of the upstream codebase still carry X3-aware paths. However, `CPR-vCodex` is developed and validated on **X4**, and I do **not** currently have an **X3** device available to test or confirm that compatibility.
+There may be some **involuntary or incidental X3 compatibility** because parts of the upstream codebase still carry X3-aware paths. `CPR-vCodex` now also includes an **experimental X3-only tilt page-turn option** for devices with the QMI8658 IMU, but it is hidden when the sensor is not detected and remains off by default. The firmware is still developed and validated on **X4**, and I do **not** currently have an **X3** device available to test or confirm that compatibility.
 
 This project is **not affiliated with Xteink**.
 
@@ -74,6 +74,7 @@ This project is **not affiliated with Xteink**.
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - `Lyra Carousel` is temporarily removed until a stable and fast version is ready for daily use
+- experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
 - EPUB bookmarks plus a global bookmarks app
 - context-aware screenshot filenames that include the current book title when available
 - KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
@@ -428,7 +429,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.42-cpr-vcodex`
+- current dev build style: `1.2.0.43-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -452,6 +453,7 @@ The incremental `.bNNNN` suffix exists specifically to help distinguish newer fl
 Possible note about X3:
 
 - the codebase may still retain some upstream X3-aware behavior
+- the X3-only `Tilt Page Turn` setting is experimental, off by default, and hidden unless the QMI8658 IMU is detected
 - `CPR-vCodex` is not validated on X3 hardware
 - no X3 device is currently available for testing
 
@@ -496,10 +498,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.42-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.43-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.42-cpr-vcodex`
+- push a stable tag named like `1.2.0.43-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

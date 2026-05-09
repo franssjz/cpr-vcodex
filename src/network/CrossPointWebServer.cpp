@@ -4,6 +4,7 @@
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
+#include <HalTiltSensor.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
@@ -256,6 +257,7 @@ constexpr StrId OPT_IMAGES[] = {StrId::STR_IMAGES_DISPLAY, StrId::STR_IMAGES_PLA
 constexpr StrId OPT_SIDE_BUTTONS[] = {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV};
 constexpr StrId OPT_SHORT_PWR[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN,
                                    StrId::STR_FORCE_REFRESH};
+constexpr StrId OPT_TILT_PAGE_TURN[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED};
 constexpr StrId OPT_SLEEP_TIMEOUT[] = {StrId::STR_MIN_1, StrId::STR_MIN_5, StrId::STR_MIN_10, StrId::STR_MIN_15,
                                        StrId::STR_MIN_30};
 constexpr StrId OPT_AUTO_MANUAL[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_MANUAL};
@@ -319,6 +321,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
              StrId::STR_CAT_CONTROLS),
     WEB_TOGGLE(StrId::STR_LONG_PRESS_SKIP, longPressChapterSkip, "longPressChapterSkip", StrId::STR_CAT_CONTROLS),
     WEB_ENUM(StrId::STR_SHORT_PWR_BTN, shortPwrBtn, OPT_SHORT_PWR, "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_TILT_PAGE_TURN, tiltPageTurn, OPT_TILT_PAGE_TURN, "tiltPageTurn", StrId::STR_CAT_CONTROLS),
 
     WEB_ENUM(StrId::STR_TIME_TO_SLEEP, sleepTimeout, OPT_SLEEP_TIMEOUT, "sleepTimeout", StrId::STR_CAT_SYSTEM),
     WEB_TOGGLE(StrId::STR_SHOW_HIDDEN_FILES, showHiddenFiles, "showHiddenFiles", StrId::STR_CAT_SYSTEM),
@@ -403,6 +406,10 @@ const WebSettingDef* findWebSetting(const char* key) {
     }
   }
   return nullptr;
+}
+
+bool isWebSettingVisible(const WebSettingDef& setting) {
+  return setting.nameId != StrId::STR_TILT_PAGE_TURN || halTiltSensor.isAvailable();
 }
 }  // namespace
 
@@ -1437,6 +1444,7 @@ void CrossPointWebServer::handleGetSettings() const {
   bool seenFirst = false;
 
   for (const auto& s : WEB_SETTINGS) {
+    if (!isWebSettingVisible(s)) continue;
     if (requestedCategory >= 0 && webSettingsCategoryIndex(s.category) != requestedCategory) continue;
 
     if (seenFirst) {
@@ -1560,6 +1568,7 @@ void CrossPointWebServer::handlePostSettings() {
   bool saveKOReader = false;
 
   for (const auto& s : WEB_SETTINGS) {
+    if (!isWebSettingVisible(s)) continue;
     if (!doc[s.key].is<JsonVariant>()) continue;
 
     switch (s.type) {

@@ -2,6 +2,7 @@
 
 #include <CrossPointSettings.h>
 #include <GfxRenderer.h>
+#include <HalTiltSensor.h>
 #include <Logging.h>
 
 #include "MappedInputManager.h"
@@ -33,10 +34,13 @@ inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
 struct PageTurnResult {
   bool prev;
   bool next;
+  bool fromTilt;
 };
 
 inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
   const bool usePress = !SETTINGS.longPressChapterSkip;
+  const bool tiltNext = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedForward();
+  const bool tiltPrev = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedBack();
   const bool prev = usePress ? (input.wasPressed(MappedInputManager::Button::PageBack) ||
                                 input.wasPressed(MappedInputManager::Button::Left))
                              : (input.wasReleased(MappedInputManager::Button::PageBack) ||
@@ -47,7 +51,7 @@ inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
                                 input.wasPressed(MappedInputManager::Button::Right))
                              : (input.wasReleased(MappedInputManager::Button::PageForward) || powerTurn ||
                                 input.wasReleased(MappedInputManager::Button::Right));
-  return {prev, next};
+  return {tiltPrev || prev, tiltNext || next, tiltPrev || tiltNext};
 }
 
 inline bool hasNonConfirmNavigationInput(const MappedInputManager& input) {

@@ -346,6 +346,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("sideButtonLayout", s.sideButtonLayout, CrossPointSettings::SIDE_BUTTON_LAYOUT_COUNT);
   loadToggle("longPressChapterSkip", s.longPressChapterSkip);
   loadEnum("shortPwrBtn", s.shortPwrBtn, CrossPointSettings::SHORT_PWRBTN_COUNT);
+  loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   loadEnum("sleepTimeout", s.sleepTimeout, CrossPointSettings::SLEEP_TIMEOUT_COUNT);
   loadToggle("showHiddenFiles", s.showHiddenFiles);
 
@@ -673,6 +674,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sideButtonLayout"] = s.sideButtonLayout;
   doc["longPressChapterSkip"] = s.longPressChapterSkip;
   doc["shortPwrBtn"] = s.shortPwrBtn;
+  doc["tiltPageTurn"] = s.tiltPageTurn;
 
   doc["sleepTimeout"] = s.sleepTimeout;
   doc["showHiddenFiles"] = s.showHiddenFiles;

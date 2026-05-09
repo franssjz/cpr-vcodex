@@ -1,13 +1,17 @@
 #include "SettingsList.h"
 
+#include <HalTiltSensor.h>
 #include <I18n.h>
+
+#include <algorithm>
 
 #include "CrossPointSettings.h"
 #include "KOReaderCredentialStore.h"
 #include "util/ShortcutRegistry.h"
 
 const std::vector<SettingInfo>& getSettingsList() {
-  static const std::vector<SettingInfo> list = {
+  static const std::vector<SettingInfo> list = [] {
+    std::vector<SettingInfo> settings = {
       // --- Display ---
       SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen,
                         {StrId::STR_DARK, StrId::STR_LIGHT, StrId::STR_CUSTOM, StrId::STR_COVER, StrId::STR_NONE_OPT,
@@ -79,6 +83,9 @@ const std::vector<SettingInfo>& getSettingsList() {
       SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
                         {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH},
                         "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
+                        {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}, "tiltPageTurn",
+                        StrId::STR_CAT_CONTROLS),
 
       // --- System ---
       SettingInfo::Enum(StrId::STR_TIME_TO_SLEEP, &CrossPointSettings::sleepTimeout,
@@ -209,7 +216,17 @@ const std::vector<SettingInfo>& getSettingsList() {
                         StrId::STR_CUSTOMISE_STATUS_BAR),
       SettingInfo::Toggle(StrId::STR_BATTERY, &CrossPointSettings::statusBarBattery, "statusBarBattery",
                           StrId::STR_CUSTOMISE_STATUS_BAR),
-  };
+    };
+
+    if (!halTiltSensor.isAvailable()) {
+      settings.erase(std::remove_if(settings.begin(), settings.end(), [](const SettingInfo& setting) {
+                       return setting.nameId == StrId::STR_TILT_PAGE_TURN;
+                     }),
+                     settings.end());
+    }
+
+    return settings;
+  }();
 
   return list;
 }
