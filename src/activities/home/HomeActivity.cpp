@@ -19,6 +19,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "FavoritesStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
@@ -55,6 +56,21 @@ struct HomeShortcutEntry {
 
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
+}
+
+std::string getBookTitleFromPath(const std::string& path) {
+  const size_t slashPos = path.find_last_of('/');
+  const std::string filename = slashPos == std::string::npos ? path : path.substr(slashPos + 1);
+  const size_t dotPos = filename.rfind('.');
+  return dotPos == std::string::npos ? filename : filename.substr(0, dotPos);
+}
+
+RecentBook toRecentBook(const FavoriteBook& book) {
+  RecentBook recentBook{book.bookId, book.path, book.title, book.author, book.coverBmpPath};
+  if (recentBook.title.empty()) {
+    recentBook.title = getBookTitleFromPath(recentBook.path);
+  }
+  return recentBook;
 }
 
 std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsServers) {
@@ -148,8 +164,7 @@ bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
 }
 
 bool isLyraCarouselTheme() {
-  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) ==
-         CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
 }
 
 int wrapBookIndex(int index, int bookCount) {
@@ -252,8 +267,23 @@ int HomeActivity::getMenuItemCount() const {
   return static_cast<int>(recentBooks.size()) + static_cast<int>(entries.size());
 }
 
-void HomeActivity::loadRecentBooks(const int maxBooks) {
+void HomeActivity::loadHomeCarouselBooks(const int maxBooks) {
   recentBooks.clear();
+  if (SETTINGS.homeCarouselSource == CrossPointSettings::HOME_CAROUSEL_FAVORITES) {
+    const auto& books = FAVORITES.getBooks();
+    recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
+    for (const FavoriteBook& book : books) {
+      if (static_cast<int>(recentBooks.size()) >= maxBooks) {
+        break;
+      }
+      if (!Storage.exists(book.path.c_str())) {
+        continue;
+      }
+      recentBooks.push_back(toRecentBook(book));
+    }
+    return;
+  }
+
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
 
@@ -303,12 +333,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
       if (missingThumb) {
         if (isLyraCarouselTheme()) {
           carouselCoverLoadAttemptPath = book.path;
-          // Free carousel frame buffers (~3 × 48 KB on ESP32-C3) before JPEG
-          // thumbnail generation. With all three slots allocated the remaining
-          // heap falls below the JPEG decoder pre-flight guard and the decode
-          // silently fails. Frames are re-rendered in the needsRefresh path.
           carouselFramesReady = false;
-          freeCarouselFrames();
         }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
@@ -361,7 +386,6 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   if (needsRefresh) {
     if (isLyraCarouselTheme()) {
       carouselFramesReady = false;
-      freeCarouselFrames();
       preRenderCarouselFrames();
     }
     requestUpdate();
@@ -395,7 +419,7 @@ void HomeActivity::onEnter() {
   carouselCoverLoadAttemptPath.clear();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  loadRecentBooks(metrics.homeRecentBooksCount);
+  loadHomeCarouselBooks(metrics.homeRecentBooksCount);
   recentsLoaded = !needsRecentCoverLoad(metrics.homeCoverHeight);
 
   requestUpdate();
@@ -404,7 +428,6 @@ void HomeActivity::onEnter() {
 void HomeActivity::onExit() {
   Activity::onExit();
   freeCoverBuffer();
-  freeCarouselFrames();
 }
 
 bool HomeActivity::storeCoverBuffer() {
@@ -448,28 +471,89 @@ void HomeActivity::freeCoverBuffer() {
   coverBufferStored = false;
 }
 
-void HomeActivity::freeCarouselFrames() {
-  for (int i = 0; i < kCarouselFrameCount; ++i) {
-    if (carouselFrames[i]) {
-      free(carouselFrames[i]);
-      carouselFrames[i] = nullptr;
-    }
-    carouselFrameBookIdx[i] = -1;
+bool HomeActivity::loadCarouselFrameFromStorage(int bookIndex) {
+  if (recentBooks.empty()) {
+    return false;
   }
-  carouselFramesReady = false;
+
+  const int bookCount = static_cast<int>(recentBooks.size());
+  const int safeBookIndex = wrapBookIndex(bookIndex, bookCount);
+  const size_t bufferSize = renderer.getBufferSize();
+  const std::string cachePath = getCarouselFrameCachePath(recentBooks, safeBookIndex, renderer);
+
+  FsFile file;
+  if (!Storage.openFileForRead("HCR", cachePath, file)) {
+    return false;
+  }
+
+  if (file.size() != bufferSize) {
+    file.close();
+    Storage.remove(cachePath.c_str());
+    return false;
+  }
+
+  uint8_t* frameBuffer = renderer.getFrameBuffer();
+  if (!frameBuffer) {
+    file.close();
+    return false;
+  }
+
+  size_t totalRead = 0;
+  while (totalRead < bufferSize) {
+    const int bytesRead = file.read(frameBuffer + totalRead, bufferSize - totalRead);
+    if (bytesRead <= 0) {
+      break;
+    }
+    totalRead += static_cast<size_t>(bytesRead);
+  }
+  file.close();
+
+  if (totalRead != bufferSize) {
+    Storage.remove(cachePath.c_str());
+    return false;
+  }
+
+  carouselFramesReady = true;
+  return true;
 }
 
-void HomeActivity::renderCarouselFrame(int slot, int bookIndex) {
-  if (slot < 0 || slot >= kCarouselFrameCount || recentBooks.empty()) {
-    return;
+bool HomeActivity::saveCarouselFrameToStorage(int bookIndex) {
+  if (!isLyraCarouselTheme() || recentBooks.empty()) {
+    return false;
   }
 
+  uint8_t* frameBuffer = renderer.getFrameBuffer();
+  if (!frameBuffer) {
+    return false;
+  }
+
+  const int bookCount = static_cast<int>(recentBooks.size());
+  const int safeBookIndex = wrapBookIndex(bookIndex, bookCount);
   const size_t bufferSize = renderer.getBufferSize();
-  if (!carouselFrames[slot]) {
-    carouselFrames[slot] = static_cast<uint8_t*>(malloc(bufferSize));
-    if (!carouselFrames[slot]) {
-      return;
-    }
+  const std::string cachePath = getCarouselFrameCachePath(recentBooks, safeBookIndex, renderer);
+
+  Storage.mkdir("/.crosspoint");
+  Storage.mkdir(CAROUSEL_FRAME_CACHE_DIR);
+
+  FsFile file;
+  if (!Storage.openFileForWrite("HCR", cachePath, file)) {
+    return false;
+  }
+
+  const size_t written = file.write(frameBuffer, bufferSize);
+  file.close();
+
+  if (written != bufferSize) {
+    Storage.remove(cachePath.c_str());
+    return false;
+  }
+
+  return true;
+}
+
+bool HomeActivity::renderCarouselFrame(int bookIndex) {
+  if (recentBooks.empty()) {
+    return false;
   }
 
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -493,12 +577,12 @@ void HomeActivity::renderCarouselFrame(int slot, int bookIndex) {
                           recentBooks, bookCount, localCoverRendered, localCoverBufferStored, localBufferRestored,
                           [] { return false; });
 
-  uint8_t* frameBuffer = renderer.getFrameBuffer();
-  if (!frameBuffer) {
-    return;
+  if (!renderer.getFrameBuffer()) {
+    return false;
   }
-  memcpy(carouselFrames[slot], frameBuffer, bufferSize);
-  carouselFrameBookIdx[slot] = safeBookIndex;
+  carouselFramesReady = true;
+  saveCarouselFrameToStorage(safeBookIndex);
+  return true;
 }
 
 void HomeActivity::preRenderCarouselFrames() {
@@ -509,45 +593,12 @@ void HomeActivity::preRenderCarouselFrames() {
   freeCoverBuffer();
   const int bookCount = static_cast<int>(recentBooks.size());
   const int centerIdx = wrapBookIndex(lastCarouselBookIndex, bookCount);
-  // Render only the center frame into slot 0. Adjacent frames (prev/next) are
-  // filled lazily by updateSlidingWindowCache() after the first paint completes,
-  // so the user sees their selected book immediately without 3 SD card reads.
-  renderCarouselFrame(0, centerIdx);
-  carouselFramesReady = (carouselFrames[0] != nullptr);
-}
-
-void HomeActivity::updateSlidingWindowCache(int centerIdx, int bookCount) {
-  if (!isLyraCarouselTheme() || bookCount <= 0) {
-    return;
+  // Load the center frame from the SD cache directly into the frame buffer, or
+  // render it fresh and write it to the SD cache for future loads.
+  if (!loadCarouselFrameFromStorage(centerIdx)) {
+    renderCarouselFrame(centerIdx);
   }
-
-  for (int offset = -1; offset <= 1; ++offset) {
-    const int bookIdx = wrapBookIndex(centerIdx + offset, bookCount);
-    bool hasFrame = false;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (carouselFrames[slot] && carouselFrameBookIdx[slot] == bookIdx) {
-        hasFrame = true;
-        break;
-      }
-    }
-    if (hasFrame) {
-      continue;
-    }
-
-    int slotToUse = -1;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (!carouselFrames[slot]) {
-        slotToUse = slot;
-        break;
-      }
-    }
-    if (slotToUse < 0) {
-      slotToUse = offset < 0 ? 2 : 0;
-    }
-    renderCarouselFrame(slotToUse, bookIdx);
-  }
-
-  carouselFramesReady = carouselFrames[0] && carouselFrames[1] && carouselFrames[2];
+  carouselFramesReady = true;
 }
 
 void HomeActivity::loop() {
@@ -617,7 +668,8 @@ void HomeActivity::loop() {
         selectorIndex = recentCount;
       } else {
         const int selectedHomeIndex = selectorIndex - recentCount;
-        selectorIndex = recentCount + ButtonNavigator::nextPageIndex(selectedHomeIndex, homeCount, HOME_SHORTCUT_PAGE_SIZE);
+        selectorIndex =
+            recentCount + ButtonNavigator::nextPageIndex(selectedHomeIndex, homeCount, HOME_SHORTCUT_PAGE_SIZE);
       }
       requestUpdate();
     });
@@ -642,7 +694,8 @@ void HomeActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (selectorIndex < recentBooks.size()) {
-      if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
+      if (SETTINGS.homeCarouselSource == CrossPointSettings::HOME_CAROUSEL_RECENTS &&
+          mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
         const RecentBook selectedBook = recentBooks[selectorIndex];
         const int currentSelection = selectorIndex;
         startActivityForResult(
@@ -656,7 +709,7 @@ void HomeActivity::loop() {
 
               if (RECENT_BOOKS.removeBook(selectedBook.path)) {
                 const auto& metrics = UITheme::getInstance().getMetrics();
-                loadRecentBooks(metrics.homeRecentBooksCount);
+                loadHomeCarouselBooks(metrics.homeRecentBooksCount);
                 if (recentBooks.empty()) {
                   selectorIndex = 0;
                 } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
@@ -666,7 +719,6 @@ void HomeActivity::loop() {
                 }
                 coverRendered = false;
                 freeCoverBuffer();
-                freeCarouselFrames();
                 if (isLyraCarouselTheme()) {
                   lastCarouselBookIndex = selectorIndex < static_cast<int>(recentBooks.size()) ? selectorIndex : 0;
                   preRenderCarouselFrames();
@@ -764,23 +816,19 @@ void HomeActivity::render(RenderLock&&) {
   }
 
   bool usedCarouselFrame = false;
-  if (carouselTheme && carouselFramesReady && !recentBooks.empty()) {
+  if (carouselTheme && !recentBooks.empty()) {
     const int centerIdx = wrapBookIndex(lastCarouselBookIndex, recentCount);
-    int frameSlot = -1;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (carouselFrames[slot] && carouselFrameBookIdx[slot] == centerIdx) {
-        frameSlot = slot;
-        break;
-      }
-    }
-    if (frameSlot < 0) {
-      frameSlot = 1;
-      renderCarouselFrame(frameSlot, centerIdx);
+    // Load the center frame from the SD cache directly into the frame buffer,
+    // or render it fresh (and cache to SD). No intermediate slot allocation.
+    if (!loadCarouselFrameFromStorage(centerIdx)) {
+      renderCarouselFrame(centerIdx);
     }
 
     uint8_t* frameBuffer = renderer.getFrameBuffer();
-    if (frameBuffer && carouselFrames[frameSlot]) {
-      memcpy(frameBuffer, carouselFrames[frameSlot], renderer.getBufferSize());
+    if (frameBuffer) {
+      renderer.fillRect(0, 0, pageWidth, metrics.homeTopPadding, false);
+      GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding}, nullptr, nullptr);
+      HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
       GUI.drawCarouselBorder(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                              inCarouselRow);
       usedCarouselFrame = true;
@@ -848,16 +896,11 @@ void HomeActivity::render(RenderLock&&) {
         });
   }
 
-  const auto labels = carouselTheme
-                          ? mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT))
-                          : mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = carouselTheme ? mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT))
+                                    : mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
-
-  if (usedCarouselFrame) {
-    updateSlidingWindowCache(lastCarouselBookIndex, recentCount);
-  }
 
   if (wasFirstRenderDone && carouselTheme && recentsLoaded && !carouselFramesReady && !recentBooks.empty()) {
     preRenderCarouselFrames();
