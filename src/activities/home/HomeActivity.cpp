@@ -333,12 +333,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
       if (missingThumb) {
         if (isLyraCarouselTheme()) {
           carouselCoverLoadAttemptPath = book.path;
-          // Free carousel frame buffers (~3 × 48 KB on ESP32-C3) before JPEG
-          // thumbnail generation. With all three slots allocated the remaining
-          // heap falls below the JPEG decoder pre-flight guard and the decode
-          // silently fails. Frames are re-rendered in the needsRefresh path.
           carouselFramesReady = false;
-          freeCarouselFrames();
         }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
@@ -391,7 +386,6 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   if (needsRefresh) {
     if (isLyraCarouselTheme()) {
       carouselFramesReady = false;
-      freeCarouselFrames();
       preRenderCarouselFrames();
     }
     requestUpdate();
@@ -434,7 +428,6 @@ void HomeActivity::onEnter() {
 void HomeActivity::onExit() {
   Activity::onExit();
   freeCoverBuffer();
-  freeCarouselFrames();
 }
 
 bool HomeActivity::storeCoverBuffer() {
@@ -478,19 +471,8 @@ void HomeActivity::freeCoverBuffer() {
   coverBufferStored = false;
 }
 
-void HomeActivity::freeCarouselFrames() {
-  for (int i = 0; i < kCarouselFrameCount; ++i) {
-    if (carouselFrames[i]) {
-      free(carouselFrames[i]);
-      carouselFrames[i] = nullptr;
-    }
-    carouselFrameBookIdx[i] = -1;
-  }
-  carouselFramesReady = false;
-}
-
-bool HomeActivity::loadCarouselFrameFromStorage(int slot, int bookIndex) {
-  if (slot < 0 || slot >= kCarouselFrameCount || recentBooks.empty()) {
+bool HomeActivity::loadCarouselFrameFromStorage(int bookIndex) {
+  if (recentBooks.empty()) {
     return false;
   }
 
@@ -510,17 +492,15 @@ bool HomeActivity::loadCarouselFrameFromStorage(int slot, int bookIndex) {
     return false;
   }
 
-  if (!carouselFrames[slot]) {
-    carouselFrames[slot] = static_cast<uint8_t*>(malloc(bufferSize));
-    if (!carouselFrames[slot]) {
-      file.close();
-      return false;
-    }
+  uint8_t* frameBuffer = renderer.getFrameBuffer();
+  if (!frameBuffer) {
+    file.close();
+    return false;
   }
 
   size_t totalRead = 0;
   while (totalRead < bufferSize) {
-    const int bytesRead = file.read(carouselFrames[slot] + totalRead, bufferSize - totalRead);
+    const int bytesRead = file.read(frameBuffer + totalRead, bufferSize - totalRead);
     if (bytesRead <= 0) {
       break;
     }
@@ -529,12 +509,10 @@ bool HomeActivity::loadCarouselFrameFromStorage(int slot, int bookIndex) {
   file.close();
 
   if (totalRead != bufferSize) {
-    carouselFrameBookIdx[slot] = -1;
     Storage.remove(cachePath.c_str());
     return false;
   }
 
-  carouselFrameBookIdx[slot] = safeBookIndex;
   carouselFramesReady = true;
   return true;
 }
@@ -573,17 +551,9 @@ bool HomeActivity::saveCarouselFrameToStorage(int bookIndex) {
   return true;
 }
 
-void HomeActivity::renderCarouselFrame(int slot, int bookIndex) {
-  if (slot < 0 || slot >= kCarouselFrameCount || recentBooks.empty()) {
-    return;
-  }
-
-  const size_t bufferSize = renderer.getBufferSize();
-  if (!carouselFrames[slot]) {
-    carouselFrames[slot] = static_cast<uint8_t*>(malloc(bufferSize));
-    if (!carouselFrames[slot]) {
-      return;
-    }
+bool HomeActivity::renderCarouselFrame(int bookIndex) {
+  if (recentBooks.empty()) {
+    return false;
   }
 
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -607,14 +577,12 @@ void HomeActivity::renderCarouselFrame(int slot, int bookIndex) {
                           recentBooks, bookCount, localCoverRendered, localCoverBufferStored, localBufferRestored,
                           [] { return false; });
 
-  uint8_t* frameBuffer = renderer.getFrameBuffer();
-  if (!frameBuffer) {
-    return;
+  if (!renderer.getFrameBuffer()) {
+    return false;
   }
-  memcpy(carouselFrames[slot], frameBuffer, bufferSize);
-  carouselFrameBookIdx[slot] = safeBookIndex;
   carouselFramesReady = true;
   saveCarouselFrameToStorage(safeBookIndex);
+  return true;
 }
 
 void HomeActivity::preRenderCarouselFrames() {
@@ -625,52 +593,12 @@ void HomeActivity::preRenderCarouselFrames() {
   freeCoverBuffer();
   const int bookCount = static_cast<int>(recentBooks.size());
   const int centerIdx = wrapBookIndex(lastCarouselBookIndex, bookCount);
-  // Render only the center frame into slot 0. Persistent SD frames are loaded
-  // on demand; missing frames are rendered once and written back to the cache.
-  if (!loadCarouselFrameFromStorage(0, centerIdx)) {
-    renderCarouselFrame(0, centerIdx);
+  // Load the center frame from the SD cache directly into the frame buffer, or
+  // render it fresh and write it to the SD cache for future loads.
+  if (!loadCarouselFrameFromStorage(centerIdx)) {
+    renderCarouselFrame(centerIdx);
   }
-  carouselFramesReady = (carouselFrames[0] != nullptr);
-}
-
-void HomeActivity::updateSlidingWindowCache(int centerIdx, int bookCount) {
-  if (!isLyraCarouselTheme() || bookCount <= 0) {
-    return;
-  }
-
-  for (int offset = -1; offset <= 1; ++offset) {
-    const int bookIdx = wrapBookIndex(centerIdx + offset, bookCount);
-    bool hasFrame = false;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (carouselFrames[slot] && carouselFrameBookIdx[slot] == bookIdx) {
-        hasFrame = true;
-        break;
-      }
-    }
-    if (hasFrame) {
-      continue;
-    }
-
-    int slotToUse = -1;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (!carouselFrames[slot]) {
-        slotToUse = slot;
-        break;
-      }
-    }
-    if (slotToUse < 0) {
-      slotToUse = offset < 0 ? 2 : 0;
-    }
-    // Best-effort SD load only. Do NOT render here: renderCarouselFrame takes
-    // ~300-500 ms per frame (cover BMP read + 48 KB SD write), and running it
-    // for two adjacent books in the same render call freezes loop() for ~1 s
-    // after every home-screen entry, making Left/Right navigation unresponsive.
-    // Frames missing from the SD cache are rendered on demand in render() when
-    // the user actually scrolls to that position.
-    loadCarouselFrameFromStorage(slotToUse, bookIdx);
-  }
-
-  carouselFramesReady = carouselFrames[0] || carouselFrames[1] || carouselFrames[2];
+  carouselFramesReady = true;
 }
 
 void HomeActivity::loop() {
@@ -791,7 +719,6 @@ void HomeActivity::loop() {
                 }
                 coverRendered = false;
                 freeCoverBuffer();
-                freeCarouselFrames();
                 if (isLyraCarouselTheme()) {
                   lastCarouselBookIndex = selectorIndex < static_cast<int>(recentBooks.size()) ? selectorIndex : 0;
                   preRenderCarouselFrames();
@@ -891,23 +818,14 @@ void HomeActivity::render(RenderLock&&) {
   bool usedCarouselFrame = false;
   if (carouselTheme && !recentBooks.empty()) {
     const int centerIdx = wrapBookIndex(lastCarouselBookIndex, recentCount);
-    int frameSlot = -1;
-    for (int slot = 0; slot < kCarouselFrameCount; ++slot) {
-      if (carouselFrames[slot] && carouselFrameBookIdx[slot] == centerIdx) {
-        frameSlot = slot;
-        break;
-      }
-    }
-    if (frameSlot < 0) {
-      frameSlot = 1;
-      if (!loadCarouselFrameFromStorage(frameSlot, centerIdx)) {
-        renderCarouselFrame(frameSlot, centerIdx);
-      }
+    // Load the center frame from the SD cache directly into the frame buffer,
+    // or render it fresh (and cache to SD). No intermediate slot allocation.
+    if (!loadCarouselFrameFromStorage(centerIdx)) {
+      renderCarouselFrame(centerIdx);
     }
 
     uint8_t* frameBuffer = renderer.getFrameBuffer();
-    if (frameBuffer && carouselFrames[frameSlot]) {
-      memcpy(frameBuffer, carouselFrames[frameSlot], renderer.getBufferSize());
+    if (frameBuffer) {
       renderer.fillRect(0, 0, pageWidth, metrics.homeTopPadding, false);
       GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding}, nullptr, nullptr);
       HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
@@ -983,10 +901,6 @@ void HomeActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
-
-  if (usedCarouselFrame) {
-    updateSlidingWindowCache(lastCarouselBookIndex, recentCount);
-  }
 
   if (wasFirstRenderDone && carouselTheme && recentsLoaded && !carouselFramesReady && !recentBooks.empty()) {
     preRenderCarouselFrames();
