@@ -12,12 +12,28 @@
   <img src="./docs/images/screenshots.png" alt="CPR-vCodex overview" width="1000" />
 </p>
 
+## Fork notice
+
+This repository is Daniel's personal fork of `CPR-vCodex`, itself based on
+CrossPoint Reader for the **Xteink X4**. This fork is **not affiliated with
+Xteink, CrossPoint Reader, or the upstream CPR-vCodex maintainer**.
+
+The current direction is Codex-assisted firmware work focused on deeper reading
+statistics: completion estimates, chapter and book time-left views, richer
+reading analytics, and browser-side tools for inspecting exported stats.
+
+Use this firmware at your own risk. It is built and released from this fork for
+experimentation on Daniel's Xteink X4, and custom firmware can break behavior,
+lose data, or require recovery flashing if something goes wrong. Back up your SD
+card and reading stats before flashing.
+
 ## At a glance
 
 | Item | Value |
 |---|---|
-| Project | `CPR-vCodex` |
+| Project | `CPR-vCodex Stats` |
 | Device | `Xteink X4` |
+| Fork status | Unofficial Codex-assisted fork focused on deeper reading statistics |
 | Current release (CPR-vCodex) build | [`1.2.0.44-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex) |
 | Latest Open Dyslexic font build | [`1.2.0.44-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
@@ -58,18 +74,20 @@ front,back
 Sample deck ready to copy to the SD card:
 - [flashcards_sample.csv](./flashcards_sample.csv)
 
-`CPR-vCodex` is a reading-focused firmware fork for the **Xteink X4**, built on top of the stable **CrossPoint Reader** baseline and extended with analytics, reader utilities, branding cleanup, extra UI features, and carefully selected upstream carry-forwards.
+`CPR-vCodex Stats` is an unofficial, Codex-assisted firmware fork for the **Xteink X4**. It builds on **CPR-vCodex** and the stable **CrossPoint Reader** baseline, then leans harder into reading analytics, completion estimates, reader utilities, branding cleanup, extra UI features, and carefully selected upstream carry-forwards.
 
 The official `crosspoint-reader` project is treated as the stable reference. `vcodex` only carries forward upstream work when it is useful on the X4 and safe enough to keep the reader fast and reliable.
 
 There may be some **involuntary or incidental X3 compatibility** because parts of the upstream codebase still carry X3-aware paths. `CPR-vCodex` now also includes an **experimental X3-only tilt page-turn option** for devices with the QMI8658 IMU, but it is hidden when the sensor is not detected and remains off by default. The firmware is still developed and validated on **X4**, and I do **not** currently have an **X3** device available to test or confirm that compatibility.
 
-This project is **not affiliated with Xteink**.
+This project is **not affiliated with Xteink, CrossPoint Reader, or the upstream CPR-vCodex maintainer**.
 
 ## Highlights
 
 - stable upstream-based reader baseline kept fast on large EPUBs
-- richer on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
+- deeper on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
+- estimated time left for books and current chapters based on recorded reading progress
+- average session and average reading-day metrics for a better sense of reading pace
 - manual per-book reading-time corrections for missed or accidental sessions
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
