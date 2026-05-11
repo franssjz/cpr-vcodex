@@ -23,6 +23,7 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/ReadingStatsAnalytics.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -724,7 +725,14 @@ void TxtReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE) {
     title = txt->getTitle();
   }
-  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title);
+  std::string timeLeftText;
+  if (SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE) {
+    const ReadingBookStats* stats = READING_STATS.findMatchingBookForPath(txt->getPath(), txt->getTitle(), "");
+    if (stats) {
+      timeLeftText = ReadingStatsAnalytics::formatTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats));
+    }
+  }
+  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, timeLeftText);
 }
 
 void TxtReaderActivity::saveProgress() const {

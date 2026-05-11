@@ -11,12 +11,13 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int MENU_ITEMS = 6;
+constexpr int MENU_ITEMS = 7;
 const StrId menuNames[MENU_ITEMS] = {StrId::STR_CHAPTER_PAGE_COUNT,
                                      StrId::STR_BOOK_PROGRESS_PERCENTAGE,
                                      StrId::STR_PROGRESS_BAR,
                                      StrId::STR_PROGRESS_BAR_THICKNESS,
                                      StrId::STR_TITLE,
+                                     StrId::STR_ESTIMATED_TIME_LEFT,
                                      StrId::STR_BATTERY};
 constexpr int PROGRESS_BAR_ITEMS = 3;
 const StrId progressBarNames[PROGRESS_BAR_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
@@ -27,6 +28,8 @@ const StrId progressBarThicknessNames[PROGRESS_BAR_THICKNESS_ITEMS] = {
 
 constexpr int TITLE_ITEMS = 3;
 const StrId titleNames[TITLE_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
+constexpr int TIME_LEFT_ITEMS = 3;
+const StrId timeLeftNames[TIME_LEFT_ITEMS] = {StrId::STR_HIDE, StrId::STR_BOOK, StrId::STR_CHAPTER};
 
 const int widthMargin = 10;
 const int verticalPreviewPadding = 50;
@@ -43,12 +46,17 @@ void StatusBarSettingsActivity::onEnter() {
     SETTINGS.statusBarProgressBar = CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   }
 
-  if (SETTINGS.statusBarTitle >= PROGRESS_BAR_THICKNESS_ITEMS) {
-    SETTINGS.statusBarTitle = CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS::PROGRESS_BAR_NORMAL;
+  if (SETTINGS.statusBarProgressBarThickness >= PROGRESS_BAR_THICKNESS_ITEMS) {
+    SETTINGS.statusBarProgressBarThickness =
+        CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS::PROGRESS_BAR_NORMAL;
   }
 
   if (SETTINGS.statusBarTitle >= TITLE_ITEMS) {
     SETTINGS.statusBarTitle = CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE;
+  }
+
+  if (SETTINGS.statusBarTimeLeft >= TIME_LEFT_ITEMS) {
+    SETTINGS.statusBarTimeLeft = CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE;
   }
 
   requestUpdate();
@@ -108,6 +116,9 @@ void StatusBarSettingsActivity::handleSelection() {
     // Chapter Title
     SETTINGS.statusBarTitle = (SETTINGS.statusBarTitle + 1) % TITLE_ITEMS;
   } else if (selectedIndex == 5) {
+    // Estimated Time Left
+    SETTINGS.statusBarTimeLeft = (SETTINGS.statusBarTimeLeft + 1) % TIME_LEFT_ITEMS;
+  } else if (selectedIndex == 6) {
     // Show Battery
     SETTINGS.statusBarBattery = (SETTINGS.statusBarBattery + 1) % 2;
   }
@@ -142,6 +153,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
         } else if (index == 4) {
           return I18N.get(titleNames[SETTINGS.statusBarTitle]);
         } else if (index == 5) {
+          return I18N.get(timeLeftNames[SETTINGS.statusBarTimeLeft]);
+        } else if (index == 6) {
           return SETTINGS.statusBarBattery ? tr(STR_SHOW) : tr(STR_HIDE);
         } else {
           return tr(STR_HIDE);
@@ -160,7 +173,7 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     title = tr(STR_EXAMPLE_CHAPTER);
   }
 
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, "~1h 20m");
 
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
                     renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() - verticalPreviewPadding -

@@ -89,7 +89,7 @@ def build_release(project_dir: Path, tag: str, jobs: int) -> str:
         "VCODEX_RELEASE_DRY_RUN": "1",
         "VCODEX_RELEASE_TAG": tag,
     }
-    cmd = ["python", "-X", "utf8", "-m", "platformio", "run", "-e", "gh_release", "-j", str(jobs)]
+    cmd = [sys.executable, "-X", "utf8", "-m", "platformio", "run", "-e", "gh_release", "-j", str(jobs)]
     print(f"[run] {' '.join(cmd)}")
     result = run(cmd, env=env)
     if result.returncode != 0:

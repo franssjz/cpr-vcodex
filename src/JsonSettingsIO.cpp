@@ -370,6 +370,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("statusBarProgressBarThickness", s.statusBarProgressBarThickness,
            CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT);
   loadEnum("statusBarTitle", s.statusBarTitle, CrossPointSettings::STATUS_BAR_TITLE_COUNT);
+  loadEnum("statusBarTimeLeft", s.statusBarTimeLeft, CrossPointSettings::STATUS_BAR_TIME_LEFT_COUNT);
   loadToggle("statusBarBattery", s.statusBarBattery);
 
   using S = CrossPointSettings;
@@ -701,6 +702,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
   doc["statusBarTitle"] = s.statusBarTitle;
+  doc["statusBarTimeLeft"] = s.statusBarTimeLeft;
   doc["statusBarBattery"] = s.statusBarBattery;
 
   // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.

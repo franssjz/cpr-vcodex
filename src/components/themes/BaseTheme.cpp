@@ -718,7 +718,7 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 
 void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                               const int pageCount, std::string title, const int paddingBottom,
-                              const int textYOffset) const {
+                              const int textYOffset, const std::string& timeLeftText) const {
   auto metrics = UITheme::getInstance().getMetrics();
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
@@ -775,6 +775,17 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
                         showBatteryPercentage);
   }
 
+  int timeLeftWidth = 0;
+  if (!timeLeftText.empty()) {
+    const int batterySize = SETTINGS.statusBarBattery ? (showBatteryPercentage ? 50 : 20) : 0;
+    const int timeLeftX = metrics.statusBarHorizontalMargin + orientedMarginLeft + batterySize + 8;
+    const int maxTimeLeftWidth = std::max(0, renderer.getScreenWidth() - orientedMarginRight - progressTextWidth -
+                                                 timeLeftX - metrics.statusBarHorizontalMargin - 30);
+    std::string timeLeft = renderer.truncatedText(SMALL_FONT_ID, timeLeftText.c_str(), maxTimeLeftWidth);
+    timeLeftWidth = renderer.getTextWidth(SMALL_FONT_ID, timeLeft.c_str());
+    renderer.drawText(SMALL_FONT_ID, timeLeftX, textY, timeLeft.c_str());
+  }
+
   // Draw Title
   if (!title.empty()) {
     textY -= textYOffset;
@@ -784,7 +795,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
         renderer.getScreenWidth() - (metrics.statusBarHorizontalMargin * 2) - orientedMarginLeft - orientedMarginRight;
 
     const int batterySize = SETTINGS.statusBarBattery ? (showBatteryPercentage ? 50 : 20) : 0;
-    const int titleMarginLeft = batterySize + 30;
+    const int titleMarginLeft = batterySize + timeLeftWidth + (timeLeftWidth > 0 ? 38 : 30);
     const int titleMarginRight = progressTextWidth + 30;
 
     // Attempt to center title on the screen, but if title is too wide then later we will center it within the

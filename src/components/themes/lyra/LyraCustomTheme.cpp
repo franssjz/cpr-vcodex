@@ -3,6 +3,7 @@
 #include <Bitmap.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
+#include <I18n.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -14,6 +15,7 @@
 #include "components/UITheme.h"
 #include "components/icons/cover.h"
 #include "fontIds.h"
+#include "util/ReadingStatsAnalytics.h"
 
 namespace {
 constexpr int H_PADDING = 8;
@@ -21,15 +23,23 @@ constexpr int CORNER_RADIUS = 6;
 constexpr int PROGRESS_ROW_TOP = 8;
 constexpr int PROGRESS_ROW_GAP = 8;
 constexpr int PROGRESS_BAR_HEIGHT = 8;
-constexpr int TITLE_TOP_GAP = 10;
+constexpr int TITLE_TOP_GAP = 6;
+constexpr int ESTIMATE_TOP_GAP = 6;
 
 uint8_t getBookProgressPercent(const RecentBook& recentBook) {
-  for (const auto& book : READING_STATS.getBooks()) {
-    if (book.path == recentBook.path) {
-      return book.lastProgressPercent;
-    }
+  const ReadingBookStats* book = READING_STATS.findMatchingBookForPath(recentBook.path, recentBook.title, recentBook.author);
+  return book ? book->lastProgressPercent : 0;
+}
+
+std::string buildEstimateLine(const char* label, const ReadingStatsAnalytics::TimeLeftEstimate& estimate) {
+  return std::string(label) + ": " + ReadingStatsAnalytics::formatTimeLeftEstimate(estimate);
+}
+
+std::string buildReadingSummaryLine(const ReadingBookStats* stats) {
+  if (!stats) {
+    return "0m | 0x";
   }
-  return 0;
+  return ReadingStatsAnalytics::formatDurationHm(stats->totalReadingMs) + " | " + std::to_string(stats->sessions) + "x";
 }
 
 void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
@@ -102,15 +112,19 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       const int tileX = LyraCustomMetrics::values.contentSidePadding + tileWidth * i;
       const int maxLineWidth = tileWidth - 2 * H_PADDING;
 
-      const auto titleLines = renderer.wrappedText(SMALL_FONT_ID, recentBooks[i].title.c_str(), maxLineWidth, 3);
+      const auto titleLines = renderer.wrappedText(SMALL_FONT_ID, recentBooks[i].title.c_str(), maxLineWidth, 2);
       const int titleLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
       const int titleBlockHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
       const uint8_t progressPercent = getBookProgressPercent(recentBooks[i]);
       const std::string progressText = std::to_string(progressPercent) + "%";
       const int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
       const int progressRowHeight = std::max(titleLineHeight, PROGRESS_BAR_HEIGHT);
+      const ReadingBookStats* stats =
+          READING_STATS.findMatchingBookForPath(recentBooks[i].path, recentBooks[i].title, recentBooks[i].author);
+      const int estimateLineHeight = stats ? renderer.getLineHeight(SMALL_FONT_ID) : 0;
+      const int estimateBlockHeight = stats ? ESTIMATE_TOP_GAP + estimateLineHeight * 3 : 0;
       const int bottomBlockHeight =
-          PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
+          PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + estimateBlockHeight + H_PADDING + 5;
 
       if (bookSelected) {
         renderer.fillRoundedRect(tileX, tileY, tileWidth, H_PADDING, CORNER_RADIUS, true, true, false, false,
@@ -136,6 +150,23 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       for (const auto& line : titleLines) {
         renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, line.c_str(), true);
         currentY += titleLineHeight;
+      }
+
+      if (stats) {
+        currentY += ESTIMATE_TOP_GAP;
+        const std::string summaryText =
+            renderer.truncatedText(SMALL_FONT_ID, buildReadingSummaryLine(stats).c_str(), maxLineWidth);
+        renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, summaryText.c_str(), true);
+        currentY += estimateLineHeight;
+        const std::string chapterLine =
+            buildEstimateLine(tr(STR_CHAPTER_TIME_LEFT), ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats));
+        const std::string bookLine =
+            buildEstimateLine(tr(STR_BOOK_TIME_LEFT), ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats));
+        const std::string chapterText = renderer.truncatedText(SMALL_FONT_ID, chapterLine.c_str(), maxLineWidth);
+        renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, chapterText.c_str(), true);
+        currentY += estimateLineHeight;
+        const std::string bookText = renderer.truncatedText(SMALL_FONT_ID, bookLine.c_str(), maxLineWidth);
+        renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, bookText.c_str(), true);
       }
     }
   } else {

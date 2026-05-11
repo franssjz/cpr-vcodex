@@ -32,6 +32,7 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/ReadingStatsAnalytics.h"
 #include "util/ScreenshotUtil.h"
 
 namespace {
@@ -1156,7 +1157,18 @@ void EpubReaderActivity::renderStatusBar() const {
     title = epub->getTitle();
   }
 
-  GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset);
+  std::string timeLeftText;
+  if (SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE) {
+    const ReadingBookStats* stats = READING_STATS.findMatchingBookForPath(epub->getPath(), epub->getTitle(), epub->getAuthor());
+    if (stats) {
+      const auto estimate = SETTINGS.statusBarTimeLeft == CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_BOOK
+                                ? ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats)
+                                : ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats);
+      timeLeftText = ReadingStatsAnalytics::formatTimeLeftEstimate(estimate);
+    }
+  }
+
+  GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, timeLeftText);
 }
 
 void EpubReaderActivity::navigateToHref(const std::string& hrefStr, const bool savePosition) {

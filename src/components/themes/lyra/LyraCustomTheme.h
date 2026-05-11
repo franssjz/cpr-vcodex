@@ -7,7 +7,7 @@ class GfxRenderer;
 namespace LyraCustomMetrics {
 constexpr ThemeMetrics values = [] {
   ThemeMetrics v = LyraMetrics::values;
-  v.homeCoverTileHeight = 336;
+  v.homeCoverTileHeight = 370;
   v.homeRecentBooksCount = 3;
   v.keyboardKeyHeight = 50;
   v.keyboardCenteredText = true;

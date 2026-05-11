@@ -58,6 +58,7 @@ class CrossPointSettings {
     STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT
   };
   enum STATUS_BAR_TITLE { BOOK_TITLE = 0, CHAPTER_TITLE = 1, HIDE_TITLE = 2, STATUS_BAR_TITLE_COUNT };
+  enum STATUS_BAR_TIME_LEFT { TIME_LEFT_HIDE = 0, TIME_LEFT_BOOK = 1, TIME_LEFT_CHAPTER = 2, STATUS_BAR_TIME_LEFT_COUNT };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -228,6 +229,7 @@ class CrossPointSettings {
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
+  uint8_t statusBarTimeLeft = TIME_LEFT_CHAPTER;
   uint8_t statusBarBattery = 1;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
