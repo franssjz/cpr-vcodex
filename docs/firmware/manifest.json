@@ -1,17 +1,17 @@
 {
   "name": "CPR-vCodex",
-  "version": "1.2.0.46-cpr-vcodex",
+  "version": "1.2.0.47-cpr-vcodex",
   "firmwareUrl": "firmware/firmware.bin",
-  "downloadUrl": "https://github.com/danielc0603/cpr-vcodex-stats/releases/download/1.2.0.46-cpr-vcodex/1.2.0.46-cpr-vcodex.bin",
-  "size": 6142656,
-  "sha256": "a4f21cbf34c1651b9a9b489e3f9e6f1dc444c73a4fdda88d39d1802b8026a5b1",
+  "downloadUrl": "https://github.com/danielc0603/cpr-vcodex-stats/releases/download/1.2.0.47-cpr-vcodex/1.2.0.47-cpr-vcodex.bin",
+  "size": 6144208,
+  "sha256": "182eb909784d379049f54d4ec541ce3667c8863f2edfd8e1861196eb9b4a2e91",
   "source": {
     "type": "github-release",
     "repo": "danielc0603/cpr-vcodex-stats",
-    "tag": "1.2.0.46-cpr-vcodex",
-    "asset": "1.2.0.46-cpr-vcodex.bin",
-    "publishedAt": "2026-05-11T06:02:56Z",
-    "assetUpdatedAt": "2026-05-11T06:02:56Z"
+    "tag": "1.2.0.47-cpr-vcodex",
+    "asset": "1.2.0.47-cpr-vcodex.bin",
+    "publishedAt": "2026-05-11T06:36:14Z",
+    "assetUpdatedAt": "2026-05-11T06:36:14Z"
   },
   "new_install_prompt_erase": false,
   "builds": [
