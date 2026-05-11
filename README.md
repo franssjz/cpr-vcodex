@@ -1,540 +1,209 @@
-# CPR-vCodex
+# CPR-vCodex Stats
 
-<p align="center">
-  <img src="./docs/images/logotext_by_Which-Estimate4566.svg" alt="CPR-vCodex logo" width="720" />
-  <br />
-  <sub>Logo contributed by Which-Estimate4566.</sub>
-</p>
+CPR-vCodex Stats is Daniel's unofficial, Codex-assisted firmware fork for the
+Xteink X4 e-reader. It is based on CPR-vCodex, which is itself based on
+CrossPoint Reader, but this repository is now its own experiment: a reading
+firmware build focused on deeper reading statistics, completion estimates, and
+more useful reader analytics.
 
-## Screenshots
+This project is not affiliated with Xteink, CrossPoint Reader, or the upstream
+CPR-vCodex maintainer. It is a personal fork built with AI-assisted development
+using Codex and tested primarily for Daniel's own Xteink X4 workflow.
 
-<p align="center">
-  <img src="./docs/images/screenshots.png" alt="CPR-vCodex overview" width="1000" />
-</p>
+Use it at your own risk. Custom firmware can fail to flash, behave differently
+than expected, lose reading data, or require recovery flashing. Back up your SD
+card and exported reading stats before installing any release from this fork.
 
-## Fork notice
-
-This repository is Daniel's personal fork of `CPR-vCodex`, itself based on
-CrossPoint Reader for the **Xteink X4**. This fork is **not affiliated with
-Xteink, CrossPoint Reader, or the upstream CPR-vCodex maintainer**.
-
-The current direction is Codex-assisted firmware work focused on deeper reading
-statistics: completion estimates, chapter and book time-left views, richer
-reading analytics, and browser-side tools for inspecting exported stats.
-
-Use this firmware at your own risk. It is built and released from this fork for
-experimentation on Daniel's Xteink X4, and custom firmware can break behavior,
-lose data, or require recovery flashing if something goes wrong. Back up your SD
-card and reading stats before flashing.
-
-## At a glance
+## Current Release
 
 | Item | Value |
 |---|---|
-| Project | `CPR-vCodex Stats` |
-| Device | `Xteink X4` |
-| Fork status | Unofficial Codex-assisted fork focused on deeper reading statistics |
-| Current release (CPR-vCodex) build | [`1.2.0.44-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex) |
-| Latest Open Dyslexic font build | [`1.2.0.44-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex) |
+| Fork name | `CPR-vCodex Stats` |
+| Firmware focus | Reading statistics, completion estimates, and analytics |
+| Target device | Xteink X4 |
+| First fork release name | `Stats Preview 0.1.0` |
+| Published firmware tag | [`1.2.0.44-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex) |
+| Flashable file | `1.2.0.44-cpr-vcodex.bin` |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
-| Latest official commit incorporated | Selected stability and low-risk updates through [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
-| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`/`64ecfe2`; RoundedRaff theme `b8a5152`/`22701cc`; page-turn orientation setting `2e2ea6a`; SD firmware update/X3 bootloader flow `5717374` |
 
-## Web tools
+The published tag still uses the inherited CPR-vCodex-compatible release format
+because the current build and release scripts expect that scheme. Going forward,
+this fork will describe releases with a simpler fork-facing name such as
+`Stats Preview 0.1.0`, while the firmware artifact may keep the compatible tag
+format until the release tooling is intentionally renamed.
 
-- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware from Chrome or Edge using Web Serial.
-- [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
+## What This Fork Changes
 
-## Flashcards study modes
+The first goal is to make reading progress more understandable without adding
+friction while reading.
 
-`Flashcards` currently offers three review modes:
+The current stats work adds:
 
-- `Due`: builds a finite session from cards that are due first, then fills with unseen cards if needed. `Session size` is respected here, and `All` means "all due cards plus unseen cards".
-- `Scheduled`: builds a finite shuffled session from the whole deck. `Session size` is respected here, and `All` means the whole deck.
-- `Infinite`: ignores `Session size`, keeps drawing cards from the whole deck, and never finishes on its own. Exit manually when you want the session summary.
+- estimated time left for the whole book;
+- estimated time left for the current chapter;
+- average reading session length;
+- average reading-day length;
+- persisted chapter reading-time state for better chapter estimates;
+- browser stats-editor support for the new chapter estimate fields;
+- release artifacts and auto-flash metadata pointing to this fork's published
+  firmware.
 
-Why it is split this way:
+These estimates are intentionally conservative. If there is not enough reading
+history yet, the device should say to read more before trusting the estimate.
+The chapter estimate becomes useful only after the firmware has watched progress
+inside the current chapter for a while.
 
-- `Study mode` decides **which cards** enter the session
-- `Session size` decides **how many** of those cards are included
+## What Is Inherited
 
-`Fail` and `Next` send the current card back through the session flow. In `Infinite`, the queue is rebuilt again when a full pass is consumed, so practice can continue indefinitely.
+This fork still includes many existing CPR-vCodex and CrossPoint Reader features,
+including:
 
-Example CSV deck structure:
+- EPUB, TXT, Markdown, and XTC reading support;
+- existing reading stats, heatmap, day detail, and reading profile screens;
+- manual reading-time correction;
+- achievements;
+- bookmarks and recent books;
+- OPDS and KOReader Sync related features;
+- flashcards;
+- sleep-screen tools;
+- browser-based file transfer and settings tools;
+- multilingual UI support.
 
-```csv
-front,back
-"What is the capital of France?","Paris"
-"Who wrote Don Quixote?","Miguel de Cervantes"
-"What is 12 x 12?","144"
+Those inherited features are not claimed as newly created here. This repository
+builds on them and changes the direction toward more detailed reading analytics.
+
+## Installation
+
+The easiest manual install path is:
+
+1. Open the latest release:
+   [1.2.0.44-cpr-vcodex](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.44-cpr-vcodex).
+2. Download `1.2.0.44-cpr-vcodex.bin`.
+3. Turn on and unlock the Xteink X4.
+4. Open [xteink.dve.al](https://xteink.dve.al/) in Chrome or Edge.
+5. Choose the downloaded `.bin` file in the OTA flash controls.
+6. Flash the firmware and wait for completion.
+
+The browser auto-flash files in `docs/firmware/` have also been synchronized to
+the current fork release, but the safest first install path is still to download
+the `.bin` release asset directly and know exactly which file is being flashed.
+
+## Reading Stats Behavior
+
+The stats system tracks reading sessions and progress while books are open. The
+new estimate fields are derived from that existing stats flow.
+
+Book time-left estimate:
+
+- uses total recorded reading time and current book progress;
+- waits until there is enough reading time and progress to make a reasonable
+  estimate;
+- displays an approximate remaining duration and, when possible, an estimated
+  number of sessions left.
+
+Chapter time-left estimate:
+
+- tracks time spent in the current chapter;
+- records the chapter progress point where timing started;
+- estimates remaining chapter time from progress made inside that chapter;
+- resets when the current chapter changes.
+
+Average session:
+
+- divides total recorded reading time by counted reading sessions.
+
+Average reading day:
+
+- divides total recorded reading time by days that have nonzero reading time.
+
+## Data And Privacy
+
+Reading stats are stored locally on the device and can be exported for editing.
+The browser stats editor is designed to work locally in the browser. It should
+not upload private reading data.
+
+Before flashing, exporting, importing, or manually editing stats, keep a backup
+of:
+
+- the SD card;
+- exported reading stats;
+- any books or documents that are not stored elsewhere.
+
+## Release Files
+
+A GitHub release can contain several files. For this fork:
+
+- `.bin` is the firmware file to flash;
+- `.json` is build metadata;
+- `firmware-budget.json` is a machine-readable firmware size and RAM report;
+- `firmware-budget.md` is the same budget report in a readable format.
+
+For normal flashing, use the `.bin` file.
+
+## Release Naming
+
+This fork is starting fresh in documentation with fork-facing release names:
+
+- `Stats Preview 0.1.0`: first Daniel/Codex stats-focused release.
+
+The current build scripts still publish firmware tags like:
+
+- `1.2.0.44-cpr-vcodex`
+
+That inherited tag means:
+
+- base firmware line: `1.2.0`;
+- release number: `44`;
+- compatibility suffix: `cpr-vcodex`.
+
+A future cleanup can rename the build scripts, artifact suffix, release regexes,
+and auto-flash sync rules to a dedicated `cpr-vcodex-stats` or `stats` scheme.
+That should be done carefully because the release workflow, firmware metadata,
+and auto-flash page all depend on the current format.
+
+## Development Workflow
+
+Typical future work on this fork:
+
+1. Decide the reading-stat or firmware behavior to change.
+2. Inspect the relevant firmware files.
+3. Make the smallest safe code change.
+4. Build with PlatformIO.
+5. Flash and test on hardware.
+6. Update the changelog.
+7. Publish a new GitHub release when the build is worth sharing.
+
+Useful commands:
+
+```bash
+pio run -e default
+pio run -e gh_release
+python3 scripts/pre_release_check.py --tag 1.2.0.45-cpr-vcodex
+python3 scripts/sync_autoflash_firmware.py --repo danielc0603/cpr-vcodex-stats
 ```
 
-Sample deck ready to copy to the SD card:
-- [flashcards_sample.csv](./flashcards_sample.csv)
-
-`CPR-vCodex Stats` is an unofficial, Codex-assisted firmware fork for the **Xteink X4**. It builds on **CPR-vCodex** and the stable **CrossPoint Reader** baseline, then leans harder into reading analytics, completion estimates, reader utilities, branding cleanup, extra UI features, and carefully selected upstream carry-forwards.
-
-The official `crosspoint-reader` project is treated as the stable reference. `vcodex` only carries forward upstream work when it is useful on the X4 and safe enough to keep the reader fast and reliable.
-
-There may be some **involuntary or incidental X3 compatibility** because parts of the upstream codebase still carry X3-aware paths. `CPR-vCodex` now also includes an **experimental X3-only tilt page-turn option** for devices with the QMI8658 IMU, but it is hidden when the sensor is not detected and remains off by default. The firmware is still developed and validated on **X4**, and I do **not** currently have an **X3** device available to test or confirm that compatibility.
-
-This project is **not affiliated with Xteink, CrossPoint Reader, or the upstream CPR-vCodex maintainer**.
-
-## Highlights
-
-- stable upstream-based reader baseline kept fast on large EPUBs
-- deeper on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
-- estimated time left for books and current chapters based on recorded reading progress
-- average session and average reading-day metrics for a better sense of reading pace
-- manual per-book reading-time corrections for missed or accidental sessions
-- `Achievements` built on top of the same reading data model
-- `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
-- `Lyra Carousel` is temporarily removed until a stable and fast version is ready for daily use
-- experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
-- EPUB bookmarks plus a global bookmarks app
-- context-aware screenshot filenames that include the current book title when available
-- KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
-- configurable OPDS download filename format: `Author - Title` or `Title - Author`
-- configurable `Home` and `Apps` shortcuts
-- `Flashcards` with offline CSV decks, session summary, recents, stats and settings
-- `Text Darkness`, `Reader Refresh Mode`, `Lexend`, `X Small`
-- `Sleep` tools with directory selection, preview, cache, sequential and shuffle behavior
-- `Dark Mode (Experimental)`
-- Vietnamese UI support and synchronized translation coverage across all shipped languages
-
-## Languages
-
-`CPR-vCodex` currently ships with **23 UI languages**:
-
-- English
-- Spanish
-- French
-- German
-- Czech
-- Portuguese
-- Russian
-- Swedish
-- Romanian
-- Catalan
-- Ukrainian
-- Belarusian
-- Italian
-- Polish
-- Finnish
-- Danish
-- Dutch
-- Turkish
-- Kazakh
-- Hungarian
-- Lithuanian
-- Slovenian
-- Vietnamese
-
-The translation set is maintained from `english.yaml` as the source of truth, with safe English fallback when a key is not translated yet.
-
-## Easy installation
-
-For most users, this is the easiest way to install the firmware:
-
-1. Download the latest `*-cpr-vcodex.bin` release file.
-2. Turn on and unlock your Xteink X4.
-3. Open [xteink.dve.al](https://xteink.dve.al/).
-4. In `OTA fast flash controls`, select the firmware file.
-5. Click `Flash firmware from file`.
-6. Select the device when the browser asks.
-7. Wait for the installation to finish.
-8. Restart the device if needed.
-
-To return to the original CrossPoint Reader later, repeat the same process with the original firmware file.
-
-## 5-minute start
-
-If you just flashed `CPR-vCodex` and want the main value quickly:
-
-1. Open `Home > Sync Day`
-2. Connect to Wi-Fi and sync the date
-3. Open a book and read normally
-4. Open `Apps > Reading Stats`
-5. Open `Apps > Reading Heatmap`
-
-That is enough to start using the core `vcodex` additions: coherent day-based analytics, better stats visibility, and improved app-level reading tools.
-
-## What this fork adds
-
-| Feature | What it adds | More info |
-|---|---|---|
-| `Reading Stats` | totals, streaks, goal tracking, started books, finished books, and per-book detail | [Reading analytics suite](#reading-analytics-suite) |
-| `Manual stats correction` | add or subtract per-book minutes for a selected date without typing on the device | [Reading analytics suite](#reading-analytics-suite) |
-| `Reading Heatmap` | monthly calendar of reading intensity | [Reading analytics suite](#reading-analytics-suite) |
-| `Reading Day` | one-day drill-down from the heatmap | [Reading analytics suite](#reading-analytics-suite) |
-| `Reading Profile` | weekly reading behavior summary | [Reading analytics suite](#reading-analytics-suite) |
-| `Achievements` | console-style milestones and optional popups | [Achievements](#achievements) |
-| `Flashcards` | offline deck study with `Scheduled` and `Infinite` session modes | [Flashcards](#flashcards) |
-| `Sync Day` | manual Wi-Fi date sync and fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
-| `Home + Apps shortcuts` | configurable placement, visibility, ordering, and a fallback to `Lyra vCodex` for removed/unknown themes | [Home and Apps](#home-and-apps) |
-| `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
-| `Sleep tools` | folder selection, preview, cache, sequential and shuffle behavior | [Sleep](#sleep) |
-| `Text Darkness` | global `Normal / Dark / Extra Dark` text rendering control, based on the idea first seen in `crosspet` | [Settings](#settings) |
-| `Reader Refresh Mode` | `Auto / Fast / Half / Full` | [Settings](#settings) |
-| `Lexend` | additional reader font family | [Settings](#settings) |
-| `Dark Mode (Experimental)` | optional white-on-black UI and reader presentation | [Settings](#settings) |
-| `ReadMe` | on-device quick guide for the main fork features | [ReadMe](#readme) |
-| `If found, please return me` | lost-device contact screen from `/if_found.txt` on the SD card | [If found, please return me](#if-found-please-return-me) |
-| `Vietnamese UI` | extra UI language with matching font binding | [Languages](#languages) |
-
-## Home and Apps
-
-The launcher is split into `Home` and `Apps`.
-
-`Home` stays focused on frequently used reading entry points, while `Apps` collects the richer tools added by the fork.
-
-Notable launcher behavior:
-
-- shortcut placement can be moved between `Home` and `Apps`
-- shortcut visibility can be toggled
-- ordering is configurable
-- stats-related shortcuts show useful live metadata
-- `Apps` paginates long lists and supports page-jump navigation
-- `Lyra Carousel` is temporarily removed until a stable and fast version is ready; devices that had it selected fall back to `Lyra vCodex`
-
-Management lives in:
-
-- `Settings > Apps > Location Home and Apps`
-- `Settings > Apps > Visibility Home and Apps`
-- `Settings > Apps > Order Home shortcuts`
-- `Settings > Apps > Order Apps shortcuts`
-
-## Sync Day and date model
-
-This part matters, because several `vcodex` features depend on day-level data.
-
-The ESP32-C3 in the X4 does not provide a sleep-resilient real-time clock you can trust after every sleep cycle. So the fork uses a practical model:
-
-1. `Sync Day` connects over Wi-Fi and gets a valid date/time using NTP
-2. that becomes the trusted reference date for stats
-3. if the live clock later becomes unreliable, the firmware falls back to the last valid saved date
-4. day-based views stay coherent instead of drifting randomly
-
-In practice:
-
-- syncing once per day before reading is usually enough
-- day-based stats depend on having a valid day reference
-- timezone and date format are configurable globally
-
-## Reading analytics suite
-
-All reading analytics features share the same persistence model and data source.
-
-That means these views stay coherent with each other:
-
-- `Reading Stats`
-- `Reading Heatmap`
-- `Reading Day`
-- `Reading Profile`
-- per-book stats detail
-
-### What gets tracked
-
-- started books
-- finished books
-- total reading time
-- daily reading time
-- counted sessions
-- daily-goal progress
-- goal streak and max streak
-- per-book progress and last-read state
-
-### Important rules
-
-- a session counts only after reaching the minimum tracked duration
-- daily goal is configurable
-- day-based analytics depend on a valid synced or recovered day
-- books under ignored stats paths are excluded from tracking
-
-### Main views
-
-| View | Purpose |
-|---|---|
-| `Reading Stats` | main analytics hub with goal, streak, totals and started books |
-| `More Details` | wider trends and graphs |
-| `Reading Heatmap` | monthly calendar of reading intensity |
-| `Reading Day` | one-day detail view opened from the heatmap |
-| `Reading Profile` | summary of recent reading behavior |
-| `Per-book stats detail` | cover, progress, sessions, time and last-read info for one book |
-
-Per-book detail also includes a small settings button under the cover. It opens a correction screen for missed or accidental reading time:
-
-- choose `Add` or `Subtract`
-- choose the exact date with the same numeric picker style used by `Sync Day`
-- choose 15, 30, 45, or 60 minutes
-- subtracting is capped so a day can never go below zero
-
-Manual corrections update the same daily totals used by streaks, heatmaps and achievements.
-
-## Achievements
-
-`Achievements` adds a lightweight progression layer on top of the same reading data used by stats.
-
-It provides:
-
-- a dedicated `Apps > Achievements` screen
-- pending vs completed sections
-- unlock popups
-- reset support
-- retroactive sync from existing reading stats
-
-The current catalog rewards, among other things:
-
-- started books
-- counted sessions
-- finished books
-- total reading time
-- goal-completion days
-- streaks
-- bookmark usage
-- long sessions
-
-## ReadMe
-
-`ReadMe` is an on-device quick guide for the main fork features.
-
-It includes compact help pages for:
-
-- `Sync Day`
-- `Reading Stats`
-- `Bookmarks`
-- `Flashcards`
-- `Sleep`
-- `Customize Home and Apps`
-- `Achievements`
-- `If found, please return me`
-
-This gives device-side help without needing to reopen GitHub every time.
-
-## If found, please return me
-
-This app is a simple lost-device return screen.
-
-How it works:
-
-- open `Apps > If found, please return me`
-- the screen always shows a fixed intro message
-- if `/if_found.txt` exists on the SD root, its content is shown below
-- if the file does not exist, the app shows a fallback message explaining how to create it
-
-## Bookmarks
-
-Bookmarks are implemented for EPUB and work in two ways:
-
-- inside the reader
-- from the global `Apps > Bookmarks` screen
-
-Supported flow:
-
-- long-press `Select` inside EPUB reading to toggle bookmark
-- open bookmark list from the reader
-- reopen a book directly at a saved bookmark from the global bookmarks app
-- delete individual bookmarks or all bookmarks for one book
-
-## Flashcards
-
-`Flashcards` is an offline study app built around CSV decks on the SD card.
-
-Main sections:
-
-- `Open`
-- `Recents`
-- `Statistics`
-- `Settings`
-
-Deck flow:
-
-- open a CSV deck from the SD card
-- study in landscape using `Flip`, `Next`, `Success` and `Fail`
-- leave the deck through the page buttons when you want to finish
-- get a session summary when you exit
-
-Study modes:
-
-- `Due`: finite review-oriented session, using due cards first and unseen cards second
-- `Scheduled`: finite shuffled session from the whole deck
-- `Infinite`: endless practice, ignores `Session size`
-
-Statistics:
-
-- each deck keeps its own seen / unseen / due / mastered metrics
-- `Statistics` lists known decks
-- holding `Select` on a deck inside `Statistics` lets you reset that deck's flashcard stats after confirmation
-
-## Sleep
-
-The `Sleep` app makes custom sleep images easier to manage.
-
-It supports:
-
-- directory discovery
-- preview
-- sequential vs shuffle order
-- persistent selected directory
-- cached sleep framebuffers
-- reduced repetition through recent-wallpaper tracking
-
-## Settings
-
-The most important fork-specific options are concentrated in `Settings > Apps`, while reader and display behavior stay under the normal settings categories.
-
-Useful reader/display additions include:
-
-| Area | Options |
-|---|---|
-| Reader | `Text Anti-Aliasing`, `Text Darkness`, `Reader Refresh Mode`, `Reader Font Family`, `Reader Font Size` |
-| Display | `UI Theme`, sleep-screen controls, `Dark Mode (Experimental)`, `Sunlight Fading Fix` |
-| Date | `Display Day`, `Date Format`, `Time Zone`, `Sync Day` reminder behavior |
-| Reading stats | `Daily Goal`, `Show after reading`, `Reset Reading Stats`, `Export Reading Stats`, `Import Reading Stats` |
-| Achievements | `Enable achievements`, `Achievement popups`, `Reset achievements`, `Sync with prev. stats` |
-| Navigation | `Location Home and Apps`, `Visibility Home and Apps`, `Order Home shortcuts`, `Order Apps shortcuts` |
-
-`Text Darkness` is a feature idea seen in the `crosspet` fork and adapted here for `vcodex`.
-
-Font notes:
-
-- `Bookerly` and `Noto Sans` have full regular/bold/italic coverage in the compiled sizes
-- `Lexend` is available as an extra reader family
-- `Lexend` italic and bold-italic still use safe fallbacks rather than separate real italic assets
-
-## What requires Sync Day
-
-Anything tied to day-level analytics depends on having a valid day reference.
-
-That includes:
-
-- daily goal
-- goal streak
-- max goal streak
-- heatmap
-- `today`
-- `7D`
-- `30D`
-- last read date
-
-Recommended rule:
-
-- do `Sync Day` once before reading each day
-
-## Data persistence
-
-`CPR-vCodex` keeps storage compatibility as a first priority.
-
-It does **not** use a database. User state is persisted mainly under `/.crosspoint/`.
-
-Important artifacts include:
-
-- `/.crosspoint/state.json`
-- `/.crosspoint/reading_stats.json`
-- `/.crosspoint/achievements.json`
-- `/.crosspoint/recent.json`
-- per-book `bookmarks.bin`
-- `/exports/*.json` for reading stats export/import
-
-This is one of the main reasons the fork was rebuilt on a cleaner upstream-derived base instead of continuing to patch the older fork in place.
-
-## Versioning
-
-Each packaged dev build now keeps the base firmware line and the local flash identity easy to distinguish.
-
-Practical values to look at:
-
-- base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.44-cpr-vcodex`
-- packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
-
-The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
-
-## Main docs
-
-- [User Guide](./USER_GUIDE.md)
-- [Scope](./SCOPE.md)
-- [i18n notes](./docs/i18n.md)
-- [Contributing docs](./docs/contributing/README.md)
-
-## Build from source
-
-### Prerequisites
-
-- `PlatformIO Core` (`pio`) or `VS Code + PlatformIO IDE`
-- Python 3.8+
-- USB-C cable for flashing the ESP32-C3
-- Xteink X4
-
-Possible note about X3:
-
-- the codebase may still retain some upstream X3-aware behavior
-- the X3-only `Tilt Page Turn` setting is experimental, off by default, and hidden unless the QMI8658 IMU is detected
-- `CPR-vCodex` is not validated on X3 hardware
-- no X3 device is currently available for testing
-
-### Build
-
-Use the project build wrapper:
-
-```powershell
-.\bin\build-vcodex.ps1
-```
-
-The wrapper forces UTF-8 Python/console output for PlatformIO on Windows and
-uses one build job by default for more repeatable local diagnostics. You can
-still pass another environment or job count explicitly:
-
-```powershell
-.\bin\build-vcodex.ps1 -Environment gh_release_rc -Jobs 2
-```
-
-To verify the `gh_release` environment locally without advancing the release
-counter or rewriting this README:
-
-```powershell
-$env:VCODEX_RELEASE_DRY_RUN = "1"
-.\bin\build-vcodex.ps1 -Environment gh_release
-Remove-Item Env:\VCODEX_RELEASE_DRY_RUN
-```
-
-This generates a packaged firmware artifact under:
-
-```text
-artifacts/<version>-cpr-vcodex.bin
-```
-
-Versioning rules:
-
-- release builds: `1.2.0.<release>-cpr-vcodex.bin`
-- dev builds: `1.2.0.<release>.dev<build>-cpr-vcodex.bin`
-
-Release publishing:
-
-- before tagging, run:
-
-```powershell
-python scripts/pre_release_check.py --tag 1.2.0.44-cpr-vcodex
-```
-
-- push a stable tag named like `1.2.0.44-cpr-vcodex`
-- the release workflow builds `gh_release`, validates that the packaged artifact
-  name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
-- tagged CI release builds derive the firmware release number from the tag, not
-  from a local counter file
-- the auto-flash sync workflow then mirrors that published release asset into
-  `docs/firmware/firmware.bin` and updates `docs/firmware/manifest.json`
+## Upstream Relationship
+
+`upstream` refers to the original CPR-vCodex repository. `origin` refers to
+Daniel's fork.
+
+The upstream author can continue publishing their own updates. This fork does
+not automatically receive those changes. Future updates can be reviewed,
+merged, skipped, or adapted depending on whether they fit this fork's reading
+stats direction.
+
+This fork should preserve stability first. The Xteink X4 uses an ESP32-C3 with
+limited RAM and no PSRAM, so new analytics should stay lightweight and avoid
+expensive work in reading/render loops.
 
 ## Credits
 
-Huge credit goes to:
+This fork exists because of prior work from:
 
-- the **CrossPoint Reader** project for the upstream base
-- the Xteink X4 community around the firmware ecosystem
-- Which-Estimate4566 for the logo artwork used in the docs
+- CrossPoint Reader, the original firmware base;
+- CPR-vCodex, the upstream fork this repository was cloned from;
+- the Xteink X4 community;
+- Codex, used as Daniel's AI coding assistant for this fork.
 
----
-
-CPR-vCodex is **not affiliated with Xteink or any manufacturer of the X4 hardware**.
+Again: this project is unofficial, unaffiliated, experimental, and provided with
+no warranty.
