@@ -15,7 +15,11 @@ where Daniel started publishing his own firmware builds.
 
 Published as GitHub release:
 
-- Pending release tag: `1.2.0.47-cpr-vcodex`
+- [`1.2.0.47-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.47-cpr-vcodex)
+
+Flashable firmware:
+
+- `1.2.0.47-cpr-vcodex.bin`
 
 ### Reader Home And Menu
 
@@ -57,6 +61,10 @@ pio run -e default
   - RAM usage: `102156 / 327680 bytes`;
   - packaged dev firmware:
     `artifacts/1.2.0.46.dev3-1de519a-cpr-vcodex.bin`.
+- Release gate passed with:
+  - flash usage: `6131927 / 6553600 bytes`;
+  - RAM usage: `102132 / 327680 bytes`;
+  - packaged firmware size: `6144480 bytes`.
 
 ## Stats Preview 0.2.0
 
