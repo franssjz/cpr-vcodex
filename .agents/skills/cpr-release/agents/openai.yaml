@@ -1,0 +1,6 @@
+interface:
+  display_name: "CPR Release"
+  short_description: "Version, release, CI, and auto-flash workflow"
+  default_prompt: "Use $cpr-release to prepare a CPR-vCodex release."
+policy:
+  allow_implicit_invocation: true

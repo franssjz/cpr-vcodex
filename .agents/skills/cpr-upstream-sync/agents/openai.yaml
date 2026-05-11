@@ -1,0 +1,6 @@
+interface:
+  display_name: "CPR Upstream Sync"
+  short_description: "Compare and port upstream or fork changes"
+  default_prompt: "Use $cpr-upstream-sync to compare CPR-vCodex with another fork."
+policy:
+  allow_implicit_invocation: true
