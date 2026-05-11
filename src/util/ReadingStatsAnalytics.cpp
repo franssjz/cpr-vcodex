@@ -273,6 +273,21 @@ uint32_t getAverageProgressPaceTenths(const ReadingBookStats& book) { return bui
 
 uint32_t getRecentProgressPaceTenths(const ReadingBookStats& book) { return buildPaceTenths(book, RECENT_SAMPLE_COUNT); }
 
+std::string formatPaceTrend(const ReadingBookStats& book) {
+  const uint32_t average = getAverageProgressPaceTenths(book);
+  const uint32_t recent = getRecentProgressPaceTenths(book);
+  if (average == 0 || recent == 0) {
+    return tr(STR_NOT_ENOUGH);
+  }
+
+  const uint32_t delta = average > recent ? average - recent : recent - average;
+  if (delta * 100 < average * 15) {
+    return tr(STR_PACE_STEADY);
+  }
+
+  return recent > average ? tr(STR_PACE_FASTER_LATELY) : tr(STR_PACE_SLOWER_LATELY);
+}
+
 uint32_t getTrackedProgressGainPercent(const ReadingBookStats& book) {
   uint32_t progressDelta = 0;
   for (const auto& sample : book.progressSamples) {

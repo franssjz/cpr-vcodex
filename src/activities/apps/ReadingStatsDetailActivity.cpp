@@ -247,7 +247,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   options.valueLargeY = METRIC_CARD_VALUE_Y;
   options.labelY = METRIC_CARD_LABEL_Y;
   options.shrinkValue = false;
-  options.labelMode = AppMetricCard::LabelMode::Truncate;
+  options.labelMode = AppMetricCard::LabelMode::Wrap;
   AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
@@ -578,7 +578,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
   }
 
-  const int finalCardsTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6;
+  const int finalCardsTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5;
   const int contentBottom = finalCardsTop + METRIC_CARD_HEIGHT + metrics.verticalSpacing;
   maxScrollOffset = std::max(0, contentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
@@ -634,6 +634,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
             : ReadingStatsAnalytics::formatTimeLeftEstimate(bookEstimate);
     const std::string progressGainValue =
         std::to_string(ReadingStatsAnalytics::getTrackedProgressGainPercent(*book)) + "%";
+    const std::string paceTrendValue = ReadingStatsAnalytics::formatPaceTrend(*book);
 
     drawMetricCard(renderer, Rect{metrics.contentSidePadding, drawCardsTop, cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_LAST_SESSION), ReadingStatsAnalytics::formatDurationHm(book->lastSessionMs));
@@ -644,46 +645,42 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding, drawCardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth,
                         METRIC_CARD_HEIGHT},
-                   tr(STR_SESSIONS), std::to_string(book->sessions));
-    drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
-                        drawCardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth, METRIC_CARD_HEIGHT},
-                   tr(STR_STATUS), book->completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS)));
-    drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2,
-                        pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
-                   tr(STR_LAST_READ_DATE), formatDate(book->lastReadAt));
-    drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 3,
-                        pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
-                   tr(STR_START_END_DATE), formatDateRange(book->firstReadAt, getCompletionDateForDisplay(*book)));
-    drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4,
-                        cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_BOOK_TIME_LEFT), ReadingStatsAnalytics::formatTimeLeftEstimate(bookEstimate));
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
-                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4, cardWidth, METRIC_CARD_HEIGHT},
+                        drawCardsTop + METRIC_CARD_HEIGHT + METRIC_CARD_GAP, cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_CHAPTER_TIME_LEFT), chapterEstimateValue);
     drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2,
                         cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_AVG_PACE),
                    ReadingStatsAnalytics::formatProgressPace(ReadingStatsAnalytics::getAverageProgressPaceTenths(*book)));
     drawMetricCard(
         renderer,
         Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
-             drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5, cardWidth, METRIC_CARD_HEIGHT},
+             drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 2, cardWidth, METRIC_CARD_HEIGHT},
         tr(STR_RECENT_PACE),
         ReadingStatsAnalytics::formatProgressPace(ReadingStatsAnalytics::getRecentProgressPaceTenths(*book)));
     drawMetricCard(renderer,
-                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 3,
                         cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_PROGRESS_GAIN), progressGainValue);
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
-                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6, cardWidth, METRIC_CARD_HEIGHT},
+                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 3, cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_PACE_TREND), paceTrendValue);
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4,
+                        cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_SESSIONS), std::to_string(book->sessions));
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
+                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4, cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_CONFIDENCE), ReadingStatsAnalytics::formatEstimateConfidence(bookEstimate.confidence));
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5,
+                        pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
+                   tr(STR_START_END_DATE), formatDateRange(book->firstReadAt, getCompletionDateForDisplay(*book)));
 
     renderer.fillRect(0, 0, pageWidth, contentTop, false);
     if (viewportBottom < pageHeight) {

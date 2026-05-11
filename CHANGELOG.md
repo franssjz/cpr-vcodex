@@ -11,6 +11,53 @@ where Daniel started publishing his own firmware builds.
 
 - No unreleased changes yet.
 
+## Stats Preview 0.3.0
+
+Published as GitHub release:
+
+- Pending release tag: `1.2.0.47-cpr-vcodex`
+
+### Reader Home And Menu
+
+- Added chapter time-left above book time-left in the normal Lyra home card.
+- Changed Lyra vCodex home time-left lines to compact `Ch:` and `Bk:` labels and
+  wrapped them instead of truncating them.
+- Added direct EPUB reader menu entries for Reader settings and Display settings
+  so font, font size, line spacing, margins, theme, and status bar options can
+  be reached without leaving the book.
+- Removed Bookmarks from the EPUB reader menu to reduce unused menu clutter.
+
+### Stats App Organization
+
+- Reordered per-book stats so book time-left, chapter time-left, average pace,
+  and recent pace appear above date metadata.
+- Removed Last Read from per-book stats detail.
+- Moved Start date - End date to the final full-width card.
+- Restored wrapping for metric-card labels so longer stats labels fit better.
+- Added Pace Trend, using neutral labels such as `Faster lately`, `Slower
+  lately`, or `Steady`.
+
+### Apps And Settings Menus
+
+- Hid Bookmarks and Flashcards from the Apps list and on-device app settings
+  list while leaving their underlying code and data support intact.
+- Defaulted Bookmarks and Flashcards shortcuts to hidden and filtered them from
+  shortcut ordering.
+
+### Verification
+
+- Built the development firmware with:
+
+```bash
+pio run -e default
+```
+
+- Development build passed with:
+  - flash usage: `6200299 / 6553600 bytes`;
+  - RAM usage: `102156 / 327680 bytes`;
+  - packaged dev firmware:
+    `artifacts/1.2.0.46.dev3-1de519a-cpr-vcodex.bin`.
+
 ## Stats Preview 0.2.0
 
 Published as GitHub release:

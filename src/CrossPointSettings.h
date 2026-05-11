@@ -341,9 +341,9 @@ class CrossPointSettings {
   uint8_t ifFoundShortcutVisible = 1;
   uint8_t readMeShortcutVisible = 1;
   uint8_t recentBooksShortcutVisible = 1;
-  uint8_t bookmarksShortcutVisible = 1;
+  uint8_t bookmarksShortcutVisible = 0;
   uint8_t favoritesShortcutVisible = 1;
-  uint8_t flashcardsShortcutVisible = 1;
+  uint8_t flashcardsShortcutVisible = 0;
   uint8_t fileTransferShortcutVisible = 1;
   uint8_t sleepShortcutVisible = 1;
   uint8_t opdsBrowserShortcutVisible = 1;

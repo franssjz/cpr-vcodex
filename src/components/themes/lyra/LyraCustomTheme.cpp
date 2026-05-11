@@ -31,7 +31,7 @@ uint8_t getBookProgressPercent(const RecentBook& recentBook) {
   return book ? book->lastProgressPercent : 0;
 }
 
-std::string buildEstimateLine(const char* label, const ReadingStatsAnalytics::TimeLeftEstimate& estimate) {
+std::string buildCompactEstimateLine(const char* label, const ReadingStatsAnalytics::TimeLeftEstimate& estimate) {
   return std::string(label) + ": " + ReadingStatsAnalytics::formatCompactTimeLeftEstimate(estimate);
 }
 
@@ -125,10 +125,18 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
                                       : ReadingStatsAnalytics::TimeLeftEstimate{};
       const auto chapterEstimate = stats ? ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats)
                                          : ReadingStatsAnalytics::TimeLeftEstimate{};
-      const bool showChapterEstimate =
-          chapterEstimate.ready && chapterEstimate.confidence != ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE;
       const int estimateLineHeight = stats ? renderer.getLineHeight(SMALL_FONT_ID) : 0;
-      const int estimateLineCount = stats ? (showChapterEstimate ? 3 : 2) : 0;
+      std::vector<std::string> estimateLines;
+      if (stats) {
+        estimateLines.push_back(renderer.truncatedText(SMALL_FONT_ID, buildReadingSummaryLine(stats).c_str(), maxLineWidth));
+        const auto wrappedChapter =
+            renderer.wrappedText(SMALL_FONT_ID, buildCompactEstimateLine("Ch", chapterEstimate).c_str(), maxLineWidth, 2);
+        estimateLines.insert(estimateLines.end(), wrappedChapter.begin(), wrappedChapter.end());
+        const auto wrappedBook =
+            renderer.wrappedText(SMALL_FONT_ID, buildCompactEstimateLine("Bk", bookEstimate).c_str(), maxLineWidth, 2);
+        estimateLines.insert(estimateLines.end(), wrappedBook.begin(), wrappedBook.end());
+      }
+      const int estimateLineCount = static_cast<int>(estimateLines.size());
       const int estimateBlockHeight = stats ? ESTIMATE_TOP_GAP + estimateLineHeight * estimateLineCount : 0;
       const int bottomBlockHeight =
           PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + estimateBlockHeight + H_PADDING + 5;
@@ -161,19 +169,10 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
 
       if (stats) {
         currentY += ESTIMATE_TOP_GAP;
-        const std::string summaryText =
-            renderer.truncatedText(SMALL_FONT_ID, buildReadingSummaryLine(stats).c_str(), maxLineWidth);
-        renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, summaryText.c_str(), true);
-        currentY += estimateLineHeight;
-        if (showChapterEstimate) {
-          const std::string chapterLine = buildEstimateLine(tr(STR_CHAPTER_TIME_LEFT), chapterEstimate);
-          const std::string chapterText = renderer.truncatedText(SMALL_FONT_ID, chapterLine.c_str(), maxLineWidth);
-          renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, chapterText.c_str(), true);
+        for (const auto& line : estimateLines) {
+          renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, line.c_str(), true);
           currentY += estimateLineHeight;
         }
-        const std::string bookLine = buildEstimateLine(tr(STR_BOOK_TIME_LEFT), bookEstimate);
-        const std::string bookText = renderer.truncatedText(SMALL_FONT_ID, bookLine.c_str(), maxLineWidth);
-        renderer.drawText(SMALL_FONT_ID, tileX + H_PADDING, currentY, bookText.c_str(), true);
       }
     }
   } else {

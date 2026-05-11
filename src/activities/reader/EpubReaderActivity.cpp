@@ -28,6 +28,7 @@
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
+#include "activities/settings/SettingsActivity.h"
 #include "activities/settings/StatusBarSettingsActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -619,6 +620,20 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
                                READING_STATS.resumeSession();
+                               section.reset();
+                               requestUpdate();
+                             });
+      break;
+    }
+    case EpubReaderMenuActivity::MenuAction::READER_SETTINGS:
+    case EpubReaderMenuActivity::MenuAction::DISPLAY_SETTINGS: {
+      const int initialCategory =
+          action == EpubReaderMenuActivity::MenuAction::READER_SETTINGS ? 1 : 0;
+      READING_STATS.noteActivity();
+      startActivityForResult(std::make_unique<SettingsActivity>(renderer, mappedInput, initialCategory),
+                             [this](const ActivityResult&) {
+                               READING_STATS.resumeSession();
+                               UITheme::getInstance().reload();
                                section.reset();
                                requestUpdate();
                              });

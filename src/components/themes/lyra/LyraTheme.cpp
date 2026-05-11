@@ -588,11 +588,19 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
         stats != nullptr
             ? ReadingStatsAnalytics::formatDurationHm(stats->totalReadingMs) + " | " + std::to_string(stats->sessions) + "x"
             : std::string("0m | 0x");
-    const std::string timeLeftText =
-        stats != nullptr ? std::string(tr(STR_BOOK_TIME_LEFT)) + ": " +
-                               ReadingStatsAnalytics::formatCompactTimeLeftEstimate(
-                                   ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats))
-                         : std::string();
+    std::vector<std::string> timeLeftLines;
+    if (stats != nullptr) {
+      const auto chapterEstimate = ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats);
+      const auto bookEstimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats);
+      const std::string chapterLine =
+          std::string("Ch: ") + ReadingStatsAnalytics::formatCompactTimeLeftEstimate(chapterEstimate);
+      const auto wrappedChapter = renderer.wrappedText(SMALL_FONT_ID, chapterLine.c_str(), textWidth, 2);
+      timeLeftLines.insert(timeLeftLines.end(), wrappedChapter.begin(), wrappedChapter.end());
+      const std::string bookLine =
+          std::string("Bk: ") + ReadingStatsAnalytics::formatCompactTimeLeftEstimate(bookEstimate);
+      const auto wrappedBook = renderer.wrappedText(SMALL_FONT_ID, bookLine.c_str(), textWidth, 2);
+      timeLeftLines.insert(timeLeftLines.end(), wrappedBook.begin(), wrappedBook.end());
+    }
 
     auto titleLines = renderer.wrappedText(UI_12_FONT_ID, book.title.c_str(), textWidth, 3, EpdFontFamily::BOLD);
 
@@ -606,7 +614,7 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     const int progressTopGap = 14;
     const int statsTopGap = 7;
     const int totalBlockHeight = titleBlockHeight + authorHeight + progressTopGap + progressRowHeight + statsTopGap +
-                                 statsLineHeight + (stats != nullptr ? statsLineHeight : 0);
+                                 statsLineHeight + static_cast<int>(timeLeftLines.size()) * statsLineHeight;
     int currentY = tileY + tileHeight / 2 - totalBlockHeight / 2;
     const int textX = tileX + hPaddingInSelection + coverWidth + LyraMetrics::values.verticalSpacing;
     for (const auto& line : titleLines) {
@@ -630,9 +638,8 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     currentY += progressRowHeight + statsTopGap;
     auto statsLine = renderer.truncatedText(SMALL_FONT_ID, statsText.c_str(), textWidth);
     renderer.drawText(SMALL_FONT_ID, textX, currentY, statsLine.c_str(), true);
-    if (!timeLeftText.empty()) {
+    for (const auto& timeLeftLine : timeLeftLines) {
       currentY += statsLineHeight;
-      auto timeLeftLine = renderer.truncatedText(SMALL_FONT_ID, timeLeftText.c_str(), textWidth);
       renderer.drawText(SMALL_FONT_ID, textX, currentY, timeLeftLine.c_str(), true);
     }
   } else {

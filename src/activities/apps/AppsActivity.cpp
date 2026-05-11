@@ -22,6 +22,11 @@
 #include "util/ShortcutUiMetadata.h"
 
 namespace {
+bool shouldHideStatsForkShortcut(const ShortcutDefinition* definition) {
+  return definition != nullptr &&
+         (definition->id == ShortcutId::Bookmarks || definition->id == ShortcutId::Flashcards);
+}
+
 std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItems, const int itemsPerPage) {
   if (totalItems <= 0) {
     return "";
@@ -37,6 +42,8 @@ std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItem
 void AppsActivity::onEnter() {
   Activity::onEnter();
   appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
+  appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(), shouldHideStatsForkShortcut),
+                     appShortcuts.end());
   if (!OPDS_STORE.hasServers()) {
     appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(),
                                       [](const ShortcutDefinition* definition) {
@@ -199,6 +206,8 @@ void AppsActivity::openSelectedApp() {
 
   startActivityForResult(std::move(activity), [this](const ActivityResult&) {
     appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
+    appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(), shouldHideStatsForkShortcut),
+                       appShortcuts.end());
     rebuildShortcutSubtitles();
     if (!appShortcuts.empty()) {
       selectedIndex = std::min(selectedIndex, static_cast<int>(appShortcuts.size()) - 1);

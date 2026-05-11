@@ -45,6 +45,7 @@ std::string formatTimeLeftEstimate(const TimeLeftEstimate& estimate);
 std::string formatCompactTimeLeftEstimate(const TimeLeftEstimate& estimate);
 std::string formatProgressPace(uint32_t progressPerHourTenths);
 std::string formatEstimateConfidence(EstimateConfidence confidence);
+std::string formatPaceTrend(const ReadingBookStats& book);
 uint32_t getAverageProgressPaceTenths(const ReadingBookStats& book);
 uint32_t getRecentProgressPaceTenths(const ReadingBookStats& book);
 uint32_t getTrackedProgressGainPercent(const ReadingBookStats& book);

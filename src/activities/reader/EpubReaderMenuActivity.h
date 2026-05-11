@@ -18,6 +18,8 @@ class EpubReaderMenuActivity final : public Activity {
     GO_TO_PERCENT,
     AUTO_PAGE_TURN,
     ROTATE_SCREEN,
+    READER_SETTINGS,
+    DISPLAY_SETTINGS,
     STATUS_BAR,
     SCREENSHOT,
     DISPLAY_QR,

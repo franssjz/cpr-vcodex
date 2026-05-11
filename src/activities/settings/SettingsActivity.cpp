@@ -195,16 +195,9 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
       SettingInfo::Action(StrId::STR_RESET_ACHIEVEMENTS, SettingAction::ResetAchievements),
       SettingInfo::Action(StrId::STR_SYNC_WITH_PREV_STATS, SettingAction::SyncAchievementsFromStats),
       SettingInfo::Section(StrId::STR_APPS),
-      SettingInfo::Action(StrId::STR_BOOKMARKS, SettingAction::Bookmarks),
       SettingInfo::Action(StrId::STR_FAVORITES, SettingAction::Favorites),
       SettingInfo::Action(StrId::STR_SLEEP, SettingAction::SleepApp),
       SettingInfo::Action(StrId::STR_IF_FOUND_RETURN_ME, SettingAction::IfFound),
-      SettingInfo::Section(StrId::STR_FLASHCARDS),
-      SettingInfo::Action(StrId::STR_FLASHCARDS, SettingAction::Flashcards),
-      SettingInfo::Enum(StrId::STR_STUDY_MODE, &CrossPointSettings::flashcardStudyMode,
-                        {StrId::STR_DUE, StrId::STR_SCHEDULED, StrId::STR_RANDOM_PRACTICE}),
-      SettingInfo::Enum(StrId::STR_SESSION_SIZE, &CrossPointSettings::flashcardSessionSize,
-                        {StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30, StrId::STR_NUM_50, StrId::STR_ALL}),
       SettingInfo::Section(StrId::STR_SHORTCUTS_SECTION),
       SettingInfo::Action(StrId::STR_SHORTCUT_LOCATION, SettingAction::ShortcutLocation),
       SettingInfo::Action(StrId::STR_SHORTCUT_VISIBILITY, SettingAction::ShortcutVisibility),
@@ -370,10 +363,9 @@ void SettingsActivity::onEnter() {
 
   buildSettingsLists();
 
-  // Reset selection to first category
-  selectedCategoryIndex = 0;
+  selectedCategoryIndex = std::clamp(initialCategoryIndex, 0, categoryCount - 1);
   selectedSettingIndex = 0;
-  enterCategory(0);
+  enterCategory(selectedCategoryIndex);
 
   // Trigger first update
   requestUpdate();

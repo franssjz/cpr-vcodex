@@ -114,6 +114,10 @@ inline bool isShortcutAlwaysVisible(const ShortcutDefinition& definition) {
   return definition.id == ShortcutId::Settings;
 }
 
+inline bool isStatsForkHiddenShortcut(const ShortcutDefinition& definition) {
+  return definition.id == ShortcutId::Bookmarks || definition.id == ShortcutId::Flashcards;
+}
+
 inline uint8_t getShortcutOrder(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
   return settings.*(definition.orderPtr);
 }
@@ -127,6 +131,9 @@ inline uint8_t& getShortcutOrderRef(CrossPointSettings& settings, const Shortcut
 }
 
 inline bool getShortcutVisibility(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {
+  if (isStatsForkHiddenShortcut(definition)) {
+    return false;
+  }
   if (isShortcutAlwaysVisible(definition)) {
     return true;
   }
@@ -168,6 +175,9 @@ inline std::vector<const ShortcutDefinition*> getConfiguredShortcuts(
     const CrossPointSettings::SHORTCUT_LOCATION location) {
   std::vector<const ShortcutDefinition*> shortcuts;
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isStatsForkHiddenShortcut(definition)) {
+      continue;
+    }
     if (static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr)) == location &&
         getShortcutVisibility(definition)) {
       shortcuts.push_back(&definition);
@@ -186,6 +196,9 @@ inline std::vector<ShortcutOrderEntry> getShortcutOrderEntries(const ShortcutOrd
   }
 
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isStatsForkHiddenShortcut(definition)) {
+      continue;
+    }
     const auto location = static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr));
     if ((group == ShortcutOrderGroup::Home && location == CrossPointSettings::SHORTCUT_HOME) ||
         (group == ShortcutOrderGroup::Apps && location == CrossPointSettings::SHORTCUT_APPS)) {

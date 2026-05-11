@@ -185,6 +185,7 @@ class SettingsActivity final : public Activity {
   std::vector<SettingRef> appSettings;
   const std::vector<SettingRef>* currentSettings = nullptr;
   bool settingsListsBuilt = false;
+  int initialCategoryIndex = 0;
 
   static constexpr int categoryCount = 5;
   static const StrId categoryNames[categoryCount];
@@ -199,8 +200,8 @@ class SettingsActivity final : public Activity {
   void buildSettingsLists();
 
  public:
-  explicit SettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : Activity("Settings", renderer, mappedInput) {}
+  explicit SettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, int initialCategoryIndex = 0)
+      : Activity("Settings", renderer, mappedInput), initialCategoryIndex(initialCategoryIndex) {}
   void onEnter() override;
   void onExit() override;
   void loop() override;
