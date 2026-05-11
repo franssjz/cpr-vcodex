@@ -10,6 +10,7 @@
 #include <Xtc.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -27,7 +28,8 @@
 namespace {
 constexpr int COVER_WIDTH = 96;
 constexpr int COVER_HEIGHT = 140;
-constexpr int PROGRESS_BLOCK_HEIGHT = 38;
+constexpr int DONUT_RADIUS = 54;
+constexpr int DONUT_THICKNESS = 9;
 constexpr int METRIC_ROW_HEIGHT = 46;
 constexpr int DETAIL_FOCUS_ITEM_COUNT = 2;
 constexpr int DETAIL_ADJUST_FOCUS_INDEX = 1;
@@ -237,6 +239,42 @@ std::string formatDateRange(const uint32_t startTimestamp, const uint32_t endTim
 }
 
 uint32_t getCompletionDateForDisplay(const ReadingBookStats& book) { return book.completedAt; }
+
+bool pointInProgressArc(const int dx, const int dy, const float progress) {
+  constexpr float kPi = 3.1415926535f;
+  if (progress >= 0.999f) {
+    return true;
+  }
+  float angle = atan2f(static_cast<float>(dy), static_cast<float>(dx)) + kPi / 2.0f;
+  while (angle < 0.0f) {
+    angle += kPi * 2.0f;
+  }
+  const float normalized = angle / (kPi * 2.0f);
+  return normalized <= progress;
+}
+
+void drawDonutGauge(GfxRenderer& renderer, const int cx, const int cy, const int radius, const int thickness,
+                    const uint8_t percent) {
+  const int innerRadius = std::max(2, radius - thickness);
+  const int outer2 = radius * radius;
+  const int inner2 = innerRadius * innerRadius;
+  const float progress = std::min<int>(percent, 100) / 100.0f;
+  for (int y = -radius; y <= radius; ++y) {
+    for (int x = -radius; x <= radius; ++x) {
+      const int d2 = x * x + y * y;
+      if (d2 <= inner2 || d2 > outer2) {
+        continue;
+      }
+      if (pointInProgressArc(x, y, progress)) {
+        renderer.drawPixel(cx + x, cy + y, true);
+      } else if (((x + y) & 3) == 0) {
+        renderer.drawPixel(cx + x, cy + y, true);
+      }
+    }
+  }
+  const std::string percentText = std::to_string(std::min<int>(percent, 100)) + "%";
+  renderer.drawText(UI_12_FONT_ID, cx - 18, cy - 8, percentText.c_str(), true, EpdFontFamily::BOLD);
+}
 
 void drawAdjustTimeButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
   if (selected) {
@@ -567,18 +605,8 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     currentY += 10;
   }
 
-  currentY += 6;
-  const int bookProgressTop = currentY;
-  currentY += PROGRESS_BLOCK_HEIGHT + 14;
-  const int chapterProgressTop = currentY;
-  currentY += PROGRESS_BLOCK_HEIGHT + 14;
-  const int chapterLabelTop = currentY;
-  currentY += renderer.getLineHeight(UI_10_FONT_ID) + 6;
-  const int chapterTextTop = currentY;
   const std::string currentChapter = book->chapterTitle.empty() ? std::string(tr(STR_NOT_SET)) : book->chapterTitle;
-  const auto chapterLines =
-      renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), textWidth, 2, EpdFontFamily::BOLD);
-  currentY += static_cast<int>(chapterLines.size()) * renderer.getLineHeight(UI_10_FONT_ID);
+  currentY = std::max(currentY + 10, contentTop + DONUT_RADIUS * 2 + 18);
 
   int cardsTop = std::max(adjustButtonBaseRect.y + adjustButtonBaseRect.height, currentY) + metrics.verticalSpacing + 10;
   const int summaryBannerTop = cardsTop;
@@ -586,7 +614,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
   }
 
-  constexpr int metricRowCount = 13;
+  constexpr int metricRowCount = 16;
   const int contentBottom = cardsTop + metricRowCount * METRIC_ROW_HEIGHT + metrics.verticalSpacing;
   maxScrollOffset = std::max(0, contentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
@@ -611,18 +639,8 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
       renderer.drawText(UI_10_FONT_ID, textX, authorTop + scrollDy, book->author.c_str());
     }
 
-    drawProgressBlock(renderer, Rect{textX, bookProgressTop + scrollDy, textWidth, PROGRESS_BLOCK_HEIGHT}, tr(STR_BOOK_PROGRESS),
-                      book->lastProgressPercent);
-    drawProgressBlock(renderer, Rect{textX, chapterProgressTop + scrollDy, textWidth, PROGRESS_BLOCK_HEIGHT}, tr(STR_CHAPTER_PROGRESS),
-                      book->chapterProgressPercent);
-
-    renderer.drawText(UI_10_FONT_ID, textX, chapterLabelTop + scrollDy, tr(STR_CURRENT_CHAPTER));
-
-    currentY = chapterTextTop + scrollDy;
-    for (const auto& line : chapterLines) {
-      renderer.drawText(UI_10_FONT_ID, textX, currentY, line.c_str(), true, EpdFontFamily::BOLD);
-      currentY += renderer.getLineHeight(UI_10_FONT_ID);
-    }
+    drawDonutGauge(renderer, textX + textWidth / 2, contentTop + DONUT_RADIUS + 18 + scrollDy, DONUT_RADIUS,
+                   DONUT_THICKNESS, book->lastProgressPercent);
 
     int drawCardsTop = cardsTop + scrollDy;
     if (showCompletionBanner) {
@@ -666,6 +684,9 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     };
     drawRow(tr(STR_LAST_SESSION), ReadingStatsAnalytics::formatDurationHm(book->lastSessionMs));
     drawRow(tr(STR_TOTAL_TIME), ReadingStatsAnalytics::formatDurationHm(book->totalReadingMs));
+    drawRow(tr(STR_BOOK_PROGRESS), std::to_string(book->lastProgressPercent) + "%");
+    drawRow(tr(STR_CHAPTER_PROGRESS), std::to_string(book->chapterProgressPercent) + "%");
+    drawRow(tr(STR_CURRENT_CHAPTER), currentChapter);
     drawRow(tr(STR_BOOK_TIME_LEFT), ReadingStatsAnalytics::formatTimeLeftEstimate(bookEstimate));
     drawRow(tr(STR_CHAPTER_TIME_LEFT), chapterEstimateValue);
     drawRow(tr(STR_AVG_PACE),

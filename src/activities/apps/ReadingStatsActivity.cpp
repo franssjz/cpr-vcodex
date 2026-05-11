@@ -15,11 +15,11 @@
 #include "util/ReadingStatsAnalytics.h"
 
 namespace {
-constexpr int SUMMARY_PANEL_HEIGHT = 142;
+constexpr int SUMMARY_PANEL_HEIGHT = 214;
 constexpr int DETAILS_BUTTON_HEIGHT = 38;
 constexpr int LIST_HEADER_HEIGHT = 34;
 constexpr int LIST_HEADER_BOTTOM_GAP = 10;
-constexpr int BOOK_ROW_HEIGHT = 94;
+constexpr int BOOK_ROW_HEIGHT = 74;
 constexpr int BOOK_ROW_GAP = 8;
 constexpr int BOOKS_PER_PAGE = 3;
 
@@ -31,6 +31,8 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
   }
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
 }
+
+void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent);
 
 void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
   if (selected) {
@@ -45,38 +47,57 @@ void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool s
   renderer.drawText(UI_12_FONT_ID, textX, textY, label, true, EpdFontFamily::BOLD);
 }
 
-void drawSummaryCell(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
-                     const bool emphasized = false) {
-  const int labelY = rect.y + 8;
-  const int valueY = rect.y + 31;
-  renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, label);
+void drawSummaryCell(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
+  const int labelY = rect.y + 7;
+  const int valueY = rect.y + 29;
+  const std::string clippedLabel = renderer.truncatedText(SMALL_FONT_ID, label, rect.width - 16);
+  renderer.drawText(SMALL_FONT_ID, rect.x + 8, labelY, clippedLabel.c_str());
   const std::string clipped =
-      renderer.truncatedText(UI_12_FONT_ID, value.c_str(), rect.width - 20, emphasized ? EpdFontFamily::BOLD
-                                                                                       : EpdFontFamily::REGULAR);
-  renderer.drawText(UI_12_FONT_ID, rect.x + 10, valueY, clipped.c_str(), true,
-                    emphasized ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+      renderer.truncatedText(UI_12_FONT_ID, value.c_str(), rect.width - 16, EpdFontFamily::BOLD);
+  renderer.drawText(UI_12_FONT_ID, rect.x + 8, valueY, clipped.c_str(), true, EpdFontFamily::BOLD);
 }
 
-void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t todayReadingMs,
-                      const std::string& dailyGoalValue) {
+void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t todayReadingMs) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-  const int headerHeight = 28;
-  const int halfWidth = rect.width / 2;
-  const int rowHeight = (rect.height - headerHeight) / 2;
-  renderer.drawText(UI_10_FONT_ID, rect.x + 10, rect.y + 8, tr(STR_READING_STATS), true, EpdFontFamily::BOLD);
-  renderer.drawLine(rect.x, rect.y + headerHeight, rect.x + rect.width, rect.y + headerHeight);
-  renderer.drawLine(rect.x + halfWidth, rect.y + headerHeight, rect.x + halfWidth, rect.y + rect.height);
-  renderer.drawLine(rect.x, rect.y + headerHeight + rowHeight, rect.x + rect.width, rect.y + headerHeight + rowHeight);
+  const int pad = 12;
+  renderer.drawText(UI_12_FONT_ID, rect.x + pad, rect.y + 10, tr(STR_READING_STATS), true, EpdFontFamily::BOLD);
 
-  drawSummaryCell(renderer, Rect{rect.x, rect.y + headerHeight, halfWidth, rowHeight}, tr(STR_TODAY),
-                  ReadingStatsAnalytics::formatDurationHm(todayReadingMs), todayReadingMs >= getDailyReadingGoalMs());
-  drawSummaryCell(renderer, Rect{rect.x + halfWidth, rect.y + headerHeight, rect.width - halfWidth, rowHeight},
-                  tr(STR_STREAK), std::to_string(READING_STATS.getCurrentStreakDays()));
-  drawSummaryCell(renderer, Rect{rect.x, rect.y + headerHeight + rowHeight, halfWidth, rowHeight}, tr(STR_DAILY_GOAL),
-                  dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
-  drawSummaryCell(renderer,
-                  Rect{rect.x + halfWidth, rect.y + headerHeight + rowHeight, rect.width - halfWidth, rowHeight},
-                  tr(STR_READING_TIME), ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
+  const auto& books = READING_STATS.getBooks();
+  const int heroTop = rect.y + 42;
+  const int heroHeight = 72;
+  renderer.drawLine(rect.x, heroTop - 8, rect.x + rect.width, heroTop - 8);
+  if (!books.empty()) {
+    const auto& recent = books.front();
+    const int titleWidth = rect.width - pad * 2 - 78;
+    const std::string title =
+        renderer.truncatedText(UI_12_FONT_ID, getBookTitle(recent).c_str(), titleWidth, EpdFontFamily::BOLD);
+    renderer.drawText(UI_12_FONT_ID, rect.x + pad, heroTop, title.c_str(), true, EpdFontFamily::BOLD);
+    const std::string author =
+        renderer.truncatedText(UI_10_FONT_ID, getBookSubtitle(recent).c_str(), titleWidth, EpdFontFamily::REGULAR);
+    renderer.drawText(UI_10_FONT_ID, rect.x + pad, heroTop + 25, author.c_str());
+    renderer.drawText(UI_12_FONT_ID, rect.x + rect.width - pad - 52, heroTop + 6,
+                      (std::to_string(recent.lastProgressPercent) + "%").c_str(), true, EpdFontFamily::BOLD);
+    drawMiniProgressBar(renderer, Rect{rect.x + pad, heroTop + 54, rect.width - pad * 2, 8},
+                        recent.lastProgressPercent);
+  } else {
+    renderer.drawText(UI_10_FONT_ID, rect.x + pad, heroTop + 20, tr(STR_NO_READING_STATS));
+  }
+
+  const int gridTop = heroTop + heroHeight + 8;
+  const int halfWidth = rect.width / 2;
+  const int rowHeight = (rect.y + rect.height - gridTop) / 2;
+  renderer.drawLine(rect.x, gridTop, rect.x + rect.width, gridTop);
+  renderer.drawLine(rect.x + halfWidth, gridTop, rect.x + halfWidth, rect.y + rect.height);
+  renderer.drawLine(rect.x, gridTop + rowHeight, rect.x + rect.width, gridTop + rowHeight);
+
+  drawSummaryCell(renderer, Rect{rect.x, gridTop, halfWidth, rowHeight}, tr(STR_READING_TIME),
+                  ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
+  drawSummaryCell(renderer, Rect{rect.x + halfWidth, gridTop, rect.width - halfWidth, rowHeight}, tr(STR_TODAY),
+                  ReadingStatsAnalytics::formatDurationHm(todayReadingMs));
+  drawSummaryCell(renderer, Rect{rect.x, gridTop + rowHeight, halfWidth, rowHeight}, tr(STR_STREAK),
+                  std::to_string(READING_STATS.getCurrentStreakDays()));
+  drawSummaryCell(renderer, Rect{rect.x + halfWidth, gridTop + rowHeight, rect.width - halfWidth, rowHeight},
+                  tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
 }
 
 void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
@@ -245,13 +266,11 @@ void ReadingStatsActivity::render(RenderLock&&) {
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int detailsTop = summaryTop + SUMMARY_PANEL_HEIGHT + metrics.verticalSpacing;
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
-  const std::string dailyGoalValue = ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
-                                     ReadingStatsAnalytics::formatDurationHm(getDailyReadingGoalMs());
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
   drawSummaryPanel(renderer, Rect{sidePadding, summaryTop, pageWidth - sidePadding * 2, SUMMARY_PANEL_HEIGHT},
-                   todayReadingMs, dailyGoalValue);
+                   todayReadingMs);
 
   drawMoreDetailsButton(renderer, Rect{sidePadding, detailsTop, pageWidth - sidePadding * 2, DETAILS_BUTTON_HEIGHT},
                         selectedIndex == 0);
