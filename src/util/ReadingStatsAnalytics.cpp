@@ -1,5 +1,7 @@
 #include "ReadingStatsAnalytics.h"
 
+#include <I18n.h>
+
 #include <algorithm>
 #include <ctime>
 
@@ -8,6 +10,12 @@
 namespace ReadingStatsAnalytics {
 namespace {
 constexpr uint64_t MIN_READING_DAY_BOOK_MS = 3ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_ESTIMATE_READING_MS = 10ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_CHAPTER_ESTIMATE_READING_MS = 2ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_ESTIMATE_AVG_SESSION_MS = 5ULL * 60ULL * 1000ULL;
+constexpr uint64_t ESTIMATE_ROUNDING_MS = 5ULL * 60ULL * 1000ULL;
+constexpr uint8_t MIN_ESTIMATE_PROGRESS_PERCENT = 5;
+constexpr uint8_t MIN_CHAPTER_ESTIMATE_PROGRESS_DELTA = 5;
 
 int resolveYearFromTimestamp(const uint32_t timestamp) {
   if (!TimeUtils::isClockValid(timestamp)) {
@@ -20,6 +28,20 @@ int resolveYearFromTimestamp(const uint32_t timestamp) {
     return 0;
   }
   return localTime.tm_year + 1900;
+}
+
+uint64_t roundUpEstimateMs(const uint64_t valueMs) {
+  if (valueMs == 0) {
+    return 0;
+  }
+  return ((valueMs + ESTIMATE_ROUNDING_MS - 1) / ESTIMATE_ROUNDING_MS) * ESTIMATE_ROUNDING_MS;
+}
+
+uint32_t calculateSessionsLeft(const uint64_t remainingMs, const uint64_t averageSessionMs) {
+  if (remainingMs == 0 || averageSessionMs < MIN_ESTIMATE_AVG_SESSION_MS) {
+    return 0;
+  }
+  return static_cast<uint32_t>((remainingMs + averageSessionMs - 1) / averageSessionMs);
 }
 
 }  // namespace
@@ -63,6 +85,95 @@ int getReferenceYear() {
   }
 
   return 2026;
+}
+
+uint64_t getAverageSessionMs() {
+  uint64_t totalReadingMs = 0;
+  uint32_t sessionCount = 0;
+  for (const auto& book : READING_STATS.getBooks()) {
+    totalReadingMs += book.totalReadingMs;
+    sessionCount += book.sessions;
+  }
+  return sessionCount == 0 ? 0 : totalReadingMs / sessionCount;
+}
+
+uint64_t getAverageReadingDayMs() {
+  uint64_t totalReadingMs = 0;
+  uint32_t readingDayCount = 0;
+  for (const auto& day : READING_STATS.getReadingDays()) {
+    if (day.readingMs == 0) {
+      continue;
+    }
+    totalReadingMs += day.readingMs;
+    readingDayCount++;
+  }
+  return readingDayCount == 0 ? 0 : totalReadingMs / readingDayCount;
+}
+
+TimeLeftEstimate buildBookTimeLeftEstimate(const ReadingBookStats& book) {
+  TimeLeftEstimate estimate;
+  if (book.completed || book.lastProgressPercent >= 100) {
+    estimate.completed = true;
+    estimate.ready = true;
+    return estimate;
+  }
+
+  if (book.totalReadingMs < MIN_ESTIMATE_READING_MS || book.lastProgressPercent < MIN_ESTIMATE_PROGRESS_PERCENT) {
+    return estimate;
+  }
+
+  const uint64_t estimatedTotalMs =
+      (book.totalReadingMs * 100ULL + book.lastProgressPercent - 1) / book.lastProgressPercent;
+  if (estimatedTotalMs <= book.totalReadingMs) {
+    return estimate;
+  }
+
+  estimate.remainingMs = roundUpEstimateMs(estimatedTotalMs - book.totalReadingMs);
+  estimate.sessionsLeft = calculateSessionsLeft(estimate.remainingMs, book.sessions == 0 ? 0 : book.totalReadingMs / book.sessions);
+  estimate.ready = true;
+  return estimate;
+}
+
+TimeLeftEstimate buildChapterTimeLeftEstimate(const ReadingBookStats& book) {
+  TimeLeftEstimate estimate;
+  if (book.completed || book.lastProgressPercent >= 100 || book.chapterProgressPercent >= 100) {
+    estimate.completed = true;
+    estimate.ready = true;
+    return estimate;
+  }
+
+  if (book.chapterTitle.empty() || book.currentChapterReadingMs < MIN_CHAPTER_ESTIMATE_READING_MS ||
+      book.chapterProgressPercent <= book.chapterReadingStartProgressPercent) {
+    return estimate;
+  }
+
+  const uint8_t progressDelta = book.chapterProgressPercent - book.chapterReadingStartProgressPercent;
+  const uint8_t remainingProgress = 100 - book.chapterProgressPercent;
+  if (progressDelta < MIN_CHAPTER_ESTIMATE_PROGRESS_DELTA || remainingProgress == 0) {
+    return estimate;
+  }
+
+  estimate.remainingMs = roundUpEstimateMs((book.currentChapterReadingMs * remainingProgress + progressDelta - 1) /
+                                           progressDelta);
+  estimate.sessionsLeft = calculateSessionsLeft(estimate.remainingMs, book.sessions == 0 ? 0 : book.totalReadingMs / book.sessions);
+  estimate.ready = true;
+  return estimate;
+}
+
+std::string formatTimeLeftEstimate(const TimeLeftEstimate& estimate) {
+  if (estimate.completed) {
+    return tr(STR_DONE);
+  }
+  if (!estimate.ready || estimate.remainingMs == 0) {
+    return tr(STR_ESTIMATE_AFTER_MORE_READING);
+  }
+
+  std::string value = "~" + formatDurationHm(estimate.remainingMs);
+  if (estimate.sessionsLeft > 0) {
+    value += " / " + std::to_string(estimate.sessionsLeft) + " " +
+             (estimate.sessionsLeft == 1 ? std::string(tr(STR_SESSION)) : std::string(tr(STR_SESSIONS)));
+  }
+  return value;
 }
 
 std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {

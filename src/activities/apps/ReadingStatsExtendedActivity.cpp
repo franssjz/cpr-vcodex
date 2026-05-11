@@ -202,7 +202,7 @@ int getScrollableContentBottom(const GfxRenderer&, const ThemeMetrics&) {
 
 int getMaxScrollOffset(const GfxRenderer& renderer, const ThemeMetrics& metrics) {
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int recentTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
+  const int recentTop = summaryTop + SUMMARY_CARD_HEIGHT * 4 + SUMMARY_GAP * 3 + metrics.verticalSpacing;
   const int chartViewportTop = recentTop + RECENT_CARD_HEIGHT + metrics.verticalSpacing;
   const int visibleHeight = renderer.getScreenHeight() - metrics.buttonHintsHeight - CHART_BOTTOM_GAP - chartViewportTop;
   return std::max(0, getScrollableContentBottom(renderer, metrics) - visibleHeight);
@@ -320,7 +320,7 @@ void ReadingStatsExtendedActivity::render(RenderLock&&) {
   const int sidePadding = metrics.contentSidePadding;
   const int cardWidth = (pageWidth - sidePadding * 2 - SUMMARY_GAP) / 2;
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int recentTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
+  const int recentTop = summaryTop + SUMMARY_CARD_HEIGHT * 4 + SUMMARY_GAP * 3 + metrics.verticalSpacing;
   const int chartViewportTop = recentTop + RECENT_CARD_HEIGHT + metrics.verticalSpacing;
   const int chartViewportBottom = renderer.getScreenHeight() - metrics.buttonHintsHeight - CHART_BOTTOM_GAP;
   const int maxScrollOffset = getMaxScrollOffset(renderer, metrics);
@@ -332,6 +332,8 @@ void ReadingStatsExtendedActivity::render(RenderLock&&) {
 
   const std::string last7DaysValue = ReadingStatsAnalytics::formatDurationHm(READING_STATS.getRecentReadingMs(7));
   const std::string last30DaysValue = ReadingStatsAnalytics::formatDurationHm(READING_STATS.getRecentReadingMs(30));
+  const std::string averageSessionValue = ReadingStatsAnalytics::formatDurationHm(ReadingStatsAnalytics::getAverageSessionMs());
+  const std::string averageDayValue = ReadingStatsAnalytics::formatDurationHm(ReadingStatsAnalytics::getAverageReadingDayMs());
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
   const std::string dailyGoalValue =
       ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
@@ -375,6 +377,13 @@ void ReadingStatsExtendedActivity::render(RenderLock&&) {
                  Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2,
                       cardWidth, SUMMARY_CARD_HEIGHT},
                  tr(STR_BOOKS_STARTED), std::to_string(READING_STATS.getBooksStartedCount()));
+  drawMetricCard(renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 3, cardWidth,
+                                SUMMARY_CARD_HEIGHT},
+                 tr(STR_AVG_SESSION), averageSessionValue);
+  drawMetricCard(renderer,
+                 Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 3,
+                      cardWidth, SUMMARY_CARD_HEIGHT},
+                 tr(STR_AVG_READING_DAY), averageDayValue);
 
   drawRecentWindowCard(renderer, Rect{sidePadding, recentTop, cardWidth, RECENT_CARD_HEIGHT}, "7D", last7DaysValue);
   drawRecentWindowCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, recentTop, cardWidth, RECENT_CARD_HEIGHT},

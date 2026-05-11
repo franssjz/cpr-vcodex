@@ -1381,6 +1381,8 @@
         knownPaths: "Known paths, one per line",
         coverBmpPath: "Cover BMP path",
         chapterTitle: "Chapter title",
+        currentChapterMinutes: "Current chapter minutes",
+        chapterStartProgress: "Chapter start progress",
         totalReadingMinutes: "Total reading minutes",
         lastSessionMinutes: "Last session minutes",
         bookProgress: "Book progress %",
@@ -3364,6 +3366,7 @@
         chapterTitle: String(book.chapterTitle || ""),
         readingDays: readingDays.map(normalizeDay).filter(day => day.dayOrdinal && day.readingMs),
         totalReadingMs: toUInt(book.totalReadingMs),
+        currentChapterReadingMs: toUInt(book.currentChapterReadingMs),
         sessions: toUInt(book.sessions),
         lastSessionMs: toUInt(book.lastSessionMs),
         firstReadAt: toUInt(book.firstReadAt),
@@ -3371,6 +3374,9 @@
         completedAt: toUInt(book.completedAt),
         lastProgressPercent: clampPercent(book.lastProgressPercent),
         chapterProgressPercent: clampPercent(book.chapterProgressPercent),
+        chapterReadingStartProgressPercent: book.chapterReadingStartProgressPercent === undefined
+          ? clampPercent(book.chapterProgressPercent)
+          : clampPercent(book.chapterReadingStartProgressPercent),
         completed: Boolean(book.completed)
       };
       if (!normalized.bookId) normalized.bookId = normalized.path;
@@ -3385,7 +3391,7 @@
       const books = Array.isArray(doc.books) ? doc.books : [];
       const sessionLog = Array.isArray(doc.sessionLog) ? doc.sessionLog : [];
       const normalized = {
-        formatVersion: 5,
+        formatVersion: Math.max(toUInt(doc.formatVersion), 6),
         readingDays: [],
         legacyReadingDays: [],
         sessionLog: sessionLog.map(entry => ({
@@ -3418,18 +3424,20 @@
         book.totalReadingMs = book.readingDays.reduce((sum, day) => sum + toUInt(day.readingMs), 0);
         book.lastProgressPercent = clampPercent(book.lastProgressPercent);
         book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
+        book.chapterReadingStartProgressPercent = clampPercent(book.chapterReadingStartProgressPercent);
+        if (book.currentChapterReadingMs > book.totalReadingMs) book.currentChapterReadingMs = book.totalReadingMs;
         if (book.completed && book.lastProgressPercent < 100) book.lastProgressPercent = 100;
       }
       doc.readingDays = Array.from(totals.entries())
         .map(([dayOrdinal, readingMs]) => ({dayOrdinal, readingMs}))
         .sort((a, b) => a.dayOrdinal - b.dayOrdinal);
       doc.legacyReadingDays = doc.readingDays.map(day => ({...day}));
-      doc.formatVersion = 5;
+      doc.formatVersion = Math.max(toUInt(doc.formatVersion), 6);
     }
 
     function makeEmptyDoc() {
       return {
-        formatVersion: 5,
+        formatVersion: 6,
         readingDays: [],
         legacyReadingDays: [],
         sessionLog: [],
@@ -3448,6 +3456,7 @@
         chapterTitle: "",
         readingDays: [],
         totalReadingMs: 0,
+        currentChapterReadingMs: 0,
         sessions: 0,
         lastSessionMs: 0,
         firstReadAt: 0,
@@ -3455,6 +3464,7 @@
         completedAt: 0,
         lastProgressPercent: 0,
         chapterProgressPercent: 0,
+        chapterReadingStartProgressPercent: 0,
         completed: false
       });
     }
@@ -3785,10 +3795,12 @@
           ${textField("coverBmpPath", t("coverBmpPath"), book.coverBmpPath)}
           ${textField("chapterTitle", t("chapterTitle"), book.chapterTitle)}
           ${numberField("totalReadingMinutes", t("totalReadingMinutes"), msToMinutes(book.totalReadingMs))}
+          ${numberField("currentChapterMinutes", t("currentChapterMinutes"), msToMinutes(book.currentChapterReadingMs))}
           ${numberField("sessions", t("sessions"), book.sessions)}
           ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
           ${numberField("lastProgressPercent", t("bookProgress"), book.lastProgressPercent)}
           ${numberField("chapterProgressPercent", t("chapterProgress"), book.chapterProgressPercent)}
+          ${numberField("chapterReadingStartProgressPercent", t("chapterStartProgress"), book.chapterReadingStartProgressPercent)}
           ${datetimeField("firstReadAt", t("firstReadAt"), datetimeDisplayFromEpoch(book.firstReadAt))}
           ${datetimeField("lastReadAt", t("lastReadAt"), datetimeDisplayFromEpoch(book.lastReadAt))}
           ${datetimeField("completedAt", t("completedAt"), datetimeDisplayFromEpoch(book.completedAt))}
@@ -3833,10 +3845,12 @@
         book.coverBmpPath = value("coverBmpPath");
         book.chapterTitle = value("chapterTitle");
         book.totalReadingMs = minutesToMs(value("totalReadingMinutes"));
+        book.currentChapterReadingMs = Math.min(minutesToMs(value("currentChapterMinutes")), book.totalReadingMs);
         book.sessions = toUInt(value("sessions"));
         book.lastSessionMs = minutesToMs(value("lastSessionMinutes"));
         book.lastProgressPercent = clampPercent(value("lastProgressPercent"));
         book.chapterProgressPercent = clampPercent(value("chapterProgressPercent"));
+        book.chapterReadingStartProgressPercent = clampPercent(value("chapterReadingStartProgressPercent"));
         book.firstReadAt = epochFromDatetimeInput(value("firstReadAt"));
         book.lastReadAt = epochFromDatetimeInput(value("lastReadAt"));
         book.completedAt = epochFromDatetimeInput(value("completedAt"));

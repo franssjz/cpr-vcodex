@@ -196,6 +196,8 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
   if (primary.chapterTitle.empty() || (!duplicate.chapterTitle.empty() && duplicate.lastReadAt >= primary.lastReadAt)) {
     primary.chapterTitle = duplicate.chapterTitle;
+    primary.currentChapterReadingMs = duplicate.currentChapterReadingMs;
+    primary.chapterReadingStartProgressPercent = duplicate.chapterReadingStartProgressPercent;
   }
 
   primary.totalReadingMs += duplicate.totalReadingMs;
@@ -213,6 +215,8 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   if (duplicate.lastReadAt >= primary.lastReadAt) {
     primary.lastProgressPercent = duplicate.lastProgressPercent;
     primary.chapterProgressPercent = duplicate.chapterProgressPercent;
+    primary.currentChapterReadingMs = duplicate.currentChapterReadingMs;
+    primary.chapterReadingStartProgressPercent = duplicate.chapterReadingStartProgressPercent;
   } else {
     primary.lastProgressPercent = std::max(primary.lastProgressPercent, duplicate.lastProgressPercent);
     primary.chapterProgressPercent = std::max(primary.chapterProgressPercent, duplicate.chapterProgressPercent);
@@ -593,6 +597,10 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   auto& book = books[0];
   activeSession.startProgressPercent = book.lastProgressPercent;
   activeSession.startCompleted = book.completed;
+  if (book.chapterTitle != chapterTitle) {
+    book.currentChapterReadingMs = 0;
+    book.chapterReadingStartProgressPercent = clampPercent(chapterProgressPercent);
+  }
   book.lastProgressPercent = clampPercent(progressPercent);
   book.chapterTitle = chapterTitle;
   book.chapterProgressPercent = clampPercent(chapterProgressPercent);
@@ -622,6 +630,7 @@ void ReadingStatsStore::noteActivity() {
   if (creditedMs > 0) {
     auto& book = books[activeSession.bookIndex];
     book.totalReadingMs += creditedMs;
+    book.currentChapterReadingMs += creditedMs;
     activeSession.accumulatedMs += creditedMs;
     const uint32_t referenceTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     recordReadingTime(book, referenceTimestamp, creditedMs);
@@ -674,6 +683,10 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   }
 
   book.lastProgressPercent = clampedBookProgress;
+  if (chapterTitleChanged) {
+    book.currentChapterReadingMs = 0;
+    book.chapterReadingStartProgressPercent = clampedChapterProgress;
+  }
   book.chapterTitle = chapterTitle;
   book.chapterProgressPercent = clampedChapterProgress;
   if (completed || clampedBookProgress >= 100) {

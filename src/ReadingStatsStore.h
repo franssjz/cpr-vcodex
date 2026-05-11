@@ -23,6 +23,7 @@ struct ReadingBookStats {
   std::string chapterTitle;
   std::vector<ReadingDayStats> readingDays;
   uint64_t totalReadingMs = 0;
+  uint64_t currentChapterReadingMs = 0;
   uint32_t sessions = 0;
   uint32_t lastSessionMs = 0;
   uint32_t firstReadAt = 0;
@@ -30,6 +31,7 @@ struct ReadingBookStats {
   uint32_t completedAt = 0;
   uint8_t lastProgressPercent = 0;
   uint8_t chapterProgressPercent = 0;
+  uint8_t chapterReadingStartProgressPercent = 0;
   bool completed = false;
 };
 

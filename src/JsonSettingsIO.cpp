@@ -1198,7 +1198,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
 
 bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  doc["formatVersion"] = 5;
+  doc["formatVersion"] = 6;
 
   JsonArray days = doc["readingDays"].to<JsonArray>();
   for (const auto& day : store.getReadingDays()) {
@@ -1235,6 +1235,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["coverBmpPath"] = book.coverBmpPath;
     obj["chapterTitle"] = book.chapterTitle;
     obj["totalReadingMs"] = book.totalReadingMs;
+    obj["currentChapterReadingMs"] = book.currentChapterReadingMs;
     obj["sessions"] = book.sessions;
     obj["lastSessionMs"] = book.lastSessionMs;
     obj["firstReadAt"] = book.firstReadAt;
@@ -1242,6 +1243,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["completedAt"] = book.completedAt;
     obj["lastProgressPercent"] = book.lastProgressPercent;
     obj["chapterProgressPercent"] = book.chapterProgressPercent;
+    obj["chapterReadingStartProgressPercent"] = book.chapterReadingStartProgressPercent;
     obj["completed"] = book.completed;
 
     JsonArray bookDays = obj["readingDays"].to<JsonArray>();
@@ -1328,6 +1330,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
+    book.currentChapterReadingMs = obj["currentChapterReadingMs"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);
@@ -1335,6 +1338,7 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     book.completedAt = obj["completedAt"] | static_cast<uint32_t>(0);
     book.lastProgressPercent = obj["lastProgressPercent"] | static_cast<uint8_t>(0);
     book.chapterProgressPercent = obj["chapterProgressPercent"] | static_cast<uint8_t>(0);
+    book.chapterReadingStartProgressPercent = obj["chapterReadingStartProgressPercent"] | book.chapterProgressPercent;
     book.completed = obj["completed"] | false;
     if (formatVersion >= 2) {
       appendReadingDays(book.readingDays, obj["readingDays"].as<JsonArray>());

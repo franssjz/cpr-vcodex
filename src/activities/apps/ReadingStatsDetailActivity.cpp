@@ -40,10 +40,6 @@ constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 128;
 constexpr size_t MAX_RESOLVED_COVERS = 16;
-constexpr uint64_t MIN_ESTIMATE_READING_MS = 10ULL * 60ULL * 1000ULL;
-constexpr uint8_t MIN_ESTIMATE_PROGRESS_PERCENT = 5;
-constexpr uint64_t MIN_ESTIMATE_AVG_SESSION_MS = 5ULL * 60ULL * 1000ULL;
-constexpr uint64_t ESTIMATE_ROUNDING_MS = 5ULL * 60ULL * 1000ULL;
 
 struct ResolvedCoverCacheEntry {
   std::string bookPath;
@@ -245,58 +241,6 @@ std::string formatDateRange(const uint32_t startTimestamp, const uint32_t endTim
 }
 
 uint32_t getCompletionDateForDisplay(const ReadingBookStats& book) { return book.completedAt; }
-
-uint64_t roundUpEstimateMs(const uint64_t valueMs) {
-  if (valueMs == 0) {
-    return 0;
-  }
-  return ((valueMs + ESTIMATE_ROUNDING_MS - 1) / ESTIMATE_ROUNDING_MS) * ESTIMATE_ROUNDING_MS;
-}
-
-std::string buildSessionEstimateText(const uint64_t remainingMs, const ReadingBookStats& book) {
-  if (book.sessions == 0) {
-    return "";
-  }
-
-  const uint64_t averageSessionMs = book.totalReadingMs / book.sessions;
-  if (averageSessionMs < MIN_ESTIMATE_AVG_SESSION_MS) {
-    return "";
-  }
-
-  const uint32_t sessionsLeft =
-      static_cast<uint32_t>((remainingMs + averageSessionMs - 1) / averageSessionMs);
-  if (sessionsLeft == 0) {
-    return "";
-  }
-
-  return std::to_string(sessionsLeft) + " " +
-         (sessionsLeft == 1 ? std::string(tr(STR_SESSION)) : std::string(tr(STR_SESSIONS)));
-}
-
-std::string buildEstimatedTimeLeftText(const ReadingBookStats& book) {
-  if (book.completed || book.lastProgressPercent >= 100) {
-    return tr(STR_DONE);
-  }
-
-  if (book.totalReadingMs < MIN_ESTIMATE_READING_MS ||
-      book.lastProgressPercent < MIN_ESTIMATE_PROGRESS_PERCENT) {
-    return tr(STR_ESTIMATE_AFTER_MORE_READING);
-  }
-
-  const uint64_t estimatedTotalMs =
-      (book.totalReadingMs * 100ULL + book.lastProgressPercent - 1) / book.lastProgressPercent;
-  if (estimatedTotalMs <= book.totalReadingMs) {
-    return tr(STR_ESTIMATE_AFTER_MORE_READING);
-  }
-
-  const uint64_t remainingMs = roundUpEstimateMs(estimatedTotalMs - book.totalReadingMs);
-  std::string estimateText = "~" + ReadingStatsAnalytics::formatDurationHm(remainingMs);
-  const std::string sessionText = buildSessionEstimateText(remainingMs, book);
-  if (!sessionText.empty()) {
-    estimateText += " / " + sessionText;
-  }
-  return estimateText;
-}
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
   AppMetricCard::Options options;
@@ -634,8 +578,8 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
   }
 
-  const int estimateCardTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4;
-  const int contentBottom = estimateCardTop + METRIC_CARD_HEIGHT + metrics.verticalSpacing;
+  const int estimateCardsTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4;
+  const int contentBottom = estimateCardsTop + METRIC_CARD_HEIGHT + metrics.verticalSpacing;
   maxScrollOffset = std::max(0, contentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
   const int scrollDy = -scrollOffset;
@@ -707,8 +651,15 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
                    tr(STR_START_END_DATE), formatDateRange(book->firstReadAt, getCompletionDateForDisplay(*book)));
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4,
-                        pageWidth - metrics.contentSidePadding * 2, METRIC_CARD_HEIGHT},
-                   tr(STR_ESTIMATED_TIME_LEFT), buildEstimatedTimeLeftText(*book));
+                        cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_BOOK_TIME_LEFT),
+                   ReadingStatsAnalytics::formatTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(*book)));
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
+                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4, cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_CHAPTER_TIME_LEFT),
+                   ReadingStatsAnalytics::formatTimeLeftEstimate(
+                       ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*book)));
 
     renderer.fillRect(0, 0, pageWidth, contentTop, false);
     if (viewportBottom < pageHeight) {
