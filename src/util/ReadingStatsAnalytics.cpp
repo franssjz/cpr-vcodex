@@ -16,6 +16,7 @@ constexpr uint64_t ESTIMATE_ROUNDING_MS = 5ULL * 60ULL * 1000ULL;
 constexpr uint32_t MIN_MEDIUM_CONFIDENCE_PROGRESS = 3;
 constexpr uint32_t MIN_HIGH_CONFIDENCE_PROGRESS = 10;
 constexpr uint32_t RECENT_SAMPLE_COUNT = 8;
+constexpr uint32_t TREND_SAMPLE_COUNT = 4;
 
 int resolveYearFromTimestamp(const uint32_t timestamp) {
   if (!TimeUtils::isClockValid(timestamp)) {
@@ -113,6 +114,31 @@ uint32_t buildPaceTenths(const ReadingBookStats& book, const uint32_t maxSamples
     }
     if (it->sessionMs == 0 || it->endProgressPercent <= it->startProgressPercent) {
       continue;
+    }
+    trackedMs += it->sessionMs;
+    progressDelta += static_cast<uint32_t>(it->endProgressPercent - it->startProgressPercent);
+    samplesUsed++;
+  }
+  if (trackedMs == 0 || progressDelta == 0) {
+    return 0;
+  }
+  return static_cast<uint32_t>((static_cast<uint64_t>(progressDelta) * 36000ULL + trackedMs / 2) / trackedMs);
+}
+
+uint32_t buildPaceTenthsWindow(const ReadingBookStats& book, const uint32_t skipSamples, const uint32_t maxSamples) {
+  uint64_t trackedMs = 0;
+  uint32_t progressDelta = 0;
+  uint32_t validSamplesSeen = 0;
+  uint32_t samplesUsed = 0;
+  for (auto it = book.progressSamples.rbegin(); it != book.progressSamples.rend(); ++it) {
+    if (it->sessionMs == 0 || it->endProgressPercent <= it->startProgressPercent) {
+      continue;
+    }
+    if (validSamplesSeen++ < skipSamples) {
+      continue;
+    }
+    if (maxSamples > 0 && samplesUsed >= maxSamples) {
+      break;
     }
     trackedMs += it->sessionMs;
     progressDelta += static_cast<uint32_t>(it->endProgressPercent - it->startProgressPercent);
@@ -250,6 +276,32 @@ std::string formatCompactTimeLeftEstimate(const TimeLeftEstimate& estimate) {
   return "~" + formatDurationCompact(estimate.remainingMs);
 }
 
+std::string formatEstimateReadinessExplanation(const TimeLeftEstimate& estimate) {
+  if (estimate.completed || estimate.ready) {
+    return "";
+  }
+
+  const uint32_t neededProgress =
+      estimate.trackedProgressDeltaPercent >= MIN_MEDIUM_CONFIDENCE_PROGRESS
+          ? 0
+          : MIN_MEDIUM_CONFIDENCE_PROGRESS - estimate.trackedProgressDeltaPercent;
+  const uint64_t neededMs =
+      estimate.trackedProgressMs >= MIN_MEDIUM_CONFIDENCE_MS ? 0 : MIN_MEDIUM_CONFIDENCE_MS - estimate.trackedProgressMs;
+
+  if (neededProgress > 0 && neededMs > 0) {
+    return std::string(tr(STR_NEEDS_PREFIX)) + std::to_string(neededProgress) + "%" +
+           tr(STR_MORE_PROGRESS_SUFFIX) + " / " + formatDurationCompact(neededMs) + tr(STR_TRACKED_SUFFIX);
+  }
+  if (neededProgress > 0) {
+    return std::string(tr(STR_NEEDS_PREFIX)) + std::to_string(neededProgress) + "%" +
+           tr(STR_MORE_PROGRESS_SUFFIX);
+  }
+  if (neededMs > 0) {
+    return std::string(tr(STR_NEEDS_PREFIX)) + formatDurationCompact(neededMs) + tr(STR_TRACKED_SUFFIX);
+  }
+  return tr(STR_ESTIMATE_AFTER_MORE_READING);
+}
+
 std::string formatProgressPace(const uint32_t progressPerHourTenths) {
   if (progressPerHourTenths == 0) {
     return tr(STR_ESTIMATE_AFTER_MORE_READING);
@@ -273,19 +325,51 @@ uint32_t getAverageProgressPaceTenths(const ReadingBookStats& book) { return bui
 
 uint32_t getRecentProgressPaceTenths(const ReadingBookStats& book) { return buildPaceTenths(book, RECENT_SAMPLE_COUNT); }
 
-std::string formatPaceTrend(const ReadingBookStats& book) {
-  const uint32_t average = getAverageProgressPaceTenths(book);
-  const uint32_t recent = getRecentProgressPaceTenths(book);
-  if (average == 0 || recent == 0) {
+uint32_t getOlderProgressPaceTenths(const ReadingBookStats& book) {
+  return buildPaceTenthsWindow(book, TREND_SAMPLE_COUNT, TREND_SAMPLE_COUNT);
+}
+
+std::string formatEstimateStability(const ReadingBookStats& book) {
+  if (book.estimateSamples.size() < 3) {
     return tr(STR_NOT_ENOUGH);
   }
 
-  const uint32_t delta = average > recent ? average - recent : recent - average;
-  if (delta * 100 < average * 15) {
+  uint64_t totalSwing = 0;
+  uint32_t comparisons = 0;
+  for (size_t index = 1; index < book.estimateSamples.size(); ++index) {
+    const uint32_t previous = book.estimateSamples[index - 1].remainingMs;
+    const uint32_t current = book.estimateSamples[index].remainingMs;
+    if (previous == 0 || current == 0) {
+      continue;
+    }
+    totalSwing += previous > current ? previous - current : current - previous;
+    comparisons++;
+  }
+  if (comparisons == 0) {
+    return tr(STR_NOT_ENOUGH);
+  }
+
+  const uint32_t latest = book.estimateSamples.back().remainingMs;
+  const uint64_t averageSwing = totalSwing / comparisons;
+  if (averageSwing * 100ULL <= static_cast<uint64_t>(latest) * 20ULL) {
+    return tr(STR_ESTIMATE_STABILIZING);
+  }
+  return tr(STR_ESTIMATE_JUMPY);
+}
+
+std::string formatPaceTrend(const ReadingBookStats& book) {
+  const uint32_t older = getOlderProgressPaceTenths(book);
+  const uint32_t recent = buildPaceTenthsWindow(book, 0, TREND_SAMPLE_COUNT);
+  if (older == 0 || recent == 0) {
+    return tr(STR_NOT_ENOUGH);
+  }
+
+  const uint32_t delta = older > recent ? older - recent : recent - older;
+  if (delta * 100 < older * 15) {
     return tr(STR_PACE_STEADY);
   }
 
-  return recent > average ? tr(STR_PACE_FASTER_LATELY) : tr(STR_PACE_SLOWER_LATELY);
+  return recent > older ? tr(STR_PACE_FASTER_LATELY) : tr(STR_PACE_SLOWER_LATELY);
 }
 
 uint32_t getTrackedProgressGainPercent(const ReadingBookStats& book) {

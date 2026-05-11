@@ -1200,7 +1200,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
 
 bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  doc["formatVersion"] = 7;
+  doc["formatVersion"] = 8;
 
   JsonArray days = doc["readingDays"].to<JsonArray>();
   for (const auto& day : store.getReadingDays()) {
@@ -1221,6 +1221,17 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     JsonObject sessionObj = sessionLog.add<JsonObject>();
     sessionObj["dayOrdinal"] = session.dayOrdinal;
     sessionObj["sessionMs"] = session.sessionMs;
+  }
+
+  if (store.activeCheckpoint.valid) {
+    JsonObject checkpoint = doc["activeSessionCheckpoint"].to<JsonObject>();
+    checkpoint["bookId"] = store.activeCheckpoint.bookId;
+    checkpoint["path"] = store.activeCheckpoint.path;
+    checkpoint["startProgressPercent"] = store.activeCheckpoint.startProgressPercent;
+    checkpoint["currentProgressPercent"] = store.activeCheckpoint.currentProgressPercent;
+    checkpoint["chapterStartProgressPercent"] = store.activeCheckpoint.chapterStartProgressPercent;
+    checkpoint["accumulatedMs"] = store.activeCheckpoint.accumulatedMs;
+    checkpoint["savedAt"] = store.activeCheckpoint.savedAt;
   }
 
   JsonArray books = doc["books"].to<JsonArray>();
@@ -1257,6 +1268,13 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
       sampleObj["endProgressPercent"] = sample.endProgressPercent;
     }
 
+    JsonArray estimateSamples = obj["estimateSamples"].to<JsonArray>();
+    for (const auto& sample : book.estimateSamples) {
+      JsonObject sampleObj = estimateSamples.add<JsonObject>();
+      sampleObj["endedAt"] = sample.endedAt;
+      sampleObj["remainingMs"] = sample.remainingMs;
+    }
+
     JsonArray bookDays = obj["readingDays"].to<JsonArray>();
     for (const auto& day : book.readingDays) {
       JsonObject dayObj = bookDays.add<JsonObject>();
@@ -1281,6 +1299,8 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
   store.legacyReadingDays.clear();
   store.readingDays.clear();
   store.sessionLog.clear();
+  store.activeSession = {};
+  store.activeCheckpoint = {};
   store.dirty = false;
 
   const uint32_t formatVersion = doc["formatVersion"] | static_cast<uint32_t>(1);
@@ -1320,6 +1340,24 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     }
   } else {
     store.dirty = true;
+  }
+
+  if (formatVersion >= 8) {
+    JsonObjectConst checkpoint = doc["activeSessionCheckpoint"];
+    if (!checkpoint.isNull()) {
+      store.activeCheckpoint.valid = true;
+      store.activeCheckpoint.bookId = checkpoint["bookId"] | std::string("");
+      store.activeCheckpoint.path = checkpoint["path"] | std::string("");
+      store.activeCheckpoint.startProgressPercent = checkpoint["startProgressPercent"] | static_cast<uint8_t>(0);
+      store.activeCheckpoint.currentProgressPercent = checkpoint["currentProgressPercent"] | static_cast<uint8_t>(0);
+      store.activeCheckpoint.chapterStartProgressPercent =
+          checkpoint["chapterStartProgressPercent"] | static_cast<uint8_t>(0);
+      store.activeCheckpoint.accumulatedMs = checkpoint["accumulatedMs"] | static_cast<uint64_t>(0);
+      store.activeCheckpoint.savedAt = checkpoint["savedAt"] | static_cast<uint32_t>(0);
+      if (store.activeCheckpoint.path.empty() && store.activeCheckpoint.bookId.empty()) {
+        store.activeCheckpoint = {};
+      }
+    }
   }
 
   JsonArray books = doc["books"].as<JsonArray>();
@@ -1365,6 +1403,16 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
       }
     } else {
       store.dirty = true;
+    }
+    if (formatVersion >= 8) {
+      for (JsonObject sampleObj : obj["estimateSamples"].as<JsonArray>()) {
+        ReadingBookStats::EstimateSample sample;
+        sample.endedAt = sampleObj["endedAt"] | static_cast<uint32_t>(0);
+        sample.remainingMs = sampleObj["remainingMs"] | static_cast<uint32_t>(0);
+        if (sample.remainingMs != 0) {
+          book.estimateSamples.push_back(sample);
+        }
+      }
     }
     if (formatVersion >= 2) {
       appendReadingDays(book.readingDays, obj["readingDays"].as<JsonArray>());

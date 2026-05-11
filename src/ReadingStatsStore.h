@@ -20,6 +20,10 @@ struct ReadingBookStats {
     uint8_t startProgressPercent = 0;
     uint8_t endProgressPercent = 0;
   };
+  struct EstimateSample {
+    uint32_t endedAt = 0;
+    uint32_t remainingMs = 0;
+  };
 
   std::string bookId;
   std::string path;
@@ -41,6 +45,7 @@ struct ReadingBookStats {
   uint8_t chapterReadingStartProgressPercent = 0;
   bool completed = false;
   std::vector<ProgressSample> progressSamples;
+  std::vector<EstimateSample> estimateSamples;
 };
 
 struct ReadingSessionSnapshot {
@@ -93,12 +98,23 @@ class ReadingStatsStore {
     bool startCompleted = false;
     bool hasProgressSample = false;
   };
+  struct SessionCheckpoint {
+    bool valid = false;
+    std::string bookId;
+    std::string path;
+    uint8_t startProgressPercent = 0;
+    uint8_t currentProgressPercent = 0;
+    uint8_t chapterStartProgressPercent = 0;
+    uint64_t accumulatedMs = 0;
+    uint32_t savedAt = 0;
+  };
 
   std::vector<ReadingBookStats> books;
   std::vector<ReadingDayStats> legacyReadingDays;
   std::vector<ReadingDayStats> readingDays;
   std::vector<ReadingSessionLogEntry> sessionLog;
   SessionState activeSession;
+  SessionCheckpoint activeCheckpoint;
   ReadingSessionSnapshot lastSessionSnapshot;
   uint32_t sessionSerialCounter = 0;
   mutable SummaryCache summaryCache;
@@ -130,6 +146,9 @@ class ReadingStatsStore {
   void recordReadingTime(ReadingBookStats& book, uint32_t epochSeconds, uint64_t readingMs);
   void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs);
   void updateActiveProgressSample(ReadingBookStats& book, uint32_t timestamp);
+  void updateEstimateHistory(ReadingBookStats& book, uint32_t timestamp);
+  bool restoreCheckpointIfValid(ReadingBookStats& book, uint8_t currentProgressPercent);
+  void clearActiveCheckpoint();
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
   void invalidateSummaryCache();
@@ -150,6 +169,7 @@ class ReadingStatsStore {
   void noteActivity();
   void tickActiveSession();
   void resumeSession();
+  bool checkpointActiveSession();
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();

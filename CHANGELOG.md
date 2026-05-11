@@ -11,6 +11,65 @@ where Daniel started publishing his own firmware builds.
 
 - No unreleased changes yet.
 
+## Stats Preview 0.4.0
+
+Published as GitHub release:
+
+- [`1.2.0.48-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.48-cpr-vcodex)
+
+Flashable firmware:
+
+- `1.2.0.48-cpr-vcodex.bin`
+
+### Reading Session Persistence
+
+- Added an active reading session checkpoint to the reading stats JSON.
+- Saved active book id/path, session start progress, current progress,
+  chapter-start progress, accumulated active time, and timestamp before sleep.
+- Restored active session timing after wake only when the same book is reopened
+  and the checkpoint is still recent enough to trust.
+- Kept persistence tied to sleep, progress changes, and reader exit instead of
+  adding constant flash writes.
+
+### Estimate Quality
+
+- Added `More data` explanations such as needing more tracked progress or more
+  tracked reading time.
+- Changed pace trend to compare recent samples against older samples instead of
+  comparing recent pace to the all-time average.
+- Added per-book estimate history samples and a stability label showing whether
+  time-left is stabilizing or jumping around.
+
+### Home And Reader Flow
+
+- Added home summary cards for today reading time, current goal streak, and
+  current book time-left.
+- Replaced the EPUB reader's full Reader/Display settings launch with a small
+  in-reader quick settings panel for font size, line spacing, margins, UI theme,
+  and status-bar time-left.
+- Returning from quick settings now reflows and refreshes the current book page
+  instead of leaving the reader.
+- Expanded the optional post-session stats screen with session progress, session
+  pace, updated time-left, and estimate stability.
+
+### Verification
+
+- Built the development firmware with:
+
+```bash
+pio run -e default
+```
+
+- Development build passed with:
+  - flash usage: `6209003 / 6553600 bytes`;
+  - RAM usage: `102228 / 327680 bytes`;
+  - packaged dev firmware:
+    `artifacts/1.2.0.47.dev1-4f3d337-cpr-vcodex.bin`.
+- Release gate passed with:
+  - flash usage: `6140657 / 6553600 bytes`;
+  - RAM usage: `102204 / 327680 bytes`;
+  - packaged firmware size: `6153216 bytes`.
+
 ## Stats Preview 0.3.0
 
 Published as GitHub release:

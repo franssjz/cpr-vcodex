@@ -19,8 +19,11 @@ constexpr unsigned long MAX_READING_GAP_MS = 30UL * 60UL * 1000UL;
 constexpr unsigned long SESSION_HEARTBEAT_MS = 60UL * 1000UL;
 constexpr unsigned long DEFERRED_SAVE_INTERVAL_MS = 30UL * 1000UL;
 constexpr uint64_t MIN_SESSION_READING_MS = 3ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_CHECKPOINT_RESUME_MS = 30ULL * 1000ULL;
+constexpr uint32_t MAX_CHECKPOINT_SLEEP_SECONDS = 12UL * 60UL * 60UL;
 constexpr size_t MAX_SESSION_LOG_ENTRIES = 256;
 constexpr size_t MAX_BOOK_PROGRESS_SAMPLES = 32;
+constexpr size_t MAX_BOOK_ESTIMATE_SAMPLES = 8;
 
 uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 100); }
 
@@ -260,6 +263,12 @@ void ReadingStatsStore::normalizeBook(ReadingBookStats& book) {
         book.progressSamples.begin(),
         book.progressSamples.begin() +
             static_cast<std::ptrdiff_t>(book.progressSamples.size() - MAX_BOOK_PROGRESS_SAMPLES));
+  }
+  if (book.estimateSamples.size() > MAX_BOOK_ESTIMATE_SAMPLES) {
+    book.estimateSamples.erase(
+        book.estimateSamples.begin(),
+        book.estimateSamples.begin() +
+            static_cast<std::ptrdiff_t>(book.estimateSamples.size() - MAX_BOOK_ESTIMATE_SAMPLES));
   }
 }
 
@@ -501,6 +510,7 @@ void ReadingStatsStore::updateActiveProgressSample(ReadingBookStats& book, const
     sample.endedAt = timestamp;
     sample.sessionMs = sessionMs;
     sample.endProgressPercent = book.lastProgressPercent;
+    updateEstimateHistory(book, timestamp);
     return;
   }
 
@@ -513,6 +523,101 @@ void ReadingStatsStore::updateActiveProgressSample(ReadingBookStats& book, const
     activeSession.progressSampleIndex =
         activeSession.progressSampleIndex == 0 ? 0 : activeSession.progressSampleIndex - 1;
   }
+  updateEstimateHistory(book, timestamp);
+}
+
+void ReadingStatsStore::updateEstimateHistory(ReadingBookStats& book, const uint32_t timestamp) {
+  if (book.completed || book.lastProgressPercent >= 100 || book.progressSamples.empty()) {
+    return;
+  }
+
+  uint64_t trackedMs = 0;
+  uint32_t progressDelta = 0;
+  uint32_t samplesUsed = 0;
+  for (auto it = book.progressSamples.rbegin(); it != book.progressSamples.rend() && samplesUsed < 8; ++it) {
+    if (it->sessionMs == 0 || it->endProgressPercent <= it->startProgressPercent) {
+      continue;
+    }
+    trackedMs += it->sessionMs;
+    progressDelta += static_cast<uint32_t>(it->endProgressPercent - it->startProgressPercent);
+    samplesUsed++;
+  }
+  if (trackedMs < 20ULL * 60ULL * 1000ULL || progressDelta < 3 || progressDelta == 0) {
+    return;
+  }
+
+  const uint32_t remainingProgress = 100 - book.lastProgressPercent;
+  const uint64_t remainingMs64 = (static_cast<uint64_t>(remainingProgress) * trackedMs + progressDelta - 1) / progressDelta;
+  if (remainingMs64 == 0) {
+    return;
+  }
+  const uint32_t remainingMs =
+      remainingMs64 > static_cast<uint64_t>(UINT32_MAX) ? UINT32_MAX : static_cast<uint32_t>(remainingMs64);
+  if (!book.estimateSamples.empty()) {
+    auto& previous = book.estimateSamples.back();
+    if (previous.endedAt == timestamp) {
+      previous.remainingMs = remainingMs;
+      return;
+    }
+    const uint32_t delta = previous.remainingMs > remainingMs ? previous.remainingMs - remainingMs
+                                                              : remainingMs - previous.remainingMs;
+    if (delta < 5UL * 60UL * 1000UL) {
+      return;
+    }
+  }
+  book.estimateSamples.push_back(ReadingBookStats::EstimateSample{timestamp, remainingMs});
+  if (book.estimateSamples.size() > MAX_BOOK_ESTIMATE_SAMPLES) {
+    book.estimateSamples.erase(book.estimateSamples.begin());
+  }
+}
+
+void ReadingStatsStore::clearActiveCheckpoint() {
+  if (!activeCheckpoint.valid) {
+    return;
+  }
+  activeCheckpoint = {};
+  markDirty();
+}
+
+bool ReadingStatsStore::restoreCheckpointIfValid(ReadingBookStats& book, const uint8_t currentProgressPercent) {
+  if (!activeCheckpoint.valid || activeCheckpoint.accumulatedMs < MIN_CHECKPOINT_RESUME_MS) {
+    return false;
+  }
+  const bool sameBook = (!book.bookId.empty() && book.bookId == activeCheckpoint.bookId) ||
+                        (!book.path.empty() && book.path == activeCheckpoint.path) ||
+                        containsString(book.knownPaths, activeCheckpoint.path);
+  if (!sameBook) {
+    clearActiveCheckpoint();
+    return false;
+  }
+
+  const uint32_t now = TimeUtils::getAuthoritativeTimestamp();
+  if (isClockValid(now) && isClockValid(activeCheckpoint.savedAt)) {
+    if (now < activeCheckpoint.savedAt || (now - activeCheckpoint.savedAt) > MAX_CHECKPOINT_SLEEP_SECONDS) {
+      clearActiveCheckpoint();
+      return false;
+    }
+  }
+  if (currentProgressPercent + 50 < activeCheckpoint.currentProgressPercent) {
+    clearActiveCheckpoint();
+    return false;
+  }
+
+  activeSession.accumulatedMs = activeCheckpoint.accumulatedMs;
+  activeSession.startProgressPercent = activeCheckpoint.startProgressPercent;
+  book.chapterReadingStartProgressPercent = activeCheckpoint.chapterStartProgressPercent;
+  for (size_t index = book.progressSamples.size(); index > 0; --index) {
+    const auto& sample = book.progressSamples[index - 1];
+    if (sample.startProgressPercent == activeCheckpoint.startProgressPercent &&
+        sample.endProgressPercent == activeCheckpoint.currentProgressPercent) {
+      activeSession.hasProgressSample = true;
+      activeSession.progressSampleIndex = index - 1;
+      break;
+    }
+  }
+  activeCheckpoint = {};
+  markDirty();
+  return true;
 }
 
 void ReadingStatsStore::rebuildAggregatedReadingDays() {
@@ -670,6 +775,8 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   activeSession.lastInteractionMs = millis();
   activeSession.accumulatedMs = 0;
   activeSession.startProgressPercent = clampedBookProgress;
+  restoreCheckpointIfValid(book, clampedBookProgress);
+  activeSession.lastInteractionMs = millis();
 
   markDirty();
 }
@@ -721,6 +828,26 @@ void ReadingStatsStore::resumeSession() {
   activeSession.lastInteractionMs = millis();
 }
 
+bool ReadingStatsStore::checkpointActiveSession() {
+  if (!activeSession.active || activeSession.bookIndex >= books.size()) {
+    return false;
+  }
+
+  noteActivity();
+
+  const auto& book = books[activeSession.bookIndex];
+  activeCheckpoint.valid = true;
+  activeCheckpoint.bookId = book.bookId;
+  activeCheckpoint.path = book.path;
+  activeCheckpoint.startProgressPercent = activeSession.startProgressPercent;
+  activeCheckpoint.currentProgressPercent = book.lastProgressPercent;
+  activeCheckpoint.chapterStartProgressPercent = book.chapterReadingStartProgressPercent;
+  activeCheckpoint.accumulatedMs = activeSession.accumulatedMs;
+  activeCheckpoint.savedAt = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
+  markDirty();
+  return saveToFile();
+}
+
 void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool completed,
                                        const std::string& chapterTitle, const uint8_t chapterProgressPercent) {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
@@ -757,6 +884,16 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   updateActiveProgressSample(book, book.lastReadAt);
 
   markDirty();
+  if (progressChanged && activeSession.accumulatedMs >= MIN_CHECKPOINT_RESUME_MS) {
+    activeCheckpoint.valid = true;
+    activeCheckpoint.bookId = book.bookId;
+    activeCheckpoint.path = book.path;
+    activeCheckpoint.startProgressPercent = activeSession.startProgressPercent;
+    activeCheckpoint.currentProgressPercent = book.lastProgressPercent;
+    activeCheckpoint.chapterStartProgressPercent = book.chapterReadingStartProgressPercent;
+    activeCheckpoint.accumulatedMs = activeSession.accumulatedMs;
+    activeCheckpoint.savedAt = book.lastReadAt;
+  }
   if (shouldSaveDeferred()) {
     saveToFile();
   }
@@ -875,6 +1012,8 @@ void ReadingStatsStore::endSession() {
   lastSessionSnapshot.endProgressPercent = book.lastProgressPercent;
 
   activeSession = {};
+  activeCheckpoint = {};
+  markDirty();
   saveToFile();
 }
 

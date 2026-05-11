@@ -26,9 +26,9 @@
 #include "ReadingStatsStore.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
+#include "ReaderQuickSettingsActivity.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
-#include "activities/settings/SettingsActivity.h"
 #include "activities/settings/StatusBarSettingsActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -627,13 +627,16 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::READER_SETTINGS:
     case EpubReaderMenuActivity::MenuAction::DISPLAY_SETTINGS: {
-      const int initialCategory =
-          action == EpubReaderMenuActivity::MenuAction::READER_SETTINGS ? 1 : 0;
       READING_STATS.noteActivity();
-      startActivityForResult(std::make_unique<SettingsActivity>(renderer, mappedInput, initialCategory),
+      startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
                                READING_STATS.resumeSession();
                                UITheme::getInstance().reload();
+                               if (section) {
+                                 cachedSpineIndex = currentSpineIndex;
+                                 cachedChapterTotalPageCount = section->pageCount;
+                                 nextPageNumber = section->currentPage;
+                               }
                                section.reset();
                                requestUpdate();
                              });
