@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <string>
 
-#include "AppMetricCard.h"
 #include "ReadingStatsDetailActivity.h"
 #include "ReadingStatsExtendedActivity.h"
 #include "ReadingStatsStore.h"
@@ -16,13 +15,12 @@
 #include "util/ReadingStatsAnalytics.h"
 
 namespace {
-constexpr int SUMMARY_CARD_HEIGHT = 76;
-constexpr int SUMMARY_GAP = 10;
-constexpr int DETAILS_BUTTON_HEIGHT = 58;
+constexpr int SUMMARY_PANEL_HEIGHT = 142;
+constexpr int DETAILS_BUTTON_HEIGHT = 38;
 constexpr int LIST_HEADER_HEIGHT = 34;
 constexpr int LIST_HEADER_BOTTOM_GAP = 10;
-constexpr int BOOK_ROW_HEIGHT = 80;
-constexpr int BOOK_ROW_GAP = 10;
+constexpr int BOOK_ROW_HEIGHT = 94;
+constexpr int BOOK_ROW_GAP = 8;
 constexpr int BOOKS_PER_PAGE = 3;
 
 std::string getBookTitle(const ReadingBookStats& book) { return book.title.empty() ? book.path : book.title; }
@@ -32,13 +30,6 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
     return book.author;
   }
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
-}
-
-void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
-                    const bool showCheck = false) {
-  AppMetricCard::Options options;
-  options.showCheck = showCheck;
-  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
 void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
@@ -52,6 +43,40 @@ void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool s
   const int textX = rect.x + (rect.width - textWidth) / 2;
   const int textY = rect.y + (rect.height - renderer.getLineHeight(UI_12_FONT_ID)) / 2 + 2;
   renderer.drawText(UI_12_FONT_ID, textX, textY, label, true, EpdFontFamily::BOLD);
+}
+
+void drawSummaryCell(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value,
+                     const bool emphasized = false) {
+  const int labelY = rect.y + 8;
+  const int valueY = rect.y + 31;
+  renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, label);
+  const std::string clipped =
+      renderer.truncatedText(UI_12_FONT_ID, value.c_str(), rect.width - 20, emphasized ? EpdFontFamily::BOLD
+                                                                                       : EpdFontFamily::REGULAR);
+  renderer.drawText(UI_12_FONT_ID, rect.x + 10, valueY, clipped.c_str(), true,
+                    emphasized ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+}
+
+void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t todayReadingMs,
+                      const std::string& dailyGoalValue) {
+  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
+  const int headerHeight = 28;
+  const int halfWidth = rect.width / 2;
+  const int rowHeight = (rect.height - headerHeight) / 2;
+  renderer.drawText(UI_10_FONT_ID, rect.x + 10, rect.y + 8, tr(STR_READING_STATS), true, EpdFontFamily::BOLD);
+  renderer.drawLine(rect.x, rect.y + headerHeight, rect.x + rect.width, rect.y + headerHeight);
+  renderer.drawLine(rect.x + halfWidth, rect.y + headerHeight, rect.x + halfWidth, rect.y + rect.height);
+  renderer.drawLine(rect.x, rect.y + headerHeight + rowHeight, rect.x + rect.width, rect.y + headerHeight + rowHeight);
+
+  drawSummaryCell(renderer, Rect{rect.x, rect.y + headerHeight, halfWidth, rowHeight}, tr(STR_TODAY),
+                  ReadingStatsAnalytics::formatDurationHm(todayReadingMs), todayReadingMs >= getDailyReadingGoalMs());
+  drawSummaryCell(renderer, Rect{rect.x + halfWidth, rect.y + headerHeight, rect.width - halfWidth, rowHeight},
+                  tr(STR_STREAK), std::to_string(READING_STATS.getCurrentStreakDays()));
+  drawSummaryCell(renderer, Rect{rect.x, rect.y + headerHeight + rowHeight, halfWidth, rowHeight}, tr(STR_DAILY_GOAL),
+                  dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
+  drawSummaryCell(renderer,
+                  Rect{rect.x + halfWidth, rect.y + headerHeight + rowHeight, rect.width - halfWidth, rowHeight},
+                  tr(STR_READING_TIME), ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
 }
 
 void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent) {
@@ -72,39 +97,41 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   }
 
   const int sidePadding = 12;
-  const int topPadding = 9;
-  const int metaWidth = 88;
+  const int topPadding = 10;
+  const int progressBlockWidth = 58;
   const int innerX = rect.x + sidePadding;
   const int innerY = rect.y + topPadding;
-  const int textWidth = rect.width - sidePadding * 2 - metaWidth;
+  const int textX = innerX + progressBlockWidth + 12;
+  const int textWidth = rect.width - sidePadding * 2 - progressBlockWidth - 12;
   const int titleY = innerY;
   const int subtitleY = innerY + 26;
-  const int progressBarY = rect.y + rect.height - 14;
+  const int metaY = rect.y + rect.height - 32;
+  const int progressBarY = rect.y + rect.height - 12;
 
   const std::string title =
       renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4, EpdFontFamily::BOLD);
-  renderer.drawText(UI_12_FONT_ID, innerX, titleY, title.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(UI_12_FONT_ID, textX, titleY, title.c_str(), true, EpdFontFamily::BOLD);
 
   const std::string subtitle =
       renderer.truncatedText(UI_10_FONT_ID, getBookSubtitle(book).c_str(), textWidth - 4, EpdFontFamily::REGULAR);
-  renderer.drawText(UI_10_FONT_ID, innerX, subtitleY, subtitle.c_str());
+  renderer.drawText(UI_10_FONT_ID, textX, subtitleY, subtitle.c_str());
 
   const std::string progressText = std::to_string(book.lastProgressPercent) + "%";
   const std::string totalTimeText = ReadingStatsAnalytics::formatDurationHm(book.totalReadingMs);
   const std::string timeLeftText =
       ReadingStatsAnalytics::formatCompactTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(book));
   const int progressWidth = renderer.getTextWidth(UI_12_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
-  const int timeWidth = renderer.getTextWidth(UI_10_FONT_ID, totalTimeText.c_str());
-  const int timeLeftWidth = renderer.getTextWidth(SMALL_FONT_ID, timeLeftText.c_str());
-  const int progressX = rect.x + rect.width - sidePadding - progressWidth;
-  const int timeX = rect.x + rect.width - sidePadding - timeWidth;
-  const int timeLeftX = rect.x + rect.width - sidePadding - timeLeftWidth;
+  renderer.drawText(UI_12_FONT_ID, innerX + (progressBlockWidth - progressWidth) / 2, titleY + 9, progressText.c_str(),
+                    true, EpdFontFamily::BOLD);
 
-  renderer.drawText(UI_12_FONT_ID, progressX, titleY, progressText.c_str(), true, EpdFontFamily::BOLD);
-  renderer.drawText(UI_10_FONT_ID, timeX, subtitleY, totalTimeText.c_str());
-  renderer.drawText(SMALL_FONT_ID, timeLeftX, subtitleY + 19, timeLeftText.c_str());
+  const int metaWidth = (textWidth - 8) / 2;
+  renderer.drawText(SMALL_FONT_ID, textX, metaY, tr(STR_READING_TIME));
+  renderer.drawText(UI_10_FONT_ID, textX, metaY + 15, totalTimeText.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(SMALL_FONT_ID, textX + metaWidth + 8, metaY, tr(STR_BOOK_TIME_LEFT));
+  renderer.drawText(UI_10_FONT_ID, textX + metaWidth + 8, metaY + 15, timeLeftText.c_str(), true,
+                    EpdFontFamily::BOLD);
 
-  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9}, book.lastProgressPercent);
+  drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 8}, book.lastProgressPercent);
 }
 }  // namespace
 
@@ -215,33 +242,16 @@ void ReadingStatsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   const int sidePadding = metrics.contentSidePadding;
-  const int cardWidth = (pageWidth - sidePadding * 2 - SUMMARY_GAP) / 2;
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int detailsTop = summaryTop + SUMMARY_CARD_HEIGHT * 3 + SUMMARY_GAP * 2 + metrics.verticalSpacing;
+  const int detailsTop = summaryTop + SUMMARY_PANEL_HEIGHT + metrics.verticalSpacing;
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
   const std::string dailyGoalValue = ReadingStatsAnalytics::formatDurationHm(todayReadingMs) + " / " +
                                      ReadingStatsAnalytics::formatDurationHm(getDailyReadingGoalMs());
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
-  drawMetricCard(renderer, Rect{sidePadding, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT}, tr(STR_STREAK),
-                 std::to_string(READING_STATS.getCurrentStreakDays()));
-  drawMetricCard(renderer, Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop, cardWidth, SUMMARY_CARD_HEIGHT},
-                 tr(STR_MAX_STREAK), std::to_string(READING_STATS.getMaxStreakDays()));
-  drawMetricCard(renderer,
-                 Rect{sidePadding, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth, SUMMARY_CARD_HEIGHT},
-                 tr(STR_DAILY_GOAL), dailyGoalValue, todayReadingMs >= getDailyReadingGoalMs());
-  drawMetricCard(renderer,
-                 Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + SUMMARY_CARD_HEIGHT + SUMMARY_GAP, cardWidth,
-                      SUMMARY_CARD_HEIGHT},
-                 tr(STR_READING_TIME), ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
-  drawMetricCard(
-      renderer, Rect{sidePadding, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2, cardWidth, SUMMARY_CARD_HEIGHT},
-      tr(STR_BOOKS_FINISHED), std::to_string(READING_STATS.getBooksFinishedCount()));
-  drawMetricCard(renderer,
-                 Rect{sidePadding + cardWidth + SUMMARY_GAP, summaryTop + (SUMMARY_CARD_HEIGHT + SUMMARY_GAP) * 2,
-                      cardWidth, SUMMARY_CARD_HEIGHT},
-                 tr(STR_BOOKS_STARTED), std::to_string(READING_STATS.getBooksStartedCount()));
+  drawSummaryPanel(renderer, Rect{sidePadding, summaryTop, pageWidth - sidePadding * 2, SUMMARY_PANEL_HEIGHT},
+                   todayReadingMs, dailyGoalValue);
 
   drawMoreDetailsButton(renderer, Rect{sidePadding, detailsTop, pageWidth - sidePadding * 2, DETAILS_BUTTON_HEIGHT},
                         selectedIndex == 0);

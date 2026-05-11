@@ -625,8 +625,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                              });
       break;
     }
-    case EpubReaderMenuActivity::MenuAction::READER_SETTINGS:
-    case EpubReaderMenuActivity::MenuAction::DISPLAY_SETTINGS: {
+    case EpubReaderMenuActivity::MenuAction::QUICK_SETTINGS: {
       READING_STATS.noteActivity();
       startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {

@@ -28,8 +28,7 @@ std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuI
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
   }
   items.push_back({MenuAction::ROTATE_SCREEN, StrId::STR_ORIENTATION});
-  items.push_back({MenuAction::READER_SETTINGS, StrId::STR_CAT_READER});
-  items.push_back({MenuAction::DISPLAY_SETTINGS, StrId::STR_CAT_DISPLAY});
+  items.push_back({MenuAction::QUICK_SETTINGS, StrId::STR_QUICK_SETTINGS});
   items.push_back({MenuAction::STATUS_BAR, StrId::STR_CUSTOMISE_STATUS_BAR});
   items.push_back({MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_PAGES_PER_MIN});
   items.push_back({MenuAction::GO_TO_PERCENT, StrId::STR_GO_TO_PERCENT});

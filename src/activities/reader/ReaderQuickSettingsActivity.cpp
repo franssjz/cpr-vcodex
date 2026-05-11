@@ -12,14 +12,35 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int ITEM_COUNT = 5;
-constexpr StrId ITEM_LABELS[ITEM_COUNT] = {StrId::STR_FONT_SIZE, StrId::STR_LINE_SPACING, StrId::STR_SCREEN_MARGIN,
-                                           StrId::STR_UI_THEME, StrId::STR_ESTIMATED_TIME_LEFT};
+constexpr int TAB_READER = 0;
+constexpr int TAB_DISPLAY = 1;
+constexpr int TAB_COUNT = 2;
+constexpr int READER_ITEM_COUNT = 6;
+constexpr int DISPLAY_ITEM_COUNT = 5;
+
+constexpr StrId TAB_LABELS[TAB_COUNT] = {StrId::STR_CAT_READER, StrId::STR_CAT_DISPLAY};
+constexpr StrId READER_ITEM_LABELS[READER_ITEM_COUNT] = {
+    StrId::STR_FONT_FAMILY, StrId::STR_FONT_SIZE,      StrId::STR_LINE_SPACING,
+    StrId::STR_SCREEN_MARGIN, StrId::STR_PARA_ALIGNMENT, StrId::STR_BIONIC_READING};
+constexpr StrId DISPLAY_ITEM_LABELS[DISPLAY_ITEM_COUNT] = {StrId::STR_UI_THEME, StrId::STR_DARK_MODE,
+                                                           StrId::STR_TEXT_DARKNESS,
+                                                           StrId::STR_READER_REFRESH_MODE, StrId::STR_IMAGES};
+
+constexpr StrId FONT_FAMILY_LABELS[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
 constexpr StrId FONT_SIZE_LABELS[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
                                       StrId::STR_X_LARGE};
 constexpr StrId LINE_SPACING_LABELS[] = {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE};
+constexpr StrId ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
+                                      StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
+constexpr StrId BIONIC_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE};
 constexpr StrId THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM};
-constexpr StrId TIME_LEFT_LABELS[] = {StrId::STR_HIDE, StrId::STR_BOOK, StrId::STR_CHAPTER};
+constexpr StrId DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
+constexpr StrId TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
+                                          StrId::STR_EXTRA_DARK};
+constexpr StrId REFRESH_MODE_LABELS[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_REFRESH_MODE_FAST,
+                                         StrId::STR_REFRESH_MODE_HALF, StrId::STR_REFRESH_MODE_FULL};
+constexpr StrId IMAGE_LABELS[] = {StrId::STR_IMAGES_DISPLAY, StrId::STR_IMAGES_PLACEHOLDER,
+                                  StrId::STR_IMAGES_SUPPRESS};
 
 uint8_t wrapEnum(const uint8_t value, const int direction, const uint8_t count) {
   if (count == 0) {
@@ -31,65 +52,147 @@ uint8_t wrapEnum(const uint8_t value, const int direction, const uint8_t count) 
   return value == 0 ? static_cast<uint8_t>(count - 1) : static_cast<uint8_t>(value - 1);
 }
 
-std::string valueForIndex(const int index) {
+std::string enumValue(const uint8_t value, const StrId* labels, const uint8_t count) {
+  return I18N.get(labels[std::min<uint8_t>(value, count - 1)]);
+}
+
+std::string valueForIndex(const int tab, const int index) {
+  if (tab == TAB_READER) {
+    switch (index) {
+      case 0:
+        return enumValue(SETTINGS.fontFamily, FONT_FAMILY_LABELS, CrossPointSettings::FONT_FAMILY_COUNT);
+      case 1:
+        return enumValue(SETTINGS.fontSize, FONT_SIZE_LABELS, CrossPointSettings::FONT_SIZE_COUNT);
+      case 2:
+        return enumValue(SETTINGS.lineSpacing, LINE_SPACING_LABELS, CrossPointSettings::LINE_COMPRESSION_COUNT);
+      case 3:
+        return std::to_string(SETTINGS.screenMargin);
+      case 4:
+        return enumValue(SETTINGS.paragraphAlignment, ALIGNMENT_LABELS, CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT);
+      case 5:
+        return enumValue(SETTINGS.bionicReading, BIONIC_LABELS, CrossPointSettings::BIONIC_READING_MODE_COUNT);
+      default:
+        return "";
+    }
+  }
+
   switch (index) {
     case 0:
-      return I18N.get(FONT_SIZE_LABELS[std::min<uint8_t>(SETTINGS.fontSize, CrossPointSettings::FONT_SIZE_COUNT - 1)]);
+      return enumValue(SETTINGS.uiTheme, THEME_LABELS, CrossPointSettings::UI_THEME_COUNT);
     case 1:
-      return I18N.get(
-          LINE_SPACING_LABELS[std::min<uint8_t>(SETTINGS.lineSpacing, CrossPointSettings::LINE_COMPRESSION_COUNT - 1)]);
+      return I18N.get(DARK_MODE_LABELS[SETTINGS.darkMode ? 1 : 0]);
     case 2:
-      return std::to_string(SETTINGS.screenMargin);
+      return enumValue(SETTINGS.textDarkness, TEXT_DARKNESS_LABELS, CrossPointSettings::TEXT_DARKNESS_COUNT);
     case 3:
-      return I18N.get(THEME_LABELS[std::min<uint8_t>(SETTINGS.uiTheme, CrossPointSettings::UI_THEME_COUNT - 1)]);
+      return enumValue(SETTINGS.readerRefreshMode, REFRESH_MODE_LABELS,
+                       CrossPointSettings::READER_REFRESH_MODE_COUNT);
     case 4:
-      return I18N.get(
-          TIME_LEFT_LABELS[std::min<uint8_t>(SETTINGS.statusBarTimeLeft,
-                                             CrossPointSettings::STATUS_BAR_TIME_LEFT_COUNT - 1)]);
+      return enumValue(SETTINGS.imageRendering, IMAGE_LABELS, CrossPointSettings::IMAGE_RENDERING_COUNT);
     default:
       return "";
   }
+}
+
+StrId labelForIndex(const int tab, const int index) {
+  return tab == TAB_READER ? READER_ITEM_LABELS[index] : DISPLAY_ITEM_LABELS[index];
 }
 }  // namespace
 
 void ReaderQuickSettingsActivity::onEnter() {
   Activity::onEnter();
+  selectedTab = TAB_READER;
   selectedIndex = 0;
+  tabFocused = true;
   requestUpdate();
 }
 
+int ReaderQuickSettingsActivity::currentItemCount() const {
+  return selectedTab == TAB_READER ? READER_ITEM_COUNT : DISPLAY_ITEM_COUNT;
+}
+
 void ReaderQuickSettingsActivity::adjustSelected(const int direction) {
-  switch (selectedIndex) {
-    case 0:
-      SETTINGS.fontSize = wrapEnum(SETTINGS.fontSize, direction, CrossPointSettings::FONT_SIZE_COUNT);
-      break;
-    case 1:
-      SETTINGS.lineSpacing = wrapEnum(SETTINGS.lineSpacing, direction, CrossPointSettings::LINE_COMPRESSION_COUNT);
-      break;
-    case 2:
-      if (direction > 0) {
-        SETTINGS.screenMargin = std::min<uint8_t>(40, SETTINGS.screenMargin + 5);
-      } else {
-        SETTINGS.screenMargin = SETTINGS.screenMargin <= 5 ? 40 : static_cast<uint8_t>(SETTINGS.screenMargin - 5);
-      }
-      break;
-    case 3:
-      SETTINGS.uiTheme = wrapEnum(SETTINGS.uiTheme, direction, CrossPointSettings::UI_THEME_COUNT);
-      UITheme::getInstance().reload();
-      break;
-    case 4:
-      SETTINGS.statusBarTimeLeft =
-          wrapEnum(SETTINGS.statusBarTimeLeft, direction, CrossPointSettings::STATUS_BAR_TIME_LEFT_COUNT);
-      break;
-    default:
-      return;
+  if (selectedTab == TAB_READER) {
+    switch (selectedIndex) {
+      case 0:
+        SETTINGS.fontFamily = wrapEnum(SETTINGS.fontFamily, direction, CrossPointSettings::FONT_FAMILY_COUNT);
+        break;
+      case 1:
+        SETTINGS.fontSize = wrapEnum(SETTINGS.fontSize, direction, CrossPointSettings::FONT_SIZE_COUNT);
+        break;
+      case 2:
+        SETTINGS.lineSpacing = wrapEnum(SETTINGS.lineSpacing, direction, CrossPointSettings::LINE_COMPRESSION_COUNT);
+        break;
+      case 3:
+        if (direction > 0) {
+          SETTINGS.screenMargin = std::min<uint8_t>(40, SETTINGS.screenMargin + 5);
+        } else {
+          SETTINGS.screenMargin = SETTINGS.screenMargin <= 5 ? 40 : static_cast<uint8_t>(SETTINGS.screenMargin - 5);
+        }
+        break;
+      case 4:
+        SETTINGS.paragraphAlignment =
+            wrapEnum(SETTINGS.paragraphAlignment, direction, CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT);
+        break;
+      case 5:
+        SETTINGS.bionicReading =
+            wrapEnum(SETTINGS.bionicReading, direction, CrossPointSettings::BIONIC_READING_MODE_COUNT);
+        break;
+      default:
+        return;
+    }
+  } else {
+    switch (selectedIndex) {
+      case 0:
+        SETTINGS.uiTheme = wrapEnum(SETTINGS.uiTheme, direction, CrossPointSettings::UI_THEME_COUNT);
+        UITheme::getInstance().reload();
+        break;
+      case 1:
+        SETTINGS.darkMode = SETTINGS.darkMode ? 0 : 1;
+        renderer.setDarkMode(SETTINGS.darkMode);
+        break;
+      case 2:
+        SETTINGS.textDarkness = wrapEnum(SETTINGS.textDarkness, direction, CrossPointSettings::TEXT_DARKNESS_COUNT);
+        renderer.setTextDarkness(SETTINGS.textDarkness);
+        break;
+      case 3:
+        SETTINGS.readerRefreshMode =
+            wrapEnum(SETTINGS.readerRefreshMode, direction, CrossPointSettings::READER_REFRESH_MODE_COUNT);
+        break;
+      case 4:
+        SETTINGS.imageRendering = wrapEnum(SETTINGS.imageRendering, direction, CrossPointSettings::IMAGE_RENDERING_COUNT);
+        break;
+      default:
+        return;
+    }
   }
   SETTINGS.saveToFile();
 }
 
 void ReaderQuickSettingsActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    if (!tabFocused) {
+      tabFocused = true;
+      requestUpdate();
+      return;
+    }
     finish();
+    return;
+  }
+
+  if (tabFocused) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Left) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+      selectedTab = selectedTab == TAB_READER ? TAB_DISPLAY : TAB_READER;
+      selectedIndex = 0;
+      requestUpdate();
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+      tabFocused = false;
+      requestUpdate();
+      return;
+    }
     return;
   }
 
@@ -106,11 +209,11 @@ void ReaderQuickSettingsActivity::loop() {
   }
 
   buttonNavigator.onNextRelease([this] {
-    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, ITEM_COUNT);
+    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, currentItemCount());
     requestUpdate();
   });
   buttonNavigator.onPreviousRelease([this] {
-    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, ITEM_COUNT);
+    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, currentItemCount());
     requestUpdate();
   });
 }
@@ -120,16 +223,39 @@ void ReaderQuickSettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
+  const int sidePadding = metrics.contentSidePadding;
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_QUICK_SETTINGS));
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+
+  const int tabsTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int tabHeight = 34;
+  const int tabWidth = (pageWidth - sidePadding * 2) / TAB_COUNT;
+  for (int tab = 0; tab < TAB_COUNT; ++tab) {
+    const int tabX = sidePadding + tab * tabWidth;
+    const bool active = tab == selectedTab;
+    if (active) {
+      renderer.fillRectDither(tabX, tabsTop, tabWidth, tabHeight, Color::LightGray);
+    }
+    renderer.drawRect(tabX, tabsTop, tabWidth, tabHeight);
+    const char* label = I18N.get(TAB_LABELS[tab]);
+    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label, active ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+    renderer.drawText(UI_10_FONT_ID, tabX + (tabWidth - textWidth) / 2, tabsTop + 8, label, true,
+                      active ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+    if (tabFocused && active) {
+      renderer.drawRect(tabX + 2, tabsTop + 2, tabWidth - 4, tabHeight - 4);
+    }
+  }
+
+  const int contentTop = tabsTop + tabHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
   GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, ITEM_COUNT, selectedIndex,
-      [](int index) { return std::string(I18N.get(ITEM_LABELS[index])); }, nullptr, nullptr,
-      [](int index) { return valueForIndex(index); }, true);
+      renderer, Rect{0, contentTop, pageWidth, contentHeight}, currentItemCount(), tabFocused ? -1 : selectedIndex,
+      [this](int index) { return std::string(I18N.get(labelForIndex(selectedTab, index))); }, nullptr, nullptr,
+      [this](int index) { return valueForIndex(selectedTab, index); }, true);
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      tabFocused ? mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT))
+                 : mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 }
