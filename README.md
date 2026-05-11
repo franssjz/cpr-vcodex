@@ -22,8 +22,8 @@ card and exported reading stats before installing any release from this fork.
 | Firmware focus | Reading statistics, completion estimates, and analytics |
 | Target device | Xteink X4 |
 | First fork release name | `Stats Preview 0.1.0` |
-| Published firmware tag | [`1.2.0.45-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.45-cpr-vcodex) |
-| Flashable file | `1.2.0.45-cpr-vcodex.bin` |
+| Published firmware tag | [`1.2.0.46-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.46-cpr-vcodex) |
+| Flashable file | `1.2.0.46-cpr-vcodex.bin` |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 
 The published tag still uses the inherited CPR-vCodex-compatible release format
@@ -77,8 +77,8 @@ builds on them and changes the direction toward more detailed reading analytics.
 The easiest manual install path is:
 
 1. Open the latest release:
-   [1.2.0.45-cpr-vcodex](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.45-cpr-vcodex).
-2. Download `1.2.0.45-cpr-vcodex.bin`.
+   [1.2.0.46-cpr-vcodex](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.46-cpr-vcodex).
+2. Download `1.2.0.46-cpr-vcodex.bin`.
 3. Turn on and unlock the Xteink X4.
 4. Open [xteink.dve.al](https://xteink.dve.al/) in Chrome or Edge.
 5. Choose the downloaded `.bin` file in the OTA flash controls.
@@ -148,7 +148,7 @@ This fork is starting fresh in documentation with fork-facing release names:
 
 The current build scripts still publish firmware tags like:
 
-- `1.2.0.45-cpr-vcodex`
+- `1.2.0.46-cpr-vcodex`
 
 That inherited tag means:
 
@@ -178,7 +178,7 @@ Useful commands:
 ```bash
 pio run -e default
 pio run -e gh_release
-python3 scripts/pre_release_check.py --tag 1.2.0.45-cpr-vcodex
+python3 scripts/pre_release_check.py --tag 1.2.0.46-cpr-vcodex
 python3 scripts/sync_autoflash_firmware.py --repo danielc0603/cpr-vcodex-stats
 ```
 
