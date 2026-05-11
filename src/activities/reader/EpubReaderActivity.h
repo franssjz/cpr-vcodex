@@ -38,6 +38,11 @@ class EpubReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
+  bool quickSettingsOpen = false;
+  bool quickSettingsTabFocused = true;
+  int quickSettingsTab = 0;
+  int quickSettingsItem = 0;
+  bool quickSettingsNeedsReflow = false;
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
@@ -61,6 +66,14 @@ class EpubReaderActivity final : public Activity {
   void toggleAutoPageTurn(uint8_t selectedPageTurnOption);
   void pageTurn(bool isForwardTurn);
   void requestCurrentPageFullRefresh();
+  void openQuickSettingsOverlay();
+  bool handleQuickSettingsInput();
+  void adjustQuickSetting(int direction);
+  void closeQuickSettingsOverlay();
+  void renderQuickSettingsOverlay();
+  int getQuickSettingsItemCount() const;
+  const char* getQuickSettingLabel(int tab, int index) const;
+  std::string getQuickSettingValue(int tab, int index) const;
 
   // Footnote navigation
   void navigateToHref(const std::string& href, bool savePosition = false);

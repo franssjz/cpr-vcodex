@@ -26,7 +26,6 @@
 #include "ReadingStatsStore.h"
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
-#include "ReaderQuickSettingsActivity.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "activities/settings/StatusBarSettingsActivity.h"
@@ -43,6 +42,28 @@ constexpr unsigned long skipChapterMs = 700;
 constexpr unsigned long bookmarkToggleMs = 700;
 // pages per minute, first item is 1 to prevent division by zero if accessed
 constexpr int PAGE_TURN_RATES[] = {1, 1, 3, 6, 12};
+constexpr int QS_TAB_READER = 0;
+constexpr int QS_TAB_DISPLAY = 1;
+constexpr int QS_TAB_COUNT = 2;
+constexpr int QS_READER_ITEM_COUNT = 4;
+constexpr int QS_DISPLAY_ITEM_COUNT = 4;
+constexpr StrId QS_TAB_LABELS[QS_TAB_COUNT] = {StrId::STR_CAT_READER, StrId::STR_CAT_DISPLAY};
+constexpr StrId QS_READER_LABELS[QS_READER_ITEM_COUNT] = {StrId::STR_FONT_SIZE, StrId::STR_LINE_SPACING,
+                                                          StrId::STR_SCREEN_MARGIN, StrId::STR_PARA_ALIGNMENT};
+constexpr StrId QS_DISPLAY_LABELS[QS_DISPLAY_ITEM_COUNT] = {StrId::STR_UI_THEME, StrId::STR_DARK_MODE,
+                                                            StrId::STR_TEXT_DARKNESS,
+                                                            StrId::STR_READER_REFRESH_MODE};
+constexpr StrId QS_FONT_SIZE_LABELS[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
+                                         StrId::STR_X_LARGE};
+constexpr StrId QS_LINE_SPACING_LABELS[] = {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE};
+constexpr StrId QS_ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
+                                         StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
+constexpr StrId QS_THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM};
+constexpr StrId QS_DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
+constexpr StrId QS_TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
+                                             StrId::STR_EXTRA_DARK};
+constexpr StrId QS_REFRESH_MODE_LABELS[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_REFRESH_MODE_FAST,
+                                            StrId::STR_REFRESH_MODE_HALF, StrId::STR_REFRESH_MODE_FULL};
 
 int clampPercent(int percent) {
   if (percent < 0) {
@@ -52,6 +73,17 @@ int clampPercent(int percent) {
     return 100;
   }
   return percent;
+}
+
+uint8_t wrapSettingValue(const uint8_t value, const int direction, const uint8_t count) {
+  if (direction > 0) {
+    return static_cast<uint8_t>((value + 1) % count);
+  }
+  return value == 0 ? static_cast<uint8_t>(count - 1) : static_cast<uint8_t>(value - 1);
+}
+
+std::string quickEnumValue(const uint8_t value, const StrId* labels, const uint8_t count) {
+  return I18N.get(labels[std::min<uint8_t>(value, count - 1)]);
 }
 
 std::string getStatsChapterTitle(Epub& epub, const int spineIndex) {
@@ -297,6 +329,12 @@ void EpubReaderActivity::loop() {
 
   READING_STATS.tickActiveSession();
   const unsigned long nowMs = millis();
+
+  if (quickSettingsOpen) {
+    if (handleQuickSettingsInput()) {
+      return;
+    }
+  }
 
   if (waitingForConfirmSecondClick && ReaderUtils::hasNonConfirmNavigationInput(mappedInput)) {
     waitingForConfirmSecondClick = false;
@@ -627,18 +665,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
     }
     case EpubReaderMenuActivity::MenuAction::QUICK_SETTINGS: {
       READING_STATS.noteActivity();
-      startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
-                             [this](const ActivityResult&) {
-                               READING_STATS.resumeSession();
-                               UITheme::getInstance().reload();
-                               if (section) {
-                                 cachedSpineIndex = currentSpineIndex;
-                                 cachedChapterTotalPageCount = section->pageCount;
-                                 nextPageNumber = section->currentPage;
-                               }
-                               section.reset();
-                               requestUpdate();
-                             });
+      READING_STATS.resumeSession();
+      openQuickSettingsOverlay();
       break;
     }
     case EpubReaderMenuActivity::MenuAction::DISPLAY_QR: {
@@ -710,6 +738,228 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
   }
+}
+
+void EpubReaderActivity::openQuickSettingsOverlay() {
+  quickSettingsOpen = true;
+  quickSettingsTabFocused = true;
+  quickSettingsTab = QS_TAB_READER;
+  quickSettingsItem = 0;
+  quickSettingsNeedsReflow = false;
+  renderQuickSettingsOverlay();
+}
+
+int EpubReaderActivity::getQuickSettingsItemCount() const {
+  return quickSettingsTab == QS_TAB_READER ? QS_READER_ITEM_COUNT : QS_DISPLAY_ITEM_COUNT;
+}
+
+const char* EpubReaderActivity::getQuickSettingLabel(const int tab, const int index) const {
+  return I18N.get(tab == QS_TAB_READER ? QS_READER_LABELS[index] : QS_DISPLAY_LABELS[index]);
+}
+
+std::string EpubReaderActivity::getQuickSettingValue(const int tab, const int index) const {
+  if (tab == QS_TAB_READER) {
+    switch (index) {
+      case 0:
+        return quickEnumValue(SETTINGS.fontSize, QS_FONT_SIZE_LABELS, CrossPointSettings::FONT_SIZE_COUNT);
+      case 1:
+        return quickEnumValue(SETTINGS.lineSpacing, QS_LINE_SPACING_LABELS, CrossPointSettings::LINE_COMPRESSION_COUNT);
+      case 2:
+        return std::to_string(SETTINGS.screenMargin);
+      case 3:
+        return quickEnumValue(SETTINGS.paragraphAlignment, QS_ALIGNMENT_LABELS,
+                              CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT);
+      default:
+        return "";
+    }
+  }
+
+  switch (index) {
+    case 0:
+      return quickEnumValue(SETTINGS.uiTheme, QS_THEME_LABELS, CrossPointSettings::UI_THEME_COUNT);
+    case 1:
+      return I18N.get(QS_DARK_MODE_LABELS[SETTINGS.darkMode ? 1 : 0]);
+    case 2:
+      return quickEnumValue(SETTINGS.textDarkness, QS_TEXT_DARKNESS_LABELS, CrossPointSettings::TEXT_DARKNESS_COUNT);
+    case 3:
+      return quickEnumValue(SETTINGS.readerRefreshMode, QS_REFRESH_MODE_LABELS,
+                            CrossPointSettings::READER_REFRESH_MODE_COUNT);
+    default:
+      return "";
+  }
+}
+
+void EpubReaderActivity::adjustQuickSetting(const int direction) {
+  if (quickSettingsTab == QS_TAB_READER) {
+    switch (quickSettingsItem) {
+      case 0:
+        SETTINGS.fontSize = wrapSettingValue(SETTINGS.fontSize, direction, CrossPointSettings::FONT_SIZE_COUNT);
+        quickSettingsNeedsReflow = true;
+        break;
+      case 1:
+        SETTINGS.lineSpacing =
+            wrapSettingValue(SETTINGS.lineSpacing, direction, CrossPointSettings::LINE_COMPRESSION_COUNT);
+        quickSettingsNeedsReflow = true;
+        break;
+      case 2:
+        SETTINGS.screenMargin =
+            direction > 0 ? std::min<uint8_t>(40, SETTINGS.screenMargin + 5)
+                          : (SETTINGS.screenMargin <= 5 ? 40 : static_cast<uint8_t>(SETTINGS.screenMargin - 5));
+        quickSettingsNeedsReflow = true;
+        break;
+      case 3:
+        SETTINGS.paragraphAlignment =
+            wrapSettingValue(SETTINGS.paragraphAlignment, direction, CrossPointSettings::PARAGRAPH_ALIGNMENT_COUNT);
+        quickSettingsNeedsReflow = true;
+        break;
+    }
+  } else {
+    switch (quickSettingsItem) {
+      case 0:
+        SETTINGS.uiTheme = wrapSettingValue(SETTINGS.uiTheme, direction, CrossPointSettings::UI_THEME_COUNT);
+        UITheme::getInstance().reload();
+        break;
+      case 1:
+        SETTINGS.darkMode = SETTINGS.darkMode ? 0 : 1;
+        renderer.setDarkMode(SETTINGS.darkMode);
+        break;
+      case 2:
+        SETTINGS.textDarkness = wrapSettingValue(SETTINGS.textDarkness, direction, CrossPointSettings::TEXT_DARKNESS_COUNT);
+        renderer.setTextDarkness(SETTINGS.textDarkness);
+        break;
+      case 3:
+        SETTINGS.readerRefreshMode =
+            wrapSettingValue(SETTINGS.readerRefreshMode, direction, CrossPointSettings::READER_REFRESH_MODE_COUNT);
+        break;
+    }
+  }
+
+  SETTINGS.saveToFile();
+  renderQuickSettingsOverlay();
+}
+
+void EpubReaderActivity::closeQuickSettingsOverlay() {
+  quickSettingsOpen = false;
+  if (quickSettingsNeedsReflow) {
+    RenderLock lock(*this);
+    if (section) {
+      cachedSpineIndex = currentSpineIndex;
+      cachedChapterTotalPageCount = section->pageCount;
+      nextPageNumber = section->currentPage;
+    }
+    section.reset();
+    pagesUntilFullRefresh = 0;
+  }
+  requestUpdate();
+}
+
+bool EpubReaderActivity::handleQuickSettingsInput() {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    if (!quickSettingsTabFocused) {
+      quickSettingsTabFocused = true;
+      renderQuickSettingsOverlay();
+      return true;
+    }
+    closeQuickSettingsOverlay();
+    return true;
+  }
+
+  if (quickSettingsTabFocused) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Left) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+      quickSettingsTab = quickSettingsTab == QS_TAB_READER ? QS_TAB_DISPLAY : QS_TAB_READER;
+      quickSettingsItem = 0;
+      renderQuickSettingsOverlay();
+      return true;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+      quickSettingsTabFocused = false;
+      renderQuickSettingsOverlay();
+      return true;
+    }
+    return true;
+  }
+
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
+      mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+    adjustQuickSetting(1);
+    return true;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
+    adjustQuickSetting(-1);
+    return true;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Down)) {
+    quickSettingsItem = ButtonNavigator::nextIndex(quickSettingsItem, getQuickSettingsItemCount());
+    renderQuickSettingsOverlay();
+    return true;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {
+    quickSettingsItem = ButtonNavigator::previousIndex(quickSettingsItem, getQuickSettingsItemCount());
+    renderQuickSettingsOverlay();
+    return true;
+  }
+  return true;
+}
+
+void EpubReaderActivity::renderQuickSettingsOverlay() {
+  const int w = renderer.getScreenWidth();
+  const int h = renderer.getScreenHeight();
+  const int overlayH = std::min(310, h - 40);
+  const int overlayY = h - overlayH;
+  renderer.fillRect(0, overlayY, w, overlayH, false);
+  renderer.drawRect(0, overlayY, w, overlayH);
+
+  const int tabY = overlayY + 12;
+  const int tabH = 34;
+  const int tabW = w / QS_TAB_COUNT;
+  for (int tab = 0; tab < QS_TAB_COUNT; ++tab) {
+    const bool active = tab == quickSettingsTab;
+    const int tabX = tab * tabW;
+    if (active) {
+      renderer.fillRectDither(tabX + 8, tabY, tabW - 16, tabH, Color::LightGray);
+    }
+    renderer.drawRect(tabX + 8, tabY, tabW - 16, tabH);
+    const char* label = I18N.get(QS_TAB_LABELS[tab]);
+    const auto fontStyle = active ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
+    const int textW = renderer.getTextWidth(UI_10_FONT_ID, label, fontStyle);
+    renderer.drawText(UI_10_FONT_ID, tabX + (tabW - textW) / 2, tabY + 8, label, true,
+                      active ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+    if (quickSettingsTabFocused && active) {
+      renderer.drawRect(tabX + 10, tabY + 2, tabW - 20, tabH - 4);
+    }
+  }
+
+  const int rowTop = tabY + tabH + 14;
+  const int rowH = 42;
+  const int itemCount = getQuickSettingsItemCount();
+  for (int i = 0; i < itemCount; ++i) {
+    const int y = rowTop + i * rowH;
+    const bool focused = !quickSettingsTabFocused && i == quickSettingsItem;
+    if (focused) {
+      renderer.fillRectDither(12, y - 4, w - 24, rowH - 2, Color::LightGray);
+    }
+    renderer.drawText(UI_10_FONT_ID, 24, y + 6, getQuickSettingLabel(quickSettingsTab, i), true,
+                      focused ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+    std::string value = getQuickSettingValue(quickSettingsTab, i);
+    if (focused) {
+      value = "< " + value + " >";
+    }
+    value = renderer.truncatedText(UI_10_FONT_ID, value.c_str(), 170, focused ? EpdFontFamily::BOLD
+                                                                              : EpdFontFamily::REGULAR);
+    const int valueW = renderer.getTextWidth(UI_10_FONT_ID, value.c_str(), focused ? EpdFontFamily::BOLD
+                                                                                   : EpdFontFamily::REGULAR);
+    renderer.drawText(UI_10_FONT_ID, w - 24 - valueW, y + 6, value.c_str(), true,
+                      focused ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+    renderer.drawLine(12, y + rowH - 3, w - 12, y + rowH - 3);
+  }
+
+  const auto labels =
+      quickSettingsTabFocused ? mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT))
+                              : mappedInput.mapLabels(tr(STR_BACK), tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 }
 
 void EpubReaderActivity::applyOrientation(const uint8_t orientation) {

@@ -21,7 +21,6 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
-#include "ReadingStatsStore.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
 #include "activities/apps/FavoritesAppActivity.h"
@@ -36,7 +35,6 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
-#include "util/ReadingStatsAnalytics.h"
 #include "util/ShortcutRegistry.h"
 #include "util/ShortcutUiMetadata.h"
 
@@ -99,43 +97,6 @@ UIIcon getHomeShortcutIcon(const HomeShortcutEntry& entry) {
 
 bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
   return entry.definition && ShortcutUiMetadata::showAccessory(*entry.definition);
-}
-
-const ReadingBookStats* findHomeCurrentBook(const std::vector<RecentBook>& recentBooks) {
-  for (const auto& recent : recentBooks) {
-    const auto* book = READING_STATS.findMatchingBookForPath(recent.path, recent.title, recent.author);
-    if (book && !book->completed) {
-      return book;
-    }
-  }
-  return nullptr;
-}
-
-void drawHomeStatsCards(GfxRenderer& renderer, const Rect& rect, const std::vector<RecentBook>& recentBooks) {
-  constexpr int gap = 6;
-  const int cardWidth = (rect.width - gap * 2) / 3;
-  const int cardHeight = rect.height;
-  const uint64_t todayMs = READING_STATS.getTodayReadingMs();
-  const uint32_t streak = READING_STATS.getCurrentStreakDays();
-  const auto* currentBook = findHomeCurrentBook(recentBooks);
-  const std::string timeLeft =
-      currentBook ? ReadingStatsAnalytics::formatCompactTimeLeftEstimate(
-                        ReadingStatsAnalytics::buildBookTimeLeftEstimate(*currentBook))
-                  : std::string(tr(STR_NOT_SET));
-  const std::string values[] = {ReadingStatsAnalytics::formatDurationHm(todayMs), std::to_string(streak), timeLeft};
-  const char* labels[] = {tr(STR_TODAY), tr(STR_STREAK), tr(STR_BOOK_TIME_LEFT)};
-
-  for (int index = 0; index < 3; ++index) {
-    const Rect card{rect.x + index * (cardWidth + gap), rect.y, cardWidth, cardHeight};
-    renderer.drawRect(card.x, card.y, card.width, card.height, true);
-    const std::string value = renderer.truncatedText(UI_12_FONT_ID, values[index].c_str(), card.width - 10,
-                                                     EpdFontFamily::BOLD);
-    const int valueX = card.x + (card.width - renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD)) / 2;
-    renderer.drawText(UI_12_FONT_ID, valueX, card.y + 8, value.c_str(), true, EpdFontFamily::BOLD);
-    const std::string label = renderer.truncatedText(UI_10_FONT_ID, labels[index], card.width - 10);
-    const int labelX = card.x + (card.width - renderer.getTextWidth(UI_10_FONT_ID, label.c_str())) / 2;
-    renderer.drawText(UI_10_FONT_ID, labelX, card.y + card.height - 22, label.c_str());
-  }
 }
 
 }  // namespace
@@ -471,12 +432,7 @@ void HomeActivity::render(RenderLock&&) {
       0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
       pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
                     metrics.buttonHintsHeight + metrics.verticalSpacing)};
-  constexpr int statsCardHeight = 54;
-  const Rect statsRect{metrics.contentSidePadding, shortcutsRect.y,
-                       pageWidth - metrics.contentSidePadding * 2, statsCardHeight};
-  drawHomeStatsCards(renderer, statsRect, recentBooks);
-  const Rect menuRect{shortcutsRect.x, shortcutsRect.y + statsCardHeight + metrics.verticalSpacing, shortcutsRect.width,
-                      std::max(0, shortcutsRect.height - statsCardHeight - metrics.verticalSpacing)};
+  const Rect menuRect = shortcutsRect;
 
   const int shortcutDisplayCount = static_cast<int>(homeEntries.size());
 
