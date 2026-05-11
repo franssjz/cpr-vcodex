@@ -1,6 +1,6 @@
 # CPR-vCodex Stats
 
-CPR-vCodex Stats is Daniel's unofficial, Codex-assisted firmware fork for the
+CPR-vCodex Stats is an unofficial, Codex-assisted firmware fork for the
 Xteink X4 e-reader. It is based on CPR-vCodex, which is itself based on
 CrossPoint Reader, but this repository is now its own experiment: a reading
 firmware build focused on deeper reading statistics, completion estimates, and
