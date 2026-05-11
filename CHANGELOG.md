@@ -11,6 +11,67 @@ where Daniel started publishing his own firmware builds.
 
 - No unreleased changes yet.
 
+## Stats Preview 0.2.0
+
+Published as GitHub release:
+
+- Pending release tag: `1.2.0.46-cpr-vcodex`
+
+### Reading Time-Left Estimates
+
+- Replaced the old total-time/current-progress estimate with progress-delta
+  samples recorded from real reading sessions.
+- Stored session start progress, session end progress, and active reading time
+  for valid sessions where book progress actually changed.
+- Updated active progress samples during reading activity and after progress
+  changes, so estimates can recalculate after page turns and minute-level
+  reading updates.
+- Added estimate confidence levels and now shows `More data` instead of a
+  precise time when tracked progress is too weak.
+- Kept the estimator local and lightweight. This release does not add full EPUB
+  word or character counting because that needs a parser/cache design that stays
+  safe on ESP32-C3 RAM and flash limits.
+
+### Reader UI
+
+- Defaulted the reader status bar to book time left instead of chapter time left.
+- Made status-bar time-left text compact, such as `~1h35` or `More data`, to
+  avoid Larix vCodex clipping.
+- Let chapter time-left appear only when it has enough confidence; otherwise the
+  reader falls back to book time-left.
+- Added a status-bar customization entry to the EPUB reader menu so status bar
+  mode and visibility settings can be changed without leaving the book.
+- Added book time-left display to the Lyra home/book UI in addition to the
+  Larix vCodex theme path.
+
+### Stats App
+
+- Added book time-left, average pace, recent pace, tracked progress gain, and
+  confidence to per-book stats detail pages.
+- Added compact time-left text to book rows in the Stats app.
+- Removed estimated sessions remaining from reading analytics displays while
+  keeping session count as informational metadata.
+
+### Browser Reading Stats Editor
+
+- Bumped reading stats export handling to format version `7`.
+- Preserved the new per-book progress sample history during browser editor
+  import/export normalization.
+
+### Verification
+
+- Built the development firmware with:
+
+```bash
+pio run -e default
+```
+
+- Development build passed with:
+  - flash usage: `6198747 / 6553600 bytes`;
+  - RAM usage: `102164 / 327680 bytes`;
+  - packaged dev firmware:
+    `artifacts/1.2.0.45.dev3-bff7436-cpr-vcodex.bin`.
+
 ## Stats Preview 0.1.0
 
 Published as GitHub release:

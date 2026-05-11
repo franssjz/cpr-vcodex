@@ -10,12 +10,12 @@
 namespace ReadingStatsAnalytics {
 namespace {
 constexpr uint64_t MIN_READING_DAY_BOOK_MS = 3ULL * 60ULL * 1000ULL;
-constexpr uint64_t MIN_ESTIMATE_READING_MS = 10ULL * 60ULL * 1000ULL;
-constexpr uint64_t MIN_CHAPTER_ESTIMATE_READING_MS = 2ULL * 60ULL * 1000ULL;
-constexpr uint64_t MIN_ESTIMATE_AVG_SESSION_MS = 5ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_MEDIUM_CONFIDENCE_MS = 20ULL * 60ULL * 1000ULL;
+constexpr uint64_t MIN_HIGH_CONFIDENCE_MS = 60ULL * 60ULL * 1000ULL;
 constexpr uint64_t ESTIMATE_ROUNDING_MS = 5ULL * 60ULL * 1000ULL;
-constexpr uint8_t MIN_ESTIMATE_PROGRESS_PERCENT = 5;
-constexpr uint8_t MIN_CHAPTER_ESTIMATE_PROGRESS_DELTA = 5;
+constexpr uint32_t MIN_MEDIUM_CONFIDENCE_PROGRESS = 3;
+constexpr uint32_t MIN_HIGH_CONFIDENCE_PROGRESS = 10;
+constexpr uint32_t RECENT_SAMPLE_COUNT = 8;
 
 int resolveYearFromTimestamp(const uint32_t timestamp) {
   if (!TimeUtils::isClockValid(timestamp)) {
@@ -37,11 +37,91 @@ uint64_t roundUpEstimateMs(const uint64_t valueMs) {
   return ((valueMs + ESTIMATE_ROUNDING_MS - 1) / ESTIMATE_ROUNDING_MS) * ESTIMATE_ROUNDING_MS;
 }
 
-uint32_t calculateSessionsLeft(const uint64_t remainingMs, const uint64_t averageSessionMs) {
-  if (remainingMs == 0 || averageSessionMs < MIN_ESTIMATE_AVG_SESSION_MS) {
+std::string formatDurationCompact(const uint64_t totalMs) {
+  const uint64_t totalMinutes = totalMs / 60000ULL;
+  const uint64_t hours = totalMinutes / 60ULL;
+  const uint64_t minutes = totalMinutes % 60ULL;
+  if (hours == 0) {
+    return std::to_string(minutes) + "m";
+  }
+  return std::to_string(hours) + "h" + (minutes < 10 ? "0" : "") + std::to_string(minutes);
+}
+
+EstimateConfidence classifyConfidence(const uint64_t trackedMs, const uint32_t progressDeltaPercent) {
+  if (trackedMs >= MIN_HIGH_CONFIDENCE_MS || progressDeltaPercent >= MIN_HIGH_CONFIDENCE_PROGRESS) {
+    return EstimateConfidence::HIGH_CONFIDENCE;
+  }
+  if ((trackedMs >= MIN_MEDIUM_CONFIDENCE_MS && progressDeltaPercent >= MIN_MEDIUM_CONFIDENCE_PROGRESS) ||
+      progressDeltaPercent >= 5) {
+    return EstimateConfidence::MEDIUM_CONFIDENCE;
+  }
+  return EstimateConfidence::LOW_CONFIDENCE;
+}
+
+TimeLeftEstimate buildProgressDeltaEstimate(const ReadingBookStats& book, const uint8_t currentProgressPercent) {
+  TimeLeftEstimate estimate;
+  if (book.completed || currentProgressPercent >= 100) {
+    estimate.completed = true;
+    estimate.ready = true;
+    estimate.confidence = EstimateConfidence::HIGH_CONFIDENCE;
+    return estimate;
+  }
+
+  if (book.progressSamples.empty()) {
+    return estimate;
+  }
+
+  uint64_t trackedMs = 0;
+  uint32_t progressDelta = 0;
+  uint32_t samplesUsed = 0;
+  for (auto it = book.progressSamples.rbegin(); it != book.progressSamples.rend() && samplesUsed < RECENT_SAMPLE_COUNT; ++it) {
+    if (it->sessionMs == 0 || it->endProgressPercent <= it->startProgressPercent) {
+      continue;
+    }
+    trackedMs += it->sessionMs;
+    progressDelta += static_cast<uint32_t>(it->endProgressPercent - it->startProgressPercent);
+    samplesUsed++;
+  }
+
+  if (trackedMs == 0 || progressDelta == 0) {
+    return estimate;
+  }
+
+  estimate.confidence = classifyConfidence(trackedMs, progressDelta);
+  estimate.trackedProgressDeltaPercent = progressDelta;
+  estimate.trackedProgressMs = trackedMs;
+  estimate.progressPerHourTenths =
+      static_cast<uint32_t>((static_cast<uint64_t>(progressDelta) * 36000ULL + trackedMs / 2) / trackedMs);
+  if (estimate.confidence == EstimateConfidence::LOW_CONFIDENCE) {
+    return estimate;
+  }
+
+  const uint32_t remainingPercent = 100 - currentProgressPercent;
+  estimate.remainingMs =
+      roundUpEstimateMs((static_cast<uint64_t>(remainingPercent) * trackedMs + progressDelta - 1) / progressDelta);
+  estimate.ready = estimate.remainingMs > 0;
+  return estimate;
+}
+
+uint32_t buildPaceTenths(const ReadingBookStats& book, const uint32_t maxSamples) {
+  uint64_t trackedMs = 0;
+  uint32_t progressDelta = 0;
+  uint32_t samplesUsed = 0;
+  for (auto it = book.progressSamples.rbegin(); it != book.progressSamples.rend(); ++it) {
+    if (maxSamples > 0 && samplesUsed >= maxSamples) {
+      break;
+    }
+    if (it->sessionMs == 0 || it->endProgressPercent <= it->startProgressPercent) {
+      continue;
+    }
+    trackedMs += it->sessionMs;
+    progressDelta += static_cast<uint32_t>(it->endProgressPercent - it->startProgressPercent);
+    samplesUsed++;
+  }
+  if (trackedMs == 0 || progressDelta == 0) {
     return 0;
   }
-  return static_cast<uint32_t>((remainingMs + averageSessionMs - 1) / averageSessionMs);
+  return static_cast<uint32_t>((static_cast<uint64_t>(progressDelta) * 36000ULL + trackedMs / 2) / trackedMs);
 }
 
 }  // namespace
@@ -111,27 +191,7 @@ uint64_t getAverageReadingDayMs() {
 }
 
 TimeLeftEstimate buildBookTimeLeftEstimate(const ReadingBookStats& book) {
-  TimeLeftEstimate estimate;
-  if (book.completed || book.lastProgressPercent >= 100) {
-    estimate.completed = true;
-    estimate.ready = true;
-    return estimate;
-  }
-
-  if (book.totalReadingMs < MIN_ESTIMATE_READING_MS || book.lastProgressPercent < MIN_ESTIMATE_PROGRESS_PERCENT) {
-    return estimate;
-  }
-
-  const uint64_t estimatedTotalMs =
-      (book.totalReadingMs * 100ULL + book.lastProgressPercent - 1) / book.lastProgressPercent;
-  if (estimatedTotalMs <= book.totalReadingMs) {
-    return estimate;
-  }
-
-  estimate.remainingMs = roundUpEstimateMs(estimatedTotalMs - book.totalReadingMs);
-  estimate.sessionsLeft = calculateSessionsLeft(estimate.remainingMs, book.sessions == 0 ? 0 : book.totalReadingMs / book.sessions);
-  estimate.ready = true;
-  return estimate;
+  return buildProgressDeltaEstimate(book, book.lastProgressPercent);
 }
 
 TimeLeftEstimate buildChapterTimeLeftEstimate(const ReadingBookStats& book) {
@@ -139,23 +199,32 @@ TimeLeftEstimate buildChapterTimeLeftEstimate(const ReadingBookStats& book) {
   if (book.completed || book.lastProgressPercent >= 100 || book.chapterProgressPercent >= 100) {
     estimate.completed = true;
     estimate.ready = true;
+    estimate.confidence = EstimateConfidence::HIGH_CONFIDENCE;
     return estimate;
   }
 
-  if (book.chapterTitle.empty() || book.currentChapterReadingMs < MIN_CHAPTER_ESTIMATE_READING_MS ||
-      book.chapterProgressPercent <= book.chapterReadingStartProgressPercent) {
+  if (book.chapterTitle.empty() || book.chapterProgressPercent <= book.chapterReadingStartProgressPercent) {
     return estimate;
   }
 
   const uint8_t progressDelta = book.chapterProgressPercent - book.chapterReadingStartProgressPercent;
   const uint8_t remainingProgress = 100 - book.chapterProgressPercent;
-  if (progressDelta < MIN_CHAPTER_ESTIMATE_PROGRESS_DELTA || remainingProgress == 0) {
+  if (progressDelta < MIN_MEDIUM_CONFIDENCE_PROGRESS || remainingProgress == 0 || book.currentChapterReadingMs == 0) {
+    return estimate;
+  }
+
+  estimate.confidence = classifyConfidence(book.currentChapterReadingMs, progressDelta);
+  estimate.trackedProgressDeltaPercent = progressDelta;
+  estimate.trackedProgressMs = book.currentChapterReadingMs;
+  estimate.progressPerHourTenths =
+      static_cast<uint32_t>((static_cast<uint64_t>(progressDelta) * 36000ULL + book.currentChapterReadingMs / 2) /
+                            book.currentChapterReadingMs);
+  if (estimate.confidence == EstimateConfidence::LOW_CONFIDENCE) {
     return estimate;
   }
 
   estimate.remainingMs = roundUpEstimateMs((book.currentChapterReadingMs * remainingProgress + progressDelta - 1) /
                                            progressDelta);
-  estimate.sessionsLeft = calculateSessionsLeft(estimate.remainingMs, book.sessions == 0 ? 0 : book.totalReadingMs / book.sessions);
   estimate.ready = true;
   return estimate;
 }
@@ -168,12 +237,50 @@ std::string formatTimeLeftEstimate(const TimeLeftEstimate& estimate) {
     return tr(STR_ESTIMATE_AFTER_MORE_READING);
   }
 
-  std::string value = "~" + formatDurationHm(estimate.remainingMs);
-  if (estimate.sessionsLeft > 0) {
-    value += " / " + std::to_string(estimate.sessionsLeft) + " " +
-             (estimate.sessionsLeft == 1 ? std::string(tr(STR_SESSION)) : std::string(tr(STR_SESSIONS)));
+  return "~" + formatDurationHm(estimate.remainingMs);
+}
+
+std::string formatCompactTimeLeftEstimate(const TimeLeftEstimate& estimate) {
+  if (estimate.completed) {
+    return tr(STR_DONE);
   }
-  return value;
+  if (!estimate.ready || estimate.remainingMs == 0) {
+    return tr(STR_ESTIMATE_AFTER_MORE_READING);
+  }
+  return "~" + formatDurationCompact(estimate.remainingMs);
+}
+
+std::string formatProgressPace(const uint32_t progressPerHourTenths) {
+  if (progressPerHourTenths == 0) {
+    return tr(STR_ESTIMATE_AFTER_MORE_READING);
+  }
+  return std::to_string(progressPerHourTenths / 10) + "." + std::to_string(progressPerHourTenths % 10) + "%/h";
+}
+
+std::string formatEstimateConfidence(const EstimateConfidence confidence) {
+  switch (confidence) {
+    case EstimateConfidence::HIGH_CONFIDENCE:
+      return tr(STR_HIGH_CONFIDENCE);
+    case EstimateConfidence::MEDIUM_CONFIDENCE:
+      return tr(STR_MEDIUM_CONFIDENCE);
+    case EstimateConfidence::LOW_CONFIDENCE:
+    default:
+      return tr(STR_LOW_CONFIDENCE);
+  }
+}
+
+uint32_t getAverageProgressPaceTenths(const ReadingBookStats& book) { return buildPaceTenths(book, 0); }
+
+uint32_t getRecentProgressPaceTenths(const ReadingBookStats& book) { return buildPaceTenths(book, RECENT_SAMPLE_COUNT); }
+
+uint32_t getTrackedProgressGainPercent(const ReadingBookStats& book) {
+  uint32_t progressDelta = 0;
+  for (const auto& sample : book.progressSamples) {
+    if (sample.endProgressPercent > sample.startProgressPercent) {
+      progressDelta += static_cast<uint32_t>(sample.endProgressPercent - sample.startProgressPercent);
+    }
+  }
+  return progressDelta;
 }
 
 std::vector<DayBookEntry> getBooksReadOnDay(const uint32_t dayOrdinal) {

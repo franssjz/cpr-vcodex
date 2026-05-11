@@ -14,6 +14,13 @@ struct ReadingDayStats {
 };
 
 struct ReadingBookStats {
+  struct ProgressSample {
+    uint32_t endedAt = 0;
+    uint32_t sessionMs = 0;
+    uint8_t startProgressPercent = 0;
+    uint8_t endProgressPercent = 0;
+  };
+
   std::string bookId;
   std::string path;
   std::vector<std::string> knownPaths;
@@ -33,6 +40,7 @@ struct ReadingBookStats {
   uint8_t chapterProgressPercent = 0;
   uint8_t chapterReadingStartProgressPercent = 0;
   bool completed = false;
+  std::vector<ProgressSample> progressSamples;
 };
 
 struct ReadingSessionSnapshot {
@@ -78,10 +86,12 @@ class ReadingStatsStore {
   struct SessionState {
     bool active = false;
     size_t bookIndex = 0;
+    size_t progressSampleIndex = 0;
     unsigned long lastInteractionMs = 0;
     uint64_t accumulatedMs = 0;
     uint8_t startProgressPercent = 0;
     bool startCompleted = false;
+    bool hasProgressSample = false;
   };
 
   std::vector<ReadingBookStats> books;
@@ -119,6 +129,7 @@ class ReadingStatsStore {
   void updateBookReadTimestamp(ReadingBookStats& book, uint32_t preferredTimestamp);
   void recordReadingTime(ReadingBookStats& book, uint32_t epochSeconds, uint64_t readingMs);
   void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs);
+  void updateActiveProgressSample(ReadingBookStats& book, uint32_t timestamp);
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
   void invalidateSummaryCache();

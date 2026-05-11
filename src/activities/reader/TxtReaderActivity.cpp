@@ -729,7 +729,8 @@ void TxtReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE) {
     const ReadingBookStats* stats = READING_STATS.findMatchingBookForPath(txt->getPath(), txt->getTitle(), "");
     if (stats) {
-      timeLeftText = ReadingStatsAnalytics::formatTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats));
+      timeLeftText =
+          ReadingStatsAnalytics::formatCompactTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats));
     }
   }
   GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, timeLeftText);

@@ -588,6 +588,11 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
         stats != nullptr
             ? ReadingStatsAnalytics::formatDurationHm(stats->totalReadingMs) + " | " + std::to_string(stats->sessions) + "x"
             : std::string("0m | 0x");
+    const std::string timeLeftText =
+        stats != nullptr ? std::string(tr(STR_BOOK_TIME_LEFT)) + ": " +
+                               ReadingStatsAnalytics::formatCompactTimeLeftEstimate(
+                                   ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats))
+                         : std::string();
 
     auto titleLines = renderer.wrappedText(UI_12_FONT_ID, book.title.c_str(), textWidth, 3, EpdFontFamily::BOLD);
 
@@ -600,8 +605,8 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     const int statsLineHeight = smallLineHeight;
     const int progressTopGap = 14;
     const int statsTopGap = 7;
-    const int totalBlockHeight =
-        titleBlockHeight + authorHeight + progressTopGap + progressRowHeight + statsTopGap + statsLineHeight;
+    const int totalBlockHeight = titleBlockHeight + authorHeight + progressTopGap + progressRowHeight + statsTopGap +
+                                 statsLineHeight + (stats != nullptr ? statsLineHeight : 0);
     int currentY = tileY + tileHeight / 2 - totalBlockHeight / 2;
     const int textX = tileX + hPaddingInSelection + coverWidth + LyraMetrics::values.verticalSpacing;
     for (const auto& line : titleLines) {
@@ -625,6 +630,11 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     currentY += progressRowHeight + statsTopGap;
     auto statsLine = renderer.truncatedText(SMALL_FONT_ID, statsText.c_str(), textWidth);
     renderer.drawText(SMALL_FONT_ID, textX, currentY, statsLine.c_str(), true);
+    if (!timeLeftText.empty()) {
+      currentY += statsLineHeight;
+      auto timeLeftLine = renderer.truncatedText(SMALL_FONT_ID, timeLeftText.c_str(), textWidth);
+      renderer.drawText(SMALL_FONT_ID, textX, currentY, timeLeftLine.c_str(), true);
+    }
   } else {
     drawEmptyRecents(renderer, rect);
   }

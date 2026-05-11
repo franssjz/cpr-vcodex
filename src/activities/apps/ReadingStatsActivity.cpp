@@ -91,13 +91,18 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
 
   const std::string progressText = std::to_string(book.lastProgressPercent) + "%";
   const std::string totalTimeText = ReadingStatsAnalytics::formatDurationHm(book.totalReadingMs);
+  const std::string timeLeftText =
+      ReadingStatsAnalytics::formatCompactTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(book));
   const int progressWidth = renderer.getTextWidth(UI_12_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
   const int timeWidth = renderer.getTextWidth(UI_10_FONT_ID, totalTimeText.c_str());
+  const int timeLeftWidth = renderer.getTextWidth(SMALL_FONT_ID, timeLeftText.c_str());
   const int progressX = rect.x + rect.width - sidePadding - progressWidth;
   const int timeX = rect.x + rect.width - sidePadding - timeWidth;
+  const int timeLeftX = rect.x + rect.width - sidePadding - timeLeftWidth;
 
   renderer.drawText(UI_12_FONT_ID, progressX, titleY, progressText.c_str(), true, EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, timeX, subtitleY, totalTimeText.c_str());
+  renderer.drawText(SMALL_FONT_ID, timeLeftX, subtitleY + 19, timeLeftText.c_str());
 
   drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 9}, book.lastProgressPercent);
 }

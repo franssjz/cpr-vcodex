@@ -95,11 +95,11 @@ new estimate fields are derived from that existing stats flow.
 
 Book time-left estimate:
 
-- uses total recorded reading time and current book progress;
-- waits until there is enough reading time and progress to make a reasonable
-  estimate;
-- displays an approximate remaining duration and, when possible, an estimated
-  number of sessions left.
+- uses tracked progress gained during valid reading sessions;
+- waits until there is enough tracked reading time or progress gain to make a
+  reasonable estimate;
+- displays an approximate remaining duration, or `More data` when confidence is
+  too low.
 
 Chapter time-left estimate:
 

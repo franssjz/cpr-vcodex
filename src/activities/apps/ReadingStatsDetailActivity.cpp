@@ -578,8 +578,8 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
   }
 
-  const int estimateCardsTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4;
-  const int contentBottom = estimateCardsTop + METRIC_CARD_HEIGHT + metrics.verticalSpacing;
+  const int finalCardsTop = cardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6;
+  const int contentBottom = finalCardsTop + METRIC_CARD_HEIGHT + metrics.verticalSpacing;
   maxScrollOffset = std::max(0, contentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
   const int scrollDy = -scrollOffset;
@@ -626,6 +626,14 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     }
 
     const int cardWidth = (pageWidth - metrics.contentSidePadding * 2 - METRIC_CARD_GAP) / 2;
+    const auto bookEstimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(*book);
+    const auto chapterEstimate = ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*book);
+    const std::string chapterEstimateValue =
+        chapterEstimate.ready && chapterEstimate.confidence != ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE
+            ? ReadingStatsAnalytics::formatTimeLeftEstimate(chapterEstimate)
+            : ReadingStatsAnalytics::formatTimeLeftEstimate(bookEstimate);
+    const std::string progressGainValue =
+        std::to_string(ReadingStatsAnalytics::getTrackedProgressGainPercent(*book)) + "%";
 
     drawMetricCard(renderer, Rect{metrics.contentSidePadding, drawCardsTop, cardWidth, METRIC_CARD_HEIGHT},
                    tr(STR_LAST_SESSION), ReadingStatsAnalytics::formatDurationHm(book->lastSessionMs));
@@ -652,14 +660,30 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4,
                         cardWidth, METRIC_CARD_HEIGHT},
-                   tr(STR_BOOK_TIME_LEFT),
-                   ReadingStatsAnalytics::formatTimeLeftEstimate(ReadingStatsAnalytics::buildBookTimeLeftEstimate(*book)));
+                   tr(STR_BOOK_TIME_LEFT), ReadingStatsAnalytics::formatTimeLeftEstimate(bookEstimate));
     drawMetricCard(renderer,
                    Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
                         drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 4, cardWidth, METRIC_CARD_HEIGHT},
-                   tr(STR_CHAPTER_TIME_LEFT),
-                   ReadingStatsAnalytics::formatTimeLeftEstimate(
-                       ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*book)));
+                   tr(STR_CHAPTER_TIME_LEFT), chapterEstimateValue);
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5,
+                        cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_AVG_PACE),
+                   ReadingStatsAnalytics::formatProgressPace(ReadingStatsAnalytics::getAverageProgressPaceTenths(*book)));
+    drawMetricCard(
+        renderer,
+        Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
+             drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 5, cardWidth, METRIC_CARD_HEIGHT},
+        tr(STR_RECENT_PACE),
+        ReadingStatsAnalytics::formatProgressPace(ReadingStatsAnalytics::getRecentProgressPaceTenths(*book)));
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding, drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6,
+                        cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_PROGRESS_GAIN), progressGainValue);
+    drawMetricCard(renderer,
+                   Rect{metrics.contentSidePadding + cardWidth + METRIC_CARD_GAP,
+                        drawCardsTop + (METRIC_CARD_HEIGHT + METRIC_CARD_GAP) * 6, cardWidth, METRIC_CARD_HEIGHT},
+                   tr(STR_CONFIDENCE), ReadingStatsAnalytics::formatEstimateConfidence(bookEstimate.confidence));
 
     renderer.fillRect(0, 0, pageWidth, contentTop, false);
     if (viewportBottom < pageHeight) {

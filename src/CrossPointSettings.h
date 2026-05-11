@@ -229,7 +229,7 @@ class CrossPointSettings {
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
-  uint8_t statusBarTimeLeft = TIME_LEFT_CHAPTER;
+  uint8_t statusBarTimeLeft = TIME_LEFT_BOOK;
   uint8_t statusBarBattery = 1;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;

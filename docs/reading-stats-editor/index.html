@@ -3356,6 +3356,7 @@
     function normalizeBook(book = {}) {
       const knownPaths = Array.isArray(book.knownPaths) ? book.knownPaths : [];
       const readingDays = Array.isArray(book.readingDays) ? book.readingDays : [];
+      const progressSamples = Array.isArray(book.progressSamples) ? book.progressSamples : [];
       const normalized = {
         bookId: String(book.bookId || ""),
         path: String(book.path || ""),
@@ -3377,7 +3378,13 @@
         chapterReadingStartProgressPercent: book.chapterReadingStartProgressPercent === undefined
           ? clampPercent(book.chapterProgressPercent)
           : clampPercent(book.chapterReadingStartProgressPercent),
-        completed: Boolean(book.completed)
+        completed: Boolean(book.completed),
+        progressSamples: progressSamples.map(sample => ({
+          endedAt: toUInt(sample && sample.endedAt),
+          sessionMs: toUInt(sample && sample.sessionMs),
+          startProgressPercent: clampPercent(sample && sample.startProgressPercent),
+          endProgressPercent: clampPercent(sample && sample.endProgressPercent)
+        })).filter(sample => sample.sessionMs && sample.endProgressPercent > sample.startProgressPercent)
       };
       if (!normalized.bookId) normalized.bookId = normalized.path;
       if (!normalized.knownPaths.includes(normalized.path) && normalized.path) {
@@ -3391,7 +3398,7 @@
       const books = Array.isArray(doc.books) ? doc.books : [];
       const sessionLog = Array.isArray(doc.sessionLog) ? doc.sessionLog : [];
       const normalized = {
-        formatVersion: Math.max(toUInt(doc.formatVersion), 6),
+        formatVersion: Math.max(toUInt(doc.formatVersion), 7),
         readingDays: [],
         legacyReadingDays: [],
         sessionLog: sessionLog.map(entry => ({
@@ -3432,12 +3439,12 @@
         .map(([dayOrdinal, readingMs]) => ({dayOrdinal, readingMs}))
         .sort((a, b) => a.dayOrdinal - b.dayOrdinal);
       doc.legacyReadingDays = doc.readingDays.map(day => ({...day}));
-      doc.formatVersion = Math.max(toUInt(doc.formatVersion), 6);
+      doc.formatVersion = Math.max(toUInt(doc.formatVersion), 7);
     }
 
     function makeEmptyDoc() {
       return {
-        formatVersion: 6,
+        formatVersion: 7,
         readingDays: [],
         legacyReadingDays: [],
         sessionLog: [],
@@ -3465,7 +3472,8 @@
         lastProgressPercent: 0,
         chapterProgressPercent: 0,
         chapterReadingStartProgressPercent: 0,
-        completed: false
+        completed: false,
+        progressSamples: []
       });
     }
 

@@ -28,6 +28,7 @@
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
+#include "activities/settings/StatusBarSettingsActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
@@ -613,6 +614,16 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           });
       break;
     }
+    case EpubReaderMenuActivity::MenuAction::STATUS_BAR: {
+      READING_STATS.noteActivity();
+      startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput),
+                             [this](const ActivityResult&) {
+                               READING_STATS.resumeSession();
+                               section.reset();
+                               requestUpdate();
+                             });
+      break;
+    }
     case EpubReaderMenuActivity::MenuAction::DISPLAY_QR: {
       if (section && section->currentPage >= 0 && section->currentPage < section->pageCount) {
         auto p = section->loadPageFromSectionFile();
@@ -1161,10 +1172,15 @@ void EpubReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE) {
     const ReadingBookStats* stats = READING_STATS.findMatchingBookForPath(epub->getPath(), epub->getTitle(), epub->getAuthor());
     if (stats) {
-      const auto estimate = SETTINGS.statusBarTimeLeft == CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_BOOK
-                                ? ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats)
-                                : ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats);
-      timeLeftText = ReadingStatsAnalytics::formatTimeLeftEstimate(estimate);
+      auto estimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(*stats);
+      if (SETTINGS.statusBarTimeLeft == CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_CHAPTER) {
+        const auto chapterEstimate = ReadingStatsAnalytics::buildChapterTimeLeftEstimate(*stats);
+        if (chapterEstimate.ready &&
+            chapterEstimate.confidence != ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE) {
+          estimate = chapterEstimate;
+        }
+      }
+      timeLeftText = ReadingStatsAnalytics::formatCompactTimeLeftEstimate(estimate);
     }
   }
 

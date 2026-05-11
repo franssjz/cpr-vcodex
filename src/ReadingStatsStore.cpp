@@ -20,6 +20,7 @@ constexpr unsigned long SESSION_HEARTBEAT_MS = 60UL * 1000UL;
 constexpr unsigned long DEFERRED_SAVE_INTERVAL_MS = 30UL * 1000UL;
 constexpr uint64_t MIN_SESSION_READING_MS = 3ULL * 60ULL * 1000ULL;
 constexpr size_t MAX_SESSION_LOG_ENTRIES = 256;
+constexpr size_t MAX_BOOK_PROGRESS_SAMPLES = 32;
 
 uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 100); }
 
@@ -223,6 +224,18 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
   primary.completed = primary.completed || duplicate.completed;
   primary.readingDays.insert(primary.readingDays.end(), duplicate.readingDays.begin(), duplicate.readingDays.end());
+  primary.progressSamples.insert(primary.progressSamples.end(), duplicate.progressSamples.begin(),
+                                 duplicate.progressSamples.end());
+  std::sort(primary.progressSamples.begin(), primary.progressSamples.end(),
+            [](const ReadingBookStats::ProgressSample& left, const ReadingBookStats::ProgressSample& right) {
+              return left.endedAt < right.endedAt;
+            });
+  if (primary.progressSamples.size() > MAX_BOOK_PROGRESS_SAMPLES) {
+    primary.progressSamples.erase(
+        primary.progressSamples.begin(),
+        primary.progressSamples.begin() +
+            static_cast<std::ptrdiff_t>(primary.progressSamples.size() - MAX_BOOK_PROGRESS_SAMPLES));
+  }
   normalizeReadingDays(primary.readingDays);
 }
 
@@ -235,6 +248,19 @@ void ReadingStatsStore::normalizeBook(ReadingBookStats& book) {
   }
   rememberBookPath(book, book.path);
   normalizeReadingDays(book.readingDays);
+  book.progressSamples.erase(std::remove_if(book.progressSamples.begin(), book.progressSamples.end(),
+                                            [](const ReadingBookStats::ProgressSample& sample) {
+                                              return sample.sessionMs == 0 ||
+                                                     sample.endProgressPercent <= sample.startProgressPercent ||
+                                                     sample.endProgressPercent > 100;
+                                            }),
+                             book.progressSamples.end());
+  if (book.progressSamples.size() > MAX_BOOK_PROGRESS_SAMPLES) {
+    book.progressSamples.erase(
+        book.progressSamples.begin(),
+        book.progressSamples.begin() +
+            static_cast<std::ptrdiff_t>(book.progressSamples.size() - MAX_BOOK_PROGRESS_SAMPLES));
+  }
 }
 
 void ReadingStatsStore::normalizeBooks() {
@@ -461,6 +487,34 @@ void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const u
   }
 }
 
+void ReadingStatsStore::updateActiveProgressSample(ReadingBookStats& book, const uint32_t timestamp) {
+  if (!activeSession.active || book.lastProgressPercent <= activeSession.startProgressPercent ||
+      activeSession.accumulatedMs < MIN_SESSION_READING_MS) {
+    return;
+  }
+
+  const uint32_t sessionMs = activeSession.accumulatedMs > static_cast<uint64_t>(UINT32_MAX)
+                                 ? UINT32_MAX
+                                 : static_cast<uint32_t>(activeSession.accumulatedMs);
+  if (activeSession.hasProgressSample && activeSession.progressSampleIndex < book.progressSamples.size()) {
+    auto& sample = book.progressSamples[activeSession.progressSampleIndex];
+    sample.endedAt = timestamp;
+    sample.sessionMs = sessionMs;
+    sample.endProgressPercent = book.lastProgressPercent;
+    return;
+  }
+
+  book.progressSamples.push_back(
+      ReadingBookStats::ProgressSample{timestamp, sessionMs, activeSession.startProgressPercent, book.lastProgressPercent});
+  activeSession.progressSampleIndex = book.progressSamples.size() - 1;
+  activeSession.hasProgressSample = true;
+  if (book.progressSamples.size() > MAX_BOOK_PROGRESS_SAMPLES) {
+    book.progressSamples.erase(book.progressSamples.begin());
+    activeSession.progressSampleIndex =
+        activeSession.progressSampleIndex == 0 ? 0 : activeSession.progressSampleIndex - 1;
+  }
+}
+
 void ReadingStatsStore::rebuildAggregatedReadingDays() {
   readingDays = legacyReadingDays;
   normalizeReadingDays(readingDays);
@@ -595,15 +649,16 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   touchBook(index);
 
   auto& book = books[0];
-  activeSession.startProgressPercent = book.lastProgressPercent;
   activeSession.startCompleted = book.completed;
+  const uint8_t clampedBookProgress = clampPercent(progressPercent);
+  const uint8_t clampedChapterProgress = clampPercent(chapterProgressPercent);
   if (book.chapterTitle != chapterTitle) {
     book.currentChapterReadingMs = 0;
-    book.chapterReadingStartProgressPercent = clampPercent(chapterProgressPercent);
+    book.chapterReadingStartProgressPercent = clampedChapterProgress;
   }
-  book.lastProgressPercent = clampPercent(progressPercent);
+  book.lastProgressPercent = clampedBookProgress;
   book.chapterTitle = chapterTitle;
-  book.chapterProgressPercent = clampPercent(chapterProgressPercent);
+  book.chapterProgressPercent = clampedChapterProgress;
   if (book.lastProgressPercent >= 100) {
     book.completed = true;
   }
@@ -614,6 +669,7 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   activeSession.bookIndex = 0;
   activeSession.lastInteractionMs = millis();
   activeSession.accumulatedMs = 0;
+  activeSession.startProgressPercent = clampedBookProgress;
 
   markDirty();
 }
@@ -635,6 +691,7 @@ void ReadingStatsStore::noteActivity() {
     const uint32_t referenceTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     recordReadingTime(book, referenceTimestamp, creditedMs);
     updateBookReadTimestamp(book, referenceTimestamp);
+    updateActiveProgressSample(book, referenceTimestamp);
     markDirty();
   }
 
@@ -697,6 +754,7 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   if (completionChanged && book.completedAt == 0) {
     book.completedAt = book.lastReadAt;
   }
+  updateActiveProgressSample(book, book.lastReadAt);
 
   markDirty();
   if (shouldSaveDeferred()) {
@@ -786,6 +844,22 @@ void ReadingStatsStore::endSession() {
     const uint32_t sessionTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     if (isClockValid(sessionTimestamp)) {
       appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs);
+    }
+    if (!activeSession.hasProgressSample && sessionMs >= MIN_SESSION_READING_MS &&
+        book.lastProgressPercent > activeSession.startProgressPercent) {
+      book.progressSamples.push_back(ReadingBookStats::ProgressSample{
+          sessionTimestamp, sessionMs, activeSession.startProgressPercent, book.lastProgressPercent});
+      if (book.progressSamples.size() > MAX_BOOK_PROGRESS_SAMPLES) {
+        book.progressSamples.erase(book.progressSamples.begin(),
+                                   book.progressSamples.begin() +
+                                       static_cast<std::ptrdiff_t>(book.progressSamples.size() -
+                                                                   MAX_BOOK_PROGRESS_SAMPLES));
+      }
+    } else if (activeSession.hasProgressSample && activeSession.progressSampleIndex < book.progressSamples.size()) {
+      auto& sample = book.progressSamples[activeSession.progressSampleIndex];
+      sample.endedAt = sessionTimestamp;
+      sample.sessionMs = sessionMs;
+      sample.endProgressPercent = book.lastProgressPercent;
     }
     markDirty();
   }

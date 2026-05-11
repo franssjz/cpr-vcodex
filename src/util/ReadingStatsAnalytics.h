@@ -21,11 +21,16 @@ struct TimelineDayEntry {
   uint64_t topBookReadingMs = 0;
 };
 
+enum class EstimateConfidence : uint8_t { LOW_CONFIDENCE = 0, MEDIUM_CONFIDENCE = 1, HIGH_CONFIDENCE = 2 };
+
 struct TimeLeftEstimate {
   bool ready = false;
   bool completed = false;
   uint64_t remainingMs = 0;
-  uint32_t sessionsLeft = 0;
+  EstimateConfidence confidence = EstimateConfidence::LOW_CONFIDENCE;
+  uint32_t trackedProgressDeltaPercent = 0;
+  uint64_t trackedProgressMs = 0;
+  uint32_t progressPerHourTenths = 0;
 };
 
 std::string formatDurationHm(uint64_t totalMs);
@@ -37,6 +42,12 @@ uint64_t getAverageReadingDayMs();
 TimeLeftEstimate buildBookTimeLeftEstimate(const ReadingBookStats& book);
 TimeLeftEstimate buildChapterTimeLeftEstimate(const ReadingBookStats& book);
 std::string formatTimeLeftEstimate(const TimeLeftEstimate& estimate);
+std::string formatCompactTimeLeftEstimate(const TimeLeftEstimate& estimate);
+std::string formatProgressPace(uint32_t progressPerHourTenths);
+std::string formatEstimateConfidence(EstimateConfidence confidence);
+uint32_t getAverageProgressPaceTenths(const ReadingBookStats& book);
+uint32_t getRecentProgressPaceTenths(const ReadingBookStats& book);
+uint32_t getTrackedProgressGainPercent(const ReadingBookStats& book);
 std::vector<DayBookEntry> getBooksReadOnDay(uint32_t dayOrdinal);
 TimelineDayEntry buildTimelineDayEntry(uint32_t dayOrdinal);
 std::vector<TimelineDayEntry> buildTimelineEntries(size_t maxEntries = 0);

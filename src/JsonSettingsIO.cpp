@@ -1200,7 +1200,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
 
 bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  doc["formatVersion"] = 6;
+  doc["formatVersion"] = 7;
 
   JsonArray days = doc["readingDays"].to<JsonArray>();
   for (const auto& day : store.getReadingDays()) {
@@ -1247,6 +1247,15 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["chapterProgressPercent"] = book.chapterProgressPercent;
     obj["chapterReadingStartProgressPercent"] = book.chapterReadingStartProgressPercent;
     obj["completed"] = book.completed;
+
+    JsonArray progressSamples = obj["progressSamples"].to<JsonArray>();
+    for (const auto& sample : book.progressSamples) {
+      JsonObject sampleObj = progressSamples.add<JsonObject>();
+      sampleObj["endedAt"] = sample.endedAt;
+      sampleObj["sessionMs"] = sample.sessionMs;
+      sampleObj["startProgressPercent"] = sample.startProgressPercent;
+      sampleObj["endProgressPercent"] = sample.endProgressPercent;
+    }
 
     JsonArray bookDays = obj["readingDays"].to<JsonArray>();
     for (const auto& day : book.readingDays) {
@@ -1342,6 +1351,21 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     book.chapterProgressPercent = obj["chapterProgressPercent"] | static_cast<uint8_t>(0);
     book.chapterReadingStartProgressPercent = obj["chapterReadingStartProgressPercent"] | book.chapterProgressPercent;
     book.completed = obj["completed"] | false;
+    if (formatVersion >= 7) {
+      for (JsonObject sampleObj : obj["progressSamples"].as<JsonArray>()) {
+        ReadingBookStats::ProgressSample sample;
+        sample.endedAt = sampleObj["endedAt"] | static_cast<uint32_t>(0);
+        sample.sessionMs = sampleObj["sessionMs"] | static_cast<uint32_t>(0);
+        sample.startProgressPercent = sampleObj["startProgressPercent"] | static_cast<uint8_t>(0);
+        sample.endProgressPercent = sampleObj["endProgressPercent"] | static_cast<uint8_t>(0);
+        if (sample.sessionMs != 0 && sample.endProgressPercent > sample.startProgressPercent &&
+            sample.endProgressPercent <= 100) {
+          book.progressSamples.push_back(sample);
+        }
+      }
+    } else {
+      store.dirty = true;
+    }
     if (formatVersion >= 2) {
       appendReadingDays(book.readingDays, obj["readingDays"].as<JsonArray>());
     }
