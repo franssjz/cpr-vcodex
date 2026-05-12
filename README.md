@@ -21,16 +21,7 @@ card and exported reading stats before installing any release from this fork.
 | Fork name | `CPR-vCodex Stats` |
 | Firmware focus | Reading statistics, completion estimates, and analytics |
 | Target device | Xteink X4 |
-| First fork release name | `Stats Preview 0.1.0` |
-| Published firmware tag | [`1.2.0.48-cpr-vcodex`](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.48-cpr-vcodex) |
-| Flashable file | `1.2.0.48-cpr-vcodex.bin` |
-| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 
-The published tag still uses the inherited CPR-vCodex-compatible release format
-because the current build and release scripts expect that scheme. Going forward,
-this fork will describe releases with a simpler fork-facing name such as
-`Stats Preview 0.1.0`, while the firmware artifact may keep the compatible tag
-format until the release tooling is intentionally renamed.
 
 ## What This Fork Changes
 
@@ -64,7 +55,6 @@ including:
 - achievements;
 - bookmarks and recent books;
 - OPDS and KOReader Sync related features;
-- flashcards;
 - sleep-screen tools;
 - browser-based file transfer and settings tools;
 - multilingual UI support.
@@ -74,19 +64,31 @@ builds on them and changes the direction toward more detailed reading analytics.
 
 ## Installation
 
-The easiest manual install path is:
+The easiest install path is:
 
-1. Open the latest release:
-   [1.2.0.48-cpr-vcodex](https://github.com/danielc0603/cpr-vcodex-stats/releases/tag/1.2.0.48-cpr-vcodex).
-2. Download `1.2.0.48-cpr-vcodex.bin`.
+1. Open the latest release on GitHub:
+   Latest Releases
+
+2. Download the newest firmware .bin file.
+
 3. Turn on and unlock the Xteink X4.
-4. Open [xteink.dve.al](https://xteink.dve.al/) in Chrome or Edge.
-5. Choose the downloaded `.bin` file in the OTA flash controls.
+
+4. Open:
+   https://xteink.dve.al/
+
+in Chrome or Edge.
+
+5. Choose the downloaded .bin file using the OTA flash controls.
+
 6. Flash the firmware and wait for completion.
 
-The browser auto-flash files in `docs/firmware/` have also been synchronized to
-the current fork release, but the safest first install path is still to download
-the `.bin` release asset directly and know exactly which file is being flashed.
+Before flashing:
+
+- back up your SD card;
+- export reading stats if they matter to you;
+- keep a copy of older working firmware builds.
+
+This fork is experimental custom firmware and may behave differently from upstream CPR-vCodex releases.
 
 ## Reading Stats Behavior
 
