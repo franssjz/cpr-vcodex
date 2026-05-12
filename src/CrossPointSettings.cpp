@@ -206,7 +206,11 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, hideBatteryPercentage, HIDE_BATTERY_PERCENTAGE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPod(inputFile, longPressChapterSkip);
+    {
+      uint8_t legacyLongPressChapterSkip = 1;
+      serialization::readPod(inputFile, legacyLongPressChapterSkip);
+      longPressButtonBehavior = legacyLongPressChapterSkip ? LONG_PRESS_CHAPTER_SKIP : LONG_PRESS_OFF;
+    }
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, hyphenationEnabled);
     if (++settingsRead >= fileSettingsCount) break;

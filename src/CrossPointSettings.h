@@ -161,6 +161,14 @@ class CrossPointSettings {
   // Hide battery percentage
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
+  // Page turn button long-press behavior
+  enum LONG_PRESS_BUTTON_BEHAVIOR {
+    LONG_PRESS_OFF = 0,
+    LONG_PRESS_CHAPTER_SKIP = 1,
+    LONG_PRESS_ORIENTATION_CHANGE = 2,
+    LONG_PRESS_BUTTON_BEHAVIOR_COUNT
+  };
+
   // UI Theme
   // Value 2 used to be Lyra Carousel; keep it invalid so old settings
   // migrate back to the default theme.
@@ -281,8 +289,8 @@ class CrossPointSettings {
   uint8_t opdsFilenameFormat = OPDS_FILENAME_AUTHOR_TITLE;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
-  // Long-press chapter skip on side buttons
-  uint8_t longPressChapterSkip = 1;
+  // Page turn button long-press behavior
+  uint8_t longPressButtonBehavior = LONG_PRESS_CHAPTER_SKIP;
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
   // Experimental global dark mode for the device UI and supported readers.

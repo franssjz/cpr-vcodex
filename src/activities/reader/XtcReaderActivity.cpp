@@ -27,7 +27,6 @@
 #include "util/BookIdentity.h"
 
 namespace {
-constexpr unsigned long skipPageMs = 700;
 constexpr unsigned long goHomeMs = 1000;
 
 std::string getStableProgressPath(const std::string& bookId) {
@@ -208,7 +207,9 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  const bool skipPages = !fromTilt && SETTINGS.longPressChapterSkip && mappedInput.getHeldTime() > skipPageMs;
+  const bool skipPages = !fromTilt &&
+                         SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP &&
+                         mappedInput.getHeldTime() > ReaderUtils::SKIP_HOLD_MS;
   const int skipAmount = skipPages ? 10 : 1;
 
   if (prevTriggered) {

@@ -345,7 +345,15 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("imageRendering", s.imageRendering, CrossPointSettings::IMAGE_RENDERING_COUNT);
 
   loadEnum("sideButtonLayout", s.sideButtonLayout, CrossPointSettings::SIDE_BUTTON_LAYOUT_COUNT);
-  loadToggle("longPressChapterSkip", s.longPressChapterSkip);
+  if (!doc["longPressButtonBehavior"].isNull()) {
+    loadEnum("longPressButtonBehavior", s.longPressButtonBehavior,
+             CrossPointSettings::LONG_PRESS_BUTTON_BEHAVIOR_COUNT);
+  } else if (!doc["longPressChapterSkip"].isNull()) {
+    s.longPressButtonBehavior =
+        (doc["longPressChapterSkip"] | true) ? CrossPointSettings::LONG_PRESS_CHAPTER_SKIP
+                                             : CrossPointSettings::LONG_PRESS_OFF;
+    if (needsResave) *needsResave = true;
+  }
   loadEnum("shortPwrBtn", s.shortPwrBtn, CrossPointSettings::SHORT_PWRBTN_COUNT);
   loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   loadEnum("sleepTimeout", s.sleepTimeout, CrossPointSettings::SLEEP_TIMEOUT_COUNT);
@@ -677,7 +685,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["imageRendering"] = s.imageRendering;
 
   doc["sideButtonLayout"] = s.sideButtonLayout;
-  doc["longPressChapterSkip"] = s.longPressChapterSkip;
+  doc["longPressButtonBehavior"] = s.longPressButtonBehavior;
+  doc["longPressChapterSkip"] = s.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP;
   doc["shortPwrBtn"] = s.shortPwrBtn;
   doc["tiltPageTurn"] = s.tiltPageTurn;
 

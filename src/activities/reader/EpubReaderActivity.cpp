@@ -37,7 +37,6 @@
 
 namespace {
 // pagesPerRefresh now comes from SETTINGS.getRefreshFrequency()
-constexpr unsigned long skipChapterMs = 700;
 constexpr unsigned long bookmarkToggleMs = 700;
 // pages per minute, first item is 1 to prevent division by zero if accessed
 constexpr int PAGE_TURN_RATES[] = {1, 1, 3, 6, 12};
@@ -432,14 +431,14 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  const bool skipChapter = !fromTilt && SETTINGS.longPressChapterSkip && mappedInput.getHeldTime() > skipChapterMs;
+  const bool longPress = !fromTilt && mappedInput.getHeldTime() > ReaderUtils::SKIP_HOLD_MS;
 
   // Don't skip chapter after screenshot
   if (gpio.wasReleased(HalGPIO::BTN_POWER) && gpio.wasReleased(HalGPIO::BTN_DOWN)) {
     return;
   }
 
-  if (skipChapter) {
+  if (longPress && SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP) {
     READING_STATS.noteActivity();
     lastPageTurnTime = millis();
     // We don't want to delete the section mid-render, so grab the semaphore
@@ -452,6 +451,16 @@ void EpubReaderActivity::loop() {
       currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
       section.reset();
     }
+    requestUpdate();
+    return;
+  }
+
+  if (longPress && SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_ORIENTATION_CHANGE) {
+    const uint8_t newOrientation =
+        nextTriggered ? (SETTINGS.orientation - 1 + CrossPointSettings::ORIENTATION_COUNT) %
+                            CrossPointSettings::ORIENTATION_COUNT
+                      : (SETTINGS.orientation + 1) % CrossPointSettings::ORIENTATION_COUNT;
+    applyOrientation(newOrientation);
     requestUpdate();
     return;
   }

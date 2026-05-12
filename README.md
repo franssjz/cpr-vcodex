@@ -18,13 +18,13 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.43-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.43-cpr-vcodex) |
-| Latest Open Dyslexic font build | [`1.2.0.43-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.43-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.44-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.44-cpr-vcodex) |
+| Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
-| Latest official commit incorporated | Selected stability and low-risk updates through [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e) |
-| Intentional upstream exclusions | Bookerly replacement `c5f8270`; royalty.dev add/revert pair `b9b795b`/`15e0d39`; large i18n/settings migrations `d53c8b0`/`b25389b`/`ae865f6`/`64ecfe2`; RoundedRaff theme `b8a5152`/`22701cc`; page-turn orientation setting `2e2ea6a`; SD firmware update/X3 bootloader flow `5717374` |
+| Latest official commit reviewed | [`8d1b86a`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8d1b86a) |
+| Latest official commit incorporated | Selected reader, font, firmware-update, and tooling updates through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094) |
+| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; BMP viewer next/prev labels from `8d1b86a` are left out until the related upstream viewer navigation flow is ported cleanly; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
 
 ## Web tools
 
@@ -75,6 +75,9 @@ This project is **not affiliated with Xteink**.
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - `Lyra Carousel` is temporarily removed until a stable and fast version is ready for daily use
 - experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
+- downloadable SD-card font families, published from this fork and including `ChareInk`
+- SD-card firmware update from Settings for local `.bin` flashing without a browser
+- configurable long-press side-button behavior: `Off`, `Chapter skip`, or `Orientation change`
 - EPUB bookmarks plus a global bookmarks app
 - context-aware screenshot filenames that include the current book title when available
 - KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
@@ -156,6 +159,9 @@ That is enough to start using the core `vcodex` additions: coherent day-based an
 | `Flashcards` | offline deck study with `Scheduled` and `Infinite` session modes | [Flashcards](#flashcards) |
 | `Sync Day` | manual Wi-Fi date sync and fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
 | `Home + Apps shortcuts` | configurable placement, visibility, ordering, and a fallback to `Lyra vCodex` for removed/unknown themes | [Home and Apps](#home-and-apps) |
+| `SD card fonts` | download, upload, or manually install extra `.cpfont` families from the SD card | [Settings](#settings) |
+| `SD firmware update` | select a `.bin` from the SD card and flash it locally from Settings | [Settings](#settings) |
+| `Long-press button behavior` | choose `Off`, `Chapter skip`, or `Orientation change` for reader side-button holds | [Settings](#settings) |
 | `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
 | `Sleep tools` | folder selection, preview, cache, sequential and shuffle behavior | [Sleep](#sleep) |
 | `Text Darkness` | global `Normal / Dark / Extra Dark` text rendering control, based on the idea first seen in `crosspet` | [Settings](#settings) |
@@ -371,8 +377,11 @@ Useful reader/display additions include:
 
 | Area | Options |
 |---|---|
-| Reader | `Text Anti-Aliasing`, `Text Darkness`, `Reader Refresh Mode`, `Reader Font Family`, `Reader Font Size` |
+| Reader | `Text Anti-Aliasing`, `Text Darkness`, `Reader Refresh Mode`, `Reader Font Family`, `Reader Font Size`, `Manage Fonts` |
 | Display | `UI Theme`, sleep-screen controls, `Dark Mode (Experimental)`, `Sunlight Fading Fix` |
+| Controls | `Side Button Layout`, `Long-press button behavior`, `Short Power Button Click`, `Tilt Page Turn` |
+| Status bar | EPUB/status-bar fields, battery visibility, `XTC Status Bar` |
+| System | `SD Card Firmware Update`, OTA update check, cache clearing, language, OPDS servers |
 | Date | `Display Day`, `Date Format`, `Time Zone`, `Sync Day` reminder behavior |
 | Reading stats | `Daily Goal`, `Show after reading`, `Reset Reading Stats`, `Export Reading Stats`, `Import Reading Stats` |
 | Achievements | `Enable achievements`, `Achievement popups`, `Reset achievements`, `Sync with prev. stats` |
@@ -385,6 +394,7 @@ Font notes:
 - `Bookerly` and `Noto Sans` have full regular/bold/italic coverage in the compiled sizes
 - `Lexend` is available as an extra reader family
 - `Lexend` italic and bold-italic still use safe fallbacks rather than separate real italic assets
+- `Manage Fonts` downloads extra SD-card font families from CPR-vCodex release assets, including `ChareInk`, `Literata`, and other prebuilt `.cpfont` packages
 
 ## What requires Sync Day
 
@@ -429,7 +439,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.43-cpr-vcodex`
+- current dev build style: `1.2.0.44-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -498,10 +508,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.43-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.44-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.43-cpr-vcodex`
+- push a stable tag named like `1.2.0.44-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not
