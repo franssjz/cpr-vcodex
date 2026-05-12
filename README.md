@@ -140,61 +140,6 @@ A GitHub release can contain several files. For this fork:
 
 For normal flashing, use the `.bin` file.
 
-## Release Naming
-
-This fork is starting fresh in documentation with fork-facing release names:
-
-- `Stats Preview 0.1.0`: first Daniel/Codex stats-focused release.
-
-The current build scripts still publish firmware tags like:
-
-- `1.2.0.48-cpr-vcodex`
-
-That inherited tag means:
-
-- base firmware line: `1.2.0`;
-- release number: `44`;
-- compatibility suffix: `cpr-vcodex`.
-
-A future cleanup can rename the build scripts, artifact suffix, release regexes,
-and auto-flash sync rules to a dedicated `cpr-vcodex-stats` or `stats` scheme.
-That should be done carefully because the release workflow, firmware metadata,
-and auto-flash page all depend on the current format.
-
-## Development Workflow
-
-Typical future work on this fork:
-
-1. Decide the reading-stat or firmware behavior to change.
-2. Inspect the relevant firmware files.
-3. Make the smallest safe code change.
-4. Build with PlatformIO.
-5. Flash and test on hardware.
-6. Update the changelog.
-7. Publish a new GitHub release when the build is worth sharing.
-
-Useful commands:
-
-```bash
-pio run -e default
-pio run -e gh_release
-python3 scripts/pre_release_check.py --tag 1.2.0.48-cpr-vcodex
-python3 scripts/sync_autoflash_firmware.py --repo danielc0603/cpr-vcodex-stats
-```
-
-## Upstream Relationship
-
-`upstream` refers to the original CPR-vCodex repository. `origin` refers to
-Daniel's fork.
-
-The upstream author can continue publishing their own updates. This fork does
-not automatically receive those changes. Future updates can be reviewed,
-merged, skipped, or adapted depending on whether they fit this fork's reading
-stats direction.
-
-This fork should preserve stability first. The Xteink X4 uses an ESP32-C3 with
-limited RAM and no PSRAM, so new analytics should stay lightweight and avoid
-expensive work in reading/render loops.
 
 ## Credits
 
@@ -203,7 +148,6 @@ This fork exists because of prior work from:
 - CrossPoint Reader, the original firmware base;
 - CPR-vCodex, the upstream fork this repository was cloned from;
 - the Xteink X4 community;
-- Codex, used as Daniel's AI coding assistant for this fork.
 
 Again: this project is unofficial, unaffiliated, experimental, and provided with
 no warranty.
