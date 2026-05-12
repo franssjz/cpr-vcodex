@@ -68,6 +68,29 @@ jobs:
             --output dist/fonts.json \
             --descriptions-from lib/EpdFont/scripts/sd-fonts.yaml
 
+      - name: Package all fonts for manual SD copy
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          output = Path("lib/EpdFont/scripts/output")
+          archive = Path("dist/all-fonts.zip")
+          with ZipFile(archive, "w", compression=ZIP_DEFLATED) as zip_file:
+              for font in sorted(output.rglob("*.cpfont")):
+                  family = font.parent.name
+                  zip_file.write(font, Path("fonts") / family / font.name)
+
+              zip_file.writestr(
+                  "README.txt",
+                  "Extract this archive into the root of the CPR-vCodex microSD card.\n"
+                  "It creates /fonts/<family>/*.cpfont so the firmware can discover the fonts at boot.\n"
+                  "After copying, reinsert the card and restart the device.\n",
+              )
+
+          print(f"Created {archive} ({archive.stat().st_size} bytes)")
+          PY
+
       - name: Publish versioned release to this repo
         env:
           GH_TOKEN: ${{ github.token }}
@@ -78,7 +101,7 @@ jobs:
           cat > release-notes.md <<'EOF'
           Pre-built `.cpfont` font files for CPR-vCodex.
 
-          Download individual files or use **Settings > Reader > Manage Fonts** on the device.
+          Use **Settings > Reader > Manage Fonts** on the device, download individual files, or download `all-fonts.zip` and extract it into the root of the microSD card.
 
           See [SD Card Fonts documentation](https://github.com/${{ github.repository }}/blob/main/docs/sd-card-fonts.md) for details.
           EOF
@@ -103,7 +126,7 @@ jobs:
 
           This is revision **${{ steps.tags.outputs.revision }}**. See [\`${{ steps.tags.outputs.versioned }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.tags.outputs.versioned }}) for the immutable copy.
 
-          Download individual files or use **Settings > Reader > Manage Fonts** on the device.
+          Use **Settings > Reader > Manage Fonts** on the device, download individual files, or download \`all-fonts.zip\` and extract it into the root of the microSD card.
           EOF
 
           gh release create "$BASE" dist/* \

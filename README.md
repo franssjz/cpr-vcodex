@@ -21,6 +21,7 @@
 | Current release (CPR-vCodex) build | [`1.2.0.44-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.44-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
+| Latest release notes | - Synced selected upstream reader, font, firmware-update, and tooling work through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094), while keeping the supported vCodex theme list and X4-focused UI defaults intact.<br>- Added SD-card font support from the fork's own release assets, published the CPR-vCodex `sd-fonts-m1-b4` manifest, and added `ChareInk` to the downloadable font collection.<br>- Added `Settings > System > SD Card Firmware Update`, allowing users to choose a local `.bin` from the SD card and flash it without using a browser.<br>- Replaced the old long-press chapter-skip toggle with `Long-press button behavior`: `Off`, `Chapter skip`, or `Orientation change`, defaulting to the previous chapter-skip behavior and migrating old settings safely.<br>- Exposed `XTC Status Bar` in web settings so XTC reader status-bar placement can be configured from the browser settings page.<br>- Added a GitHub button to the CPR-vCodex Pages header and home tool list, alongside `Reading Stats` and `Auto Flash`. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`8d1b86a`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8d1b86a) |
 | Latest official commit incorporated | Selected reader, font, firmware-update, and tooling updates through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094) |
@@ -30,6 +31,37 @@
 
 - [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware from Chrome or Edge using Web Serial.
 - [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
+
+## SD card fonts
+
+`CPR-vCodex` supports extra `.cpfont` families stored on the microSD card. The built-in reader fonts still work as usual, and downloaded SD fonts appear in `Settings > Reader > Font Family` after the firmware discovers them.
+
+Device download:
+
+1. Connect the reader to Wi-Fi.
+2. Open `Settings > Reader > Manage Fonts`.
+3. Select a family and download it.
+4. Return to `Reader Font Family` and choose the newly installed font.
+
+Manual install from GitHub is faster when Wi-Fi on the device is slow:
+
+1. Download [`all-fonts.zip`](https://github.com/franssjz/cpr-vcodex/releases/download/sd-fonts-m1-b4/all-fonts.zip) from the latest SD font package.
+2. Extract it into the root of the microSD card. The archive creates `fonts/<Family>/*.cpfont`.
+3. Reinsert the card, restart the device, and select the font under `Settings > Reader > Font Family`.
+
+Manual single-family install also works. Download the four files for a family from [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4), create `fonts/<Family>/` on the microSD card, and copy the matching `Family_12.cpfont`, `Family_14.cpfont`, `Family_16.cpfont`, and `Family_18.cpfont` files there.
+
+Recommended microSD layout:
+
+```text
+SD:/
+  fonts/
+    ChareInk/
+      ChareInk_12.cpfont
+      ChareInk_14.cpfont
+      ChareInk_16.cpfont
+      ChareInk_18.cpfont
+```
 
 ## Flashcards study modes
 
