@@ -14,15 +14,6 @@ Use it at your own risk. Custom firmware can fail to flash, behave differently
 than expected, lose reading data, or require recovery flashing. Back up your SD
 card and exported reading stats before installing any release from this fork.
 
-## Current Release
-
-| Item | Value |
-|---|---|
-| Fork name | `CPR-vCodex Stats` |
-| Firmware focus | Reading statistics, completion estimates, and analytics |
-| Target device | Xteink X4 |
-
-
 ## What This Fork Changes
 
 The first goal is to make reading progress more understandable without adding
