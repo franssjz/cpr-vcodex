@@ -93,16 +93,10 @@ jobs:
           if gh release view "${tag}" >/dev/null 2>&1; then
             gh release upload "${tag}" \
               "${artifact}#${tag}.bin" \
-              "${metadata}#${tag}.json" \
-              "artifacts/${tag}-firmware-budget.json#${tag}-firmware-budget.json" \
-              "artifacts/${tag}-firmware-budget.md#${tag}-firmware-budget.md" \
               --clobber
           else
             gh release create "${tag}" \
               "${artifact}#${tag}.bin" \
-              "${metadata}#${tag}.json" \
-              "artifacts/${tag}-firmware-budget.json#${tag}-firmware-budget.json" \
-              "artifacts/${tag}-firmware-budget.md#${tag}-firmware-budget.md" \
               --verify-tag \
               --title "${tag}" \
               --notes-file "${notes_file}"

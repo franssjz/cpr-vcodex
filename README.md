@@ -18,10 +18,10 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.44-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.44-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.45-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.45-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Synced selected upstream reader, font, firmware-update, and tooling work through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094), while keeping the supported vCodex theme list and X4-focused UI defaults intact.<br>- Added SD-card font support from the fork's own release assets, published the CPR-vCodex `sd-fonts-m1-b4` manifest, and added `ChareInk` to the downloadable font collection.<br>- Added `Settings > System > SD Card Firmware Update`, allowing users to choose a local `.bin` from the SD card and flash it without using a browser.<br>- Replaced the old long-press chapter-skip toggle with `Long-press button behavior`: `Off`, `Chapter skip`, or `Orientation change`, defaulting to the previous chapter-skip behavior and migrating old settings safely.<br>- Exposed `XTC Status Bar` in web settings so XTC reader status-bar placement can be configured from the browser settings page.<br>- Added a GitHub button to the CPR-vCodex Pages header and home tool list, alongside `Reading Stats` and `Auto Flash`. |
+| Latest release notes | - Fixed paragraph indentation when using SD-card fonts with `Extra Paragraph Spacing` disabled by replacing the old `U+2003` em-space fallback with a pixel-based first-line layout offset.<br>- Bumped the EPUB section cache format so books are re-laid out after updating and do not keep stale no-indent cached pages.<br>- Simplified firmware GitHub Release assets so stable firmware releases publish only the flashable `<tag>.bin`; metadata and firmware-budget reports remain internal workflow validation outputs instead of public release assets. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`8d1b86a`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8d1b86a) |
 | Latest official commit incorporated | Selected reader, font, firmware-update, and tooling updates through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094) |
@@ -471,7 +471,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.44-cpr-vcodex`
+- current dev build style: `1.2.0.45-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -540,12 +540,12 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.44-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.45-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.44-cpr-vcodex`
+- push a stable tag named like `1.2.0.45-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
-  name matches the tag, and attaches `<tag>.bin` plus `<tag>.json` to the GitHub Release
+  name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not
   from a local counter file
 - the auto-flash sync workflow then mirrors that published release asset into
