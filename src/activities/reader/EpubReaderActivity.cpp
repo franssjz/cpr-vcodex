@@ -27,6 +27,7 @@
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -199,6 +200,8 @@ void EpubReaderActivity::onEnter() {
   if (!epub) {
     return;
   }
+
+  ensureSdFontLoaded();
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.

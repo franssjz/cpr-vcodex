@@ -358,6 +358,8 @@ bool XtcParser::getPageInfo(uint32_t pageIndex, PageInfo& info) const {
   return true;
 }
 
+const std::vector<ChapterInfo>& XtcParser::getChapters() { return m_chapters; }
+
 size_t XtcParser::loadPage(uint32_t pageIndex, uint8_t* buffer, size_t bufferSize) {
   if (!m_isOpen) {
     m_lastError = XtcError::FILE_NOT_FOUND;

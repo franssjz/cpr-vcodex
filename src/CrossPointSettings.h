@@ -58,6 +58,12 @@ class CrossPointSettings {
     STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT
   };
   enum STATUS_BAR_TITLE { BOOK_TITLE = 0, CHAPTER_TITLE = 1, HIDE_TITLE = 2, STATUS_BAR_TITLE_COUNT };
+  enum XTC_STATUS_BAR_MODE {
+    XTC_STATUS_BAR_HIDE = 0,
+    XTC_STATUS_BAR_BOTTOM = 1,
+    XTC_STATUS_BAR_TOP = 2,
+    XTC_STATUS_BAR_MODE_COUNT
+  };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -94,6 +100,7 @@ class CrossPointSettings {
 
   // Font family options
   enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, LEXEND = 2, FONT_FAMILY_COUNT };
+  static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   // Font size options
   enum FONT_SIZE { X_SMALL = 0, SMALL = 1, MEDIUM = 2, LARGE = 3, EXTRA_LARGE = 4, FONT_SIZE_COUNT };
   enum TEXT_DARKNESS {
@@ -229,6 +236,7 @@ class CrossPointSettings {
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
+  uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
@@ -262,6 +270,7 @@ class CrossPointSettings {
   uint8_t readerRefreshMode = READER_REFRESH_AUTO;
   uint8_t hyphenationEnabled = 0;
   uint8_t bionicReading = 0;
+  char sdFontFamilyName[32] = "";
 
   // Reader screen margin settings
   uint8_t screenMargin = 5;
@@ -358,6 +367,10 @@ class CrossPointSettings {
 
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
+
+  using SdFontIdResolver = int (*)(void* ctx, const char* familyName, uint8_t fontSize);
+  SdFontIdResolver sdFontIdResolver = nullptr;
+  void* sdFontResolverCtx = nullptr;
 
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;

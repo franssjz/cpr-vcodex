@@ -300,6 +300,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   } else {
     s.fontFamily = rawFontFamily;
   }
+  loadString("sdFontFamilyName", s.sdFontFamilyName, sizeof(s.sdFontFamilyName));
 
   loadEnum("fontSize", s.fontSize, CrossPointSettings::FONT_SIZE_COUNT);
   const uint8_t fontSizeSchemaVersion = doc["fontSizeSchemaVersion"] | static_cast<uint8_t>(0);
@@ -371,6 +372,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
            CrossPointSettings::STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT);
   loadEnum("statusBarTitle", s.statusBarTitle, CrossPointSettings::STATUS_BAR_TITLE_COUNT);
   loadToggle("statusBarBattery", s.statusBarBattery);
+  loadEnum("xtcStatusBarMode", s.xtcStatusBarMode, CrossPointSettings::XTC_STATUS_BAR_MODE_COUNT);
 
   using S = CrossPointSettings;
   s.frontButtonBack =
@@ -655,6 +657,9 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   doc["fontFamily"] = s.fontFamily;
   doc["fontFamilySchemaVersion"] = FONT_FAMILY_SCHEMA_VERSION;
+  if (s.sdFontFamilyName[0] != '\0') {
+    doc["sdFontFamilyName"] = s.sdFontFamilyName;
+  }
   doc["fontSize"] = s.fontSize;
   doc["fontSizeSchemaVersion"] = FONT_SIZE_SCHEMA_VERSION;
   doc["lineSpacing"] = s.lineSpacing;
@@ -702,6 +707,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
   doc["statusBarTitle"] = s.statusBarTitle;
   doc["statusBarBattery"] = s.statusBarBattery;
+  doc["xtcStatusBarMode"] = s.xtcStatusBarMode;
 
   // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;

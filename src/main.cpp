@@ -27,6 +27,7 @@
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "UiFontSelection.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
@@ -41,7 +42,8 @@ MappedInputManager mappedInputManager(gpio);
 GfxRenderer renderer(display);
 ActivityManager activityManager(renderer, mappedInputManager);
 FontDecompressor fontDecompressor;
-FontCacheManager fontCacheManager(renderer.getFontMap());
+SdCardFontSystem sdFontSystem;
+FontCacheManager fontCacheManager(renderer.getFontMap(), renderer.getSdCardFonts());
 
 // Fonts
 EpdFont bookerly14RegularFont(&bookerly_14_regular);
@@ -251,6 +253,12 @@ void enterDeepSleep() {
   powerManager.startDeepSleep(gpio);
 }
 
+void ensureSdFontLoaded() {
+  if (Storage.ready()) {
+    sdFontSystem.ensureLoaded(renderer);
+  }
+}
+
 void setupDisplayAndFonts() {
   display.begin();
   renderer.begin();
@@ -284,6 +292,9 @@ void setupDisplayAndFonts() {
   renderer.insertFont(NOTOSANS_18_FONT_ID, notosans18FontFamily);
 #endif  // OMIT_FONTS
   refreshUiFontsForCurrentLanguage();
+  if (Storage.ready()) {
+    sdFontSystem.begin(renderer);
+  }
   LOG_DBG("MAIN", "Fonts setup");
 }
 

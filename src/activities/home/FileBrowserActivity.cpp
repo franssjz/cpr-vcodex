@@ -235,7 +235,13 @@ void FileBrowserActivity::loop() {
       selectorIndex = 0;
       requestUpdate();
     } else {
-      onSelectBook(basepath + entry);
+      const std::string selectedPath = basepath + entry;
+      if (mode == Mode::PickFirmware) {
+        setResult(ActivityResult{FilePathResult{selectedPath}});
+        finish();
+      } else {
+        onSelectBook(selectedPath);
+      }
     }
     return;
   }

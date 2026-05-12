@@ -18,6 +18,7 @@
 #include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -291,6 +292,8 @@ void TxtReaderActivity::onEnter() {
   if (!txt) {
     return;
   }
+
+  ensureSdFontLoaded();
 
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
 

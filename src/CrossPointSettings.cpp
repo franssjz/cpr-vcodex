@@ -377,6 +377,13 @@ bool CrossPointSettings::getForcedReaderRefreshMode(HalDisplay::RefreshMode& mod
 }
 
 int CrossPointSettings::getReaderFontId() const {
+  if (sdFontFamilyName[0] != '\0' && sdFontIdResolver) {
+    const int id = sdFontIdResolver(sdFontResolverCtx, sdFontFamilyName, fontSize);
+    if (id != 0) {
+      return id;
+    }
+  }
+
   switch (fontFamily) {
     case BOOKERLY:
     default:

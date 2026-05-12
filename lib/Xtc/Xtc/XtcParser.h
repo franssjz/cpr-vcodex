@@ -23,6 +23,9 @@ namespace xtc {
  *
  * Reads XTC files from SD card and extracts page data.
  * Designed for ESP32-C3's limited RAM (~380KB) using streaming.
+ *
+ * The source file is kept closed between reads to free heap for rendering.
+ * It is reopened on-demand for page table lookups and bitmap data reads.
  */
 class XtcParser {
  public:
@@ -72,7 +75,7 @@ class XtcParser {
   std::string getAuthor() const { return m_author; }
 
   bool hasChapters() const { return m_hasChapters; }
-  const std::vector<ChapterInfo>& getChapters() const { return m_chapters; }
+  const std::vector<ChapterInfo>& getChapters();
 
   // Validation
   static bool isValidXtcFile(const char* filepath);
@@ -82,6 +85,7 @@ class XtcParser {
 
  private:
   FsFile m_file;
+  std::string m_filepath;
   bool m_isOpen;
   XtcHeader m_header;
   std::vector<PageInfo> m_pageTable;
@@ -92,14 +96,21 @@ class XtcParser {
   uint16_t m_defaultHeight;
   uint8_t m_bitDepth;  // 1 = XTC/XTG (1-bit), 2 = XTCH/XTH (2-bit)
   bool m_hasChapters;
+  bool m_chaptersLoaded;
   XtcError m_lastError;
 
   // Internal helper functions
   XtcError readHeader();
+  XtcError readFirstPageInfo();
   XtcError readPageTable();
   XtcError readTitle();
   XtcError readAuthor();
   XtcError readChapters();
+  bool readPageTableEntry(uint32_t pageIndex, PageInfo& info);
+
+  // File handle management — reopen on demand, close after use
+  bool ensureFileOpen();
+  void closeFile();
 };
 
 }  // namespace xtc

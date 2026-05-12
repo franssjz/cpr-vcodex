@@ -1,0 +1,112 @@
+name: Build & Publish SD Card Fonts
+
+# Fonts change rarely. Run this manually when font sources or the conversion
+# pipeline are updated. CPR-vCodex publishes its own .cpfont files and
+# fonts.json manifest as release assets in this repository so the firmware can
+# keep working even if the upstream font mirror disappears.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-fonts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install font tools
+        run: pip install freetype-py fonttools pyyaml
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfreetype6-dev
+
+      - name: Read version constants
+        id: versions
+        run: |
+          cd lib/EpdFont/scripts
+          echo "binary=$(python3 -c 'from cpfont_version import CPFONT_VERSION; print(CPFONT_VERSION)')" >> "$GITHUB_OUTPUT"
+          echo "metadata=$(python3 -c 'from cpfont_version import FONTS_MANIFEST_VERSION; print(FONTS_MANIFEST_VERSION)')" >> "$GITHUB_OUTPUT"
+
+      - name: Build SD card fonts
+        run: python3 lib/EpdFont/scripts/build-sd-fonts.py --clean --verbose -j 1
+
+      - name: Flatten output for release assets
+        run: |
+          mkdir -p dist
+          find lib/EpdFont/scripts/output -name '*.cpfont' -exec cp {} dist/ \;
+
+      - name: Compute release tags
+        id: tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASE="sd-fonts-m${{ steps.versions.outputs.metadata }}-b${{ steps.versions.outputs.binary }}"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+
+          # Find the highest existing revision for this manifest/binary pair.
+          LAST=$(gh release list --repo "${{ github.repository }}" --limit 1000 \
+            --json tagName --jq \
+            '[.[] | select(.tagName | startswith("'"${BASE}-r"'")) | .tagName | split("-r")[1] | tonumber] | max // 0')
+          NEXT=$((LAST + 1))
+          echo "revision=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "versioned=${BASE}-r${NEXT}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate manifest
+        run: |
+          python3 scripts/generate-font-manifest.py \
+            --input dist \
+            --base-url "https://github.com/${{ github.repository }}/releases/download/${{ steps.tags.outputs.base }}/" \
+            --output dist/fonts.json \
+            --descriptions-from lib/EpdFont/scripts/sd-fonts.yaml
+
+      - name: Publish versioned release to this repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSIONED="${{ steps.tags.outputs.versioned }}"
+          TITLE="SD Card Fonts (${VERSIONED#sd-fonts-})"
+
+          cat > release-notes.md <<'EOF'
+          Pre-built `.cpfont` font files for CPR-vCodex.
+
+          Download individual files or use **Settings > Reader > Manage Fonts** on the device.
+
+          See [SD Card Fonts documentation](https://github.com/${{ github.repository }}/blob/main/docs/sd-card-fonts.md) for details.
+          EOF
+
+          gh release create "$VERSIONED" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "$TITLE" \
+            --notes-file release-notes.md
+
+      - name: Update stable tag for device downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASE="${{ steps.tags.outputs.base }}"
+
+          # Delete the old stable release for this manifest/binary pair. The
+          # versioned releases are immutable and kept for traceability.
+          gh release delete "$BASE" --repo "${{ github.repository }}" --yes 2>/dev/null || true
+
+          cat > release-notes.md <<EOF
+          Current font build for manifest v${{ steps.versions.outputs.metadata }}, binary format v${{ steps.versions.outputs.binary }}. Devices with this firmware version download from this release.
+
+          This is revision **${{ steps.tags.outputs.revision }}**. See [\`${{ steps.tags.outputs.versioned }}\`](https://github.com/${{ github.repository }}/releases/tag/${{ steps.tags.outputs.versioned }}) for the immutable copy.
+
+          Download individual files or use **Settings > Reader > Manage Fonts** on the device.
+          EOF
+
+          gh release create "$BASE" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "SD Card Fonts (${BASE#sd-fonts-})" \
+            --notes-file release-notes.md

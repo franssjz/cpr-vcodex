@@ -57,6 +57,10 @@ struct FootnoteResult {
   std::string href;
 };
 
+struct FilePathResult {
+  std::string path;
+};
+
 struct FlashcardSessionResult {
   std::string deckId;
   std::string deckPath;
@@ -78,7 +82,7 @@ struct FlashcardSessionResult {
 
 using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
                                    PageResult, BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult,
-                                   FlashcardSessionResult>;
+                                   FilePathResult, FlashcardSessionResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

@@ -16,12 +16,15 @@
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
+#include "FontDownloadActivity.h"
+#include "FontSelectionActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
 #include "OpdsServerListActivity.h"
 #include "OtaUpdateActivity.h"
 #include "ReadingStatsStore.h"
+#include "SdCardFontGlobals.h"
 #include "SettingsList.h"
 #include "ShortcutLocationActivity.h"
 #include "ShortcutOrderActivity.h"
@@ -80,6 +83,7 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
   static const std::vector<SettingInfo> settings = {
       SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
                         {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND}),
+      SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts),
       SettingInfo::Enum(
           StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
           {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}),
@@ -305,6 +309,9 @@ std::string getShortcutOrderSettingValueText(const ShortcutOrderGroup group) {
 }
 
 std::string getSettingValueText(const SettingInfo& setting) {
+  if (setting.nameId == StrId::STR_FONT_FAMILY && SETTINGS.sdFontFamilyName[0] != '\0') {
+    return SETTINGS.sdFontFamilyName;
+  }
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     const bool value = SETTINGS.*(setting.valuePtr);
     return value ? tr(STR_STATE_ON) : tr(STR_STATE_OFF);
@@ -569,6 +576,15 @@ void SettingsActivity::toggleCurrentSetting() {
     const bool currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !currentValue;
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
+    if (setting.nameId == StrId::STR_FONT_FAMILY) {
+      startActivityForResult(std::make_unique<FontSelectionActivity>(renderer, mappedInput, &sdFontSystem.registry()),
+                             [this](const ActivityResult&) {
+                               ensureSdFontLoaded();
+                               SETTINGS.saveToFile();
+                               requestUpdate(true);
+                             });
+      return;
+    }
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
@@ -605,6 +621,14 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::DownloadFonts:
+        startActivityForResult(std::make_unique<FontDownloadActivity>(renderer, mappedInput),
+                               [this](const ActivityResult&) {
+                                 ensureSdFontLoaded();
+                                 SETTINGS.saveToFile();
+                                 requestUpdate(true);
+                               });
         break;
       case SettingAction::SyncDay:
         startActivityForResult(std::make_unique<SyncDayActivity>(renderer, mappedInput), resultHandler);
@@ -726,6 +750,10 @@ void SettingsActivity::toggleCurrentSetting() {
 
   if (setting.valuePtr == &CrossPointSettings::dailyGoalTarget) {
     ACHIEVEMENTS.syncWithPreviousStats();
+  }
+
+  if (setting.valuePtr == &CrossPointSettings::fontSize) {
+    ensureSdFontLoaded();
   }
 
   if (setting.valuePtr == &CrossPointSettings::darkMode) {

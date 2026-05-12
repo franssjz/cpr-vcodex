@@ -1,5 +1,8 @@
 #include "I18n.h"
 
+#include <cstddef>
+#include <cstring>
+
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Serialization.h>
@@ -23,9 +26,12 @@ const char* I18n::get(StrId id) const {
     return "???";
   }
 
-  // Use generated helper function - no hardcoded switch needed!
-  const char* const* strings = getStringArray(_language);
-  return strings[index];
+  const LangStrings lang = getLanguageStrings(_language);
+  const uint16_t off = lang.offsets[index];
+  if (off & 0x8000) {
+    return STRINGS_EN_DATA + (off & 0x7FFF);
+  }
+  return lang.data + off;
 }
 
 void I18n::setLanguage(Language lang) {
@@ -42,6 +48,15 @@ const char* I18n::getLanguageName(Language lang) const {
     return "???";
   }
   return LANGUAGE_NAMES[index];
+}
+
+Language I18n::languageFromCode(const char* code) {
+  for (uint8_t i = 0; i < getLanguageCount(); i++) {
+    if (strcmp(code, LANGUAGE_CODES[i]) == 0) {
+      return static_cast<Language>(i);
+    }
+  }
+  return Language::EN;
 }
 
 void I18n::saveSettings() {
