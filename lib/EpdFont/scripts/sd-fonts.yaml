@@ -43,6 +43,16 @@ families:
       italic:     {url: "https://raw.githubusercontent.com/googlefonts/literata/main/fonts/ttf/Literata-Italic.ttf"}
       bolditalic: {url: "https://raw.githubusercontent.com/googlefonts/literata/main/fonts/ttf/Literata-BoldItalic.ttf"}
 
+  - name: ChareInk
+    description: "E-reader tuned serif based on Charis SIL (Latin, Greek, Cyrillic)"
+    intervals: latin-ext,greek,cyrillic
+    sizes: [12, 14, 16, 18]
+    styles:
+      regular:    {path: "builtinFonts/source/ChareInk7/ChareInk7-Regular.ttf"}
+      bold:       {path: "builtinFonts/source/ChareInk7/ChareInk7-Bold.ttf"}
+      italic:     {path: "builtinFonts/source/ChareInk7/ChareInk7-Italic.ttf"}
+      bolditalic: {path: "builtinFonts/source/ChareInk7/ChareInk7-BoldItalic.ttf"}
+
   - name: SourceSerif4
     description: "Adobe transitional serif (Latin, Greek, Cyrillic)"
     intervals: latin-ext,greek,cyrillic
