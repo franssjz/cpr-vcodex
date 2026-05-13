@@ -1,16 +1,19 @@
 #include "OtaUpdater.h"
 
+#include <HalStorage.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
 #include <cctype>
 #include <cstring>
 
 #include "esp_http_client.h"
-#include "esp_https_ota.h"
 #include "esp_wifi.h"
+#include "FirmwareFlasher.h"
+#include "HttpDownloader.h"
 
 namespace {
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/franssjz/cpr-vcodex/releases/latest";
+constexpr char otaCachePath[] = "/.crosspoint/ota-update.bin";
 
 /*
  * When esp_crt_bundle.h is included here, Arduino's include path can resolve
@@ -88,6 +91,45 @@ esp_err_t event_handler(esp_http_client_event_t* event) {
   auto* parser = static_cast<ReleaseJsonParser*>(event->user_data);
   parser->feed(static_cast<const char*>(event->data), event->data_len);
   return ESP_OK;
+}
+
+class WifiPowerSaveGuard {
+ public:
+  WifiPowerSaveGuard() { esp_wifi_set_ps(WIFI_PS_NONE); }
+  ~WifiPowerSaveGuard() { esp_wifi_set_ps(WIFI_PS_MIN_MODEM); }
+};
+
+struct FlashProgressCtx {
+  OtaUpdater* updater = nullptr;
+  OtaUpdater::ProgressCallback callback = nullptr;
+  void* callbackCtx = nullptr;
+};
+
+void notifyProgress(OtaUpdater::ProgressCallback callback, void* ctx) {
+  if (callback) {
+    callback(ctx);
+  }
+}
+
+void onFlashProgress(size_t written, size_t total, void* rawCtx) {
+  auto* progressCtx = static_cast<FlashProgressCtx*>(rawCtx);
+  if (!progressCtx || !progressCtx->updater) {
+    return;
+  }
+
+  progressCtx->updater->setProgress(written, total);
+  notifyProgress(progressCtx->callback, progressCtx->callbackCtx);
+}
+
+OtaUpdater::OtaUpdaterError mapFlashError(firmware_flash::Result result) {
+  switch (result) {
+    case firmware_flash::Result::OK:
+      return OtaUpdater::OK;
+    case firmware_flash::Result::OOM:
+      return OtaUpdater::OOM_ERROR;
+    default:
+      return OtaUpdater::INTERNAL_UPDATE_ERROR;
+  }
 }
 }  // namespace
 
@@ -179,14 +221,18 @@ bool OtaUpdater::isUpdateNewer() const {
     return false;
   }
 
+  const bool currentPreRelease = currentVersion.isRc || currentVersion.isDev;
+  const bool latestPreRelease = latest.isRc || latest.isDev;
+  if (currentVersion.isDev && !latestPreRelease) {
+    return true;
+  }
+
   for (int index = 0; index < 4; ++index) {
     if (latest.parts[index] != currentVersion.parts[index]) {
       return latest.parts[index] > currentVersion.parts[index];
     }
   }
 
-  const bool currentPreRelease = currentVersion.isRc || currentVersion.isDev;
-  const bool latestPreRelease = latest.isRc || latest.isDev;
   if (currentPreRelease != latestPreRelease) {
     return !latestPreRelease && currentPreRelease;
   }
@@ -205,64 +251,35 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
     return UPDATE_OLDER_ERROR;
   }
 
-  esp_https_ota_handle_t ota_handle = NULL;
-  esp_err_t esp_err;
+  WifiPowerSaveGuard wifiPowerSaveGuard;
+  Storage.mkdir("/.crosspoint");
 
-  esp_http_client_config_t client_config = {
-      .url = otaUrl.c_str(),
-      .timeout_ms = 15000,
-      /* Default HTTP client buffer size 512 byte only
-       * not sufficient to handle URL redirection cases or
-       * parsing of large HTTP headers.
-       */
-      .buffer_size = 8192,
-      .buffer_size_tx = 8192,
-      .skip_cert_common_name_check = true,
-      .crt_bundle_attach = esp_crt_bundle_attach,
-      .keep_alive_enable = true,
-  };
+  LOG_INF("OTA", "Downloading firmware to %s", otaCachePath);
+  setProgress(0, otaSize);
+  const auto downloadResult = HttpDownloader::downloadToFile(
+      otaUrl, otaCachePath,
+      [this, onProgress, ctx](size_t downloaded, size_t total) {
+        setProgress(downloaded, total > 0 ? total : otaSize);
+        notifyProgress(onProgress, ctx);
+      });
 
-  esp_https_ota_config_t ota_config = {
-      .http_config = &client_config,
-      .http_client_init_cb = http_client_set_header_cb,
-  };
-
-  /* For better timing and connectivity, we disable power saving for WiFi */
-  esp_wifi_set_ps(WIFI_PS_NONE);
-
-  esp_err = esp_https_ota_begin(&ota_config, &ota_handle);
-  if (esp_err != ESP_OK) {
-    LOG_DBG("OTA", "HTTP OTA Begin Failed: %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
+  if (downloadResult != HttpDownloader::OK) {
+    LOG_ERR("OTA", "Firmware download failed: %d", downloadResult);
+    return downloadResult == HttpDownloader::FILE_ERROR ? INTERNAL_UPDATE_ERROR : HTTP_ERROR;
   }
 
-  do {
-    esp_err = esp_https_ota_perform(ota_handle);
-    processedSize = esp_https_ota_get_image_len_read(ota_handle);
-    if (onProgress) onProgress(ctx);
-    delay(100);  // TODO: should we replace this with something better?
-  } while (esp_err == ESP_ERR_HTTPS_OTA_IN_PROGRESS);
+  LOG_INF("OTA", "Flashing downloaded firmware");
+  setProgress(0, otaSize);
+  notifyProgress(onProgress, ctx);
 
-  /* Return back to default power saving for WiFi in case of failing */
-  esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
-
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_perform Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
-    return HTTP_ERROR;
+  FlashProgressCtx progressCtx{this, onProgress, ctx};
+  const auto flashResult = firmware_flash::flashFromSdPath(otaCachePath, onFlashProgress, &progressCtx);
+  if (flashResult != firmware_flash::Result::OK) {
+    LOG_ERR("OTA", "Firmware flash failed: %s", firmware_flash::resultName(flashResult));
+    return mapFlashError(flashResult);
   }
 
-  if (!esp_https_ota_is_complete_data_received(ota_handle)) {
-    LOG_ERR("OTA", "esp_https_ota_is_complete_data_received Failed: %s", esp_err_to_name(esp_err));
-    esp_https_ota_finish(ota_handle);
-    return INTERNAL_UPDATE_ERROR;
-  }
-
-  esp_err = esp_https_ota_finish(ota_handle);
-  if (esp_err != ESP_OK) {
-    LOG_ERR("OTA", "esp_https_ota_finish Failed: %s", esp_err_to_name(esp_err));
-    return INTERNAL_UPDATE_ERROR;
-  }
+  Storage.remove(otaCachePath);
 
   LOG_INF("OTA", "Update completed");
   return OK;

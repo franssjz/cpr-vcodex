@@ -71,6 +71,12 @@ class SdCardFont {
   // Returns true if the given style is present in this font file.
   bool hasStyle(uint8_t style) const;
 
+  // Resolve a requested style to the best available style in this font file.
+  uint8_t resolveStyle(uint8_t style) const;
+
+  // Resolve a requested style mask to the available style bits it will use.
+  uint8_t resolveStyleMask(uint8_t styleMask) const;
+
   // Number of styles present in this font file.
   uint8_t styleCount() const { return styleCount_; }
 

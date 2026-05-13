@@ -18,14 +18,14 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.45-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.45-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.47-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.47-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Fixed paragraph indentation when using SD-card fonts with `Extra Paragraph Spacing` disabled by replacing the old `U+2003` em-space fallback with a pixel-based first-line layout offset.<br>- Bumped the EPUB section cache format so books are re-laid out after updating and do not keep stale no-indent cached pages.<br>- Simplified firmware GitHub Release assets so stable firmware releases publish only the flashable `<tag>.bin`; metadata and firmware-budget reports remain internal workflow validation outputs instead of public release assets. |
+| Latest release notes | - Fixed on-device OTA updates failing at `0%` by staging the release `.bin` on the SD card and flashing it through the same validated firmware writer used by `SD Card Firmware Update`.<br>- OTA progress now covers both download and flashing, including downloads without a reported content length.<br>- `.dev` builds can always update back to the latest stable GitHub Release from Settings. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`8d1b86a`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8d1b86a) |
-| Latest official commit incorporated | Selected reader, font, firmware-update, and tooling updates through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094) |
-| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; BMP viewer next/prev labels from `8d1b86a` are left out until the related upstream viewer navigation flow is ported cleanly; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
+| Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
+| Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
+| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
 
 ## Web tools
 
@@ -471,7 +471,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.45-cpr-vcodex`
+- current dev build style: `1.2.0.47-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -540,10 +540,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.45-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.47-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.45-cpr-vcodex`
+- push a stable tag named like `1.2.0.47-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

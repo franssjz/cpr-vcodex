@@ -19,6 +19,27 @@
 FontDownloadActivity::FontDownloadActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
     : Activity("FontDownload", renderer, mappedInput), fontInstaller_(sdFontSystem.registry()) {}
 
+namespace {
+constexpr int DOWNLOAD_ATTEMPTS = 3;
+constexpr uint32_t RETRY_DELAY_MS = 350;
+
+HttpDownloader::DownloadError downloadToFileWithRetries(const std::string& url, const char* destPath,
+                                                        HttpDownloader::ProgressCallback progress = nullptr) {
+  HttpDownloader::DownloadError lastError = HttpDownloader::HTTP_ERROR;
+  for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+    lastError = HttpDownloader::downloadToFile(url, destPath, progress);
+    if (lastError == HttpDownloader::OK) {
+      return HttpDownloader::OK;
+    }
+
+    LOG_ERR("FONT", "Download attempt %d/%d failed for %s (%d)", attempt, DOWNLOAD_ATTEMPTS, destPath, lastError);
+    Storage.remove(destPath);
+    delay(RETRY_DELAY_MS * attempt);
+  }
+  return lastError;
+}
+}  // namespace
+
 // --- Lifecycle ---
 
 void FontDownloadActivity::onEnter() {
@@ -30,6 +51,7 @@ void FontDownloadActivity::onEnter() {
 
 void FontDownloadActivity::onExit() {
   Activity::onExit();
+  WiFi.setSleep(true);
   WiFi.disconnect(false);
   delay(100);
   WiFi.mode(WIFI_OFF);
@@ -42,9 +64,23 @@ void FontDownloadActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
+  if (WiFi.status() != WL_CONNECTED) {
+    RenderLock lock(*this);
+    state_ = ERROR;
+    downloadingFamilyIndex_ = -1;
+    errorMessage_ = "Wi-Fi not connected";
+    return;
+  }
+
+  // Font downloads are large enough that modem sleep can produce avoidable
+  // stalls on weak networks. Restore the normal Wi-Fi state on exit.
+  WiFi.setSleep(false);
+  delay(250);
+
   {
     RenderLock lock(*this);
     state_ = LOADING_MANIFEST;
+    downloadingFamilyIndex_ = -1;
   }
   requestUpdateAndWait();
 
@@ -70,7 +106,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
   // TLS buffers and the full JSON string in RAM simultaneously.
   static constexpr const char* MANIFEST_TMP = "/fonts_manifest.tmp";
 
-  auto result = HttpDownloader::downloadToFile(FONT_MANIFEST_URL, MANIFEST_TMP, nullptr);
+  auto result = downloadToFileWithRetries(FONT_MANIFEST_URL, MANIFEST_TMP, nullptr);
   if (result != HttpDownloader::OK) {
     LOG_ERR("FONT", "Failed to fetch manifest from %s", FONT_MANIFEST_URL);
     errorMessage_ = "Failed to fetch font list";
@@ -173,7 +209,7 @@ bool FontDownloadActivity::fetchAndParseManifest() {
 
 void FontDownloadActivity::downloadAll() {
   for (size_t i = 0; i < families_.size(); i++) {
-    if (families_[i].installed && !families_[i].hasUpdate) continue;
+    if (families_[i].installed) continue;
     downloadFamily(families_[i]);
     if (state_ == ERROR) return;
   }
@@ -184,10 +220,59 @@ void FontDownloadActivity::downloadAll() {
   }
 }
 
-size_t FontDownloadActivity::totalUninstalledSize() const {
+void FontDownloadActivity::updateAll() {
+  for (size_t i = 0; i < families_.size(); i++) {
+    if (!families_[i].hasUpdate) continue;
+    downloadFamily(families_[i]);
+    if (state_ == ERROR) return;
+  }
+
+  {
+    RenderLock lock(*this);
+    state_ = COMPLETE;
+  }
+}
+
+bool FontDownloadActivity::showDownloadAllRow() const {
+  for (const auto& f : families_) {
+    if (!f.installed) return true;
+  }
+  return false;
+}
+
+bool FontDownloadActivity::showUpdateAllRow() const {
+  for (const auto& f : families_) {
+    if (f.hasUpdate) return true;
+  }
+  return false;
+}
+
+int FontDownloadActivity::specialRowCount() const {
+  return (showDownloadAllRow() ? 1 : 0) + (showUpdateAllRow() ? 1 : 0);
+}
+
+bool FontDownloadActivity::isDownloadAllRow(int index) const { return showDownloadAllRow() && index == 0; }
+
+bool FontDownloadActivity::isUpdateAllRow(int index) const {
+  return showUpdateAllRow() && index == (showDownloadAllRow() ? 1 : 0);
+}
+
+int FontDownloadActivity::listItemCount() const {
+  return families_.empty() ? 0 : static_cast<int>(families_.size()) + specialRowCount();
+}
+
+size_t FontDownloadActivity::totalDownloadSize() const {
   size_t total = 0;
   for (const auto& f : families_) {
-    if (!f.installed || f.hasUpdate) total += f.totalSize;
+    if (!f.installed) total += f.totalSize;
+  }
+  return total;
+}
+
+size_t FontDownloadActivity::totalUpdateSize() const {
+  size_t total = 0;
+  for (const auto& f : families_) {
+    if (f.hasUpdate) total += f.totalSize;
   }
   return total;
 }
@@ -245,60 +330,77 @@ void FontDownloadActivity::downloadFamily(ManifestFamily& family) {
 
     std::string url = baseUrl_ + file.name;
 
-    auto result = HttpDownloader::downloadToFile(url, destPath, [this](size_t downloaded, size_t total) {
-      fileProgress_ = downloaded;
-      fileTotal_ = total;
+    bool fileOk = false;
+    std::string lastError = "Download failed: " + file.name;
+
+    for (int attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
+      {
+        RenderLock lock(*this);
+        fileProgress_ = 0;
+        fileTotal_ = file.size;
+      }
       requestUpdate(true);
-    });
 
-    if (result != HttpDownloader::OK) {
-      LOG_ERR("FONT", "Download failed: %s (%d)", file.name.c_str(), result);
-      fontInstaller_.deleteFamily(family.name.c_str());
-      family.installed = false;
-      family.hasUpdate = false;
-      RenderLock lock(*this);
-      state_ = ERROR;
-      errorMessage_ = "Download failed: " + file.name;
-      return;
+      auto result = HttpDownloader::downloadToFile(url, destPath, [this](size_t downloaded, size_t total) {
+        fileProgress_ = downloaded;
+        fileTotal_ = total;
+        requestUpdate(true);
+      });
+
+      if (result != HttpDownloader::OK) {
+        LOG_ERR("FONT", "Download attempt %d/%d failed: %s (%d)", attempt, DOWNLOAD_ATTEMPTS, file.name.c_str(),
+                result);
+        lastError = "Download failed: " + file.name;
+        Storage.remove(destPath);
+        delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+
+      uint32_t actualCrc = 0;
+      if (!computeFileCrc32(destPath, actualCrc)) {
+        LOG_ERR("FONT", "Failed to open file for CRC check: %s", destPath);
+        lastError = "Failed to compute checksum: " + file.name;
+        Storage.remove(destPath);
+        delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+
+      if (actualCrc != file.crc32) {
+        LOG_ERR("FONT", "CRC32 mismatch attempt %d/%d for %s: got %08x expected %08x", attempt, DOWNLOAD_ATTEMPTS,
+                file.name.c_str(), actualCrc, file.crc32);
+        lastError = "Checksum mismatch: " + file.name;
+        Storage.remove(destPath);
+        delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+
+      if (!fontInstaller_.validateCpfontFile(destPath)) {
+        LOG_ERR("FONT", "Invalid .cpfont attempt %d/%d: %s", attempt, DOWNLOAD_ATTEMPTS, destPath);
+        lastError = "Invalid font file: " + file.name;
+        Storage.remove(destPath);
+        delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+
+      LOG_DBG("FONT", "Downloaded %s (size=%zu crc32=%08x)", file.name.c_str(), file.size, actualCrc);
+      fileOk = true;
+      break;
     }
 
-    uint32_t actualCrc = 0;
-    if (!computeFileCrc32(destPath, actualCrc)) {
-      LOG_ERR("FONT", "Failed to open file for CRC check: %s", destPath);
+    if (!fileOk) {
       fontInstaller_.deleteFamily(family.name.c_str());
       family.installed = false;
       family.hasUpdate = false;
       RenderLock lock(*this);
       state_ = ERROR;
-      errorMessage_ = "Failed to compute checksum: " + file.name;
-      return;
-    }
-    if (actualCrc != file.crc32) {
-      LOG_ERR("FONT", "CRC32 mismatch for %s: got %08x expected %08x", file.name.c_str(), actualCrc, file.crc32);
-      fontInstaller_.deleteFamily(family.name.c_str());
-      family.installed = false;
-      family.hasUpdate = false;
-      RenderLock lock(*this);
-      state_ = ERROR;
-      errorMessage_ = "Checksum mismatch: " + file.name;
-      return;
-    }
-    LOG_DBG("FONT", "Downloaded %s (size=%zu crc32=%08x)", file.name.c_str(), file.size, actualCrc);
-
-    if (!fontInstaller_.validateCpfontFile(destPath)) {
-      LOG_ERR("FONT", "Invalid .cpfont: %s", destPath);
-      fontInstaller_.deleteFamily(family.name.c_str());
-      family.installed = false;
-      family.hasUpdate = false;
-      RenderLock lock(*this);
-      state_ = ERROR;
-      errorMessage_ = "Invalid font file: " + file.name;
+      errorMessage_ = lastError;
       return;
     }
   }
 
   fontInstaller_.refreshRegistry();
   family.installed = true;
+  family.hasUpdate = false;
 
   {
     RenderLock lock(*this);
@@ -341,7 +443,8 @@ void FontDownloadActivity::onDeleteConfirmationResult(const ActivityResult& resu
 }
 
 bool FontDownloadActivity::isSelectedFamilyDeletable() const {
-  if (selectedIndex_ <= 0 || selectedIndex_ >= listItemCount()) return false;
+  if (isDownloadAllRow(selectedIndex_) || isUpdateAllRow(selectedIndex_)) return false;
+  if (selectedIndex_ < specialRowCount() || selectedIndex_ >= listItemCount()) return false;
   const auto& family = families_[familyIndexFromList(selectedIndex_)];
   return family.installed && !family.hasUpdate;
 }
@@ -380,8 +483,10 @@ void FontDownloadActivity::loop() {
 
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
       if (!families_.empty()) {
-        if (isDownloadAllSelected()) {
+        if (isDownloadAllRow(selectedIndex_)) {
           downloadAll();
+        } else if (isUpdateAllRow(selectedIndex_)) {
+          updateAll();
         } else {
           auto& family = families_[familyIndexFromList(selectedIndex_)];
           if (!family.installed || family.hasUpdate) {
@@ -416,13 +521,31 @@ void FontDownloadActivity::loop() {
         downloadFamily(families_[downloadingFamilyIndex_]);
         requestUpdateAndWait();
         return;
-      } else {
-        {
-          RenderLock lock(*this);
-          state_ = FAMILY_LIST;
-        }
-        requestUpdate();
       }
+
+      {
+        RenderLock lock(*this);
+        state_ = LOADING_MANIFEST;
+        downloadingFamilyIndex_ = -1;
+      }
+      requestUpdateAndWait();
+
+      const bool wifiConnected = WiFi.status() == WL_CONNECTED;
+      if (!wifiConnected || !fetchAndParseManifest()) {
+        RenderLock lock(*this);
+        state_ = ERROR;
+        if (!wifiConnected) {
+          errorMessage_ = "Wi-Fi not connected";
+        } else if (errorMessage_.empty()) {
+          errorMessage_ = "Failed to fetch font list";
+        }
+      } else {
+        RenderLock lock(*this);
+        state_ = FAMILY_LIST;
+        selectedIndex_ = 0;
+      }
+      requestUpdateAndWait();
+      return;
     }
   }
 }
@@ -467,18 +590,21 @@ void FontDownloadActivity::render(RenderLock&&) {
           Rect{0, contentTop, pageWidth, pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing},
           listItemCount(), selectedIndex_,
           [this](int index) -> std::string {
-            if (index == 0) {
-              return std::string(tr(STR_DOWNLOAD_ALL)) + " (" + formatSize(totalUninstalledSize()) + ")";
+            if (isDownloadAllRow(index)) {
+              return std::string(tr(STR_DOWNLOAD_ALL)) + " (" + formatSize(totalDownloadSize()) + ")";
+            }
+            if (isUpdateAllRow(index)) {
+              return std::string(tr(STR_UPDATE_ALL)) + " (" + formatSize(totalUpdateSize()) + ")";
             }
             return families_[familyIndexFromList(index)].name;
           },
           [this](int index) -> std::string {
-            if (index == 0) return "";
+            if (isDownloadAllRow(index) || isUpdateAllRow(index)) return "";
             return families_[familyIndexFromList(index)].description;
           },
           nullptr,
           [this](int index) -> std::string {
-            if (index == 0) return "";
+            if (isDownloadAllRow(index) || isUpdateAllRow(index)) return "";
             const auto& f = families_[familyIndexFromList(index)];
             if (f.hasUpdate) return tr(STR_UPDATE_AVAILABLE);
             if (f.installed) return tr(STR_INSTALLED);
@@ -486,14 +612,16 @@ void FontDownloadActivity::render(RenderLock&&) {
           },
           true,
           [this](int index) -> bool {
-            if (index == 0) return false;
+            if (isDownloadAllRow(index) || isUpdateAllRow(index)) return false;
             const auto& f = families_[familyIndexFromList(index)];
             return f.installed && !f.hasUpdate;
           });
 
-      const auto labels =
-          mappedInput.mapLabels(tr(STR_BACK), isSelectedFamilyDeletable() ? tr(STR_DELETE) : tr(STR_DOWNLOAD),
-                                tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+      const auto labels = mappedInput.mapLabels(tr(STR_BACK),
+                                                isSelectedFamilyDeletable()      ? tr(STR_DELETE)
+                                                : isUpdateAllRow(selectedIndex_) ? tr(STR_UPDATE)
+                                                                                 : tr(STR_DOWNLOAD),
+                                                tr(STR_DIR_UP), tr(STR_DIR_DOWN));
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     }
   } else if (state_ == DOWNLOADING) {

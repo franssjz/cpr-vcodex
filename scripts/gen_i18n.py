@@ -755,11 +755,10 @@ def _print_language_table(
     sep = "  ".join("-" * w for w in col_widths)
 
     def _safe_print(line: str) -> None:
-        print(
-            line.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
-                sys.stdout.encoding or "utf-8", errors="replace"
-            )
-        )
+        # PlatformIO re-echoes script output through Click. On some Windows
+        # consoles that path is still cp1252 even when Python itself reports a
+        # UTF-8 stdout, so keep the summary table ASCII-only.
+        print(line.encode("ascii", errors="replace").decode("ascii"))
 
     _safe_print(fmt.format(*headers))
     _safe_print(sep)
