@@ -102,10 +102,14 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
             renderer.drawText(fontId, cursorX + 1, y, buf, true, currentStyle);
             cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
           } else {
-            const EpdFontFamily::Style boldStyle =
-                static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-            renderer.drawText(fontId, cursorX, y, buf, true, boldStyle);
-            cursorX += renderer.getTextAdvanceX(fontId, buf, boldStyle);
+            // Use synthetic bold (double strike) instead of switching to a true BOLD face.
+            // Some EPUB fonts miss or mismatch bold glyph metrics, which can corrupt layout.
+            renderer.drawText(fontId, cursorX, y, buf, true, currentStyle);
+            if (renderer.getRenderMode() == GfxRenderer::BW) {
+              renderer.drawText(fontId, cursorX + 1, y, buf, true, currentStyle);
+              renderer.drawText(fontId, cursorX + 2, y, buf, true, currentStyle);
+            }
+            cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
           }
         }
 
