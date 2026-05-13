@@ -27,6 +27,9 @@ class HomeActivity final : public Activity {
   int residentCarouselSelectorIndex = -1;
   uint32_t residentCarouselFrameHash = 0;
   bool residentCarouselFrameValid = false;
+  int cachedCarouselFrameHashIndex = -1;
+  uint32_t cachedCarouselFrameHash = 0;
+  bool cachedCarouselFrameHashValid = false;
   std::string carouselCoverLoadAttemptPath;
   bool carouselFramesReady = false;
   std::vector<RecentBook> recentBooks;
@@ -46,6 +49,8 @@ class HomeActivity final : public Activity {
   bool loadCarouselFrameFromStorage(int bookIndex);
   bool saveCarouselFrameToStorage(int bookIndex);
   void invalidateResidentCarouselFrame();
+  void invalidateCarouselFrameHash();
+  uint32_t getCachedCarouselFrameHash(int bookIndex);
   void scheduleCarouselCoverLoadIfNeeded();
   void loadHomeCarouselBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);

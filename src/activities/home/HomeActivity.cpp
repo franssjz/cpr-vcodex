@@ -249,11 +249,8 @@ uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int ce
   return hash;
 }
 
-std::string getCarouselFrameCachePath(const std::vector<RecentBook>& books, const int centerIdx,
-                                      const GfxRenderer& renderer) {
+std::string getCarouselFrameCachePathFromHash(const uint32_t hash) {
   char filename[96];
-  const uint32_t hash = getCarouselFrameHash(books, centerIdx, renderer.getScreenWidth(), renderer.getScreenHeight(),
-                                             renderer.getBufferSize(), renderer.isDarkMode());
   std::snprintf(filename, sizeof(filename), "%s/%08lx.bin", CAROUSEL_FRAME_CACHE_DIR, static_cast<unsigned long>(hash));
   return filename;
 }
@@ -276,6 +273,7 @@ int HomeActivity::getMenuItemCount() const {
 
 void HomeActivity::loadHomeCarouselBooks(const int maxBooks) {
   invalidateResidentCarouselFrame();
+  invalidateCarouselFrameHash();
   recentBooks.clear();
   if (SETTINGS.homeCarouselSource == CrossPointSettings::HOME_CAROUSEL_FAVORITES) {
     const auto& books = FAVORITES.getBooks();
@@ -343,6 +341,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
           carouselCoverLoadAttemptPath = book.path;
           carouselFramesReady = false;
           invalidateResidentCarouselFrame();
+          invalidateCarouselFrameHash();
         }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
@@ -396,6 +395,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
     if (isLyraCarouselTheme()) {
       carouselFramesReady = false;
       invalidateResidentCarouselFrame();
+      invalidateCarouselFrameHash();
       preRenderCarouselFrames();
     }
     requestUpdate();
@@ -426,6 +426,7 @@ void HomeActivity::onEnter() {
   recentsLoaded = false;
   lastCarouselBookIndex = 0;
   invalidateResidentCarouselFrame();
+  invalidateCarouselFrameHash();
   carouselFramesReady = false;
   carouselCoverLoadAttemptPath.clear();
 
@@ -490,7 +491,7 @@ bool HomeActivity::loadCarouselFrameFromStorage(int bookIndex) {
   const int bookCount = static_cast<int>(recentBooks.size());
   const int safeBookIndex = wrapBookIndex(bookIndex, bookCount);
   const size_t bufferSize = renderer.getBufferSize();
-  const std::string cachePath = getCarouselFrameCachePath(recentBooks, safeBookIndex, renderer);
+  const std::string cachePath = getCarouselFrameCachePathFromHash(getCachedCarouselFrameHash(safeBookIndex));
 
   FsFile file;
   if (!Storage.openFileForRead("HCR", cachePath, file)) {
@@ -543,7 +544,7 @@ bool HomeActivity::saveCarouselFrameToStorage(int bookIndex) {
   const int bookCount = static_cast<int>(recentBooks.size());
   const int safeBookIndex = wrapBookIndex(bookIndex, bookCount);
   const size_t bufferSize = renderer.getBufferSize();
-  const std::string cachePath = getCarouselFrameCachePath(recentBooks, safeBookIndex, renderer);
+  const std::string cachePath = getCarouselFrameCachePathFromHash(getCachedCarouselFrameHash(safeBookIndex));
 
   Storage.mkdir("/.crosspoint");
   Storage.mkdir(CAROUSEL_FRAME_CACHE_DIR);
@@ -605,6 +606,28 @@ void HomeActivity::invalidateResidentCarouselFrame() {
   residentCarouselSelectorIndex = -1;
   residentCarouselFrameHash = 0;
   residentCarouselFrameValid = false;
+}
+
+void HomeActivity::invalidateCarouselFrameHash() {
+  cachedCarouselFrameHashIndex = -1;
+  cachedCarouselFrameHash = 0;
+  cachedCarouselFrameHashValid = false;
+}
+
+uint32_t HomeActivity::getCachedCarouselFrameHash(const int bookIndex) {
+  if (recentBooks.empty()) {
+    return 0;
+  }
+
+  const int safeBookIndex = wrapBookIndex(bookIndex, static_cast<int>(recentBooks.size()));
+  if (!cachedCarouselFrameHashValid || cachedCarouselFrameHashIndex != safeBookIndex) {
+    cachedCarouselFrameHash =
+        getCarouselFrameHash(recentBooks, safeBookIndex, renderer.getScreenWidth(), renderer.getScreenHeight(),
+                             renderer.getBufferSize(), renderer.isDarkMode());
+    cachedCarouselFrameHashIndex = safeBookIndex;
+    cachedCarouselFrameHashValid = true;
+  }
+  return cachedCarouselFrameHash;
 }
 
 void HomeActivity::preRenderCarouselFrames() {
@@ -841,9 +864,7 @@ void HomeActivity::render(RenderLock&&) {
   bool usedCarouselFrame = false;
   if (carouselTheme && !recentBooks.empty()) {
     const int centerIdx = wrapBookIndex(lastCarouselBookIndex, recentCount);
-    const uint32_t frameHash = getCarouselFrameHash(recentBooks, centerIdx, renderer.getScreenWidth(),
-                                                   renderer.getScreenHeight(), renderer.getBufferSize(),
-                                                   renderer.isDarkMode());
+    const uint32_t frameHash = getCachedCarouselFrameHash(centerIdx);
     const bool residentFrameMatches = residentCarouselFrameValid && residentCarouselFrameIndex == centerIdx &&
                                       residentCarouselSelectorIndex == selectorIndex &&
                                       residentCarouselFrameHash == frameHash;
