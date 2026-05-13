@@ -21,20 +21,7 @@ std::vector<uint8_t> invertMonochromeBitmap(const uint8_t* bitmap, size_t size) 
 }
 
 uint8_t resolveSdCardStyle(const SdCardFont& font, const EpdFontFamily::Style style) {
-  static const uint8_t kFallbacks[4][4] = {
-      {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC},
-      {EpdFontFamily::BOLD, EpdFontFamily::BOLD_ITALIC, EpdFontFamily::REGULAR, EpdFontFamily::ITALIC},
-      {EpdFontFamily::ITALIC, EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::BOLD_ITALIC},
-      {EpdFontFamily::BOLD_ITALIC, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::REGULAR},
-  };
-
-  const uint8_t styleBits = static_cast<uint8_t>(style) & 0x03;
-  for (uint8_t candidate : kFallbacks[styleBits]) {
-    if (font.hasStyle(candidate)) {
-      return candidate;
-    }
-  }
-  return EpdFontFamily::REGULAR;
+  return font.resolveStyle(static_cast<uint8_t>(style));
 }
 
 }  // namespace

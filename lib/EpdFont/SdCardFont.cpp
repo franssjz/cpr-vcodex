@@ -1,5 +1,7 @@
 #include "SdCardFont.h"
 
+#include "EpdFontFamily.h"
+
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Utf8.h>
@@ -588,6 +590,9 @@ int32_t SdCardFont::findGlobalGlyphIndex(const PerStyle& s, uint32_t codepoint) 
 int SdCardFont::prewarm(const char* utf8Text, uint8_t styleMask, bool metadataOnly) {
   if (!loaded_) return -1;
 
+  styleMask = resolveStyleMask(styleMask);
+  if (styleMask == 0) return 0;
+
   unsigned long startMs = millis();
 
   // Step 1: Extract unique codepoints from UTF-8 text (shared across all styles).
@@ -1018,6 +1023,9 @@ uint16_t SdCardFont::getAdvance(uint32_t codepoint, uint8_t style) const {
 int SdCardFont::buildAdvanceTable(const char* utf8Text, uint8_t styleMask) {
   if (!loaded_) return -1;
 
+  styleMask = resolveStyleMask(styleMask);
+  if (styleMask == 0) return 0;
+
   // Note: advance table is preserved across calls. We only fetch codepoints
   // not already present, then merge them in. Use clearPersistentCache() to
   // wipe the table when the font/size/family changes.
@@ -1075,6 +1083,7 @@ int SdCardFont::buildAdvanceTable(const char* utf8Text, uint8_t styleMask) {
   for (uint8_t si = 0; si < MAX_STYLES; si++) {
     if (!(styleMask & (1 << si)) || !styles_[si].present) continue;
     const auto& s = styles_[si];
+    const int32_t replacementIdx = findGlobalGlyphIndex(s, REPLACEMENT_GLYPH);
 
     // Stop fetching once the cache is full — further inserts would be dropped
     // by the merge anyway. The renderer fast path tolerates missing entries
@@ -1102,8 +1111,11 @@ int SdCardFont::buildAdvanceTable(const char* utf8Text, uint8_t styleMask) {
       if (advanceTableLookup(si, cp, nullptr)) continue;  // already cached
       int32_t idx = findGlobalGlyphIndex(s, cp);
       if (idx < 0) {
-        missedThisStyle++;
-        continue;
+        if (replacementIdx < 0) {
+          missedThisStyle++;
+          continue;
+        }
+        idx = replacementIdx;
       }
       mappings[needCount].codepoint = cp;
       mappings[needCount].glyphIndex = idx;
@@ -1186,6 +1198,33 @@ EpdFont* SdCardFont::getEpdFont(uint8_t style) {
   style &= (MAX_STYLES - 1);
   if (!styles_[style].present) return nullptr;
   return &styles_[style].epdFont;
+}
+
+uint8_t SdCardFont::resolveStyle(uint8_t style) const {
+  static const uint8_t kFallbacks[MAX_STYLES][MAX_STYLES] = {
+      {EpdFontFamily::REGULAR, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::BOLD_ITALIC},
+      {EpdFontFamily::BOLD, EpdFontFamily::REGULAR, EpdFontFamily::BOLD_ITALIC, EpdFontFamily::ITALIC},
+      {EpdFontFamily::ITALIC, EpdFontFamily::REGULAR, EpdFontFamily::BOLD_ITALIC, EpdFontFamily::BOLD},
+      {EpdFontFamily::BOLD_ITALIC, EpdFontFamily::BOLD, EpdFontFamily::ITALIC, EpdFontFamily::REGULAR},
+  };
+
+  const uint8_t styleBits = style & (MAX_STYLES - 1);
+  for (uint8_t candidate : kFallbacks[styleBits]) {
+    if (styles_[candidate].present) {
+      return candidate;
+    }
+  }
+  return EpdFontFamily::REGULAR;
+}
+
+uint8_t SdCardFont::resolveStyleMask(uint8_t styleMask) const {
+  uint8_t resolvedMask = 0;
+  for (uint8_t si = 0; si < MAX_STYLES; si++) {
+    if (styleMask & (1 << si)) {
+      resolvedMask |= static_cast<uint8_t>(1u << resolveStyle(si));
+    }
+  }
+  return resolvedMask;
 }
 
 bool SdCardFont::hasStyle(uint8_t style) const { return styles_[style & (MAX_STYLES - 1)].present; }

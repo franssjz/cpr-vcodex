@@ -23,9 +23,9 @@
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Latest release notes | - Fixed paragraph indentation when using SD-card fonts with `Extra Paragraph Spacing` disabled by replacing the old `U+2003` em-space fallback with a pixel-based first-line layout offset.<br>- Bumped the EPUB section cache format so books are re-laid out after updating and do not keep stale no-indent cached pages.<br>- Simplified firmware GitHub Release assets so stable firmware releases publish only the flashable `<tag>.bin`; metadata and firmware-budget reports remain internal workflow validation outputs instead of public release assets. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
-| Latest official commit reviewed | [`8d1b86a`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8d1b86a) |
-| Latest official commit incorporated | Selected reader, font, firmware-update, and tooling updates through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094) |
-| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; BMP viewer next/prev labels from `8d1b86a` are left out until the related upstream viewer navigation flow is ported cleanly; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
+| Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
+| Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
+| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
 
 ## Web tools
 
