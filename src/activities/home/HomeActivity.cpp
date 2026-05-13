@@ -40,7 +40,8 @@
 
 namespace {
 constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
-constexpr int HOME_SHORTCUT_PAGE_SIZE = 4;
+constexpr int DEFAULT_HOME_SHORTCUT_PAGE_SIZE = 4;
+constexpr int LYRA_HOME_SHORTCUT_PAGE_SIZE = 5;
 
 struct HomeShortcutEntry {
   const ShortcutDefinition* definition = nullptr;
@@ -97,6 +98,12 @@ UIIcon getHomeShortcutIcon(const HomeShortcutEntry& entry) {
 
 bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
   return entry.definition && ShortcutUiMetadata::showAccessory(*entry.definition);
+}
+
+int getHomeShortcutPageSize() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA
+             ? LYRA_HOME_SHORTCUT_PAGE_SIZE
+             : DEFAULT_HOME_SHORTCUT_PAGE_SIZE;
 }
 
 }  // namespace
@@ -262,6 +269,7 @@ void HomeActivity::loop() {
   auto homeEntries = getHomeShortcutEntries(hasOpdsServers);
   const int recentCount = static_cast<int>(recentBooks.size());
   const int homeCount = static_cast<int>(homeEntries.size());
+  const int shortcutPageSize = getHomeShortcutPageSize();
 
   buttonNavigator.onNextPress([this, menuCount] {
     selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
@@ -273,36 +281,36 @@ void HomeActivity::loop() {
     requestUpdate();
   });
 
-  buttonNavigator.onNextContinuous([this, menuCount, recentCount, homeCount] {
+  buttonNavigator.onNextContinuous([this, menuCount, recentCount, homeCount, shortcutPageSize] {
     if (menuCount <= 0) {
       return;
     }
 
-    if (homeCount <= HOME_SHORTCUT_PAGE_SIZE) {
+    if (homeCount <= shortcutPageSize) {
       selectorIndex = ButtonNavigator::nextIndex(selectorIndex, menuCount);
     } else if (selectorIndex < recentCount) {
       selectorIndex = recentCount;
     } else {
       const int selectedHomeIndex = selectorIndex - recentCount;
       selectorIndex =
-          recentCount + ButtonNavigator::nextPageIndex(selectedHomeIndex, homeCount, HOME_SHORTCUT_PAGE_SIZE);
+          recentCount + ButtonNavigator::nextPageIndex(selectedHomeIndex, homeCount, shortcutPageSize);
     }
     requestUpdate();
   });
 
-  buttonNavigator.onPreviousContinuous([this, menuCount, recentCount, homeCount] {
+  buttonNavigator.onPreviousContinuous([this, menuCount, recentCount, homeCount, shortcutPageSize] {
     if (menuCount <= 0) {
       return;
     }
 
-    if (homeCount <= HOME_SHORTCUT_PAGE_SIZE) {
+    if (homeCount <= shortcutPageSize) {
       selectorIndex = ButtonNavigator::previousIndex(selectorIndex, menuCount);
     } else if (selectorIndex < recentCount) {
-      selectorIndex = recentCount + ButtonNavigator::previousPageIndex(0, homeCount, HOME_SHORTCUT_PAGE_SIZE);
+      selectorIndex = recentCount + ButtonNavigator::previousPageIndex(0, homeCount, shortcutPageSize);
     } else {
       const int selectedHomeIndex = selectorIndex - recentCount;
       selectorIndex =
-          recentCount + ButtonNavigator::previousPageIndex(selectedHomeIndex, homeCount, HOME_SHORTCUT_PAGE_SIZE);
+          recentCount + ButtonNavigator::previousPageIndex(selectedHomeIndex, homeCount, shortcutPageSize);
     }
     requestUpdate();
   });
@@ -434,8 +442,9 @@ void HomeActivity::render(RenderLock&&) {
                     metrics.buttonHintsHeight + metrics.verticalSpacing)};
 
   const int shortcutDisplayCount = static_cast<int>(homeEntries.size());
+  const int shortcutPageSize = getHomeShortcutPageSize();
 
-  if (shortcutDisplayCount <= HOME_SHORTCUT_PAGE_SIZE) {
+  if (shortcutDisplayCount <= shortcutPageSize) {
     GUI.drawButtonMenu(
         renderer, shortcutsRect, shortcutDisplayCount, selectedHomeIndex,
         [&homeEntries](const int index) { return getHomeShortcutTitle(homeEntries[index]); },
@@ -446,11 +455,11 @@ void HomeActivity::render(RenderLock&&) {
     const int headerHeight = 34;
     const int listTop = shortcutsRect.y + headerHeight + 12;
     const int listHeight = std::max(0, shortcutsRect.height - headerHeight - 12);
-    const int currentPage = std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / HOME_SHORTCUT_PAGE_SIZE : 0);
+    const int currentPage = std::max(0, selectedHomeIndex >= 0 ? selectedHomeIndex / shortcutPageSize : 0);
     const int totalPages =
-        (static_cast<int>(homeEntries.size()) + HOME_SHORTCUT_PAGE_SIZE - 1) / HOME_SHORTCUT_PAGE_SIZE;
-    const int pageStart = currentPage * HOME_SHORTCUT_PAGE_SIZE;
-    const int pageItemCount = std::min(HOME_SHORTCUT_PAGE_SIZE, static_cast<int>(homeEntries.size()) - pageStart);
+        (static_cast<int>(homeEntries.size()) + shortcutPageSize - 1) / shortcutPageSize;
+    const int pageStart = currentPage * shortcutPageSize;
+    const int pageItemCount = std::min(shortcutPageSize, static_cast<int>(homeEntries.size()) - pageStart);
     const int localSelectedIndex = (selectedHomeIndex >= pageStart && selectedHomeIndex < pageStart + pageItemCount)
                                        ? selectedHomeIndex - pageStart
                                        : -1;

@@ -525,8 +525,20 @@ void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) co
 }
 
 template <>
+void GfxRenderer::drawPixelDither<Color::MediumGray>(const int x, const int y) const {
+  static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+  drawPixel(x, y, BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::MediumGray));
+}
+
+template <>
 void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) const {
   drawPixel(x, y, (x + y) % 2 == 0);  // TODO: maybe find a better pattern?
+}
+
+template <>
+void GfxRenderer::drawPixelDither<Color::ExtraDarkGray>(const int x, const int y) const {
+  static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+  drawPixel(x, y, BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::ExtraDarkGray));
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
@@ -541,10 +553,22 @@ void GfxRenderer::fillRectDither(const int x, const int y, const int width, cons
         drawPixelDither<Color::LightGray>(fillX, fillY);
       }
     }
+  } else if (color == Color::MediumGray) {
+    for (int fillY = y; fillY < y + height; fillY++) {
+      for (int fillX = x; fillX < x + width; fillX++) {
+        drawPixelDither<Color::MediumGray>(fillX, fillY);
+      }
+    }
   } else if (color == Color::DarkGray) {
     for (int fillY = y; fillY < y + height; fillY++) {
       for (int fillX = x; fillX < x + width; fillX++) {
         drawPixelDither<Color::DarkGray>(fillX, fillY);
+      }
+    }
+  } else if (color == Color::ExtraDarkGray) {
+    for (int fillY = y; fillY < y + height; fillY++) {
+      for (int fillX = x; fillX < x + width; fillX++) {
+        drawPixelDither<Color::ExtraDarkGray>(fillX, fillY);
       }
     }
   }

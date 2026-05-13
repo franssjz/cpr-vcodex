@@ -22,7 +22,8 @@ EpubReaderMenuActivity::EpubReaderMenuActivity(GfxRenderer& renderer, MappedInpu
 std::vector<EpubReaderMenuActivity::MenuItem> EpubReaderMenuActivity::buildMenuItems(bool hasFootnotes,
                                                                                      bool hasBookmarks) {
   std::vector<MenuItem> items;
-  items.reserve(11);
+  items.reserve(12);
+  items.push_back({MenuAction::READER_SETTINGS, StrId::STR_READING_QUICK_SETTINGS});
   items.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   if (hasFootnotes) {
     items.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
@@ -125,7 +126,7 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
 
   // Menu Items
   const int startY = 75 + contentY;
-  constexpr int lineHeight = 30;
+  constexpr int lineHeight = 28;
 
   for (size_t i = 0; i < menuItems.size(); ++i) {
     const int displayY = startY + (i * lineHeight);

@@ -15,7 +15,15 @@ class SdCardFont;
 
 // Color representation: uint8_t mapped to 4x4 Bayer matrix dithering levels
 // 0 = transparent, 1-16 = gray levels (white to black)
-enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 0x0A, Black = 0x10 };
+enum Color : uint8_t {
+  Clear = 0x00,
+  White = 0x01,
+  LightGray = 0x05,
+  MediumGray = 0x07,
+  DarkGray = 0x0A,
+  ExtraDarkGray = 0x0D,
+  Black = 0x10
+};
 
 class GfxRenderer {
  public:

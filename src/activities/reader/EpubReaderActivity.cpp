@@ -25,6 +25,7 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "QrDisplayActivity.h"
+#include "ReaderQuickSettingsActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontGlobals.h"
@@ -547,8 +548,91 @@ void EpubReaderActivity::jumpToPercent(int percent) {
   }
 }
 
+EpubReaderActivity::ReaderSettingsSnapshot EpubReaderActivity::captureReaderSettingsSnapshot() const {
+  return ReaderSettingsSnapshot{
+      SETTINGS.darkMode,
+      SETTINGS.fadingFix,
+      SETTINGS.refreshFrequency,
+      SETTINGS.fontFamily,
+      SETTINGS.fontSize,
+      SETTINGS.lineSpacing,
+      SETTINGS.screenMargin,
+      SETTINGS.paragraphAlignment,
+      SETTINGS.embeddedStyle,
+      SETTINGS.hyphenationEnabled,
+      SETTINGS.bionicReading,
+      SETTINGS.orientation,
+      SETTINGS.extraParagraphSpacing,
+      SETTINGS.textAntiAliasing,
+      SETTINGS.textDarkness,
+      SETTINGS.readerRefreshMode,
+      SETTINGS.imageRendering,
+      SETTINGS.sdFontFamilyName,
+  };
+}
+
+void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot& before) {
+  const bool fontChanged = before.fontFamily != SETTINGS.fontFamily || before.fontSize != SETTINGS.fontSize ||
+                           before.sdFontFamilyName != SETTINGS.sdFontFamilyName;
+  const bool paginationChanged =
+      fontChanged || before.lineSpacing != SETTINGS.lineSpacing || before.screenMargin != SETTINGS.screenMargin ||
+      before.paragraphAlignment != SETTINGS.paragraphAlignment || before.embeddedStyle != SETTINGS.embeddedStyle ||
+      before.hyphenationEnabled != SETTINGS.hyphenationEnabled ||
+      before.extraParagraphSpacing != SETTINGS.extraParagraphSpacing || before.imageRendering != SETTINGS.imageRendering;
+  const bool orientationChanged = before.orientation != SETTINGS.orientation;
+  const bool refreshPolicyChanged =
+      before.refreshFrequency != SETTINGS.refreshFrequency || before.readerRefreshMode != SETTINGS.readerRefreshMode;
+  const bool renderOnlyChanged = before.darkMode != SETTINGS.darkMode || before.fadingFix != SETTINGS.fadingFix ||
+                                 before.bionicReading != SETTINGS.bionicReading ||
+                                 before.textAntiAliasing != SETTINGS.textAntiAliasing ||
+                                 before.textDarkness != SETTINGS.textDarkness || refreshPolicyChanged;
+
+  if (!(paginationChanged || orientationChanged || renderOnlyChanged)) {
+    return;
+  }
+
+  if (fontChanged) {
+    ensureSdFontLoaded();
+  }
+
+  renderer.setFadingFix(SETTINGS.fadingFix);
+  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setTextDarkness(SETTINGS.textDarkness);
+  renderer.requestNextFullRefresh();
+
+  if (orientationChanged || paginationChanged) {
+    RenderLock lock(*this);
+    if (section) {
+      cachedSpineIndex = currentSpineIndex;
+      cachedChapterTotalPageCount = section->pageCount;
+      nextPageNumber = section->currentPage;
+    }
+    if (orientationChanged) {
+      ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+    }
+    section.reset();
+  }
+
+  if (refreshPolicyChanged) {
+    pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+  }
+
+  pendingForceFullRefresh = true;
+  requestUpdate(true);
+}
+
 void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action) {
   switch (action) {
+    case EpubReaderMenuActivity::MenuAction::READER_SETTINGS: {
+      const auto before = captureReaderSettingsSnapshot();
+      READING_STATS.noteActivity();
+      startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
+                             [this, before](const ActivityResult&) {
+                               applyReaderSettingsChanges(before);
+                               READING_STATS.resumeSession();
+                             });
+      break;
+    }
     case EpubReaderMenuActivity::MenuAction::SELECT_CHAPTER: {
       const int spineIdx = currentSpineIndex;
       const std::string path = epub->getPath();
@@ -654,7 +738,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::GO_HOME: {
-      onGoHome();
+      exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
       return;
     }
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
@@ -674,7 +758,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           }
         }
       }
-      onGoHome();
+      exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
       return;
     }
     case EpubReaderMenuActivity::MenuAction::SCREENSHOT: {

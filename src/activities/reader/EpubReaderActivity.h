@@ -39,6 +39,27 @@ class EpubReaderActivity final : public Activity {
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
 
+  struct ReaderSettingsSnapshot {
+    uint8_t darkMode = 0;
+    uint8_t fadingFix = 0;
+    uint8_t refreshFrequency = 0;
+    uint8_t fontFamily = 0;
+    uint8_t fontSize = 0;
+    uint8_t lineSpacing = 0;
+    uint8_t screenMargin = 0;
+    uint8_t paragraphAlignment = 0;
+    uint8_t embeddedStyle = 0;
+    uint8_t hyphenationEnabled = 0;
+    uint8_t bionicReading = 0;
+    uint8_t orientation = 0;
+    uint8_t extraParagraphSpacing = 0;
+    uint8_t textAntiAliasing = 0;
+    uint8_t textDarkness = 0;
+    uint8_t readerRefreshMode = 0;
+    uint8_t imageRendering = 0;
+    std::string sdFontFamilyName;
+  };
+
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
   struct SavedPosition {
@@ -57,6 +78,8 @@ class EpubReaderActivity final : public Activity {
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
+  ReaderSettingsSnapshot captureReaderSettingsSnapshot() const;
+  void applyReaderSettingsChanges(const ReaderSettingsSnapshot& before);
   void applyOrientation(uint8_t orientation);
   void toggleAutoPageTurn(uint8_t selectedPageTurnOption);
   void pageTurn(bool isForwardTurn);

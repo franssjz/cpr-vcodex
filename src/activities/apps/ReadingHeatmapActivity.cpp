@@ -104,17 +104,23 @@ int getHeatLevel(const uint64_t readingMs) {
     return 0;
   }
 
-  const uint64_t totalMinutes = std::max<uint64_t>(1, readingMs / 60000ULL);
-  if (totalMinutes < 10ULL) {
-    return 1;
+  const uint64_t totalMinutes = readingMs / 60000ULL;
+  if (totalMinutes < 15ULL) {
+    return 0;
   }
   if (totalMinutes < 30ULL) {
-    return 2;
+    return 1;
   }
   if (totalMinutes < 60ULL) {
+    return 2;
+  }
+  if (totalMinutes < 120ULL) {
     return 3;
   }
-  return 4;
+  if (totalMinutes < 240ULL) {
+    return 4;
+  }
+  return 5;
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
@@ -151,13 +157,16 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
       renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::LightGray);
       break;
     case 2:
-      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::DarkGray);
+      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::MediumGray);
       break;
     case 3:
       renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::DarkGray);
-      renderer.drawRect(fillRect.x + 2, fillRect.y + 2, std::max(0, fillRect.width - 4), std::max(0, fillRect.height - 4));
       break;
     case 4:
+      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::ExtraDarkGray);
+      textBlack = false;
+      break;
+    case 5:
       renderer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height);
       textBlack = false;
       break;
@@ -174,15 +183,15 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
   }
 
   if (cell.inViewedMonth && cell.readingMs >= getDailyReadingGoalMs()) {
-    drawGoalCheckBadge(renderer, rect, level == 4);
+    drawGoalCheckBadge(renderer, rect, level >= 4);
   }
 
   if (cell.isReferenceDay) {
-    renderer.drawRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, level == 4 ? false : true);
+    renderer.drawRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, level >= 4 ? false : true);
   }
   if (cell.isSelected) {
     renderer.drawRect(rect.x + 4, rect.y + 4, std::max(0, rect.width - 8), std::max(0, rect.height - 8),
-                      level == 4 ? false : true);
+                      level >= 4 ? false : true);
   }
 }
 
@@ -194,13 +203,15 @@ void drawLegendSwatch(GfxRenderer& renderer, const Rect& rect, const int level) 
       renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::LightGray);
       break;
     case 2:
-      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::DarkGray);
+      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::MediumGray);
       break;
     case 3:
       renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::DarkGray);
-      renderer.drawRect(heatRect.x + 2, heatRect.y + 2, std::max(0, heatRect.width - 4), std::max(0, heatRect.height - 4));
       break;
     case 4:
+      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::ExtraDarkGray);
+      break;
+    case 5:
       renderer.fillRect(heatRect.x, heatRect.y, heatRect.width, heatRect.height);
       break;
     default:
@@ -274,10 +285,12 @@ void drawLegend(GfxRenderer& renderer, const Rect& rect) {
     int level;
     const char* label;
   };
-  static constexpr LegendLevel LEVELS[] = {{1, "1m+"}, {2, "10m+"}, {3, "30m+"}, {4, "60m+"}};
+  static constexpr LegendLevel LEVELS[] = {
+      {1, "15m+"}, {2, "30m+"}, {3, "60m+"}, {4, "120m+"}, {5, "240m+"}};
+  constexpr int LEVEL_COUNT = sizeof(LEVELS) / sizeof(LEVELS[0]);
 
-  const int itemWidth = rect.width / 4;
-  for (int index = 0; index < 4; ++index) {
+  const int itemWidth = rect.width / LEVEL_COUNT;
+  for (int index = 0; index < LEVEL_COUNT; ++index) {
     const int itemX = rect.x + index * itemWidth;
     const Rect swatch{itemX + 6, rect.y + 3, LEGEND_SWATCH_SIZE, LEGEND_SWATCH_SIZE};
     drawLegendSwatch(renderer, swatch, LEVELS[index].level);
