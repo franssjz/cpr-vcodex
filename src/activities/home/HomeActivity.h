@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -22,6 +23,10 @@ class HomeActivity final : public Activity {
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
   int lastCarouselBookIndex = 0;
+  int residentCarouselFrameIndex = -1;
+  int residentCarouselSelectorIndex = -1;
+  uint32_t residentCarouselFrameHash = 0;
+  bool residentCarouselFrameValid = false;
   std::string carouselCoverLoadAttemptPath;
   bool carouselFramesReady = false;
   std::vector<RecentBook> recentBooks;
@@ -40,6 +45,7 @@ class HomeActivity final : public Activity {
   bool renderCarouselFrame(int bookIndex);
   bool loadCarouselFrameFromStorage(int bookIndex);
   bool saveCarouselFrameToStorage(int bookIndex);
+  void invalidateResidentCarouselFrame();
   void scheduleCarouselCoverLoadIfNeeded();
   void loadHomeCarouselBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);

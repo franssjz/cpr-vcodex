@@ -275,6 +275,7 @@ int HomeActivity::getMenuItemCount() const {
 }
 
 void HomeActivity::loadHomeCarouselBooks(const int maxBooks) {
+  invalidateResidentCarouselFrame();
   recentBooks.clear();
   if (SETTINGS.homeCarouselSource == CrossPointSettings::HOME_CAROUSEL_FAVORITES) {
     const auto& books = FAVORITES.getBooks();
@@ -341,6 +342,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
         if (isLyraCarouselTheme()) {
           carouselCoverLoadAttemptPath = book.path;
           carouselFramesReady = false;
+          invalidateResidentCarouselFrame();
         }
         if (FsHelpers::hasEpubExtension(book.path)) {
           Epub epub(book.path, "/.crosspoint");
@@ -393,6 +395,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   if (needsRefresh) {
     if (isLyraCarouselTheme()) {
       carouselFramesReady = false;
+      invalidateResidentCarouselFrame();
       preRenderCarouselFrames();
     }
     requestUpdate();
@@ -422,6 +425,7 @@ void HomeActivity::onEnter() {
   recentsLoading = false;
   recentsLoaded = false;
   lastCarouselBookIndex = 0;
+  invalidateResidentCarouselFrame();
   carouselFramesReady = false;
   carouselCoverLoadAttemptPath.clear();
 
@@ -517,9 +521,11 @@ bool HomeActivity::loadCarouselFrameFromStorage(int bookIndex) {
 
   if (totalRead != bufferSize) {
     Storage.remove(cachePath.c_str());
+    invalidateResidentCarouselFrame();
     return false;
   }
 
+  invalidateResidentCarouselFrame();
   carouselFramesReady = true;
   return true;
 }
@@ -585,11 +591,20 @@ bool HomeActivity::renderCarouselFrame(int bookIndex) {
                           [] { return false; });
 
   if (!renderer.getFrameBuffer()) {
+    invalidateResidentCarouselFrame();
     return false;
   }
+  invalidateResidentCarouselFrame();
   carouselFramesReady = true;
   saveCarouselFrameToStorage(safeBookIndex);
   return true;
+}
+
+void HomeActivity::invalidateResidentCarouselFrame() {
+  residentCarouselFrameIndex = -1;
+  residentCarouselSelectorIndex = -1;
+  residentCarouselFrameHash = 0;
+  residentCarouselFrameValid = false;
 }
 
 void HomeActivity::preRenderCarouselFrames() {
@@ -826,10 +841,18 @@ void HomeActivity::render(RenderLock&&) {
   bool usedCarouselFrame = false;
   if (carouselTheme && !recentBooks.empty()) {
     const int centerIdx = wrapBookIndex(lastCarouselBookIndex, recentCount);
-    // Load the center frame from the SD cache directly into the frame buffer,
-    // or render it fresh (and cache to SD). No intermediate slot allocation.
-    if (!loadCarouselFrameFromStorage(centerIdx)) {
-      renderCarouselFrame(centerIdx);
+    const uint32_t frameHash = getCarouselFrameHash(recentBooks, centerIdx, renderer.getScreenWidth(),
+                                                   renderer.getScreenHeight(), renderer.getBufferSize(),
+                                                   renderer.isDarkMode());
+    const bool residentFrameMatches = residentCarouselFrameValid && residentCarouselFrameIndex == centerIdx &&
+                                      residentCarouselSelectorIndex == selectorIndex &&
+                                      residentCarouselFrameHash == frameHash;
+    if (!residentFrameMatches) {
+      // Load the center frame from the SD cache directly into the frame buffer,
+      // or render it fresh (and cache to SD). No intermediate slot allocation.
+      if (!loadCarouselFrameFromStorage(centerIdx)) {
+        renderCarouselFrame(centerIdx);
+      }
     }
 
     uint8_t* frameBuffer = renderer.getFrameBuffer();
@@ -840,10 +863,15 @@ void HomeActivity::render(RenderLock&&) {
       GUI.drawCarouselBorder(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                              inCarouselRow);
       usedCarouselFrame = true;
+      residentCarouselFrameIndex = centerIdx;
+      residentCarouselSelectorIndex = selectorIndex;
+      residentCarouselFrameHash = frameHash;
+      residentCarouselFrameValid = true;
     }
   }
 
   if (!usedCarouselFrame) {
+    invalidateResidentCarouselFrame();
     renderer.clearScreen();
     bool bufferRestored = coverBufferStored && restoreCoverBuffer();
 
