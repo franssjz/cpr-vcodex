@@ -18,10 +18,10 @@
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.46-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.46-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.47-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.47-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Hardened SD-font downloads and synced selected upstream font/BMP viewer updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d).<br>- Added `Reading Quick Settings` in the reader menu for changing common reader options without ending the active session.<br>- Improved `Sleep` directory previews with faster loading, selected-directory confirmation, and automatic return to the Sleep list.<br>- Updated Home/Reading Stats polish: `Lyra` shows five shortcuts per page, and Reading Heatmap now uses `15m+`, `30m+`, `60m+`, `120m+`, and `240m+` intensity levels. |
+| Latest release notes | - Fixed on-device OTA updates failing at `0%` by staging the release `.bin` on the SD card and flashing it through the same validated firmware writer used by `SD Card Firmware Update`.<br>- OTA progress now covers both download and flashing, including downloads without a reported content length.<br>- `.dev` builds can always update back to the latest stable GitHub Release from Settings. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
 | Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
@@ -471,7 +471,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.46-cpr-vcodex`
+- current dev build style: `1.2.0.47-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -540,10 +540,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.46-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.47-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.46-cpr-vcodex`
+- push a stable tag named like `1.2.0.47-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

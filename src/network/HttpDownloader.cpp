@@ -28,7 +28,7 @@ class FileWriteStream final : public Stream {
       writeOk_ = false;
     }
     downloaded_ += written;
-    if (progress_ && total_ > 0) {
+    if (progress_) {
       progress_(downloaded_, total_);
     }
     return written;

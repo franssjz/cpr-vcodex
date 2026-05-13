@@ -191,6 +191,7 @@ void OtaUpdateActivity::loop() {
       {
         RenderLock lock(*this);
         state = UPDATE_IN_PROGRESS;
+        lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
       }
       requestUpdateAndWait();
       const auto res = updater.installUpdate(

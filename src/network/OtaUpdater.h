@@ -29,6 +29,11 @@ class OtaUpdater {
 
   size_t getTotalSize() const { return totalSize; }
 
+  void setProgress(size_t processed, size_t total) {
+    processedSize = processed;
+    totalSize = total;
+  }
+
   OtaUpdater() = default;
   bool isUpdateNewer() const;
   const std::string& getLatestVersion() const;
