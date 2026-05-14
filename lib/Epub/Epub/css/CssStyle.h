@@ -51,8 +51,16 @@ enum class CssFontStyle : uint8_t { Normal = 0, Italic = 1 };
 // Font weight options - CSS supports 100-900, we simplify to normal/bold
 enum class CssFontWeight : uint8_t { Normal = 0, Bold = 1 };
 
-// Text decoration options
-enum class CssTextDecoration : uint8_t { None = 0, Underline = 1 };
+// Text decoration options. Bitmask so underline and line-through can coexist.
+enum class CssTextDecoration : uint8_t { None = 0, Underline = 1, LineThrough = 2 };
+
+inline constexpr CssTextDecoration operator|(const CssTextDecoration lhs, const CssTextDecoration rhs) {
+  return static_cast<CssTextDecoration>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
+
+inline constexpr bool hasTextDecoration(const CssTextDecoration value, const CssTextDecoration flag) {
+  return (static_cast<uint8_t>(value) & static_cast<uint8_t>(flag)) != 0;
+}
 
 // Display options - only None and Block are relevant for e-ink rendering
 enum class CssDisplay : uint8_t { Block = 0, None = 1 };

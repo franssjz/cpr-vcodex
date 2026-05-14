@@ -8,6 +8,9 @@ namespace {
 constexpr uint8_t BIONIC_READING_OFF = 0;
 constexpr uint8_t BIONIC_READING_NORMAL = 1;
 constexpr uint8_t BIONIC_READING_SUBTLE = 2;
+constexpr int DECORATION_LINE_THICKNESS = 4;
+constexpr int STRIKETHROUGH_ASCENDER_PERCENT = 66;
+constexpr int UNDERLINE_BASELINE_OFFSET_PX = 6;
 
 // Bionic Reading helpers — no heap, no std::string, stack-only slicing.
 
@@ -29,6 +32,36 @@ static int utf8CodepointCount(const char* begin, const char* end) {
 static inline bool isWordByte(uint8_t b) {
   if (b >= 0x80) return true;
   return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b == '_');
+}
+
+struct TextDecorationMetrics {
+  int startX = 0;
+  int width = 0;
+};
+
+TextDecorationMetrics getDecorationMetrics(const GfxRenderer& renderer, const int fontId, const int wordX,
+                                           const std::string& word, const EpdFontFamily::Style style) {
+  TextDecorationMetrics metrics{wordX, renderer.getTextWidth(fontId, word.c_str(), style)};
+
+  // If word starts with em-space ("\xe2\x80\x83"), account for the additional indent
+  // before drawing decoration lines.
+  if (word.size() >= 3 && static_cast<uint8_t>(word[0]) == 0xE2 && static_cast<uint8_t>(word[1]) == 0x80 &&
+      static_cast<uint8_t>(word[2]) == 0x83) {
+    const char* visiblePtr = word.c_str() + 3;
+    const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", style);
+    metrics.startX = wordX + prefixWidth;
+    metrics.width = renderer.getTextWidth(fontId, visiblePtr, style);
+  }
+
+  return metrics;
+}
+
+void drawDecorationLine(const GfxRenderer& renderer, const int startX, const int centerY, const int width) {
+  if (width <= 0) {
+    return;
+  }
+  const int lineY = centerY - DECORATION_LINE_THICKNESS / 2;
+  renderer.drawLine(startX, lineY, startX + width - 1, lineY, DECORATION_LINE_THICKNESS, true);
 }
 }  // namespace
 
@@ -126,25 +159,22 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
       }
     }
 
-    if ((currentStyle & EpdFontFamily::UNDERLINE) != 0) {
-      const int fullWordWidth = renderer.getTextWidth(fontId, w.c_str(), currentStyle);
-      // y is the top of the text line; add ascender to reach baseline, then offset 2px below
-      const int underlineY = y + renderer.getFontAscenderSize(fontId) + 2;
-
-      int startX = wordX;
-      int underlineWidth = fullWordWidth;
-
-      // if word starts with em-space ("\xe2\x80\x83"), account for the additional indent before drawing the line
-      if (w.size() >= 3 && static_cast<uint8_t>(w[0]) == 0xE2 && static_cast<uint8_t>(w[1]) == 0x80 &&
-          static_cast<uint8_t>(w[2]) == 0x83) {
-        const char* visiblePtr = w.c_str() + 3;
-        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle);
-        const int visibleWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle);
-        startX = wordX + prefixWidth;
-        underlineWidth = visibleWidth;
+    const bool hasUnderline = (currentStyle & EpdFontFamily::UNDERLINE) != 0;
+    const bool hasStrikethrough = (currentStyle & EpdFontFamily::STRIKETHROUGH) != 0;
+    if (hasUnderline || hasStrikethrough) {
+      const auto decoration = getDecorationMetrics(renderer, fontId, wordX, w, currentStyle);
+      if (decoration.width <= 0) {
+        continue;
       }
-
-      renderer.drawLine(startX, underlineY, startX + underlineWidth, underlineY, true);
+      if (hasStrikethrough) {
+        const int strikeY = y + renderer.getFontAscenderSize(fontId) * STRIKETHROUGH_ASCENDER_PERCENT / 100;
+        drawDecorationLine(renderer, decoration.startX, strikeY, decoration.width);
+      }
+      if (hasUnderline) {
+        // y is the top of the text line; add ascender to reach baseline, then offset below.
+        const int underlineY = y + renderer.getFontAscenderSize(fontId) + UNDERLINE_BASELINE_OFFSET_PX;
+        drawDecorationLine(renderer, decoration.startX, underlineY, decoration.width);
+      }
     }
   }
 }
