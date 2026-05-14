@@ -1,3 +1,9 @@
+> **CPR-vCodex is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)**, focused on improving reading consistency, long-term reading habits, and overall reader experience without sacrificing simplicity or performance.
+>
+> Instead of only tracking progress, this fork focuses on the full reading journey — consistency, habits, milestones, statistics, customization, and personal reading identity.
+>
+> The project adds optional layers such as reading streaks, detailed analytics, achievements, heatmaps, Sync Day tracking, session history, and deeper personalization, while still allowing the interface to remain clean and distraction-free if preferred.
+
 # CPR-vCodex
 
 <p align="center">
@@ -11,6 +17,26 @@
 <p align="center">
   <img src="./docs/images/screenshots.png" alt="CPR-vCodex overview" width="1000" />
 </p>
+
+## What's different in this fork
+
+My goal with this fork was to preserve CrossPoint experience while expanding the firmware around long-term reading engagement and personalization.
+
+Unlike a complete rewrite, CPR-vCodex intentionally stays close to the upstream CrossPoint project and only carries forward additions or upstream changes that are stable and safe enough for daily reading.
+
+Some of the main additions include:
+
+- advanced reading statistics and reading heatmaps
+- achievements and reading consistency tracking
+- Sync Day support for reliable offline day-based statistics
+- reading profiles and session analysis
+- per-book reading time correction tools
+- customizable UI and reading layouts
+- downloadable SD-card font management
+- additional reader utilities and workflow improvements
+- carefully selected upstream improvements and fixes
+
+The philosophy of this fork is simple: keep the firmware fast, stable, and focused on reading, while making the device feel more rewarding and personal for people who read every day.
 
 ## At a glance
 
