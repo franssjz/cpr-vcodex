@@ -205,10 +205,16 @@ CssTextDecoration CssParser::interpretDecoration(const std::string& val) {
   const std::string v = normalized(val);
 
   // text-decoration can have multiple space-separated values
-  if (v.find("underline") != std::string::npos) {
-    return CssTextDecoration::Underline;
+  auto decoration = CssTextDecoration::None;
+  const auto values = splitWhitespace(v);
+  for (const auto& item : values) {
+    if (item == "underline") {
+      decoration = decoration | CssTextDecoration::Underline;
+    } else if (item == "line-through") {
+      decoration = decoration | CssTextDecoration::LineThrough;
+    }
   }
-  return CssTextDecoration::None;
+  return decoration;
 }
 
 CssLength CssParser::interpretLength(const std::string& val) {
