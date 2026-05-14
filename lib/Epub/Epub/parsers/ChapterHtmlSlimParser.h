@@ -3,6 +3,7 @@
 #include <expat.h>
 
 #include <climits>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -22,11 +23,20 @@ class Epub;
 #define MAX_WORD_SIZE 200
 
 class ChapterHtmlSlimParser {
+ public:
+  struct ParagraphLutEntry {
+    uint32_t xhtmlByteOffset = 0;
+    uint16_t paragraphIndex = 0;
+    uint16_t listItemIndex = 0;
+  };
+
+ private:
   std::shared_ptr<Epub> epub;
   const std::string& filepath;
   GfxRenderer& renderer;
-  std::function<void(std::unique_ptr<Page>, uint16_t)> completePageFn;
+  std::function<void(std::unique_ptr<Page>, ParagraphLutEntry)> completePageFn;
   std::function<void()> popupFn;  // Popup callback
+  XML_Parser activeParser = nullptr;  // Expat parser used to capture byte offsets for sync LUT hints
   int depth = 0;
   int skipUntilDepth = INT_MAX;
   int boldUntilDepth = INT_MAX;
@@ -78,7 +88,10 @@ class ChapterHtmlSlimParser {
   int completedPageCount = 0;
   std::vector<std::pair<std::string, uint16_t>> anchorData;
   std::string pendingAnchorId;  // deferred until after previous text block is flushed
+  int xpathBodyDepth = -1;
+  uint32_t lastBodyChildByteOffset = 0;
   uint16_t xpathParagraphIndex = 0;
+  uint16_t xpathListItemIndex = 0;
 
   // Footnote link tracking
   bool insideFootnoteLink = false;
@@ -92,6 +105,7 @@ class ChapterHtmlSlimParser {
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPartWordBuffer();
   void makePages();
+  void emitPage(uint32_t xhtmlByteOffset);
   // XML callbacks
   static void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char** atts);
   static void XMLCALL characterData(void* userData, const XML_Char* s, int len);
@@ -103,7 +117,7 @@ class ChapterHtmlSlimParser {
                                  const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                                  const uint8_t paragraphAlignment, const uint16_t viewportWidth,
                                  const uint16_t viewportHeight, const bool hyphenationEnabled,
-                                 const std::function<void(std::unique_ptr<Page>, uint16_t)>& completePageFn,
+                                 const std::function<void(std::unique_ptr<Page>, ParagraphLutEntry)>& completePageFn,
                                  const bool embeddedStyle, const std::string& contentBase,
                                  const std::string& imageBasePath, const uint8_t imageRendering = 0,
                                  const std::function<void()>& popupFn = nullptr, const CssParser* cssParser = nullptr)

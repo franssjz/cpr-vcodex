@@ -28,6 +28,8 @@
  *   persist an applied SyncResult for the reopened reader.
  * - PUSH_LOCAL: compute local mapping, warm session with GET, then upload via
  *   reused connection to avoid a second full TLS handshake.
+ * - AUTO_PULL/AUTO_PUSH: same data path without the manual chooser, intended
+ *   for the optional advanced open/close automation.
  */
 class KOReaderSyncActivity final : public Activity {
  public:
@@ -105,6 +107,7 @@ class KOReaderSyncActivity final : public Activity {
   void performUpload();
   void closeCancelled();
   void resumeReader(KOReaderSyncOutcomeState outcome, const SyncResult* appliedResult = nullptr);
+  void returnAfterAutoPush();
   bool ensureEpubLoadedForMapping();
   void releaseEpubForMapping();
   bool computeLocalProgressAndChapter();

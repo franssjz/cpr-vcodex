@@ -45,6 +45,8 @@ struct SyncResult {
   int page = 0;
   uint16_t paragraphIndex = 0;
   bool hasParagraphIndex = false;
+  uint16_t listItemIndex = 0;
+  bool hasListItemIndex = false;
 };
 
 enum class NetworkMode;

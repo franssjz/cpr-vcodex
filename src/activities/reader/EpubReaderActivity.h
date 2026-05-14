@@ -38,6 +38,9 @@ class EpubReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
+  int sessionStartSpineIndex = 0;
+  int sessionStartPage = 0;
+  bool sessionProgressTouched = false;
 
   struct ReaderSettingsSnapshot {
     uint8_t darkMode = 0;
@@ -90,11 +93,14 @@ class EpubReaderActivity final : public Activity {
   void restoreSavedPosition();
 
   // KOReader sync — standalone activity launch and result application
-  enum class SyncLaunchMode { COMPARE, PULL_REMOTE, PUSH_LOCAL };
+  enum class SyncLaunchMode { COMPARE, PULL_REMOTE, PUSH_LOCAL, AUTO_PUSH };
   bool pendingParagraphLookup = false;
   uint16_t pendingParagraphIndex = 0;
+  bool pendingListItemLookup = false;
+  uint16_t pendingListItemIndex = 0;
   void launchKOReaderSync(SyncLaunchMode mode);
   void applyPendingSyncSession();
+  bool tryAutoPushOnClose();
 
  public:
   explicit EpubReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Epub> epub,

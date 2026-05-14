@@ -225,6 +225,11 @@ class CrossPointSettings {
     SHORTCUT_APPS = 1,
     SHORTCUT_LOCATION_COUNT
   };
+  enum HOME_BOOK_SOURCE {
+    HOME_BOOKS_RECENTS = 0,
+    HOME_BOOKS_FAVORITES = 1,
+    HOME_BOOK_SOURCE_COUNT
+  };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
 
   // Image rendering in EPUB reader
@@ -287,6 +292,8 @@ class CrossPointSettings {
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
   uint8_t opdsFilenameFormat = OPDS_FILENAME_AUTHOR_TITLE;
+  uint8_t koSyncAutoPullOnOpen = 0;
+  uint8_t koSyncAutoPushOnClose = 0;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
   // Page turn button long-press behavior
@@ -298,6 +305,7 @@ class CrossPointSettings {
   // Home/apps helpers
   uint8_t displayDay = 1;
   uint8_t autoSyncDay = 1;
+  uint8_t homeBookSource = HOME_BOOKS_RECENTS;
   uint8_t syncDayWifiChoice = SYNC_DAY_WIFI_AUTO;
   uint8_t syncDayReminderStarts = SYNC_DAY_REMINDER_20;
   char sleepDirectory[128] = "";

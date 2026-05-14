@@ -362,6 +362,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadString("opdsServerUrl", s.opdsServerUrl, sizeof(s.opdsServerUrl));
   loadString("opdsUsername", s.opdsUsername, sizeof(s.opdsUsername));
   loadEnum("opdsFilenameFormat", s.opdsFilenameFormat, CrossPointSettings::OPDS_FILENAME_FORMAT_COUNT);
+  loadToggle("koSyncAutoPullOnOpen", s.koSyncAutoPullOnOpen);
+  loadToggle("koSyncAutoPushOnClose", s.koSyncAutoPushOnClose);
   {
     bool ok = false;
     std::string password = obfuscation::deobfuscateFromBase64(doc["opdsPassword_obf"] | "", &ok);
@@ -391,6 +393,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
+  s.homeBookSource =
+      clamp(doc["homeBookSource"] | s.homeBookSource, S::HOME_BOOK_SOURCE_COUNT, s.homeBookSource);
   s.displayDay = clamp(doc["displayDay"] | s.displayDay, static_cast<uint8_t>(2), s.displayDay);
   s.autoSyncDay = clamp(doc["autoSyncDay"] | s.autoSyncDay, static_cast<uint8_t>(2), s.autoSyncDay);
   s.syncDayWifiChoice =
@@ -575,6 +579,10 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   sync["resultPage"] = s.koReaderSyncSession.resultPage;
   sync["resultParagraphIndex"] = s.koReaderSyncSession.resultParagraphIndex;
   sync["resultHasParagraphIndex"] = s.koReaderSyncSession.resultHasParagraphIndex;
+  sync["resultListItemIndex"] = s.koReaderSyncSession.resultListItemIndex;
+  sync["resultHasListItemIndex"] = s.koReaderSyncSession.resultHasListItemIndex;
+  sync["exitToHomeAfterSync"] = s.koReaderSyncSession.exitToHomeAfterSync;
+  sync["autoPullEpubPath"] = s.koReaderSyncSession.autoPullEpubPath;
   JsonObject jump = doc["pendingBookmarkJump"].to<JsonObject>();
   jump["active"] = s.pendingBookmarkJump.active;
   jump["bookPath"] = s.pendingBookmarkJump.bookPath;
@@ -632,6 +640,10 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
       s.koReaderSyncSession.resultPage = sync["resultPage"] | 0;
       s.koReaderSyncSession.resultParagraphIndex = sync["resultParagraphIndex"] | static_cast<uint16_t>(0);
       s.koReaderSyncSession.resultHasParagraphIndex = sync["resultHasParagraphIndex"] | false;
+      s.koReaderSyncSession.resultListItemIndex = sync["resultListItemIndex"] | static_cast<uint16_t>(0);
+      s.koReaderSyncSession.resultHasListItemIndex = sync["resultHasListItemIndex"] | false;
+      s.koReaderSyncSession.exitToHomeAfterSync = sync["exitToHomeAfterSync"] | false;
+      s.koReaderSyncSession.autoPullEpubPath = sync["autoPullEpubPath"] | std::string("");
     } else {
       s.koReaderSyncSession.clear();
     }
@@ -709,6 +721,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["opdsUsername"] = s.opdsUsername;
   doc["opdsPassword_obf"] = obfuscation::obfuscateToBase64(s.opdsPassword);
   doc["opdsFilenameFormat"] = s.opdsFilenameFormat;
+  doc["koSyncAutoPullOnOpen"] = s.koSyncAutoPullOnOpen;
+  doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
   doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
@@ -723,6 +737,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
+  doc["homeBookSource"] = s.homeBookSource;
   doc["autoSyncDay"] = s.autoSyncDay;
   doc["sleepDirectory"] = s.sleepDirectory;
   doc["sleepImageOrder"] = s.sleepImageOrder;
@@ -894,6 +909,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.dateFormat = clamp(doc["dateFormat"] | s.dateFormat, S::DATE_FORMAT_COUNT, s.dateFormat);
   s.opdsFilenameFormat =
       clamp(doc["opdsFilenameFormat"] | s.opdsFilenameFormat, S::OPDS_FILENAME_FORMAT_COUNT, s.opdsFilenameFormat);
+  s.koSyncAutoPullOnOpen =
+      clamp(doc["koSyncAutoPullOnOpen"] | s.koSyncAutoPullOnOpen, static_cast<uint8_t>(2), s.koSyncAutoPullOnOpen);
+  s.koSyncAutoPushOnClose =
+      clamp(doc["koSyncAutoPushOnClose"] | s.koSyncAutoPushOnClose, static_cast<uint8_t>(2), s.koSyncAutoPushOnClose);
   s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);
   {
     const uint8_t rawFlashcardStudyMode = doc["flashcardStudyMode"] | s.flashcardStudyMode;

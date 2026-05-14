@@ -8,6 +8,7 @@
 #include <XmlParserUtils.h>
 #include <expat.h>
 
+#include <cstring>
 #include <iterator>
 
 #include "../../Epub.h"
@@ -157,8 +158,19 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
   wordsExtractedInBlock = 0;
 }
 
+void ChapterHtmlSlimParser::emitPage(const uint32_t xhtmlByteOffset) {
+  if (!currentPage) {
+    return;
+  }
+  completePageFn(std::move(currentPage), {xhtmlByteOffset, xpathParagraphIndex, xpathListItemIndex});
+  completedPageCount++;
+}
+
 void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  if (const char* colon = std::strrchr(name, ':')) {
+    name = colon + 1;
+  }
 
   // Middle of skip
   if (self->skipUntilDepth < self->depth) {
@@ -166,8 +178,24 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     return;
   }
 
-  if (strcmp(name, "p") == 0) {
-    self->xpathParagraphIndex++;
+  if (strcmp(name, "body") == 0 && self->xpathBodyDepth < 0) {
+    self->xpathBodyDepth = self->depth;
+  }
+
+  if (self->xpathBodyDepth >= 0 && self->depth == self->xpathBodyDepth + 1) {
+    if (self->activeParser) {
+      const XML_Index byteIndex = XML_GetCurrentByteIndex(self->activeParser);
+      if (byteIndex >= 0) {
+        self->lastBodyChildByteOffset = static_cast<uint32_t>(byteIndex);
+      }
+    }
+    if (strcmp(name, "p") == 0) {
+      self->xpathParagraphIndex++;
+    }
+  }
+
+  if (self->xpathBodyDepth >= 0 && strcmp(name, "li") == 0) {
+    self->xpathListItemIndex++;
   }
 
   // Extract class, style, and id attributes
@@ -461,8 +489,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 if (self->currentPage && !self->currentPage->elements.empty() &&
                     (self->currentPageNextY + imageMarginTop + displayHeight + imageMarginBottom >
                      self->viewportHeight)) {
-                  self->completePageFn(std::move(self->currentPage), self->xpathParagraphIndex);
-                  self->completedPageCount++;
+                  self->emitPage(self->lastBodyChildByteOffset);
                   self->currentPage.reset(new Page());
                   if (!self->currentPage) {
                     LOG_ERR("EHP", "Failed to create new page");
@@ -957,6 +984,9 @@ void XMLCALL ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const X
 
 void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* name) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  if (const char* colon = std::strrchr(name, ':')) {
+    name = colon + 1;
+  }
 
   // Check if any style state will change after we decrement depth
   // If so, we MUST flush the partWordBuffer with the CURRENT style first
@@ -1109,6 +1139,11 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     LOG_ERR("EHP", "Couldn't allocate memory for parser");
     return false;
   }
+  activeParser = parser;
+  xpathBodyDepth = -1;
+  lastBodyChildByteOffset = 0;
+  xpathParagraphIndex = 0;
+  xpathListItemIndex = 0;
 
   // Handle HTML entities (like &nbsp;) that aren't in XML spec or DTD
   // Using DefaultHandlerExpand preserves normal entity expansion from DOCTYPE
@@ -1116,6 +1151,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
   FsFile file;
   if (!Storage.openFileForRead("EHP", filepath, file)) {
+    activeParser = nullptr;
     destroyXmlParser(parser);
     return false;
   }
@@ -1135,6 +1171,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     void* const buf = XML_GetBuffer(parser, PARSE_BUFFER_SIZE);
     if (!buf) {
       LOG_ERR("EHP", "Couldn't allocate memory for buffer");
+      activeParser = nullptr;
       destroyXmlParser(parser);
       file.close();
       return false;
@@ -1144,6 +1181,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 
     if (len == 0 && file.available() > 0) {
       LOG_ERR("EHP", "File read error");
+      activeParser = nullptr;
       destroyXmlParser(parser);
       file.close();
       return false;
@@ -1154,6 +1192,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     if (XML_ParseBuffer(parser, static_cast<int>(len), done) == XML_STATUS_ERROR) {
       LOG_ERR("EHP", "Parse error at line %lu:\n%s", XML_GetCurrentLineNumber(parser),
               XML_ErrorString(XML_GetErrorCode(parser)));
+      activeParser = nullptr;
       destroyXmlParser(parser);
       file.close();
       return false;
@@ -1161,6 +1200,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   } while (!done);
   LOG_DBG("EHP", "Time to parse and build pages: %lu ms", millis() - chapterStartTime);
 
+  activeParser = nullptr;
   destroyXmlParser(parser);
   file.close();
 
@@ -1171,8 +1211,7 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       anchorData.push_back({std::move(pendingAnchorId), static_cast<uint16_t>(completedPageCount)});
       pendingAnchorId.clear();
     }
-    completePageFn(std::move(currentPage), xpathParagraphIndex);
-    completedPageCount++;
+    emitPage(0u);
     currentPage.reset();
     currentTextBlock.reset();
   }
@@ -1189,8 +1228,7 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
   }
 
   if (currentPageNextY + lineHeight > viewportHeight) {
-    completePageFn(std::move(currentPage), xpathParagraphIndex);
-    completedPageCount++;
+    emitPage(lastBodyChildByteOffset);
     currentPage.reset(new Page());
     currentPageNextY = 0;
   }

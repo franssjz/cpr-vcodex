@@ -36,6 +36,8 @@ class FavoritesStore {
 
   bool addBook(const std::string& path, const std::string& title = "", const std::string& author = "",
                const std::string& coverBmpPath = "", const std::string& bookId = "");
+  void updateBook(const std::string& path, const std::string& title, const std::string& author,
+                  const std::string& coverBmpPath, const std::string& bookId = "");
   bool removeBook(const std::string& key);
   bool toggleBook(const std::string& path);
   bool isFavorite(const std::string& key) const;

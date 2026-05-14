@@ -46,6 +46,12 @@ class Section {
   // Look up the page number for a synthetic paragraph index from XPath p[N].
   std::optional<uint16_t> getPageForParagraphIndex(uint16_t pIndex) const;
 
+  // Look up the page number for a running list-item index from a KOReader li XPath.
+  std::optional<uint16_t> getPageForListItemIndex(uint16_t liIndex) const;
+
   // Look up the synthetic paragraph index for the given rendered page.
   std::optional<uint16_t> getParagraphIndexForPage(uint16_t page) const;
+
+  // Look up the XHTML byte offset recorded at the page boundary for the given page.
+  std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
 };

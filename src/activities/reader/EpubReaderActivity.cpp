@@ -260,6 +260,10 @@ void EpubReaderActivity::onEnter() {
     cachedChapterTotalPageCount = 0;
   }
 
+  sessionStartSpineIndex = currentSpineIndex;
+  sessionStartPage = nextPageNumber;
+  sessionProgressTouched = false;
+
   // Save current epub as last opened epub and add to recent books
   APP_STATE.openEpubPath = epub->getPath();
   APP_STATE.saveToFile();
@@ -406,6 +410,9 @@ void EpubReaderActivity::loop() {
       restoreSavedPosition();
       return;
     }
+    if (tryAutoPushOnClose()) {
+      return;
+    }
     exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
     return;
   }
@@ -422,6 +429,9 @@ void EpubReaderActivity::loop() {
   // At end of the book, forward button goes home and back button returns to last page
   if (currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
     if (nextTriggered) {
+      if (tryAutoPushOnClose()) {
+        return;
+      }
       exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
     } else {
       currentSpineIndex = epub->getSpineItemsCount() - 1;
@@ -450,6 +460,7 @@ void EpubReaderActivity::loop() {
         pendingPageJump = std::numeric_limits<uint16_t>::max();
       }
       currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
+      sessionProgressTouched = true;
       section.reset();
     }
     requestUpdate();
@@ -544,6 +555,7 @@ void EpubReaderActivity::jumpToPercent(int percent) {
     currentSpineIndex = targetSpineIndex;
     nextPageNumber = 0;
     pendingPercentJump = true;
+    sessionProgressTouched = true;
     section.reset();
   }
 }
@@ -645,6 +657,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
               RenderLock lock(*this);
               currentSpineIndex = std::get<ChapterResult>(result.data).spineIndex;
               nextPageNumber = 0;
+              sessionProgressTouched = true;
               section.reset();
             }
           });
@@ -684,6 +697,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
                 RenderLock lock(*this);
                 currentSpineIndex = bookmark.spineIndex;
                 nextPageNumber = static_cast<int>(bookmark.page);
+                sessionProgressTouched = true;
                 section.reset();
               }
             }
@@ -738,6 +752,9 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       break;
     }
     case EpubReaderMenuActivity::MenuAction::GO_HOME: {
+      if (tryAutoPushOnClose()) {
+        return;
+      }
       exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
       return;
     }
@@ -831,8 +848,27 @@ void EpubReaderActivity::toggleAutoPageTurn(const uint8_t selectedPageTurnOption
   }
 }
 
+bool EpubReaderActivity::tryAutoPushOnClose() {
+  if (!SETTINGS.koSyncAutoPushOnClose || !KOREADER_STORE.hasCredentials() || !epub || !section) {
+    return false;
+  }
+
+  const int currentPage = section->currentPage;
+  const bool positionChanged =
+      sessionProgressTouched || currentSpineIndex != sessionStartSpineIndex || currentPage != sessionStartPage;
+  if (!positionChanged) {
+    return false;
+  }
+
+  LOG_DBG("ERS", "Auto-push KOReader sync before closing: spine=%d page=%d", currentSpineIndex, currentPage);
+  launchKOReaderSync(SyncLaunchMode::AUTO_PUSH);
+  return true;
+}
+
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   READING_STATS.noteActivity();
+  const int oldSpineIndex = currentSpineIndex;
+  const int oldPage = section ? section->currentPage : nextPageNumber;
 
   if (isForwardTurn) {
     if (section->currentPage < section->pageCount - 1) {
@@ -858,6 +894,10 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
         section.reset();
       }
     }
+  }
+  const int newPage = section ? section->currentPage : nextPageNumber;
+  if (currentSpineIndex != oldSpineIndex || newPage != oldPage) {
+    sessionProgressTouched = true;
   }
   lastPageTurnTime = millis();
   requestUpdate();
@@ -963,15 +1003,27 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       pendingAnchor.clear();
     }
 
-    if (pendingParagraphLookup) {
+    bool resolvedSyncLut = false;
+    if (pendingListItemLookup) {
+      if (const auto page = section->getPageForListItemIndex(pendingListItemIndex)) {
+        section->currentPage = *page;
+        resolvedSyncLut = true;
+        LOG_DBG("ERS", "Resolved list item %u to page %d", pendingListItemIndex, *page);
+      } else {
+        LOG_DBG("ERS", "List item %u not found in section %d", pendingListItemIndex, currentSpineIndex);
+      }
+      pendingListItemLookup = false;
+    }
+
+    if (!resolvedSyncLut && pendingParagraphLookup) {
       if (const auto page = section->getPageForParagraphIndex(pendingParagraphIndex)) {
         section->currentPage = *page;
         LOG_DBG("ERS", "Resolved paragraph %u to page %d", pendingParagraphIndex, *page);
       } else {
         LOG_DBG("ERS", "Paragraph %u not found in section %d", pendingParagraphIndex, currentSpineIndex);
       }
-      pendingParagraphLookup = false;
     }
+    pendingParagraphLookup = false;
 
     // handles changes in reader settings and reset to approximate position based on cached progress
     if (cachedChapterTotalPageCount > 0) {
@@ -1347,6 +1399,8 @@ void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode) {
     syncIntent = KOReaderSyncIntentState::PULL_REMOTE;
   } else if (mode == SyncLaunchMode::PUSH_LOCAL) {
     syncIntent = KOReaderSyncIntentState::PUSH_LOCAL;
+  } else if (mode == SyncLaunchMode::AUTO_PUSH) {
+    syncIntent = KOReaderSyncIntentState::AUTO_PUSH;
   }
 
   auto& sync = APP_STATE.koReaderSyncSession;
@@ -1359,7 +1413,11 @@ void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode) {
     if (const auto pIdx = section->getParagraphIndexForPage(static_cast<uint16_t>(currentPage))) {
       sync.paragraphIndex = *pIdx;
       sync.hasParagraphIndex = true;
-      sync.xhtmlSeekHint = 0;
+      if (const auto hint = section->getXhtmlByteOffsetForPage(static_cast<uint16_t>(currentPage))) {
+        sync.xhtmlSeekHint = *hint;
+      } else {
+        sync.xhtmlSeekHint = 0;
+      }
     } else {
       sync.paragraphIndex = 0;
       sync.hasParagraphIndex = false;
@@ -1376,6 +1434,10 @@ void EpubReaderActivity::launchKOReaderSync(const SyncLaunchMode mode) {
   sync.resultPage = 0;
   sync.resultParagraphIndex = 0;
   sync.resultHasParagraphIndex = false;
+  sync.resultListItemIndex = 0;
+  sync.resultHasListItemIndex = false;
+  sync.exitToHomeAfterSync = mode == SyncLaunchMode::AUTO_PUSH;
+  sync.autoPullEpubPath.clear();
   APP_STATE.saveToFile();
 
   LOG_DBG("ERS", "Standalone sync handoff: spine=%d page=%d/%d", currentSpineIndex, currentPage, totalPages);
@@ -1398,18 +1460,29 @@ void EpubReaderActivity::applyPendingSyncSession() {
     return;
   }
 
+  if (sync.intent == KOReaderSyncIntentState::AUTO_PULL && sync.outcome != KOReaderSyncOutcomeState::APPLIED_REMOTE) {
+    LOG_DBG("ERS", "Auto-pull finished without a remote position; keeping local progress");
+    sync.clear();
+    APP_STATE.saveToFile();
+    return;
+  }
+
   int restoreSpineIndex = sync.spineIndex;
   int restorePage = sync.page;
   pendingParagraphLookup = sync.hasParagraphIndex;
   pendingParagraphIndex = sync.paragraphIndex;
+  pendingListItemLookup = false;
+  pendingListItemIndex = 0;
 
   if (sync.outcome == KOReaderSyncOutcomeState::APPLIED_REMOTE) {
     restoreSpineIndex = sync.resultSpineIndex;
     restorePage = sync.resultPage;
     pendingParagraphLookup = sync.resultHasParagraphIndex;
     pendingParagraphIndex = sync.resultParagraphIndex;
-    LOG_DBG("ERS", "Applying remote position: spine=%d page=%d paragraph=%u", restoreSpineIndex, restorePage,
-            pendingParagraphIndex);
+    pendingListItemLookup = sync.resultHasListItemIndex;
+    pendingListItemIndex = sync.resultListItemIndex;
+    LOG_DBG("ERS", "Applying remote position: spine=%d page=%d paragraph=%u listItem=%u", restoreSpineIndex,
+            restorePage, pendingParagraphIndex, pendingListItemIndex);
   } else {
     LOG_DBG("ERS", "Restoring local pre-sync position: spine=%d page=%d paragraph=%u", restoreSpineIndex, restorePage,
             pendingParagraphIndex);

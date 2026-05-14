@@ -275,6 +275,7 @@ constexpr StrId OPT_DAILY_GOAL[] = {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId:
 constexpr StrId OPT_STUDY_MODE[] = {StrId::STR_DUE, StrId::STR_SCHEDULED, StrId::STR_RANDOM_PRACTICE};
 constexpr StrId OPT_SESSION_SIZE[] = {StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30, StrId::STR_NUM_50,
                                       StrId::STR_ALL};
+constexpr StrId OPT_HOME_BOOK_SOURCE[] = {StrId::STR_RECENTS, StrId::STR_FAVORITES};
 constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_APPS};
 constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
 constexpr StrId OPT_OPDS_FILENAME_FORMAT[] = {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR};
@@ -304,6 +305,8 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
              StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_REFRESH_FREQ, refreshFrequency, OPT_REFRESH_FREQ, "refreshFrequency", StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_UI_THEME, uiTheme, OPT_UI_THEME, "uiTheme", StrId::STR_CAT_DISPLAY),
+    WEB_ENUM(StrId::STR_HOME_BOOK_SOURCE, homeBookSource, OPT_HOME_BOOK_SOURCE, "homeBookSource",
+             StrId::STR_CAT_DISPLAY),
     WEB_TOGGLE(StrId::STR_DARK_MODE, darkMode, "darkMode", StrId::STR_CAT_DISPLAY),
     WEB_TOGGLE(StrId::STR_SUNLIGHT_FADING_FIX, fadingFix, "fadingFix", StrId::STR_CAT_DISPLAY),
 
@@ -384,6 +387,10 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
                        StrId::STR_KOREADER_SYNC),
     WEB_DYNAMIC(StrId::STR_DOCUMENT_MATCHING, WebDynamicSetting::KoMatchMethod, WebSettingType::Enum, OPT_KO_MATCH,
                 "koMatchMethod", StrId::STR_KOREADER_SYNC),
+    WEB_TOGGLE(StrId::STR_KO_AUTO_PULL_ON_OPEN, koSyncAutoPullOnOpen, "koSyncAutoPullOnOpen",
+               StrId::STR_KOREADER_SYNC),
+    WEB_TOGGLE(StrId::STR_KO_AUTO_PUSH_ON_CLOSE, koSyncAutoPushOnClose, "koSyncAutoPushOnClose",
+               StrId::STR_KOREADER_SYNC),
     WEB_ENUM(StrId::STR_OPDS_FILENAME_FORMAT, opdsFilenameFormat, OPT_OPDS_FILENAME_FORMAT, "opdsFilenameFormat",
              StrId::STR_KOREADER_SYNC),
 

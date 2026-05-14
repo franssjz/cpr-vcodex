@@ -7,6 +7,7 @@
 #include "CrossPointState.h"
 #include "Epub.h"
 #include "EpubReaderActivity.h"
+#include "KOReaderCredentialStore.h"
 #include "Txt.h"
 #include "TxtReaderActivity.h"
 #include "Xtc.h"
@@ -77,6 +78,27 @@ void ReaderActivity::goToLibrary(const std::string& fromBookPath) {
 void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub) {
   const auto epubPath = epub->getPath();
   currentBookPath = epubPath;
+
+  auto& sync = APP_STATE.koReaderSyncSession;
+  const bool canAutoPull = SETTINGS.koSyncAutoPullOnOpen && KOREADER_STORE.hasCredentials() && !initialBookmark.enabled &&
+                           !sync.active;
+  if (canAutoPull) {
+    sync.clear();
+    sync.active = true;
+    sync.epubPath = epubPath;
+    sync.spineIndex = 0;
+    sync.page = 0;
+    sync.totalPagesInSpine = 0;
+    sync.intent = KOReaderSyncIntentState::AUTO_PULL;
+    sync.outcome = KOReaderSyncOutcomeState::PENDING;
+    sync.autoPullEpubPath = epubPath;
+    APP_STATE.saveToFile();
+
+    LOG_DBG("READER", "Auto-pull KOReader sync before opening EPUB: %s", epubPath.c_str());
+    activityManager.goToKOReaderSync();
+    return;
+  }
+
   activityManager.replaceActivity(std::make_unique<EpubReaderActivity>(
       renderer, mappedInput, std::move(epub), initialBookmark.enabled ? initialBookmark.spineIndex : -1,
       initialBookmark.enabled ? static_cast<int>(initialBookmark.page) : -1));

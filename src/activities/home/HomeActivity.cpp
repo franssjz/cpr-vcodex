@@ -7,6 +7,7 @@
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <Txt.h>
 #include <Utf8.h>
 #include <Xtc.h>
 
@@ -18,6 +19,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "FavoritesStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
@@ -50,6 +52,110 @@ struct HomeShortcutEntry {
 
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
+}
+
+bool homeUsesFavorites() { return SETTINGS.homeBookSource == CrossPointSettings::HOME_BOOKS_FAVORITES; }
+
+RecentBook toRecentBook(const FavoriteBook& book) {
+  return RecentBook{book.bookId, book.path, book.title, book.author, book.coverBmpPath};
+}
+
+void updateHomeBookCover(const RecentBook& book, const std::string& coverBmpPath) {
+  if (homeUsesFavorites()) {
+    FAVORITES.updateBook(book.path, book.title, book.author, coverBmpPath, book.bookId);
+    return;
+  }
+
+  RECENT_BOOKS.updateBook(book.path, book.title, book.author, coverBmpPath, book.bookId);
+}
+
+void updateHomeBookMetadata(const RecentBook& book) {
+  if (homeUsesFavorites()) {
+    FAVORITES.updateBook(book.path, book.title, book.author, book.coverBmpPath, book.bookId);
+    return;
+  }
+
+  RECENT_BOOKS.updateBook(book.path, book.title, book.author, book.coverBmpPath, book.bookId);
+}
+
+bool canLoadHomeCover(const std::string& path) {
+  return FsHelpers::hasEpubExtension(path) || FsHelpers::hasXtcExtension(path) ||
+         FsHelpers::hasTxtExtension(path) || FsHelpers::hasMarkdownExtension(path);
+}
+
+bool isValidBmpFile(const std::string& path) {
+  if (path.empty() || !Storage.exists(path.c_str())) {
+    return false;
+  }
+
+  FsFile file;
+  if (!Storage.openFileForRead("HOME", path, file)) {
+    return false;
+  }
+
+  Bitmap bitmap(file);
+  const bool valid = bitmap.parseHeaders() == BmpReaderError::Ok;
+  file.close();
+  return valid;
+}
+
+bool isValidHomeCoverPath(const std::string& coverBmpPath, const int coverHeight) {
+  return isValidBmpFile(UITheme::getCoverThumbPath(coverBmpPath, coverHeight));
+}
+
+void removeInvalidHomeCoverTarget(const std::string& coverBmpPath, const int coverHeight) {
+  if (coverBmpPath.empty()) {
+    return;
+  }
+
+  const std::string resolvedPath = UITheme::getCoverThumbPath(coverBmpPath, coverHeight);
+  if (Storage.exists(resolvedPath.c_str()) && !isValidBmpFile(resolvedPath)) {
+    Storage.remove(resolvedPath.c_str());
+  }
+}
+
+std::string getFavoriteRemovalKey(const FavoriteBook& book) {
+  if (!book.path.empty()) {
+    return book.path;
+  }
+  return book.bookId;
+}
+
+RecentBook resolveFavoriteForHome(const FavoriteBook& favorite) {
+  RecentBook book = toRecentBook(favorite);
+  if (book.path.empty() || !Storage.exists(book.path.c_str())) {
+    return book;
+  }
+
+  const bool mayHaveCover = FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path);
+  if (!book.bookId.empty() && !book.title.empty() && (!mayHaveCover || !book.coverBmpPath.empty())) {
+    return book;
+  }
+
+  const FavoriteBook resolved = FAVORITES.getDataFromBook(book.path);
+  bool changed = false;
+
+  if (book.bookId.empty() && !resolved.bookId.empty()) {
+    book.bookId = resolved.bookId;
+    changed = true;
+  }
+  if (book.title.empty() && !resolved.title.empty()) {
+    book.title = resolved.title;
+    changed = true;
+  }
+  if (book.author.empty() && !resolved.author.empty()) {
+    book.author = resolved.author;
+    changed = true;
+  }
+  if (book.coverBmpPath.empty() && !resolved.coverBmpPath.empty()) {
+    book.coverBmpPath = resolved.coverBmpPath;
+    changed = true;
+  }
+
+  if (changed) {
+    FAVORITES.updateBook(book.path, book.title, book.author, book.coverBmpPath, book.bookId);
+  }
+  return book;
 }
 
 std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsServers) {
@@ -115,6 +221,31 @@ int HomeActivity::getMenuItemCount() const {
 
 void HomeActivity::loadRecentBooks(const int maxBooks) {
   recentBooks.clear();
+  if (homeUsesFavorites()) {
+    const auto books = FAVORITES.getBooks();
+    std::vector<std::string> staleFavorites;
+    recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
+
+    for (const FavoriteBook& book : books) {
+      if (book.path.empty() || !Storage.exists(book.path.c_str())) {
+        const std::string removalKey = getFavoriteRemovalKey(book);
+        if (!removalKey.empty()) {
+          staleFavorites.push_back(removalKey);
+        }
+        continue;
+      }
+
+      if (static_cast<int>(recentBooks.size()) < maxBooks) {
+        recentBooks.push_back(resolveFavoriteForHome(book));
+      }
+    }
+
+    for (const std::string& key : staleFavorites) {
+      FAVORITES.removeBook(key);
+    }
+    return;
+  }
+
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
 
@@ -122,21 +253,38 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
     if (static_cast<int>(recentBooks.size()) >= maxBooks) {
       break;
     }
-    if (!Storage.exists(book.path.c_str())) {
-      continue;
+    if (Storage.exists(book.path.c_str())) {
+      recentBooks.push_back(book);
     }
-    recentBooks.push_back(book);
   }
+}
+
+void HomeActivity::reloadHomeBooks(const int maxBooks) {
+  loadRecentBooks(maxBooks);
+
+  const int menuCount = getMenuItemCount();
+  if (selectorIndex >= menuCount) {
+    selectorIndex = std::max(0, menuCount - 1);
+  }
+
+  recentsLoading = false;
+  recentsLoaded = !needsRecentCoverLoad(UITheme::getInstance().getMetrics().homeCoverHeight);
+  coverRendered = false;
+  freeCoverBuffer();
 }
 
 bool HomeActivity::needsRecentCoverLoad(const int coverHeight) const {
   for (const RecentBook& book : recentBooks) {
-    if (book.coverBmpPath.empty()) {
+    if (!canLoadHomeCover(book.path)) {
       continue;
     }
 
-    const bool missingThumb = !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
-    if (missingThumb && (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path))) {
+    if (book.coverBmpPath.empty()) {
+      return true;
+    }
+
+    const bool missingThumb = !isValidHomeCoverPath(book.coverBmpPath, coverHeight);
+    if (missingThumb) {
       return true;
     }
   }
@@ -145,49 +293,94 @@ bool HomeActivity::needsRecentCoverLoad(const int coverHeight) const {
 
 void HomeActivity::loadRecentCovers(int coverHeight) {
   recentsLoading = true;
+  // The first home render can cache a placeholder while thumbnails are still missing.
+  // Drop that cache before generating covers so the next render reads the fresh BMPs.
+  coverRendered = false;
+  freeCoverBuffer();
+
   bool showingLoading = false;
   Rect popupRect;
   bool needsRefresh = false;
 
+  const auto updateProgress = [this, &showingLoading, &popupRect](const int progress) {
+    RenderLock lock(*this);
+    if (!showingLoading) {
+      showingLoading = true;
+      popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+    }
+    GUI.fillPopupProgress(renderer, popupRect, progress);
+  };
+
   int progress = 0;
   for (RecentBook& book : recentBooks) {
-    if (!book.coverBmpPath.empty()) {
-      const bool missingThumb = !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
-      if (missingThumb) {
-        if (FsHelpers::hasEpubExtension(book.path)) {
-          Epub epub(book.path, "/.crosspoint");
-          epub.load(false, true);
+    if (!canLoadHomeCover(book.path)) {
+      progress++;
+      continue;
+    }
 
-          if (!showingLoading) {
-            showingLoading = true;
-            popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+    const bool missingThumb = book.coverBmpPath.empty() ||
+                              !isValidHomeCoverPath(book.coverBmpPath, coverHeight);
+    if (missingThumb) {
+      updateProgress(10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
+      removeInvalidHomeCoverTarget(book.coverBmpPath, coverHeight);
+
+      if (FsHelpers::hasEpubExtension(book.path)) {
+        Epub epub(book.path, "/.crosspoint");
+        if (epub.load(true, true)) {
+          if (!epub.getTitle().empty()) {
+            book.title = epub.getTitle();
           }
-          GUI.fillPopupProgress(renderer, popupRect,
-                                10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-          const bool success = epub.generateThumbBmp(coverHeight);
+          if (!epub.getAuthor().empty()) {
+            book.author = epub.getAuthor();
+          }
+          book.coverBmpPath = epub.getThumbBmpPath();
+          const bool success = epub.generateThumbBmp(coverHeight) && isValidHomeCoverPath(book.coverBmpPath, coverHeight);
           if (!success) {
-            RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
+            removeInvalidHomeCoverTarget(book.coverBmpPath, coverHeight);
             book.coverBmpPath = "";
           }
+          updateHomeBookMetadata(book);
           coverRendered = false;
           needsRefresh = true;
-        } else if (FsHelpers::hasXtcExtension(book.path)) {
-          Xtc xtc(book.path, "/.crosspoint");
-          if (xtc.load()) {
-            if (!showingLoading) {
-              showingLoading = true;
-              popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
-            }
-            GUI.fillPopupProgress(renderer, popupRect,
-                                  10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-            const bool success = xtc.generateThumbBmp(coverHeight);
-            if (!success) {
-              RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
-              book.coverBmpPath = "";
-            }
-            coverRendered = false;
-            needsRefresh = true;
+        }
+      } else if (FsHelpers::hasXtcExtension(book.path)) {
+        Xtc xtc(book.path, "/.crosspoint");
+        if (xtc.load()) {
+          const std::string title = xtc.getTitle();
+          const std::string author = xtc.getAuthor();
+          if (!title.empty()) {
+            book.title = title;
           }
+          if (!author.empty()) {
+            book.author = author;
+          }
+          book.coverBmpPath = xtc.getThumbBmpPath();
+          const bool success = xtc.generateThumbBmp(coverHeight) && isValidHomeCoverPath(book.coverBmpPath, coverHeight);
+          if (!success) {
+            removeInvalidHomeCoverTarget(book.coverBmpPath, coverHeight);
+            book.coverBmpPath = "";
+          }
+          updateHomeBookMetadata(book);
+          coverRendered = false;
+          needsRefresh = true;
+        }
+      } else if (FsHelpers::hasTxtExtension(book.path) || FsHelpers::hasMarkdownExtension(book.path)) {
+        Txt txt(book.path, "/.crosspoint");
+        if (txt.load()) {
+          const std::string title = txt.getTitle();
+          if (!title.empty()) {
+            book.title = title;
+          }
+          book.coverBmpPath = txt.getCoverBmpPath();
+          removeInvalidHomeCoverTarget(book.coverBmpPath, coverHeight);
+          const bool success = txt.generateCoverBmp() && isValidHomeCoverPath(book.coverBmpPath, coverHeight);
+          if (!success) {
+            removeInvalidHomeCoverTarget(book.coverBmpPath, coverHeight);
+            book.coverBmpPath = "";
+          }
+          updateHomeBookMetadata(book);
+          coverRendered = false;
+          needsRefresh = true;
         }
       }
     }
@@ -197,7 +390,9 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   recentsLoaded = true;
   recentsLoading = false;
   if (needsRefresh) {
-    requestUpdate();
+    coverRendered = false;
+    freeCoverBuffer();
+    requestUpdateAndWait();
   }
 }
 
@@ -212,8 +407,7 @@ void HomeActivity::onEnter() {
   recentsLoaded = false;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  loadRecentBooks(metrics.homeRecentBooksCount);
-  recentsLoaded = !needsRecentCoverLoad(metrics.homeCoverHeight);
+  reloadHomeBooks(metrics.homeRecentBooksCount);
 
   requestUpdate();
 }
@@ -265,6 +459,11 @@ void HomeActivity::freeCoverBuffer() {
 }
 
 void HomeActivity::loop() {
+  if (firstRenderDone && !recentsLoaded && !recentsLoading) {
+    loadRecentCovers(UITheme::getInstance().getMetrics().homeCoverHeight);
+    return;
+  }
+
   const int menuCount = getMenuItemCount();
   auto homeEntries = getHomeShortcutEntries(hasOpdsServers);
   const int recentCount = static_cast<int>(recentBooks.size());
@@ -320,18 +519,23 @@ void HomeActivity::loop() {
       if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
         const RecentBook selectedBook = recentBooks[selectorIndex];
         const int currentSelection = selectorIndex;
+        const bool deleteFromFavorites = homeUsesFavorites();
+        const StrId confirmationPrompt =
+            deleteFromFavorites ? StrId::STR_DELETE_FROM_FAVORITES : StrId::STR_DELETE_FROM_RECENTS;
         startActivityForResult(
-            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
+            std::make_unique<ConfirmationActivity>(renderer, mappedInput, I18N.get(confirmationPrompt),
                                                    getRecentBookConfirmationLabel(selectedBook)),
-            [this, selectedBook, currentSelection](const ActivityResult& result) {
+            [this, selectedBook, currentSelection, deleteFromFavorites](const ActivityResult& result) {
               if (result.isCancelled) {
                 requestUpdate();
                 return;
               }
 
-              if (RECENT_BOOKS.removeBook(selectedBook.path)) {
+              const bool removed = deleteFromFavorites ? FAVORITES.removeBook(selectedBook.path)
+                                                       : RECENT_BOOKS.removeBook(selectedBook.path);
+              if (removed) {
                 const auto& metrics = UITheme::getInstance().getMetrics();
-                loadRecentBooks(metrics.homeRecentBooksCount);
+                reloadHomeBooks(metrics.homeRecentBooksCount);
                 if (recentBooks.empty()) {
                   selectorIndex = 0;
                 } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
@@ -339,8 +543,6 @@ void HomeActivity::loop() {
                 } else {
                   selectorIndex = currentSelection;
                 }
-                coverRendered = false;
-                freeCoverBuffer();
               }
               requestUpdate(true);
             });
@@ -399,7 +601,11 @@ void HomeActivity::loop() {
           break;
         case ShortcutId::Favorites:
           startActivityForResult(std::make_unique<FavoritesAppActivity>(renderer, mappedInput),
-                                 [this](const ActivityResult&) { requestUpdate(); });
+                                 [this](const ActivityResult&) {
+                                   const auto& metrics = UITheme::getInstance().getMetrics();
+                                   reloadHomeBooks(metrics.homeRecentBooksCount);
+                                   requestUpdate();
+                                 });
           break;
         case ShortcutId::Flashcards:
           startActivityForResult(std::make_unique<FlashcardsAppActivity>(renderer, mappedInput),
@@ -488,12 +694,6 @@ void HomeActivity::render(RenderLock&&) {
 
   if (!firstRenderDone) {
     firstRenderDone = true;
-    if (!recentsLoaded) {
-      requestUpdate();
-    }
-  } else if (!recentsLoaded && !recentsLoading) {
-    recentsLoading = true;
-    loadRecentCovers(metrics.homeCoverHeight);
   }
 }
 

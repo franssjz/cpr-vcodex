@@ -2,7 +2,13 @@
 #include <cstdint>
 #include <string>
 
-enum class KOReaderSyncIntentState : uint8_t { COMPARE = 0, PULL_REMOTE = 1, PUSH_LOCAL = 2 };
+enum class KOReaderSyncIntentState : uint8_t {
+  COMPARE = 0,
+  PULL_REMOTE = 1,
+  PUSH_LOCAL = 2,
+  AUTO_PUSH = 3,
+  AUTO_PULL = 4,
+};
 
 enum class KOReaderSyncOutcomeState : uint8_t {
   NONE = 0,
@@ -36,6 +42,10 @@ struct KOReaderSyncSessionState {
   int resultPage = 0;
   uint16_t resultParagraphIndex = 0;
   bool resultHasParagraphIndex = false;
+  uint16_t resultListItemIndex = 0;
+  bool resultHasListItemIndex = false;
+  bool exitToHomeAfterSync = false;
+  std::string autoPullEpubPath;
   void clear();
 };
 
