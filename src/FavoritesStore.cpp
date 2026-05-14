@@ -132,6 +132,29 @@ bool FavoritesStore::addBook(const std::string& path, const std::string& title, 
   return true;
 }
 
+void FavoritesStore::updateBook(const std::string& path, const std::string& title, const std::string& author,
+                                const std::string& coverBmpPath, const std::string& bookId) {
+  const std::string normalizedPath = BookIdentity::normalizePath(path);
+  const std::string resolvedBookId =
+      !bookId.empty() ? bookId : (!normalizedPath.empty() ? BookIdentity::resolveStableBookId(normalizedPath) : "");
+  const int existingIndex = findBookIndex(normalizedPath, resolvedBookId);
+  if (existingIndex < 0) {
+    return;
+  }
+
+  FavoriteBook& book = favoriteBooks[existingIndex];
+  if (!resolvedBookId.empty()) {
+    book.bookId = resolvedBookId;
+  }
+  if (!normalizedPath.empty()) {
+    book.path = normalizedPath;
+  }
+  book.title = title;
+  book.author = author;
+  book.coverBmpPath = coverBmpPath;
+  saveToFile();
+}
+
 bool FavoritesStore::removeBook(const std::string& key) {
   const int existingIndex = findBookIndex(key, key);
   if (existingIndex < 0) {

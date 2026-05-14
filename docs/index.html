@@ -40,38 +40,37 @@
     }
 
     main {
-      display: grid;
-      width: min(720px, calc(100vw - 32px));
-      min-height: calc(100vh - 72px);
+      width: min(960px, calc(100vw - 32px));
       margin: 0 auto;
-      place-items: center;
-      padding: 44px 0;
-    }
-
-    .home-card {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--surface);
-      padding: 28px;
-      box-shadow: 0 18px 40px rgba(17, 17, 24, 0.10);
+      padding: 54px 0 72px;
     }
 
     h1 {
-      margin: 0 0 8px;
-      font-size: 32px;
+      margin: 0 0 12px;
+      font-size: clamp(34px, 5vw, 56px);
       letter-spacing: 0;
+      line-height: 1;
     }
 
     p {
-      margin: 0 0 22px;
+      margin: 0;
       color: var(--muted);
       line-height: 1.5;
     }
 
+    .home-hero {
+      max-width: 780px;
+      margin: 0 0 28px;
+    }
+
+    .home-hero p {
+      max-width: 680px;
+      font-size: 18px;
+    }
+
     .version {
       display: inline-flex;
-      margin: 0 0 22px;
+      margin: 22px 0 0;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -81,39 +80,86 @@
       font-weight: 750;
     }
 
-    .links {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
     }
 
-    .tool-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: 40px;
+    .action-card {
+      display: grid;
+      min-height: 174px;
+      align-content: space-between;
+      gap: 18px;
+      border: 1px solid var(--line);
       border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 20px;
+      text-decoration: none;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .action-card:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in srgb, var(--accent) 54%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    }
+
+    .action-card.primary {
       background: var(--accent);
       color: #ffffff;
-      padding: 9px 14px;
-      font-weight: 750;
-      text-decoration: none;
     }
 
-    .tool-link.secondary {
-      border: 1px solid var(--line);
-      background: transparent;
-      color: var(--text);
+    .action-card.primary p,
+    .action-card.primary .action-number {
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .action-number {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+
+    .action-card h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .action-card p {
+      font-size: 15px;
+    }
+
+    @media (max-width: 720px) {
+      main {
+        padding: 34px 0 54px;
+      }
+
+      h1 {
+        font-size: 38px;
+      }
+
+      .home-hero p {
+        font-size: 16px;
+      }
+
+      .action-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
   <header class="site-header">
     <div class="site-topbar">
-      <a class="site-brand" href="./">CPR-vCodex Tools</a>
+      <a class="site-brand" href="./" data-site-i18n="homeTitle">CPR-vCodex</a>
       <nav class="site-nav" aria-label="Tools">
         <a href="./" aria-current="page" data-site-i18n="navHome">Home</a>
-        <a href="./reading-stats-editor/" data-site-i18n="navStats">Reading Stats Editor</a>
         <a href="./flash.html" data-site-i18n="navFlash">Auto Flash</a>
+        <a href="./tools.html" data-site-i18n="navTools">Tools</a>
         <a href="https://github.com/franssjz/cpr-vcodex" data-site-i18n="navGithub">GitHub</a>
         <a href="https://ko-fi.com/franssjz" data-site-i18n="navSupport">Support</a>
       </nav>
@@ -125,15 +171,44 @@
   </header>
 
   <main>
-    <section class="home-card">
-      <h1 data-site-i18n="homeTitle">CPR-vCodex Tools</h1>
-      <p data-site-i18n="homeSubtitle">Small browser tools for CPR-vCodex. Everything runs locally in your browser.</p>
-      <div class="version" data-site-i18n="latestFirmware">Latest firmware: 1.2.0.48-cpr-vcodex</div>
-      <div class="links">
-        <a class="tool-link" href="./flash.html" data-site-i18n="homeFlash">Auto Flash</a>
-        <a class="tool-link secondary" href="./reading-stats-editor/" data-site-i18n="homeStats">Reading Stats Editor</a>
-        <a class="tool-link secondary" href="https://github.com/franssjz/cpr-vcodex" data-site-i18n="homeGithub">GitHub</a>
-      </div>
+    <section class="home-hero">
+      <h1 data-site-i18n="homeTitle">CPR-vCodex</h1>
+      <p data-site-i18n="homeSubtitle">Firmware, auto-flash and local browser tools for CPR-vCodex on Xteink X4.</p>
+      <div class="version" data-site-i18n="latestFirmware">Latest firmware: 1.2.0.49-cpr-vcodex</div>
+    </section>
+
+    <section class="action-grid" aria-label="CPR-vCodex actions">
+      <a class="action-card primary" href="./flash.html">
+        <span class="action-number">01</span>
+        <div>
+          <h2 data-site-i18n="homeFlash">Auto Flash</h2>
+          <p data-site-i18n="homeFlashBody">Install the latest stable release from the browser.</p>
+        </div>
+      </a>
+
+      <a class="action-card" href="./tools.html">
+        <span class="action-number">02</span>
+        <div>
+          <h2 data-site-i18n="homeTools">Tools</h2>
+          <p data-site-i18n="homeToolsBody">Open the reading stats editor and recommended Xteink utilities.</p>
+        </div>
+      </a>
+
+      <a class="action-card" href="https://github.com/franssjz/cpr-vcodex" target="_blank" rel="noopener noreferrer">
+        <span class="action-number">03</span>
+        <div>
+          <h2 data-site-i18n="homeGithub">GitHub</h2>
+          <p data-site-i18n="homeGithubBody">Review releases, issues and project source.</p>
+        </div>
+      </a>
+
+      <a class="action-card" href="https://ko-fi.com/franssjz" target="_blank" rel="noopener noreferrer">
+        <span class="action-number">04</span>
+        <div>
+          <h2 data-site-i18n="navSupport">Support</h2>
+          <p data-site-i18n="homeSupportBody">Support CPR-vCodex development on Ko-fi.</p>
+        </div>
+      </a>
     </section>
   </main>
 

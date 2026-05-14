@@ -1,3 +1,9 @@
+> **CPR-vCodex is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)**, focused on improving reading consistency, long-term reading habits, and overall reader experience without sacrificing simplicity or performance.
+>
+> Instead of only tracking progress, this fork focuses on the full reading journey — consistency, habits, milestones, statistics, customization, and personal reading identity.
+>
+> The project adds optional layers such as reading streaks, detailed analytics, achievements, heatmaps, Sync Day tracking, session history, and deeper personalization, while still allowing the interface to remain clean and distraction-free if preferred.
+
 # CPR-vCodex
 
 <p align="center">
@@ -12,16 +18,36 @@
   <img src="./docs/images/screenshots.png" alt="CPR-vCodex overview" width="1000" />
 </p>
 
+## What's different in this fork
+
+My goal with this fork was to preserve CrossPoint experience while expanding the firmware around long-term reading engagement and personalization.
+
+Unlike a complete rewrite, CPR-vCodex intentionally stays close to the upstream CrossPoint project and only carries forward additions or upstream changes that are stable and safe enough for daily reading.
+
+Some of the main additions include:
+
+- advanced reading statistics and reading heatmaps
+- achievements and reading consistency tracking
+- Sync Day support for reliable offline day-based statistics
+- reading profiles and session analysis
+- per-book reading time correction tools
+- customizable UI and reading layouts
+- downloadable SD-card font management
+- additional reader utilities and workflow improvements
+- carefully selected upstream improvements and fixes
+
+The philosophy of this fork is simple: keep the firmware fast, stable, and focused on reading, while making the device feel more rewarding and personal for people who read every day.
+
 ## At a glance
 
 | Item | Value |
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.48-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.48-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.49-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.49-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Added EPUB strikethrough support for tags and CSS `text-decoration: line-through`.<br>- Made underline and strikethrough rendering thicker and better positioned on the X4 display.<br>- Made `If found, please return me` tolerate common SD-card text-file naming and encoding issues.<br>- Added a Ko-fi `Support` button to the GitHub Pages header. |
+| Latest release notes | - Improved KOReader Sync position mapping with EPUB XPath indexing and optional auto-pull/auto-push settings.<br>- Restored the Home books source setting and fixed Favorites Home entries that were never opened before.<br>- Hardened Home cover preloading so generated thumbnails refresh immediately and invalid thumbnails are regenerated.<br>- Added the translated GitHub Pages Tools hub and kept `if_found.txt` outside reading stats/achievements. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
 | Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
@@ -472,7 +498,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.48-cpr-vcodex`
+- current dev build style: `1.2.0.49-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -541,10 +567,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.48-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.49-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.48-cpr-vcodex`
+- push a stable tag named like `1.2.0.49-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

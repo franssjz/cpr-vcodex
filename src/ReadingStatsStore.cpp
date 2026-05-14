@@ -25,6 +25,27 @@ uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 
 
 bool countsForStreak(const ReadingDayStats& day) { return day.readingMs >= getDailyReadingGoalMs(); }
 
+std::string toLowerAscii(std::string value) {
+  for (char& c : value) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return value;
+}
+
+bool isRootIfFoundPath(const std::string& normalizedPath) {
+  if (normalizedPath.size() <= 1 || normalizedPath.front() != '/') {
+    return false;
+  }
+  if (normalizedPath.find('/', 1) != std::string::npos) {
+    return false;
+  }
+
+  const std::string lowerName = toLowerAscii(normalizedPath.substr(1));
+  return lowerName == "if_found.txt" || lowerName == "if_found.txt.txt";
+}
+
 bool isIgnoredStatsPath(const std::string& path) {
   if (path.empty()) {
     return false;
@@ -39,7 +60,7 @@ bool isIgnoredStatsPath(const std::string& path) {
     normalized.insert(normalized.begin(), '/');
   }
 
-  return normalized == "/ignore_stats" || normalized.rfind("/ignore_stats/", 0) == 0;
+  return normalized == "/ignore_stats" || normalized.rfind("/ignore_stats/", 0) == 0 || isRootIfFoundPath(normalized);
 }
 
 void normalizeReadingDays(std::vector<ReadingDayStats>& readingDays) {

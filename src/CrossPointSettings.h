@@ -171,11 +171,6 @@ class CrossPointSettings {
 
   // UI Theme
   enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
-  enum HOME_CAROUSEL_SOURCE {
-    HOME_CAROUSEL_RECENTS = 0,
-    HOME_CAROUSEL_FAVORITES = 1,
-    HOME_CAROUSEL_SOURCE_COUNT
-  };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -227,6 +222,11 @@ class CrossPointSettings {
     SHORTCUT_HOME = 0,
     SHORTCUT_APPS = 1,
     SHORTCUT_LOCATION_COUNT
+  };
+  enum HOME_BOOK_SOURCE {
+    HOME_BOOKS_RECENTS = 0,
+    HOME_BOOKS_FAVORITES = 1,
+    HOME_BOOK_SOURCE_COUNT
   };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
 
@@ -290,18 +290,20 @@ class CrossPointSettings {
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
   uint8_t opdsFilenameFormat = OPDS_FILENAME_AUTHOR_TITLE;
+  uint8_t koSyncAutoPullOnOpen = 0;
+  uint8_t koSyncAutoPushOnClose = 0;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
   // Page turn button long-press behavior
   uint8_t longPressButtonBehavior = LONG_PRESS_CHAPTER_SKIP;
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
-  uint8_t homeCarouselSource = HOME_CAROUSEL_RECENTS;
   // Experimental global dark mode for the device UI and supported readers.
   uint8_t darkMode = 0;
   // Home/apps helpers
   uint8_t displayDay = 1;
   uint8_t autoSyncDay = 1;
+  uint8_t homeBookSource = HOME_BOOKS_RECENTS;
   uint8_t syncDayWifiChoice = SYNC_DAY_WIFI_AUTO;
   uint8_t syncDayReminderStarts = SYNC_DAY_REMINDER_20;
   char sleepDirectory[128] = "";

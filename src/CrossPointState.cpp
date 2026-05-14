@@ -34,6 +34,10 @@ void KOReaderSyncSessionState::clear() {
   resultPage = 0;
   resultParagraphIndex = 0;
   resultHasParagraphIndex = false;
+  resultListItemIndex = 0;
+  resultHasListItemIndex = false;
+  exitToHomeAfterSync = false;
+  autoPullEpubPath.clear();
 }
 
 void PendingBookmarkJumpState::clear() {

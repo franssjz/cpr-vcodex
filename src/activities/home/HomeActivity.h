@@ -52,7 +52,8 @@ class HomeActivity final : public Activity {
   void invalidateCarouselFrameHash();
   uint32_t getCachedCarouselFrameHash(int bookIndex);
   void scheduleCarouselCoverLoadIfNeeded();
-  void loadHomeCarouselBooks(int maxBooks);
+  void loadRecentBooks(int maxBooks);
+  void reloadHomeBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);
   bool needsRecentCoverLoad(int coverHeight) const;
 
