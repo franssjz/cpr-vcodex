@@ -131,7 +131,7 @@ This project is **not affiliated with Xteink**.
 - manual per-book reading-time corrections for missed or accidental sessions
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
-- `Lyra Carousel` Home theme, limited to 3 books for smoother X4 navigation
+- `Lyra Carousel` Home theme, originally created by [zgredex](https://github.com/zgredex), adapted to this fork by [erickosanchezj](https://github.com/erickosanchezj), and limited to 3 books for smoother X4 navigation
 - experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
 - downloadable SD-card font families, published from this fork and including `ChareInk`
 - SD-card firmware update from Settings for local `.bin` flashing without a browser
@@ -244,6 +244,7 @@ Notable launcher behavior:
 - stats-related shortcuts show useful live metadata
 - `Apps` paginates long lists and supports page-jump navigation
 - `Lyra Carousel` is available as an optional cover-focused Home theme and is limited to 3 books for smoother X4 navigation
+  It was originally created by [zgredex](https://github.com/zgredex) and adapted to CPR-vCodex by [erickosanchezj](https://github.com/erickosanchezj).
 
 Management lives in:
 
@@ -584,6 +585,8 @@ Huge credit goes to:
 
 - the **CrossPoint Reader** project for the upstream base
 - the Xteink X4 community around the firmware ecosystem
+- [zgredex](https://github.com/zgredex) for the original `Lyra Carousel` Home theme
+- [erickosanchezj](https://github.com/erickosanchezj) for adapting `Lyra Carousel` to CPR-vCodex
 - Which-Estimate4566 for the logo artwork used in the docs
 
 ---
