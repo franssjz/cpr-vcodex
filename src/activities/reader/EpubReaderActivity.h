@@ -56,6 +56,7 @@ class EpubReaderActivity final : public Activity {
     uint8_t bionicReading = 0;
     uint8_t orientation = 0;
     uint8_t extraParagraphSpacing = 0;
+    uint8_t forceParagraphIndents = 0;
     uint8_t textAntiAliasing = 0;
     uint8_t textDarkness = 0;
     uint8_t readerRefreshMode = 0;

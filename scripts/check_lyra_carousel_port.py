@@ -55,13 +55,18 @@ def main() -> None:
     ]
     if "LyraMetrics::values.homeCoverHeight" in draw_cover_fn:
         raise AssertionError("Lyra Carousel must not render the low-resolution Lyra thumb_226.bmp fallback")
-    require("src/activities/home/HomeActivity.h", "kCarouselFrameCount")
     require("src/activities/home/HomeActivity.h", "preRenderCarouselFrames")
+    require("src/activities/home/HomeActivity.h", "loadCarouselFrameFromStorage")
+    require("src/activities/home/HomeActivity.h", "saveCarouselFrameToStorage")
     require("src/activities/home/HomeActivity.cpp", "void HomeActivity::preRenderCarouselFrames")
-    require("src/activities/home/HomeActivity.cpp", "void HomeActivity::renderCarouselFrame")
-    require("src/activities/home/HomeActivity.cpp", "void HomeActivity::updateSlidingWindowCache")
+    require("src/activities/home/HomeActivity.cpp", "bool HomeActivity::renderCarouselFrame")
+    require("src/activities/home/HomeActivity.cpp", "bool HomeActivity::loadCarouselFrameFromStorage")
+    require("src/activities/home/HomeActivity.cpp", "bool HomeActivity::saveCarouselFrameToStorage")
+    require("src/activities/home/HomeActivity.cpp", "lyra-carousel-frame-v6-carousel-thumb-only")
     require("src/activities/home/HomeActivity.cpp",
             "if (wasFirstRenderDone && carouselTheme && recentsLoaded && !carouselFramesReady &&")
+    if "carouselFrames[" in read("src/activities/home/HomeActivity.h"):
+        raise AssertionError("Lyra Carousel must not keep 48 KB frame buffers in HomeActivity")
 
     home_activity = read("src/activities/home/HomeActivity.cpp")
     on_enter = home_activity[home_activity.index("void HomeActivity::onEnter()"):home_activity.index("void HomeActivity::onExit()")]
@@ -91,7 +96,7 @@ def main() -> None:
     require("src/activities/home/HomeActivity.cpp", "carouselCoverLoadAttemptPath.clear()")
     legacy_thumb_fn = home_activity[
         home_activity.index("bool hasCarouselUsableThumb"):
-        home_activity.index("void HomeActivity::loadHomeCarouselBooks")
+        home_activity.index("uint32_t hashCarouselThumbState")
     ]
     if "LyraMetrics::values.homeCoverHeight" in legacy_thumb_fn:
         raise AssertionError(
@@ -108,19 +113,20 @@ def main() -> None:
     require("src/activities/home/HomeActivity.cpp",
             "xtc.generateThumbBmp(LyraCarouselTheme::kCenterCoverW")
 
-    # preRenderCarouselFrames must render only the center frame (slot 0), not all
-    # three, so the user sees their selected book immediately on first paint and
-    # adjacent frames are filled lazily by updateSlidingWindowCache().
+    # preRenderCarouselFrames must only prepare the center frame. The slot-free
+    # cache loads it directly into the display framebuffer, avoiding 144 KB of
+    # persistent heap allocation.
     pre_render_fn = home_activity[
         home_activity.index("void HomeActivity::preRenderCarouselFrames"):
-        home_activity.index("void HomeActivity::updateSlidingWindowCache")
+        home_activity.index("void HomeActivity::loop()")
     ]
-    if "for (int slot = 0; slot < kCarouselFrameCount" in pre_render_fn:
+    if "for (" in pre_render_fn:
         raise AssertionError(
-            "preRenderCarouselFrames must not loop over all carousel slots; "
-            "render only slot 0 (center frame) and let updateSlidingWindowCache fill the rest"
+            "preRenderCarouselFrames must not loop over carousel slots; "
+            "it should load or render only the center frame"
         )
-    require("src/activities/home/HomeActivity.cpp", "renderCarouselFrame(0, centerIdx);")
+    require("src/activities/home/HomeActivity.cpp", "loadCarouselFrameFromStorage(centerIdx)")
+    require("src/activities/home/HomeActivity.cpp", "renderCarouselFrame(centerIdx)")
 
     # renderCarouselFrame must pass bookCount (not safeBookIndex) to drawRecentBookCover
     # so that pre-rendered frames are stored with inCarouselRow=false (thin outline).

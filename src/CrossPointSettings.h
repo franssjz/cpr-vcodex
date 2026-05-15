@@ -170,9 +170,7 @@ class CrossPointSettings {
   };
 
   // UI Theme
-  // Value 2 used to be Lyra Carousel; keep it invalid so old settings
-  // migrate back to the default theme.
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, UI_THEME_COUNT = 2 };
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -252,6 +250,7 @@ class CrossPointSettings {
   uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
+  uint8_t forceParagraphIndents = 0;
   uint8_t textAntiAliasing = 1;
   uint8_t textDarkness = TEXT_DARKNESS_NORMAL;
   // Short power button click behaviour

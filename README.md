@@ -44,10 +44,10 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.49-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.49-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.50-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.50-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Improved KOReader Sync position mapping with EPUB XPath indexing and optional auto-pull/auto-push settings.<br>- Restored the Home books source setting and fixed Favorites Home entries that were never opened before.<br>- Hardened Home cover preloading so generated thumbnails refresh immediately and invalid thumbnails are regenerated.<br>- Added the translated GitHub Pages Tools hub and kept `if_found.txt` outside reading stats/achievements. |
+| Latest release notes | - Reintroduced the community `Lyra Carousel` Home theme from PR [#48](https://github.com/franssjz/cpr-vcodex/pull/48), limited to 3 books for smoother X4 navigation.<br>- Integrated the carousel with the existing vCodex Home cover pipeline so generated EPUB/XTC covers can appear directly from Home.<br>- Added `Force Paragraph Indents` for poorly formatted EPUBs, available in `Settings > Reader`, web settings, and in-reader `Reading Quick Settings`.<br>- Bumped the EPUB section cache format so changing forced indents regenerates pages instead of reusing stale cached chapters. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
 | Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |

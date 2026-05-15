@@ -330,7 +330,8 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
   // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
   // it is structural (positions the bullet/marker), not decorative.
   const int firstLineIndent =
-      firstLineIndentPending && blockStyle.textIndentDefined && (blockStyle.textIndent < 0 || !extraParagraphSpacing) &&
+      firstLineIndentPending && blockStyle.textIndentDefined &&
+              (blockStyle.textIndent < 0 || !extraParagraphSpacing || forceParagraphIndents) &&
               (blockStyle.alignment == CssTextAlign::Justify || blockStyle.alignment == CssTextAlign::Left)
           ? blockStyle.textIndent
           : 0;
@@ -440,7 +441,7 @@ std::vector<size_t> ParsedText::computeLineBreaks(const GfxRenderer& renderer, c
 }
 
 void ParsedText::prepareParagraphIndent(const GfxRenderer& renderer, const int fontId) {
-  if (extraParagraphSpacing || words.empty()) {
+  if ((extraParagraphSpacing && !forceParagraphIndents) || words.empty()) {
     return;
   }
 
@@ -471,7 +472,8 @@ std::vector<size_t> ParsedText::computeHyphenatedLineBreaks(const GfxRenderer& r
   // Negative text-indent (hanging indent, e.g. margin-left:3em; text-indent:-1em) always applies —
   // it is structural (positions the bullet/marker), not decorative.
   const int firstLineIndent =
-      firstLineIndentPending && blockStyle.textIndentDefined && (blockStyle.textIndent < 0 || !extraParagraphSpacing) &&
+      firstLineIndentPending && blockStyle.textIndentDefined &&
+              (blockStyle.textIndent < 0 || !extraParagraphSpacing || forceParagraphIndents) &&
               (blockStyle.alignment == CssTextAlign::Justify || blockStyle.alignment == CssTextAlign::Left)
           ? blockStyle.textIndent
           : 0;
@@ -643,7 +645,8 @@ void ParsedText::extractLine(const size_t breakIndex, const int pageWidth, const
   // it is structural (positions the bullet/marker), not decorative.
   const bool isFirstLine = firstLineIndentPending && breakIndex == 0;
   const int firstLineIndent =
-      isFirstLine && blockStyle.textIndentDefined && (blockStyle.textIndent < 0 || !extraParagraphSpacing) &&
+      isFirstLine && blockStyle.textIndentDefined &&
+              (blockStyle.textIndent < 0 || !extraParagraphSpacing || forceParagraphIndents) &&
               (blockStyle.alignment == CssTextAlign::Justify || blockStyle.alignment == CssTextAlign::Left)
           ? blockStyle.textIndent
           : 0;

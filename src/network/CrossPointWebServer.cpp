@@ -242,7 +242,7 @@ constexpr StrId OPT_SLEEP_FILTER[] = {StrId::STR_NONE_OPT, StrId::STR_FILTER_CON
 constexpr StrId OPT_HIDE_BATTERY[] = {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS};
 constexpr StrId OPT_REFRESH_FREQ[] = {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10,
                                       StrId::STR_PAGES_15, StrId::STR_PAGES_30};
-constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM};
+constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_CAROUSEL};
 constexpr StrId OPT_FONT_FAMILY[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
 constexpr StrId OPT_FONT_SIZE[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
                                    StrId::STR_X_LARGE};
@@ -320,6 +320,8 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_BIONIC_READING, bionicReading, OPT_BIONIC, "bionicReading", StrId::STR_CAT_READER),
     WEB_ENUM(StrId::STR_ORIENTATION, orientation, OPT_ORIENTATION, "orientation", StrId::STR_CAT_READER),
     WEB_TOGGLE(StrId::STR_EXTRA_SPACING, extraParagraphSpacing, "extraParagraphSpacing", StrId::STR_CAT_READER),
+    WEB_TOGGLE(StrId::STR_FORCE_PARAGRAPH_INDENTS, forceParagraphIndents, "forceParagraphIndents",
+               StrId::STR_CAT_READER),
     WEB_TOGGLE(StrId::STR_TEXT_AA, textAntiAliasing, "textAntiAliasing", StrId::STR_CAT_READER),
     WEB_ENUM(StrId::STR_TEXT_DARKNESS, textDarkness, OPT_TEXT_DARKNESS, "textDarkness", StrId::STR_CAT_READER),
     WEB_ENUM(StrId::STR_READER_REFRESH_MODE, readerRefreshMode, OPT_READER_REFRESH, "readerRefreshMode",

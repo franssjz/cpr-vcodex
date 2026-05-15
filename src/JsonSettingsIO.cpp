@@ -28,7 +28,7 @@
 namespace {
 constexpr uint8_t FONT_FAMILY_SCHEMA_VERSION = 2;
 constexpr uint8_t FONT_SIZE_SCHEMA_VERSION = 2;
-constexpr uint8_t UI_THEME_SCHEMA_VERSION = 2;
+constexpr uint8_t UI_THEME_SCHEMA_VERSION = 3;
 constexpr uint8_t TEXT_DARKNESS_SCHEMA_VERSION = 2;
 constexpr uint8_t FLASHCARD_STUDY_MODE_SCHEMA_VERSION = 2;
 
@@ -320,6 +320,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("bionicReading", s.bionicReading, CrossPointSettings::BIONIC_READING_MODE_COUNT);
   loadEnum("orientation", s.orientation, CrossPointSettings::ORIENTATION_COUNT);
   loadToggle("extraParagraphSpacing", s.extraParagraphSpacing);
+  loadToggle("forceParagraphIndents", s.forceParagraphIndents);
   loadToggle("textAntiAliasing", s.textAntiAliasing);
   {
     const uint8_t textDarknessSchemaVersion = doc["textDarknessSchemaVersion"] | static_cast<uint8_t>(0);
@@ -690,6 +691,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["bionicReading"] = s.bionicReading;
   doc["orientation"] = s.orientation;
   doc["extraParagraphSpacing"] = s.extraParagraphSpacing;
+  doc["forceParagraphIndents"] = s.forceParagraphIndents;
   doc["textAntiAliasing"] = s.textAntiAliasing;
   doc["textDarkness"] = s.textDarkness;
   doc["textDarknessSchemaVersion"] = TEXT_DARKNESS_SCHEMA_VERSION;

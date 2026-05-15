@@ -67,6 +67,7 @@ const std::vector<ReaderQuickSettingsActivity::QuickSetting>& ReaderQuickSetting
        &CrossPointSettings::orientation,
        {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}},
       {StrId::STR_EXTRA_SPACING, QuickSettingType::Toggle, &CrossPointSettings::extraParagraphSpacing},
+      {StrId::STR_FORCE_PARAGRAPH_INDENTS, QuickSettingType::Toggle, &CrossPointSettings::forceParagraphIndents},
       {StrId::STR_TEXT_AA, QuickSettingType::Toggle, &CrossPointSettings::textAntiAliasing},
       {StrId::STR_TEXT_DARKNESS,
        QuickSettingType::Enum,

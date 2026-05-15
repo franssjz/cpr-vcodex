@@ -8,6 +8,8 @@
 #include <XmlParserUtils.h>
 #include <expat.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <iterator>
 
@@ -154,7 +156,8 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
     anchorData.push_back({std::move(pendingAnchorId), static_cast<uint16_t>(completedPageCount)});
     pendingAnchorId.clear();
   }
-  currentTextBlock.reset(new ParsedText(extraParagraphSpacing, hyphenationEnabled, false, blockStyle));
+  currentTextBlock.reset(
+      new ParsedText(extraParagraphSpacing, forceParagraphIndents, hyphenationEnabled, false, blockStyle));
   wordsExtractedInBlock = 0;
 }
 
@@ -632,8 +635,16 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
   }
 
   const float emSize = static_cast<float>(self->renderer.getFontAscenderSize(self->fontId));
-  const auto userAlignmentBlockStyle = BlockStyle::fromCssStyle(
+  auto userAlignmentBlockStyle = BlockStyle::fromCssStyle(
       cssStyle, emSize, static_cast<CssTextAlign>(self->paragraphAlignment), self->viewportWidth);
+
+  if (self->forceParagraphIndents && strcmp(name, "p") == 0 &&
+      (userAlignmentBlockStyle.alignment == CssTextAlign::Justify ||
+       userAlignmentBlockStyle.alignment == CssTextAlign::Left) &&
+      (!userAlignmentBlockStyle.textIndentDefined || userAlignmentBlockStyle.textIndent == 0)) {
+    userAlignmentBlockStyle.textIndentDefined = true;
+    userAlignmentBlockStyle.textIndent = static_cast<int16_t>(std::min(emSize, static_cast<float>(INT16_MAX)));
+  }
 
   if (matches(name, HEADER_TAGS, std::size(HEADER_TAGS))) {
     self->currentCssStyle = cssStyle;
