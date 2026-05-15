@@ -498,7 +498,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.49-cpr-vcodex`
+- current dev build style: `1.2.0.50-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -567,10 +567,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.49-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.50-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.49-cpr-vcodex`
+- push a stable tag named like `1.2.0.50-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not
