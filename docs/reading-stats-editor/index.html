@@ -3384,23 +3384,28 @@
 
     function normalizeDoc(input) {
       const doc = input && typeof input === "object" ? input : {};
+      const formatVersion = toUInt(doc.formatVersion) || 1;
       const books = Array.isArray(doc.books) ? doc.books : [];
+      const readingDays = Array.isArray(doc.readingDays) ? doc.readingDays : [];
+      const legacyReadingDays = Array.isArray(doc.legacyReadingDays) ? doc.legacyReadingDays : readingDays;
       const sessionLog = Array.isArray(doc.sessionLog) ? doc.sessionLog : [];
       const normalized = {
-        formatVersion: 5,
+        formatVersion: 6,
         readingDays: [],
-        legacyReadingDays: [],
+        legacyReadingDays: (formatVersion < 6 ? legacyReadingDays : (Array.isArray(doc.legacyReadingDays) ? doc.legacyReadingDays : []))
+          .map(normalizeDay)
+          .filter(day => day.dayOrdinal && day.readingMs),
         sessionLog: sessionLog.map(entry => ({
           dayOrdinal: toUInt(entry && entry.dayOrdinal),
           sessionMs: toUInt(entry && entry.sessionMs)
         })).filter(entry => entry.dayOrdinal && entry.sessionMs),
         books: books.map(normalizeBook).filter(book => book.path)
       };
-      rebuildAggregatedDays(normalized);
+      rebuildAggregatedDays(normalized, {legacyTotals: formatVersion < 6});
       return normalized;
     }
 
-    function rebuildAggregatedDays(doc = state.data) {
+    function rebuildAggregatedDays(doc = state.data, options = {}) {
       if (!doc) return;
       const totals = new Map();
       for (const book of doc.books) {
@@ -3422,16 +3427,46 @@
         book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
         if (book.completed && book.lastProgressPercent < 100) book.lastProgressPercent = 100;
       }
-      doc.readingDays = Array.from(totals.entries())
+
+      const legacyMerged = [];
+      const sortedLegacyDays = (doc.legacyReadingDays || [])
+        .map(normalizeDay)
+        .filter(day => day.dayOrdinal && day.readingMs)
+        .sort((a, b) => a.dayOrdinal - b.dayOrdinal);
+      for (const day of sortedLegacyDays) {
+        const last = legacyMerged[legacyMerged.length - 1];
+        if (last && last.dayOrdinal === day.dayOrdinal) {
+          last.readingMs += day.readingMs;
+        } else {
+          legacyMerged.push({...day});
+        }
+      }
+
+      if (options.legacyTotals) {
+        doc.legacyReadingDays = legacyMerged
+          .map(day => ({
+            dayOrdinal: day.dayOrdinal,
+            readingMs: Math.max(0, day.readingMs - (totals.get(day.dayOrdinal) || 0))
+          }))
+          .filter(day => day.readingMs);
+      } else {
+        doc.legacyReadingDays = legacyMerged;
+      }
+
+      const aggregateTotals = new Map(totals);
+      for (const day of doc.legacyReadingDays) {
+        aggregateTotals.set(day.dayOrdinal, (aggregateTotals.get(day.dayOrdinal) || 0) + day.readingMs);
+      }
+
+      doc.readingDays = Array.from(aggregateTotals.entries())
         .map(([dayOrdinal, readingMs]) => ({dayOrdinal, readingMs}))
         .sort((a, b) => a.dayOrdinal - b.dayOrdinal);
-      doc.legacyReadingDays = doc.readingDays.map(day => ({...day}));
-      doc.formatVersion = 5;
+      doc.formatVersion = 6;
     }
 
     function makeEmptyDoc() {
       return {
-        formatVersion: 5,
+        formatVersion: 6,
         readingDays: [],
         legacyReadingDays: [],
         sessionLog: [],

@@ -478,6 +478,54 @@ void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const u
   }
 }
 
+bool ReadingStatsStore::convertLegacyReadingDaysToUnassigned() {
+  std::vector<ReadingDayStats> bookTotals;
+  for (const auto& book : books) {
+    for (const auto& day : book.readingDays) {
+      addReadingToDays(bookTotals, day.dayOrdinal, day.readingMs);
+    }
+  }
+
+  std::vector<ReadingDayStats> legacyTotals = legacyReadingDays;
+  normalizeReadingDays(legacyTotals);
+
+  std::vector<ReadingDayStats> unassignedDays;
+  unassignedDays.reserve(legacyTotals.size());
+  for (const auto& legacyDay : legacyTotals) {
+    if (legacyDay.dayOrdinal == 0 || legacyDay.readingMs == 0) {
+      continue;
+    }
+
+    uint64_t assignedMs = 0;
+    auto it =
+        std::lower_bound(bookTotals.begin(), bookTotals.end(), legacyDay.dayOrdinal,
+                         [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+    if (it != bookTotals.end() && it->dayOrdinal == legacyDay.dayOrdinal) {
+      assignedMs = it->readingMs;
+    }
+
+    if (legacyDay.readingMs > assignedMs) {
+      unassignedDays.push_back(ReadingDayStats{legacyDay.dayOrdinal, legacyDay.readingMs - assignedMs});
+    }
+  }
+
+  const auto sameDays = [](const std::vector<ReadingDayStats>& left, const std::vector<ReadingDayStats>& right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (size_t index = 0; index < left.size(); ++index) {
+      if (left[index].dayOrdinal != right[index].dayOrdinal || left[index].readingMs != right[index].readingMs) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const bool changed = !sameDays(legacyReadingDays, unassignedDays);
+  legacyReadingDays = std::move(unassignedDays);
+  return changed;
+}
+
 void ReadingStatsStore::rebuildAggregatedReadingDays() {
   readingDays = legacyReadingDays;
   normalizeReadingDays(readingDays);

@@ -117,6 +117,7 @@ class ReadingStatsStore {
   void updateBookReadTimestamp(ReadingBookStats& book, uint32_t preferredTimestamp);
   void recordReadingTime(ReadingBookStats& book, uint32_t epochSeconds, uint64_t readingMs);
   void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs);
+  bool convertLegacyReadingDaysToUnassigned();
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
   void invalidateSummaryCache();

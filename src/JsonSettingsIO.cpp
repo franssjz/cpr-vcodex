@@ -1234,7 +1234,7 @@ bool JsonSettingsIO::loadFavorites(FavoritesStore& store, const char* json) {
 
 bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char* path) {
   JsonDocument doc;
-  doc["formatVersion"] = 5;
+  doc["formatVersion"] = 6;
 
   JsonArray days = doc["readingDays"].to<JsonArray>();
   for (const auto& day : store.getReadingDays()) {
@@ -1328,6 +1328,9 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
   appendReadingDays(store.readingDays, doc["readingDays"].as<JsonArray>());
   if (formatVersion >= 2) {
     appendReadingDays(store.legacyReadingDays, doc["legacyReadingDays"].as<JsonArray>());
+    if (formatVersion < 6 && store.legacyReadingDays.empty()) {
+      store.legacyReadingDays = store.readingDays;
+    }
   } else {
     store.legacyReadingDays = store.readingDays;
   }
@@ -1381,6 +1384,10 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
     store.books.push_back(std::move(book));
   }
 
+  if (formatVersion < 6) {
+    store.convertLegacyReadingDaysToUnassigned();
+    store.dirty = true;
+  }
   store.rebuildAggregatedReadingDays();
   LOG_DBG("RST", "Reading stats loaded from file (%d books)", static_cast<int>(store.books.size()));
   return true;
