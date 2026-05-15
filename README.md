@@ -131,7 +131,7 @@ This project is **not affiliated with Xteink**.
 - manual per-book reading-time corrections for missed or accidental sessions
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
-- `Lyra Carousel` is temporarily removed until a stable and fast version is ready for daily use
+- `Lyra Carousel` Home theme, limited to 3 books for smoother X4 navigation
 - experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
 - downloadable SD-card font families, published from this fork and including `ChareInk`
 - SD-card firmware update from Settings for local `.bin` flashing without a browser
@@ -243,7 +243,7 @@ Notable launcher behavior:
 - ordering is configurable
 - stats-related shortcuts show useful live metadata
 - `Apps` paginates long lists and supports page-jump navigation
-- `Lyra Carousel` is temporarily removed until a stable and fast version is ready; devices that had it selected fall back to `Lyra vCodex`
+- `Lyra Carousel` is available as an optional cover-focused Home theme and is limited to 3 books for smoother X4 navigation
 
 Management lives in:
 
