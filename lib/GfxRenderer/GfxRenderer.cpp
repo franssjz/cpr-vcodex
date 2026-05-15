@@ -743,8 +743,8 @@ void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const in
   const int imgH = width;
   const int srcStride = (imgW + 7) / 8;
 
-  if (physX + imgW <= 0 || physX >= HalDisplay::DISPLAY_WIDTH) return;
-  if (physY + imgH <= 0 || physY >= HalDisplay::DISPLAY_HEIGHT) return;
+  if (physX + imgW <= 0 || physX >= panelWidth) return;
+  if (physY + imgH <= 0 || physY >= panelHeight) return;
 
   const int baseByte = (physX >= 0) ? (physX >> 3) : -(((-physX) + 7) >> 3);
   const int bitShift = ((physX % 8) + 8) % 8;
@@ -754,15 +754,15 @@ void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const in
 
   for (int row = 0; row < imgH; ++row) {
     const int destY = physY + row;
-    if (destY < 0 || destY >= HalDisplay::DISPLAY_HEIGHT) continue;
-    const int rowBase = destY * HalDisplay::DISPLAY_WIDTH_BYTES;
+    if (destY < 0 || destY >= panelHeight) continue;
+    const int rowBase = destY * panelWidthBytes;
     const int srcOffset = row * srcStride;
 
     if (bitShift == 0) {
       for (int col = 0; col < srcStride; ++col) {
         const int dst = baseByte + col;
         if (dst < 0) continue;
-        if (dst >= HalDisplay::DISPLAY_WIDTH_BYTES) break;
+        if (dst >= panelWidthBytes) break;
         uint8_t inv = ~bitmap[srcOffset + col];
         if (col == lastCol && trail > 0) inv &= trailMask;
         frameBuffer[rowBase + dst] |= inv;
@@ -775,10 +775,10 @@ void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const in
         if (col == lastCol && trail > 0) inv &= trailMask;
         const int dstHi = baseByte + col;
         const int dstLo = dstHi + 1;
-        if (dstHi >= 0 && dstHi < HalDisplay::DISPLAY_WIDTH_BYTES) {
+        if (dstHi >= 0 && dstHi < panelWidthBytes) {
           frameBuffer[rowBase + dstHi] |= static_cast<uint8_t>(inv >> rsh);
         }
-        if (dstLo >= 0 && dstLo < HalDisplay::DISPLAY_WIDTH_BYTES) {
+        if (dstLo >= 0 && dstLo < panelWidthBytes) {
           frameBuffer[rowBase + dstLo] |= static_cast<uint8_t>(inv << lsh);
         }
       }
