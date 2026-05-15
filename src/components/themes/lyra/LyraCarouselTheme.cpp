@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "components/icons/book.h"
@@ -41,6 +42,10 @@ constexpr int kCornerRadius = 6;
 constexpr int kThinOutlineW = 1;
 constexpr int kSelectionLineW = 3;
 constexpr int kCenterOutlineW = 4;
+constexpr int kProgressBadgePadX = 8;
+constexpr int kProgressBadgePadY = 4;
+constexpr int kProgressBadgeInset = 8;
+constexpr int kProgressBadgeRadius = 4;
 constexpr int kMenuIconSize = 32;
 constexpr int kMenuIconPad = 14;
 constexpr int kHighlightPad = 12;
@@ -106,6 +111,35 @@ void drawCoverPlaceholder(GfxRenderer& renderer, int x, int y, int maxW, int max
   renderer.fillRoundedRect(x, y + maxH / 3, maxW, 2 * maxH / 3, kCornerRadius, false, false, true, true,
                            Color::Black);
   renderer.drawIcon(CoverIcon, x + maxW / 2 - 16, y + 8, 32, 32);
+}
+
+uint8_t getBookProgressPercent(const RecentBook& recentBook) {
+  const ReadingBookStats* stats = nullptr;
+  if (!recentBook.bookId.empty()) {
+    stats = READING_STATS.findBook(recentBook.bookId);
+  }
+  if (stats == nullptr) {
+    stats = READING_STATS.findBook(recentBook.path);
+  }
+  if (stats == nullptr) {
+    return 0;
+  }
+  return stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100);
+}
+
+void drawProgressBadge(GfxRenderer& renderer, const RecentBook& book, const int coverX, const int coverY,
+                       const int coverW, const int coverH) {
+  const std::string progressText = std::to_string(getBookProgressPercent(book)) + "%";
+  const int textW = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
+  const int textH = renderer.getLineHeight(SMALL_FONT_ID);
+  const int badgeW = textW + 2 * kProgressBadgePadX;
+  const int badgeH = textH + 2 * kProgressBadgePadY;
+  const int badgeX = coverX + coverW - badgeW - kProgressBadgeInset;
+  const int badgeY = coverY + coverH - badgeH - kProgressBadgeInset;
+
+  renderer.fillRoundedRect(badgeX, badgeY, badgeW, badgeH, kProgressBadgeRadius, Color::Black);
+  renderer.drawText(SMALL_FONT_ID, badgeX + kProgressBadgePadX, badgeY + kProgressBadgePadY - 1,
+                    progressText.c_str(), false, EpdFontFamily::BOLD);
 }
 }  // namespace
 
@@ -190,6 +224,7 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     renderer.fillRect(centerX - kCenterOutlineW, centerTileY - kCenterOutlineW, kCenterCoverW + 2 * kCenterOutlineW,
                       kCenterCoverH + 2 * kCenterOutlineW, false);
     drawCover(centerIdx, centerX, centerTileY, kCenterCoverW, kCenterCoverH);
+    drawProgressBadge(renderer, recentBooks[centerIdx], centerX, centerTileY, kCenterCoverW, kCenterCoverH);
 
     const int dotsY = centerTileY + kCenterCoverH + 8;
     const int totalDotsW = bookCount * kDotSize + (bookCount - 1) * kDotGap;
@@ -265,7 +300,11 @@ void LyraCarouselTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int but
       const uint8_t* bmp = iconForName(rowIcon(i), kMenuIconSize);
       if (bmp != nullptr) {
         if (selectedIndex == i) {
-          renderer.drawIconInverted(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
+          if (renderer.isDarkMode()) {
+            renderer.drawIconBlack(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
+          } else {
+            renderer.drawIconInverted(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
+          }
         } else {
           renderer.drawIcon(bmp, iconX, iconY, kMenuIconSize, kMenuIconSize);
         }

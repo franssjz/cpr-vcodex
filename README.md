@@ -44,10 +44,10 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` |
-| Current release (CPR-vCodex) build | [`1.2.0.50-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.50-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.2.0.51-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.2.0.51-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Reintroduced the community `Lyra Carousel` Home theme from PR [#48](https://github.com/franssjz/cpr-vcodex/pull/48), limited to 3 books for smoother X4 navigation.<br>- Integrated the carousel with the existing vCodex Home cover pipeline so generated EPUB/XTC covers can appear directly from Home.<br>- Added `Force Paragraph Indents` for poorly formatted EPUBs, available in `Settings > Reader`, web settings, and in-reader `Reading Quick Settings`.<br>- Bumped the EPUB section cache format so changing forced indents regenerates pages instead of reusing stale cached chapters. |
+| Latest release notes | - Fixed doubled daily reading totals in Heatmap/best-day stats when legacy aggregates overlapped with per-book reading days.<br>- Migrated reading stats to format `6`, preserving legacy-only time without double-counting it.<br>- Updated the browser Reading Stats Editor so exported stats no longer recreate duplicate `legacyReadingDays` data.<br>- Added a progress badge to the central `Lyra Carousel` cover and refreshed carousel frame caching when book progress changes.<br>- Fixed selected `Lyra Carousel` shortcut icon contrast in dark mode. |
 | Base firmware line | `CrossPoint Reader 1.2.0` |
 | Latest official commit reviewed | [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
 | Latest official commit incorporated | Selected font-manager, SD-font rendering, BMP viewer, and selection-navigation updates through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d) |
@@ -499,7 +499,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.2.0`
-- current dev build style: `1.2.0.50-cpr-vcodex`
+- current dev build style: `1.2.0.51-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -568,10 +568,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.2.0.50-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.2.0.51-cpr-vcodex
 ```
 
-- push a stable tag named like `1.2.0.50-cpr-vcodex`
+- push a stable tag named like `1.2.0.51-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

@@ -23,6 +23,7 @@
 #include "FavoritesStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
@@ -317,10 +318,24 @@ uint32_t hashCarouselThumbState(uint32_t hash, const RecentBook& book) {
   return fnv1aByte(hash, Storage.exists(legacyCoverPath.c_str()) ? 1 : 0);
 }
 
+uint8_t getCarouselBookProgressPercent(const RecentBook& recentBook) {
+  const ReadingBookStats* stats = nullptr;
+  if (!recentBook.bookId.empty()) {
+    stats = READING_STATS.findBook(recentBook.bookId);
+  }
+  if (stats == nullptr) {
+    stats = READING_STATS.findBook(recentBook.path);
+  }
+  if (stats == nullptr) {
+    return 0;
+  }
+  return stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100);
+}
+
 uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int centerIdx, const int screenWidth,
                               const int screenHeight, const size_t bufferSize, const bool darkMode) {
   uint32_t hash = FNV1A_OFFSET;
-  hash = fnv1aString(hash, "lyra-carousel-frame-v6-carousel-thumb-only");
+  hash = fnv1aString(hash, "lyra-carousel-frame-v7-progress-badge");
   hash = fnv1aU32(hash, static_cast<uint32_t>(screenWidth));
   hash = fnv1aU32(hash, static_cast<uint32_t>(screenHeight));
   hash = fnv1aU32(hash, static_cast<uint32_t>(bufferSize));
@@ -336,6 +351,7 @@ uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int ce
     hash = fnv1aString(hash, book.author);
     hash = fnv1aString(hash, book.coverBmpPath);
     hash = hashCarouselThumbState(hash, book);
+    hash = fnv1aByte(hash, getCarouselBookProgressPercent(book));
   }
 
   return hash;

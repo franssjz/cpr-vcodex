@@ -735,6 +735,13 @@ void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, con
   display.drawImage(invertedBitmap.data(), destX, destY, height, width);
 }
 
+void GfxRenderer::drawIconBlack(const uint8_t bitmap[], const int x, const int y, const int width,
+                                const int height) const {
+  const int destX = y;
+  const int destY = getScreenWidth() - width - x;
+  display.drawImageTransparent(bitmap, destX, destY, height, width);
+}
+
 void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const int y, const int width,
                                    const int height) const {
   const int physX = y;
