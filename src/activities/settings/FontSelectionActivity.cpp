@@ -8,7 +8,10 @@
 #include <WiFi.h>
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstdint>
 #include <cstring>
+#include <utility>
 
 #include "CrossPointSettings.h"
 #include "FontInstaller.h"
@@ -30,9 +33,6 @@ namespace {
   "https://github.com/crosspoint-reader/crosspoint-fonts/releases/download/sd-fonts-m" FONT_MANIFEST_URL_STRINGIFY( \
       FONTS_MANIFEST_VERSION) "-b" FONT_MANIFEST_URL_STRINGIFY(CPFONT_VERSION) "/fonts.json"
 #endif
-
-constexpr int MANAGER_HOME_COUNT = 2;
-constexpr StrId MANAGER_HOME_LABELS[MANAGER_HOME_COUNT] = {StrId::STR_INSTALLED_FONTS, StrId::STR_DOWNLOAD_FONTS};
 
 std::string shortStatus(const std::string& text) {
   return text.size() > 28 ? text.substr(0, 28) : text;
@@ -73,6 +73,22 @@ void FontSelectionActivity::onEnter() {
     } else {
       selectedIndex_ = SETTINGS.fontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? SETTINGS.fontFamily : 0;
     }
+  } else {
+    downloadState_ = DownloadState::NotLoaded;
+    statusMessage_.clear();
+    if (WiFi.status() == WL_CONNECTED) {
+      downloadState_ = DownloadState::Loading;
+      statusMessage_ = tr(STR_LOADING_FONT_LIST);
+      requestUpdateAndWait();
+      if (fetchCatalog()) {
+        downloadState_ = DownloadState::Ready;
+        selectedIndex_ = 0;
+      } else {
+        downloadState_ = DownloadState::Error;
+      }
+    } else {
+      startCatalogLoad();
+    }
   }
 
   requestUpdate();
@@ -80,27 +96,16 @@ void FontSelectionActivity::onEnter() {
 
 void FontSelectionActivity::onExit() {
   Activity::onExit();
-  if (mode_ == Mode::Manage) {
-    WiFi.disconnect(false);
-    WiFi.mode(WIFI_OFF);
-  }
 }
 
 int FontSelectionActivity::currentListSize() const {
   if (mode_ == Mode::Select) return static_cast<int>(fonts_.size());
-  if (managerView_ == ManagerView::Home) return MANAGER_HOME_COUNT;
-  if (managerView_ == ManagerView::Installed) {
-    return std::max(0, static_cast<int>(fonts_.size()) - static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT));
-  }
-  return downloadState_ == DownloadState::Ready ? static_cast<int>(catalog_.size()) : 0;
+  if (downloadState_ != DownloadState::Ready) return 0;
+  return static_cast<int>(catalog_.size()) + (showDownloadAllRow() ? 1 : 0);
 }
 
 void FontSelectionActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    if (mode_ == Mode::Manage && managerView_ != ManagerView::Home) {
-      leaveManagerView();
-      return;
-    }
     finish();
     return;
   }
@@ -115,14 +120,6 @@ void FontSelectionActivity::loop() {
       return;
     }
 
-    if (managerView_ == ManagerView::Home) {
-      enterManagerView(selectedIndex_ == 0 ? ManagerView::Installed : ManagerView::Download);
-      return;
-    }
-    if (managerView_ == ManagerView::Installed) {
-      handleSelection();
-      return;
-    }
     if (downloadState_ == DownloadState::NotLoaded || downloadState_ == DownloadState::Error) {
       startCatalogLoad();
       return;
@@ -132,12 +129,7 @@ void FontSelectionActivity::loop() {
       requestUpdate();
       return;
     }
-    downloadSelectedCatalogFont();
-    return;
-  }
-
-  if (mode_ == Mode::Manage && managerView_ == ManagerView::Installed && mappedInput.wasPressed(MappedInputManager::Button::Right)) {
-    confirmUninstall();
+    handleCatalogAction();
     return;
   }
 
@@ -155,22 +147,10 @@ void FontSelectionActivity::loop() {
   });
 }
 
-bool FontSelectionActivity::selectedFontIsCustom() const {
-  const int fontIndex =
-      mode_ == Mode::Manage && managerView_ == ManagerView::Installed
-          ? selectedIndex_ + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT)
-          : selectedIndex_;
-  return fontIndex >= 0 && fontIndex < static_cast<int>(fonts_.size()) && !fonts_[fontIndex].isBuiltin;
-}
-
 void FontSelectionActivity::handleSelection() {
-  const int fontIndex =
-      mode_ == Mode::Manage && managerView_ == ManagerView::Installed
-          ? selectedIndex_ + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT)
-          : selectedIndex_;
-  if (fontIndex < 0 || fontIndex >= static_cast<int>(fonts_.size())) return;
+  if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(fonts_.size())) return;
 
-  const auto& font = fonts_[fontIndex];
+  const auto& font = fonts_[selectedIndex_];
   if (font.settingIndex < CrossPointSettings::BUILTIN_FONT_COUNT) {
     SETTINGS.fontFamily = font.settingIndex;
     SETTINGS.sdFontFamilyName[0] = '\0';
@@ -185,27 +165,45 @@ void FontSelectionActivity::handleSelection() {
   finish();
 }
 
-void FontSelectionActivity::confirmUninstall() {
-  if (!selectedFontIsCustom() || registry_ == nullptr) return;
-  const int fontIndex = selectedIndex_ + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT);
+void FontSelectionActivity::handleCatalogAction() {
+  if (downloadState_ != DownloadState::Ready) return;
+  if (isDownloadAllRow(selectedIndex_)) {
+    confirmDownloadAll();
+    return;
+  }
+
+  const int familyIndex = familyIndexFromListIndex(selectedIndex_);
+  if (familyIndex < 0 || familyIndex >= static_cast<int>(catalog_.size())) return;
+
+  const auto& family = catalog_[familyIndex];
+  if (family.installed && !family.hasUpdate) {
+    confirmDeleteSelectedCatalogFont();
+  } else {
+    downloadSelectedCatalogFont();
+  }
+}
+
+void FontSelectionActivity::confirmDeleteSelectedCatalogFont() {
+  const int familyIndex = familyIndexFromListIndex(selectedIndex_);
+  if (familyIndex < 0 || familyIndex >= static_cast<int>(catalog_.size())) return;
+
   startActivityForResult(
-      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE), fonts_[fontIndex].name),
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE), catalog_[familyIndex].name),
       [this](const ActivityResult& result) {
-        if (!result.isCancelled) handleUninstall();
+        if (!result.isCancelled) handleDeleteCatalogFont();
         requestUpdate();
       });
 }
 
-void FontSelectionActivity::handleUninstall() {
-  if (!selectedFontIsCustom() || registry_ == nullptr) return;
+void FontSelectionActivity::handleDeleteCatalogFont() {
+  const int familyIndex = familyIndexFromListIndex(selectedIndex_);
+  if (familyIndex < 0 || familyIndex >= static_cast<int>(catalog_.size())) return;
 
+  auto& family = catalog_[familyIndex];
   FontInstaller installer(sdFontSystem.registry());
-  const int fontIndex = selectedIndex_ + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT);
-  if (fontIndex < 0 || fontIndex >= static_cast<int>(fonts_.size())) return;
-
-  const auto result = installer.deleteFamily(fonts_[fontIndex].name.c_str());
+  const auto result = installer.deleteFamily(family.name.c_str());
   if (result != FontInstaller::Error::OK) {
-    LOG_ERR("FONTUI", "Failed to uninstall font family: %s", fonts_[fontIndex].name.c_str());
+    LOG_ERR("FONTUI", "Failed to uninstall font family: %s", family.name.c_str());
     statusMessage_ = tr(STR_FONT_INSTALL_FAILED);
     downloadState_ = DownloadState::Error;
     return;
@@ -213,25 +211,37 @@ void FontSelectionActivity::handleUninstall() {
 
   sdFontSystem.markRegistryDirty();
   sdFontSystem.refreshIfDirty();
-  onEnter();
-  managerView_ = ManagerView::Installed;
-}
-
-void FontSelectionActivity::enterManagerView(const ManagerView view) {
-  managerView_ = view;
-  selectedIndex_ = 0;
+  family.installed = false;
+  family.hasUpdate = false;
+  downloadState_ = DownloadState::Ready;
   requestUpdate();
 }
 
-void FontSelectionActivity::leaveManagerView() {
-  managerView_ = ManagerView::Home;
-  selectedIndex_ = 0;
-  requestUpdate();
+void FontSelectionActivity::confirmDownloadAll() {
+  const size_t size = pendingDownloadSize();
+  std::string body = I18N.get(StrId::STR_DOWNLOAD_ALL_CONFIRM);
+  if (size > 0) {
+    body += ": ";
+    body += formatSize(size);
+  }
+  startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DOWNLOAD_ALL), body),
+                         [this](const ActivityResult& result) {
+                           if (!result.isCancelled) {
+                             for (auto& family : catalog_) {
+                               if (!family.installed || family.hasUpdate) {
+                                 if (!downloadCatalogFamily(family)) return;
+                               }
+                             }
+                             statusMessage_ = tr(STR_FONT_INSTALLED);
+                             downloadState_ = DownloadState::Complete;
+                           }
+                           requestUpdate();
+                         });
 }
 
 void FontSelectionActivity::startCatalogLoad() {
   WiFi.mode(WIFI_STA);
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, true),
+  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, false),
                          [this](const ActivityResult& result) { onWifiSelectionComplete(result); });
 }
 
@@ -304,6 +314,14 @@ bool FontSelectionActivity::fetchCatalog() {
       CatalogFile file;
       file.name = fileObj["name"] | "";
       file.size = fileObj["size"] | 0;
+      if (!fileObj["crc32"].isNull()) {
+        if (fileObj["crc32"].is<const char*>()) {
+          file.hasCrc32 = parseCrc32(fileObj["crc32"] | "", file.crc32);
+        } else {
+          file.crc32 = fileObj["crc32"] | static_cast<uint32_t>(0);
+          file.hasCrc32 = true;
+        }
+      }
       if (!FontInstaller::isValidCpfontFilename(file.name.c_str())) continue;
       family.totalSize += file.size;
       family.files.push_back(std::move(file));
@@ -311,6 +329,24 @@ bool FontSelectionActivity::fetchCatalog() {
 
     if (!family.files.empty()) {
       family.installed = installer.isFamilyInstalled(family.name.c_str());
+      if (family.installed) {
+        for (const auto& file : family.files) {
+          char path[160];
+          FontInstaller::buildFontPath(family.name.c_str(), file.name.c_str(), path, sizeof(path));
+          size_t installedSize = 0;
+          if (!getFileSize(path, installedSize) || (file.size > 0 && installedSize != file.size)) {
+            family.hasUpdate = true;
+            break;
+          }
+          if (file.hasCrc32) {
+            uint32_t installedCrc = 0;
+            if (!computeFileCrc32(path, installedCrc) || installedCrc != file.crc32) {
+              family.hasUpdate = true;
+              break;
+            }
+          }
+        }
+      }
       catalog_.push_back(std::move(family));
     }
   }
@@ -323,15 +359,25 @@ bool FontSelectionActivity::fetchCatalog() {
 }
 
 void FontSelectionActivity::downloadSelectedCatalogFont() {
-  if (selectedIndex_ < 0 || selectedIndex_ >= static_cast<int>(catalog_.size())) return;
+  const int familyIndex = familyIndexFromListIndex(selectedIndex_);
+  if (familyIndex < 0 || familyIndex >= static_cast<int>(catalog_.size())) return;
 
-  CatalogFamily& family = catalog_[selectedIndex_];
+  CatalogFamily& family = catalog_[familyIndex];
+  if (downloadCatalogFamily(family)) {
+    statusMessage_ = tr(STR_FONT_INSTALLED);
+    downloadState_ = DownloadState::Complete;
+    requestUpdate();
+  }
+}
+
+bool FontSelectionActivity::downloadCatalogFamily(CatalogFamily& family) {
+  const bool wasInstalled = family.installed;
   FontInstaller installer(sdFontSystem.registry());
   if (!installer.ensureFamilyDir(family.name.c_str())) {
     statusMessage_ = tr(STR_FONT_INSTALL_FAILED);
     downloadState_ = DownloadState::Error;
     requestUpdate();
-    return;
+    return false;
   }
 
   downloadState_ = DownloadState::Downloading;
@@ -339,6 +385,7 @@ void FontSelectionActivity::downloadSelectedCatalogFont() {
   downloadFileCount_ = family.files.size();
   downloadProgress_ = 0;
   downloadTotal_ = 0;
+  statusMessage_ = family.name;
   requestUpdateAndWait();
 
   for (size_t i = 0; i < family.files.size(); ++i) {
@@ -350,36 +397,156 @@ void FontSelectionActivity::downloadSelectedCatalogFont() {
 
     char destPath[160];
     FontInstaller::buildFontPath(family.name.c_str(), file.name.c_str(), destPath, sizeof(destPath));
+    char tmpPath[168];
+    snprintf(tmpPath, sizeof(tmpPath), "%s.tmp", destPath);
+    Storage.remove(tmpPath);
     const std::string url = catalogBaseUrl_ + file.name;
-    const auto result = HttpDownloader::downloadToFile(url, destPath, [this](size_t done, size_t total) {
+    const auto result = HttpDownloader::downloadToFile(url, tmpPath, [this](size_t done, size_t total) {
       downloadProgress_ = done;
       downloadTotal_ = total;
       requestUpdate(true);
     });
 
-    if (result != HttpDownloader::OK || !installer.validateCpfontFile(destPath)) {
-      installer.deleteFamily(family.name.c_str());
-      family.installed = false;
+    if (result != HttpDownloader::OK || !verifyDownloadedFile(tmpPath, file)) {
+      Storage.remove(tmpPath);
+      if (!wasInstalled) installer.deleteFamily(family.name.c_str());
+      family.installed = wasInstalled;
       statusMessage_ = tr(STR_FONT_INSTALL_FAILED);
       downloadState_ = DownloadState::Error;
       requestUpdate();
-      return;
+      return false;
     }
+    char bakPath[168];
+    snprintf(bakPath, sizeof(bakPath), "%s.bak", destPath);
+    const bool hadExisting = Storage.exists(destPath);
+    if (hadExisting) {
+      Storage.remove(bakPath);
+      if (!Storage.rename(destPath, bakPath)) {
+        Storage.remove(tmpPath);
+        statusMessage_ = tr(STR_FONT_INSTALL_FAILED);
+        downloadState_ = DownloadState::Error;
+        requestUpdate();
+        return false;
+      }
+    }
+    if (!Storage.rename(tmpPath, destPath)) {
+      Storage.remove(tmpPath);
+      if (hadExisting) Storage.rename(bakPath, destPath);
+      if (!wasInstalled) installer.deleteFamily(family.name.c_str());
+      family.installed = wasInstalled;
+      statusMessage_ = tr(STR_FONT_INSTALL_FAILED);
+      downloadState_ = DownloadState::Error;
+      requestUpdate();
+      return false;
+    }
+    if (hadExisting) Storage.remove(bakPath);
   }
 
   installer.refreshRegistry();
   sdFontSystem.markRegistryDirty();
   sdFontSystem.refreshIfDirty();
   family.installed = true;
-  statusMessage_ = tr(STR_FONT_INSTALLED);
-  downloadState_ = DownloadState::Complete;
+  family.hasUpdate = false;
+  downloadState_ = DownloadState::Ready;
   requestUpdate();
+  return true;
 }
 
-std::string FontSelectionActivity::currentDownloadValue(const int index) const {
-  if (index < 0 || index >= static_cast<int>(catalog_.size())) return "";
-  const auto& family = catalog_[index];
+bool FontSelectionActivity::verifyDownloadedFile(const char* path, const CatalogFile& file) const {
+  FontInstaller installer(sdFontSystem.registry());
+  if (!installer.validateCpfontFile(path)) return false;
+  if (file.size > 0) {
+    size_t actualSize = 0;
+    if (!getFileSize(path, actualSize) || actualSize != file.size) return false;
+  }
+  if (file.hasCrc32) {
+    uint32_t actualCrc = 0;
+    if (!computeFileCrc32(path, actualCrc) || actualCrc != file.crc32) return false;
+  }
+  return true;
+}
+
+bool FontSelectionActivity::getFileSize(const char* path, size_t& sizeOut) const {
+  FsFile file;
+  if (!Storage.openFileForRead("FONT", path, file)) return false;
+  sizeOut = file.fileSize();
+  file.close();
+  return true;
+}
+
+bool FontSelectionActivity::computeFileCrc32(const char* path, uint32_t& crcOut) const {
+  FsFile file;
+  if (!Storage.openFileForRead("FONT", path, file)) return false;
+
+  uint8_t buffer[128];
+  uint32_t crc = 0xFFFFFFFFUL;
+  while (file.available() > 0) {
+    const int readLen = file.read(buffer, sizeof(buffer));
+    if (readLen <= 0) {
+      file.close();
+      return false;
+    }
+    crc = crc32Update(crc, buffer, static_cast<size_t>(readLen));
+  }
+  file.close();
+  crcOut = crc ^ 0xFFFFFFFFUL;
+  return true;
+}
+
+bool FontSelectionActivity::showDownloadAllRow() const {
+  for (const auto& family : catalog_) {
+    if (!family.installed || family.hasUpdate) return true;
+  }
+  return false;
+}
+
+bool FontSelectionActivity::isDownloadAllRow(const int index) const { return showDownloadAllRow() && index == 0; }
+
+int FontSelectionActivity::familyIndexFromListIndex(const int index) const {
+  const int familyIndex = index - (showDownloadAllRow() ? 1 : 0);
+  return familyIndex >= 0 && familyIndex < static_cast<int>(catalog_.size()) ? familyIndex : -1;
+}
+
+size_t FontSelectionActivity::pendingDownloadSize() const {
+  size_t total = 0;
+  for (const auto& family : catalog_) {
+    if (!family.installed || family.hasUpdate) total += family.totalSize;
+  }
+  return total;
+}
+
+bool FontSelectionActivity::selectedCatalogFontInstalled() const {
+  const int familyIndex = familyIndexFromListIndex(selectedIndex_);
+  return familyIndex >= 0 && familyIndex < static_cast<int>(catalog_.size()) && catalog_[familyIndex].installed &&
+         !catalog_[familyIndex].hasUpdate;
+}
+
+std::string FontSelectionActivity::currentCatalogValue(const int index) const {
+  if (isDownloadAllRow(index)) return formatSize(pendingDownloadSize());
+  const int familyIndex = familyIndexFromListIndex(index);
+  if (familyIndex < 0 || familyIndex >= static_cast<int>(catalog_.size())) return "";
+  const auto& family = catalog_[familyIndex];
+  if (family.hasUpdate) return tr(STR_UPDATE_AVAILABLE);
   return family.installed ? tr(STR_INSTALLED) : formatSize(family.totalSize);
+}
+
+bool FontSelectionActivity::parseCrc32(const char* value, uint32_t& crcOut) {
+  if (value == nullptr || value[0] == '\0') return false;
+  char* end = nullptr;
+  const unsigned long parsed = std::strtoul(value, &end, 16);
+  if (end == value || *end != '\0') return false;
+  crcOut = static_cast<uint32_t>(parsed);
+  return true;
+}
+
+uint32_t FontSelectionActivity::crc32Update(uint32_t crc, const uint8_t* data, const size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    crc ^= data[i];
+    for (uint8_t bit = 0; bit < 8; ++bit) {
+      crc = (crc >> 1) ^ (0xEDB88320UL & static_cast<uint32_t>(-static_cast<int32_t>(crc & 1)));
+    }
+  }
+  return crc;
 }
 
 std::string FontSelectionActivity::formatSize(const size_t bytes) {
@@ -401,25 +568,15 @@ void FontSelectionActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  const char* title = mode_ == Mode::Manage ? tr(STR_FONT_MANAGER) : tr(STR_FONT_FAMILY);
+  const char* title = mode_ == Mode::Manage ? tr(STR_FONT_BROWSER) : tr(STR_FONT_FAMILY);
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, title);
 
   int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
-  if (mode_ == Mode::Manage && managerView_ == ManagerView::Home) {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, MANAGER_HOME_COUNT, selectedIndex_,
-                 [](int index) { return std::string(I18N.get(MANAGER_HOME_LABELS[index])); }, nullptr, nullptr,
-                 nullptr, false);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-    renderer.displayBuffer();
-    return;
-  }
-
-  if (mode_ == Mode::Manage && managerView_ == ManagerView::Download) {
+  if (mode_ == Mode::Manage) {
     if (downloadState_ != DownloadState::Ready) {
-      const char* message = statusMessage_.empty() ? tr(STR_DOWNLOAD_FONTS) : statusMessage_.c_str();
+      const char* message = statusMessage_.empty() ? tr(STR_FONT_BROWSER) : statusMessage_.c_str();
       renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - renderer.getLineHeight(UI_10_FONT_ID) / 2, message,
                                 true, EpdFontFamily::BOLD);
       if (downloadState_ == DownloadState::Downloading) {
@@ -428,18 +585,40 @@ void FontSelectionActivity::render(RenderLock&&) {
             formatSize(downloadProgress_) + "/" + formatSize(downloadTotal_);
         renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 18, progress.c_str());
       }
-      const auto labels = mappedInput.mapLabels(tr(STR_BACK), downloadState_ == DownloadState::Complete ? tr(STR_OK_BUTTON) : tr(STR_DOWNLOAD),
-                                                "", "");
+      const auto actionLabel = downloadState_ == DownloadState::Complete ? tr(STR_OK_BUTTON) : tr(STR_RETRY);
+      const auto labels = mappedInput.mapLabels(tr(STR_BACK), actionLabel, "", "");
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
       renderer.displayBuffer();
       return;
     }
 
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(catalog_.size()),
-                 selectedIndex_, [this](int index) { return catalog_[index].name; },
-                 [this](int index) { return shortStatus(catalog_[index].description); }, nullptr,
-                 [this](int index) { return currentDownloadValue(index); }, true);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DOWNLOAD), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    const int itemCount = currentListSize();
+    if (itemCount == 0) {
+      renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - renderer.getLineHeight(UI_10_FONT_ID) / 2,
+                                tr(STR_NO_FONTS_AVAILABLE), true, EpdFontFamily::BOLD);
+    } else {
+      GUI.drawList(
+          renderer, Rect{0, contentTop, pageWidth, contentHeight}, itemCount, selectedIndex_,
+          [this](int index) -> std::string {
+            if (isDownloadAllRow(index)) return tr(STR_DOWNLOAD_ALL);
+            const int familyIndex = familyIndexFromListIndex(index);
+            return familyIndex >= 0 ? catalog_[familyIndex].name : "";
+          },
+          [this](int index) -> std::string {
+            if (isDownloadAllRow(index)) return tr(STR_DOWNLOAD_ALL_CONFIRM);
+            const int familyIndex = familyIndexFromListIndex(index);
+            return familyIndex >= 0 ? shortStatus(catalog_[familyIndex].description) : "";
+          },
+          nullptr, [this](int index) { return currentCatalogValue(index); }, true);
+    }
+
+    const char* actionLabel = tr(STR_DOWNLOAD);
+    if (isDownloadAllRow(selectedIndex_)) {
+      actionLabel = tr(STR_DOWNLOAD);
+    } else if (selectedCatalogFontInstalled()) {
+      actionLabel = tr(STR_DELETE);
+    }
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), actionLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
     return;
@@ -458,29 +637,20 @@ void FontSelectionActivity::render(RenderLock&&) {
     currentFontIndex = SETTINGS.fontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? SETTINGS.fontFamily : 0;
   }
 
-  if (mode_ == Mode::Manage && managerView_ == ManagerView::Installed && currentListSize() == 0) {
+  if (fonts_.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - renderer.getLineHeight(UI_10_FONT_ID) / 2,
                               tr(STR_NO_CUSTOM_FONTS), true, EpdFontFamily::BOLD);
   } else {
-    const bool customOnly = mode_ == Mode::Manage && managerView_ == ManagerView::Installed;
-    const int itemCount = customOnly ? currentListSize() : static_cast<int>(fonts_.size());
+    const int itemCount = static_cast<int>(fonts_.size());
     GUI.drawList(
         renderer, Rect{0, contentTop, pageWidth, contentHeight}, itemCount, selectedIndex_,
-        [this, customOnly](int index) {
-          const int fontIndex = customOnly ? index + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT) : index;
-          return fonts_[fontIndex].name;
-        },
+        [this](int index) { return fonts_[index].name; },
         nullptr, nullptr,
-        [this, currentFontIndex, customOnly](int index) -> std::string {
-          const int fontIndex = customOnly ? index + static_cast<int>(CrossPointSettings::BUILTIN_FONT_COUNT) : index;
-          return fontIndex == currentFontIndex ? tr(STR_SELECTED) : "";
-        },
+        [this, currentFontIndex](int index) -> std::string { return index == currentFontIndex ? tr(STR_SELECTED) : ""; },
         true);
   }
 
-  const auto labels = mode_ == Mode::Manage && selectedFontIsCustom()
-                          ? mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DELETE))
-                          : mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

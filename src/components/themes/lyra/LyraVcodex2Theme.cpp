@@ -45,7 +45,7 @@ constexpr int SP_12 = 12;
 constexpr int SP_16 = 16;
 constexpr int SP_24 = 24;
 constexpr int CARD_RADIUS = 6;
-constexpr int COVER_WIDTH = 84;
+constexpr int COVER_WIDTH = 96;
 constexpr int FALLBACK_COVER_RATIO_W = 2;
 constexpr int FALLBACK_COVER_RATIO_H = 3;
 constexpr int SUMMARY_HEIGHT = 58;
@@ -344,10 +344,6 @@ void LyraVcodex2Theme::drawList(const GfxRenderer& renderer, Rect rect, int item
                         !(i == selectedIndex && highlightValue));
     }
 
-    if (i + 1 < itemCount && i + 1 < pageStartIndex + pageItems) {
-      const int separatorY = itemY + rowHeight - 1;
-      renderer.drawLine(rowX + LIST_ROW_INSET, separatorY, rowX + rowWidth - LIST_ROW_INSET, separatorY, true);
-    }
   }
 }
 
@@ -375,11 +371,12 @@ void LyraVcodex2Theme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
   const int coverX = cardX + SP_12;
   const int coverY = heroY + SP_16;
   const int coverH = std::min(LyraVcodex2Metrics::values.homeCoverHeight, heroH - SP_16 - SP_12);
-  const int textX = coverX + COVER_WIDTH + SP_16;
+  const int coverW = std::max(COVER_WIDTH, coverH * FALLBACK_COVER_RATIO_W / FALLBACK_COVER_RATIO_H);
+  const int textX = coverX + coverW + SP_16;
   const int textW = cardW - (textX - cardX) - SP_12;
 
   drawCardSurface(renderer, Rect{cardX, heroY, cardW, heroH}, selectorIndex == 0);
-  drawCover(renderer, book, coverX, coverY, COVER_WIDTH, coverH);
+  drawCover(renderer, book, coverX, coverY, coverW, coverH);
   coverRendered = false;
   coverBufferStored = false;
   bufferRestored = false;
@@ -389,14 +386,14 @@ void LyraVcodex2Theme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
   const int progressTextWidth = renderer.getTextWidth(UI_12_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
   const int titleW = std::max(20, textW - progressTextWidth - SP_8);
   const auto titleLines = renderer.wrappedText(UI_12_FONT_ID, book.title.c_str(), titleW, 2, EpdFontFamily::BOLD);
-  int currentY = heroY + SP_8;
+  int currentY = heroY + SP_12;
   renderer.drawText(SMALL_FONT_ID, textX, currentY, tr(STR_CONTINUE_READING), true);
   currentY += renderer.getLineHeight(SMALL_FONT_ID) + SP_4;
   for (const auto& line : titleLines) {
     renderer.drawText(UI_12_FONT_ID, textX, currentY, line.c_str(), true, EpdFontFamily::BOLD);
     currentY += renderer.getLineHeight(UI_12_FONT_ID);
   }
-  renderer.drawText(UI_12_FONT_ID, cardX + cardW - SP_12 - progressTextWidth, heroY + SP_8, progressText.c_str(), true,
+  renderer.drawText(UI_12_FONT_ID, cardX + cardW - SP_12 - progressTextWidth, heroY + SP_12, progressText.c_str(), true,
                     EpdFontFamily::BOLD);
 
   if (!book.author.empty()) {
@@ -406,7 +403,7 @@ void LyraVcodex2Theme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
     currentY += renderer.getLineHeight(UI_10_FONT_ID);
   }
 
-  currentY += SP_12;
+  currentY = std::min(currentY + SP_12, heroY + heroH - 58);
   drawMiniProgressBar(renderer, Rect{textX, currentY, textW, PROGRESS_BAR_HEIGHT}, progressPercent);
 
   const ReadingBookStats* stats = READING_STATS.findMatchingBookForPath(book.path, book.title, book.author);

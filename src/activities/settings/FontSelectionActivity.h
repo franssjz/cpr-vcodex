@@ -2,6 +2,8 @@
 
 #include <SdCardFontRegistry.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -21,22 +23,33 @@ class FontSelectionActivity final : public Activity {
   void render(RenderLock&&) override;
 
  private:
-  enum class ManagerTab { Installed, Download };
-  enum class ManagerView { Home, Installed, Download };
   enum class DownloadState { NotLoaded, Loading, Ready, Downloading, Complete, Error };
 
+  struct CatalogFile;
+  struct CatalogFamily;
+
   void handleSelection();
-  void handleUninstall();
-  void confirmUninstall();
-  bool selectedFontIsCustom() const;
-  void enterManagerView(ManagerView view);
-  void leaveManagerView();
+  void handleCatalogAction();
+  void confirmDeleteSelectedCatalogFont();
+  void handleDeleteCatalogFont();
+  void confirmDownloadAll();
   void startCatalogLoad();
   void onWifiSelectionComplete(const ActivityResult& result);
   bool fetchCatalog();
   void downloadSelectedCatalogFont();
+  bool downloadCatalogFamily(CatalogFamily& family);
+  bool verifyDownloadedFile(const char* path, const CatalogFile& file) const;
+  bool getFileSize(const char* path, size_t& sizeOut) const;
+  bool computeFileCrc32(const char* path, uint32_t& crcOut) const;
+  bool showDownloadAllRow() const;
+  bool isDownloadAllRow(int index) const;
+  int familyIndexFromListIndex(int index) const;
   int currentListSize() const;
-  std::string currentDownloadValue(int index) const;
+  size_t pendingDownloadSize() const;
+  bool selectedCatalogFontInstalled() const;
+  std::string currentCatalogValue(int index) const;
+  static bool parseCrc32(const char* value, uint32_t& crcOut);
+  static uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len);
   static std::string formatSize(size_t bytes);
 
   struct FontEntry {
@@ -48,6 +61,8 @@ class FontSelectionActivity final : public Activity {
   struct CatalogFile {
     std::string name;
     size_t size = 0;
+    uint32_t crc32 = 0;
+    bool hasCrc32 = false;
   };
 
   struct CatalogFamily {
@@ -56,11 +71,11 @@ class FontSelectionActivity final : public Activity {
     std::vector<CatalogFile> files;
     size_t totalSize = 0;
     bool installed = false;
+    bool hasUpdate = false;
   };
 
   const SdCardFontRegistry* registry_;
   Mode mode_;
-  ManagerView managerView_ = ManagerView::Home;
   DownloadState downloadState_ = DownloadState::NotLoaded;
   ButtonNavigator buttonNavigator_;
   std::vector<FontEntry> fonts_;

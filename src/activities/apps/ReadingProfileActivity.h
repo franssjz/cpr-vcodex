@@ -55,8 +55,8 @@ class ReadingProfileActivity final : public Activity {
   int scrollDirection = 0;
   bool profileCacheValid = false;
   ReadingProfileSummary profileSummary;
-  std::array<ReadingProfileInsightCard, 10> insightCards;
-  std::array<std::vector<std::string>, 10> cachedInsightLabelLines;
+  std::array<ReadingProfileInsightCard, 12> insightCards;
+  std::array<std::vector<std::string>, 12> cachedInsightLabelLines;
   std::array<std::vector<std::string>, 4> cachedAxisLabelLines;
   std::array<std::vector<std::string>, 4> cachedSectionDescriptionLines;
   std::array<ReadingProfileMetricCardCache, 4> cachedMetricCardLines;

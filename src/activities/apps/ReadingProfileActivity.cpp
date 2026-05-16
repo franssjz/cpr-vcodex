@@ -18,26 +18,26 @@
 #include "util/TimeUtils.h"
 
 namespace {
-constexpr int RADAR_RADIUS = 56;
+constexpr int RADAR_RADIUS = 46;
 constexpr int CONTENT_TOP_GAP = 18;
-constexpr int INSIGHT_CARD_HEIGHT = 70;
+constexpr int INSIGHT_CARD_HEIGHT = 88;
 constexpr int INSIGHT_CARD_GAP = 12;
 constexpr int INSIGHT_SECTION_TITLE_HEIGHT = 22;
 constexpr int INSIGHT_SECTION_GAP = 24;
 constexpr int RADAR_TOP_GAP = 52;
-constexpr int RADAR_SECTION_HEIGHT = 236;
+constexpr int RADAR_SECTION_HEIGHT = 270;
 constexpr int SCORE_TOP_GAP = 20;
 constexpr int SCORE_CARD_HEIGHT = 74;
 constexpr int SECTION_TITLE_HEIGHT = 20;
 constexpr int SECTION_DESCRIPTION_TOP_GAP = 8;
 constexpr int SECTION_DESCRIPTION_BOTTOM_GAP = 12;
-constexpr int SECTION_CARD_HEIGHT = 74;
-constexpr int SECTION_TERTIARY_CARD_HEIGHT = 100;
+constexpr int SECTION_CARD_HEIGHT = 92;
+constexpr int SECTION_TERTIARY_CARD_HEIGHT = 118;
 constexpr int SECTION_CARD_GAP = 16;
 constexpr int SECTION_ROW_GAP = 20;
 constexpr int SECTION_EXTRA_CARD_ROW_GAP = 12;
 constexpr int CONTENT_SCROLL_STEP = 110;
-constexpr int RADAR_CENTER_Y_OFFSET = 104;
+constexpr int RADAR_CENTER_Y_OFFSET = 132;
 constexpr uint32_t SCROLL_REPEAT_START_MS = 260;
 constexpr uint32_t SCROLL_REPEAT_INTERVAL_MS = 130;
 constexpr uint32_t LAST_7_DAYS = 7;
@@ -47,7 +47,7 @@ constexpr uint32_t THIRTY_MINUTES_MS = 30U * 60U * 1000U;
 enum class AxisLabelAlign { Left, Center, Right };
 
 constexpr size_t PROFILE_SECTION_COUNT = 4;
-constexpr size_t INSIGHT_CARD_COUNT = 10;
+constexpr size_t INSIGHT_CARD_COUNT = 12;
 constexpr int INSIGHT_SECTION_COUNT = 3;
 constexpr std::array<int, PROFILE_SECTION_COUNT> AXIS_LABEL_WIDTHS = {112, 144, 126, 126};
 constexpr std::array<AxisLabelAlign, PROFILE_SECTION_COUNT> AXIS_LABEL_ALIGNS = {AxisLabelAlign::Center,
@@ -71,7 +71,7 @@ struct InsightSection {
 constexpr std::array<InsightSection, INSIGHT_SECTION_COUNT> INSIGHT_SECTIONS = {
     InsightSection{StrId::STR_READING_SUMMARY, 0, 4},
     InsightSection{StrId::STR_READING_HABITS, 4, 4},
-    InsightSection{StrId::STR_PREDICTIONS, 8, 2},
+    InsightSection{StrId::STR_PREDICTIONS, 8, 4},
 };
 
 int roundDiv(const int numerator, const int denominator) {
@@ -241,6 +241,32 @@ std::string buildFinishEstimateLabel() {
   return ReadingStatsAnalytics::formatDurationHm(bestRemainingMs);
 }
 
+const ReadingBookStats* findCurrentPredictionBook() {
+  const ReadingBookStats* best = nullptr;
+  for (const auto& book : READING_STATS.getBooks()) {
+    if (book.completed || book.lastProgressPercent == 0 || book.lastProgressPercent >= 100) {
+      continue;
+    }
+    if (best == nullptr || book.lastReadAt > best->lastReadAt) {
+      best = &book;
+    }
+  }
+  return best;
+}
+
+std::string buildCurrentBookTimeLeftLabel() {
+  const auto* book = findCurrentPredictionBook();
+  if (book == nullptr) return tr(STR_LEARNING);
+  const auto estimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(*book);
+  return ReadingStatsAnalytics::formatTimeLeftEstimate(estimate);
+}
+
+std::string buildCurrentBookPaceTrendLabel() {
+  const auto* book = findCurrentPredictionBook();
+  if (book == nullptr) return tr(STR_LEARNING);
+  return ReadingStatsAnalytics::formatPaceTrend(*book);
+}
+
 bool shouldDrawDitheredPixel(const int x, const int y, const Color color) {
   switch (color) {
     case Color::Black:
@@ -314,17 +340,22 @@ std::vector<std::string> getMetricCardLabelLines(GfxRenderer& renderer, const in
 
 void drawCompactMetricCard(GfxRenderer& renderer, const Rect& rect, const std::string& value,
                            const std::vector<std::string>& labelLines) {
+  constexpr int pad = 12;
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
   const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 20 ? UI_12_FONT_ID
+      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - pad * 2 ? UI_12_FONT_ID
                                                                                                     : UI_10_FONT_ID;
-  renderer.drawText(valueFontId, rect.x + 10, rect.y + 10, value.c_str(), true, EpdFontFamily::BOLD);
+  const std::string safeValue = renderer.truncatedText(valueFontId, value.c_str(), rect.width - pad * 2,
+                                                       EpdFontFamily::BOLD);
+  renderer.drawText(valueFontId, rect.x + pad, rect.y + 10, safeValue.c_str(), true, EpdFontFamily::BOLD);
 
   int labelY = rect.y + 10 + renderer.getLineHeight(valueFontId) + 6;
+  const int labelBottom = rect.y + rect.height - 8;
   for (const auto& line : labelLines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, line.c_str());
+    if (labelY > labelBottom - renderer.getLineHeight(UI_10_FONT_ID)) break;
+    renderer.drawText(UI_10_FONT_ID, rect.x + pad, labelY, line.c_str());
     labelY += renderer.getLineHeight(UI_10_FONT_ID);
   }
 }
@@ -335,19 +366,19 @@ void drawContainedInsightCard(GfxRenderer& renderer, const Rect& rect, const std
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  int labelY = rect.y + 8;
-  const int labelBottom = rect.y + 8 + renderer.getLineHeight(UI_10_FONT_ID) * 2;
+  int labelY = rect.y + 10;
+  const int valueFont =
+      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - pad * 2 ? UI_12_FONT_ID
+                                                                                                        : UI_10_FONT_ID;
+  const int valueY = rect.y + rect.height - renderer.getLineHeight(valueFont) - 10;
+  const int labelBottom = valueY - 6;
   for (const auto& line : labelLines) {
     if (labelY > labelBottom - renderer.getLineHeight(UI_10_FONT_ID)) break;
     renderer.drawText(UI_10_FONT_ID, rect.x + pad, labelY, line.c_str());
     labelY += renderer.getLineHeight(UI_10_FONT_ID);
   }
 
-  const int valueFont =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - pad * 2 ? UI_12_FONT_ID
-                                                                                                        : UI_10_FONT_ID;
   const std::string safeValue = renderer.truncatedText(valueFont, value.c_str(), rect.width - pad * 2, EpdFontFamily::BOLD);
-  const int valueY = rect.y + rect.height - renderer.getLineHeight(valueFont) - 10;
   renderer.drawText(valueFont, rect.x + pad, valueY, safeValue.c_str(), true, EpdFontFamily::BOLD);
 }
 
@@ -443,8 +474,8 @@ int getInsightDashboardHeight() {
 
 int getContentBottom(const GfxRenderer& renderer, const int contentTop, const ReadingProfileSummary& summary,
                      const std::array<std::vector<std::string>, 4>& sectionDescriptionLines) {
-  int sectionTop = contentTop + getInsightDashboardHeight() + RADAR_TOP_GAP + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP +
-                   SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
+  int sectionTop = contentTop + 44 + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP + SCORE_CARD_HEIGHT + SECTION_ROW_GAP +
+                   getInsightDashboardHeight() + SECTION_ROW_GAP;
   const auto sections = getProfileSections(summary);
   for (size_t index = 0; index < sections.size(); ++index) {
     const auto& section = sections[index];
@@ -648,8 +679,10 @@ std::array<ReadingProfileInsightCard, INSIGHT_CARD_COUNT> buildInsightCards(cons
   cards[5] = ReadingProfileInsightCard{std::to_string(weekReadingDays) + "/7", StrId::STR_READING_DAYS_THIS_WEEK};
   cards[6] = ReadingProfileInsightCard{I18N.get(getConsistencyLabel(summary, weekMs)), StrId::STR_HABIT_TYPE};
   cards[7] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatDurationHm(weekMs), StrId::STR_THIS_WEEK};
-  cards[8] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatEstimateConfidence(confidence), StrId::STR_ESTIMATE_CONFIDENCE};
-  cards[9] = ReadingProfileInsightCard{buildFinishEstimateLabel(), StrId::STR_FINISH_PREDICTION};
+  cards[8] = ReadingProfileInsightCard{buildFinishEstimateLabel(), StrId::STR_FINISH_PREDICTION};
+  cards[9] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatEstimateConfidence(confidence), StrId::STR_ESTIMATE_CONFIDENCE};
+  cards[10] = ReadingProfileInsightCard{buildCurrentBookTimeLeftLabel(), StrId::STR_TIME_LEFT};
+  cards[11] = ReadingProfileInsightCard{buildCurrentBookPaceTrendLabel(), StrId::STR_READING_PACE_TREND};
   return cards;
 }
 }  // namespace
@@ -669,10 +702,11 @@ void ReadingProfileActivity::rebuildProfileCache() {
         getMetricCardLabelLines(renderer, insightCardWidth - 20, insightCards[index].labelId);
   }
 
-  cachedRadarTop = contentTop + getInsightDashboardHeight() + RADAR_TOP_GAP;
+  cachedRadarTop = contentTop + 28;
   cachedScoreTop = cachedRadarTop + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP;
 
-  int sectionTop = cachedScoreTop + SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
+  const int insightTop = cachedScoreTop + SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
+  int sectionTop = insightTop + getInsightDashboardHeight() + SECTION_ROW_GAP;
   const int cardLabelWidth = (pageWidth - sidePadding * 2 - SECTION_CARD_GAP) / 2 - 20;
 
   for (size_t index = 0; index < sections.size(); ++index) {
@@ -779,7 +813,8 @@ void ReadingProfileActivity::render(RenderLock&&) {
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
 
   const int insightCardWidth = (pageWidth - sidePadding * 2 - INSIGHT_CARD_GAP) / 2;
-  int insightY = contentTop - scrollOffset;
+  const int insightTop = cachedScoreTop + SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
+  int insightY = insightTop - scrollOffset;
   for (const auto& insightSection : INSIGHT_SECTIONS) {
     if (intersectsVertical(insightY, INSIGHT_SECTION_TITLE_HEIGHT, viewportTop, viewportBottom)) {
       renderer.drawText(UI_10_FONT_ID, sidePadding, insightY, I18N.get(insightSection.titleId), true,
@@ -809,9 +844,10 @@ void ReadingProfileActivity::render(RenderLock&&) {
   const int radarTop = cachedRadarTop - scrollOffset;
   const int radarCenterX = pageWidth / 2;
   const int radarCenterY = radarTop + RADAR_CENTER_Y_OFFSET;
-  if (intersectsVertical(radarTop - 32, RADAR_SECTION_HEIGHT + 64, viewportTop, viewportBottom)) {
-    renderer.drawText(UI_10_FONT_ID, sidePadding, radarTop - 38, tr(STR_PROFILE_SHAPE), true, EpdFontFamily::BOLD);
-    renderer.drawRect(sidePadding, radarTop - 16, pageWidth - sidePadding * 2, RADAR_SECTION_HEIGHT + 12);
+  if (intersectsVertical(radarTop, RADAR_SECTION_HEIGHT, viewportTop, viewportBottom)) {
+    renderer.drawRect(sidePadding, radarTop, pageWidth - sidePadding * 2, RADAR_SECTION_HEIGHT);
+    renderer.drawText(UI_10_FONT_ID, sidePadding + 10, radarTop + 10, tr(STR_PROFILE_SHAPE), true,
+                      EpdFontFamily::BOLD);
     const int radarXs[4] = {radarCenterX, radarCenterX + RADAR_RADIUS, radarCenterX, radarCenterX - RADAR_RADIUS};
     const int radarYs[4] = {radarCenterY - RADAR_RADIUS, radarCenterY, radarCenterY + RADAR_RADIUS, radarCenterY};
 
@@ -838,13 +874,13 @@ void ReadingProfileActivity::render(RenderLock&&) {
       renderer.drawLine(scoreXs[index], scoreYs[index], scoreXs[next], scoreYs[next], 2, true);
     }
 
-    drawAxisSummary(renderer, radarCenterX - 56, radarTop - 26, AXIS_LABEL_WIDTHS[0], profileSummary.habit.score,
+    drawAxisSummary(renderer, radarCenterX - AXIS_LABEL_WIDTHS[0] / 2, radarTop + 32, AXIS_LABEL_WIDTHS[0], profileSummary.habit.score,
                     cachedAxisLabelLines[0], AXIS_LABEL_ALIGNS[0]);
-    drawAxisSummary(renderer, radarCenterX - 72, radarCenterY + RADAR_RADIUS + 4, AXIS_LABEL_WIDTHS[1],
+    drawAxisSummary(renderer, radarCenterX - AXIS_LABEL_WIDTHS[1] / 2, radarCenterY + RADAR_RADIUS + 4, AXIS_LABEL_WIDTHS[1],
                     profileSummary.stability.score, cachedAxisLabelLines[1], AXIS_LABEL_ALIGNS[1]);
-    drawAxisSummary(renderer, radarCenterX + RADAR_RADIUS + 28, radarCenterY - 18, AXIS_LABEL_WIDTHS[2],
+    drawAxisSummary(renderer, pageWidth - sidePadding - AXIS_LABEL_WIDTHS[2] - 8, radarCenterY - 18, AXIS_LABEL_WIDTHS[2],
                     profileSummary.engagement.score, cachedAxisLabelLines[2], AXIS_LABEL_ALIGNS[2]);
-    drawAxisSummary(renderer, radarCenterX - RADAR_RADIUS - 154, radarCenterY - 18, AXIS_LABEL_WIDTHS[3],
+    drawAxisSummary(renderer, sidePadding + 8, radarCenterY - 18, AXIS_LABEL_WIDTHS[3],
                     profileSummary.depth.score, cachedAxisLabelLines[3], AXIS_LABEL_ALIGNS[3]);
   }
 

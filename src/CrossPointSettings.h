@@ -302,7 +302,7 @@ class CrossPointSettings {
   uint8_t statsShortcutOrder = 2;
   uint8_t syncDayShortcut = SHORTCUT_HOME;
   uint8_t syncDayShortcutOrder = 3;
-  uint8_t settingsShortcut = SHORTCUT_HOME;
+  uint8_t settingsShortcut = SHORTCUT_APPS;
   uint8_t settingsShortcutOrder = 4;
   uint8_t readingStatsShortcut = SHORTCUT_APPS;
   uint8_t readingStatsShortcutOrder = 5;
@@ -326,7 +326,7 @@ class CrossPointSettings {
   uint8_t fileTransferShortcutOrder = 15;
   uint8_t sleepShortcut = SHORTCUT_APPS;
   uint8_t sleepShortcutOrder = 16;
-  uint8_t opdsBrowserShortcut = SHORTCUT_HOME;
+  uint8_t opdsBrowserShortcut = SHORTCUT_APPS;
   uint8_t opdsBrowserShortcutOrder = 17;
   uint8_t browseFilesShortcutVisible = 1;
   uint8_t statsShortcutVisible = 1;

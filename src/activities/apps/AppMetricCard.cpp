@@ -17,7 +17,7 @@ void draw(GfxRenderer& renderer, const Rect& rect, const char* label, const std:
   renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const int textWidth = rect.width - options.contentInset;
+  const int textWidth = rect.width - options.contentInset - (options.showCheck ? 28 : 0);
   const int valueFontId =
       options.shrinkValue &&
               renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) > textWidth

@@ -936,6 +936,8 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
     const Rect inner = insetRect(card, CARD_PAD);
     const int textX = inner.x;
     const int textWidth = inner.width;
+    const int statusStripHeight = 26;
+    const int statusStripTop = card.y + card.height - CARD_PAD - statusStripHeight;
 
     std::string meta;
     if (isFolder) {
@@ -951,7 +953,7 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
       renderer.drawText(SMALL_FONT_ID, iconX + BOOKSHELF_FOLDER_ICON_SIZE + 6, iconY + 7, folderMeta.c_str(), true);
 
       const int titleTop = iconY + BOOKSHELF_FOLDER_ICON_SIZE + 12;
-      const int titleBottom = card.y + card.height - CARD_PAD - 4;
+      const int titleBottom = statusStripTop - 6;
       const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 3);
       int lineY = titleTop;
       for (const auto& line : titleLines) {
@@ -959,13 +961,16 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
         renderer.drawText(UI_10_FONT_ID, textX, lineY, line.c_str(), true);
         lineY += renderer.getLineHeight(UI_10_FONT_ID);
       }
+      renderer.drawLine(inner.x, statusStripTop, inner.x + inner.width - 1, statusStripTop, true);
+      const std::string statusText = renderer.truncatedText(SMALL_FONT_ID, meta.c_str(), inner.width - 8);
+      const int statusW = renderer.getTextWidth(SMALL_FONT_ID, statusText.c_str());
+      renderer.drawText(SMALL_FONT_ID, inner.x + std::max(0, (inner.width - statusW) / 2), statusStripTop + 6,
+                        statusText.c_str(), true);
     } else {
-      const int footerHeight = 24;
-      const int footerTop = card.y + card.height - CARD_PAD - footerHeight;
       const int titleTopReserve = renderer.getLineHeight(SMALL_FONT_ID) * 2 + 8;
       const int subtitleReserve = getEntrySubtitle(index).empty() ? 0 : renderer.getLineHeight(SMALL_FONT_ID) + 4;
-      const int coverMaxHeight = std::max(64, footerTop - inner.y - titleTopReserve - subtitleReserve - 10);
-      const int coverHeight = std::min(std::max(64, coverMaxHeight), std::max(64, card.height - 86));
+      const int coverMaxHeight = std::max(58, statusStripTop - inner.y - titleTopReserve - subtitleReserve - 12);
+      const int coverHeight = std::min(std::max(58, coverMaxHeight), std::max(58, card.height - 92));
       const int coverWidth = std::max(40, std::min(inner.width, coverHeight * BOOK_COVER_RATIO_W / BOOK_COVER_RATIO_H));
       const int coverX = card.x + (card.width - coverWidth) / 2;
       const int coverY = inner.y;
@@ -977,7 +982,7 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
 
       const auto titleLines = renderer.wrappedText(SMALL_FONT_ID, getEntryTitle(index).c_str(), textWidth, 2);
       int lineY = coverY + coverHeight + 8;
-      const int subtitleBottom = footerTop - 3;
+      const int subtitleBottom = statusStripTop - 6;
       for (const auto& line : titleLines) {
         if (lineY > subtitleBottom - renderer.getLineHeight(SMALL_FONT_ID)) break;
         renderer.drawText(SMALL_FONT_ID, textX, lineY, line.c_str(), true);
@@ -992,11 +997,11 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
       if (meta.empty()) {
         meta = fileTypeLabel(entry);
       }
-      const std::string clippedMeta = renderer.truncatedText(SMALL_FONT_ID, meta.c_str(), textWidth);
-      const int badgeY = footerTop + 6;
-      const int badgeW = std::min(textWidth, renderer.getTextWidth(SMALL_FONT_ID, clippedMeta.c_str()) + 12);
-      renderer.drawRoundedRect(textX, footerTop, badgeW, footerHeight - 2, 1, 4, true);
-      renderer.drawText(SMALL_FONT_ID, textX + 6, badgeY, clippedMeta.c_str(), true);
+      renderer.drawLine(inner.x, statusStripTop, inner.x + inner.width - 1, statusStripTop, true);
+      const std::string statusText = renderer.truncatedText(SMALL_FONT_ID, meta.c_str(), inner.width - 8);
+      const int statusW = renderer.getTextWidth(SMALL_FONT_ID, statusText.c_str());
+      renderer.drawText(SMALL_FONT_ID, inner.x + std::max(0, (inner.width - statusW) / 2), statusStripTop + 6,
+                        statusText.c_str(), true, EpdFontFamily::BOLD);
     }
   }
 }

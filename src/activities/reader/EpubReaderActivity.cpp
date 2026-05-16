@@ -672,6 +672,12 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
                                READING_STATS.resumeSession();
+                               sdFontSystem.ensureLoaded(renderer);
+                               if (section) {
+                                 cachedSpineIndex = currentSpineIndex;
+                                 cachedChapterTotalPageCount = section->pageCount;
+                                 nextPageNumber = section->currentPage;
+                               }
                                section.reset();
                                requestUpdate();
                              });

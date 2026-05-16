@@ -257,9 +257,13 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("hideBatteryPercentage", s.hideBatteryPercentage, CrossPointSettings::HIDE_BATTERY_PERCENTAGE_COUNT);
   loadEnum("refreshFrequency", s.refreshFrequency, CrossPointSettings::REFRESH_FREQUENCY_COUNT);
   {
-    const uint8_t rawUiTheme = doc["uiTheme"] | s.uiTheme;
-    const uint8_t uiThemeSchemaVersion = doc["uiThemeSchemaVersion"] | static_cast<uint8_t>(0);
-    s.uiTheme = migrateStoredUiTheme(rawUiTheme, uiThemeSchemaVersion, s.uiTheme, needsResave);
+    if (doc["uiTheme"].isNull()) {
+      if (needsResave) *needsResave = true;
+    } else {
+      const uint8_t rawUiTheme = doc["uiTheme"] | s.uiTheme;
+      const uint8_t uiThemeSchemaVersion = doc["uiThemeSchemaVersion"] | static_cast<uint8_t>(0);
+      s.uiTheme = migrateStoredUiTheme(rawUiTheme, uiThemeSchemaVersion, s.uiTheme, needsResave);
+    }
   }
   loadToggle("showCurrentBookCard", s.showCurrentBookCard);
   loadToggle("fadingFix", s.fadingFix);

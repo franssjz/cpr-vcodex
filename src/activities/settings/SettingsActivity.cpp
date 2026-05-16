@@ -338,7 +338,7 @@ std::string getSettingValueText(const SettingInfo& setting) {
   if (setting.type == SettingType::ACTION) {
     switch (setting.action) {
       case SettingAction::FontSelection:
-        return getReaderFontSettingValueText();
+        return setting.nameId == StrId::STR_FONT_FAMILY ? getReaderFontSettingValueText() : "";
       case SettingAction::Network:
         return getNetworkSettingValueText();
       case SettingAction::CheckForUpdates:
@@ -888,9 +888,6 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
                           valueText.c_str(), true, EpdFontFamily::REGULAR);
       }
     }
-
-    const int separatorY = currentY + itemHeight - 1;
-    renderer.drawLine(rowX + leftPadding, separatorY, rowX + rowWidth - rightPadding, separatorY, true);
 
     currentY += itemHeight;
     renderedHeight += itemHeight;

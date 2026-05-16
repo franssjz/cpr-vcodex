@@ -107,7 +107,8 @@ inline const ShortcutDefinition* findShortcutDefinition(const ShortcutId id) {
 }
 
 inline bool isShortcutAlwaysVisible(const ShortcutDefinition& definition) {
-  return definition.id == ShortcutId::Settings;
+  (void)definition;
+  return false;
 }
 
 inline bool isStatsForkHiddenShortcut(const ShortcutDefinition& definition) {
