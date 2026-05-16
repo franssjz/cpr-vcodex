@@ -28,7 +28,7 @@ constexpr int COVER_WIDTH = 88;
 constexpr int COVER_HEIGHT = 132;
 constexpr int DONUT_RADIUS = 28;
 constexpr int DONUT_THICKNESS = 6;
-constexpr int METRIC_ROW_HEIGHT = 88;
+constexpr int METRIC_ROW_HEIGHT = 104;
 constexpr int TOP_CARD_HEIGHT = 212;
 constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
@@ -316,7 +316,8 @@ void drawStatsTableRow(GfxRenderer& renderer, const Rect& rect, const char* labe
     y += renderer.getLineHeight(SMALL_FONT_ID);
   }
 
-  const auto lines = renderer.wrappedText(UI_10_FONT_ID, value.c_str(), rect.width - pad * 2, 2, EpdFontFamily::REGULAR);
+  const auto lines = renderer.wrappedText(UI_10_FONT_ID, value.c_str(), rect.width - pad * 2, 3,
+                                          EpdFontFamily::REGULAR);
   const int valueLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   y = std::max(y + 4, rect.y + rect.height - static_cast<int>(lines.size()) * valueLineHeight - 8);
   for (const auto& line : lines) {
@@ -573,7 +574,6 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   if (!baseScreenRestored) {
     renderer.clearScreen();
     const Rect topCardRect = offsetRect(topCard, scrollDy);
-    renderer.fillRectDither(topCardRect.x, topCardRect.y, topCardRect.width, topCardRect.height, Color::LightGray);
     renderer.drawRect(topCardRect.x, topCardRect.y, topCardRect.width, topCardRect.height);
     drawCover(renderer, coverRect, resolvedCoverBmpPath);
 

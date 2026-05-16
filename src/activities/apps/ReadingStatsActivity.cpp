@@ -221,8 +221,6 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   const std::string totalTimeText = ReadingStatsAnalytics::formatDurationHm(book.totalReadingMs);
   renderer.drawText(UI_12_FONT_ID, rect.x + rect.width - sidePadding - progressWidth, titleY + 2,
                     progressText.c_str(), true, EpdFontFamily::BOLD);
-  renderer.drawLine(innerX, dividerY, rect.x + rect.width - sidePadding, dividerY);
-
   const std::string readText = std::string(tr(STR_TOTAL_TIME)) + ": " + totalTimeText;
   const std::string clippedReadText = renderer.truncatedText(UI_10_FONT_ID, readText.c_str(), textWidth,
                                                              EpdFontFamily::BOLD);
