@@ -780,7 +780,7 @@ int FileBrowserActivity::getBookshelfColumns() const {
 }
 
 int FileBrowserActivity::getBookshelfCardHeight() const {
-  if (isLibraryDashboard()) return 108;
+  if (isLibraryDashboard()) return 132;
   const bool insideFolder = basepath != "/";
   if (isLibraryShelf()) return getBookshelfColumns() == 2 ? 220 : 188;
   return getBookshelfColumns() == 2 ? (insideFolder ? 204 : 170) : (insideFolder ? 174 : 146);
@@ -947,14 +947,10 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
       const uint16_t folderItems =
           (index >= 0 && index < static_cast<int>(folderItemCounts.size())) ? folderItemCounts[index] : 0;
       meta = std::to_string(folderItems) + " " + I18N.get(folderItems == 1 ? StrId::STR_ITEM : StrId::STR_ITEMS);
-      const int metaX = iconX + BOOKSHELF_FOLDER_ICON_SIZE + 8;
-      const int metaW = std::max(0, inner.x + inner.width - metaX);
-      const std::string folderMeta = renderer.truncatedText(SMALL_FONT_ID, meta.c_str(), metaW);
-      renderer.drawText(SMALL_FONT_ID, iconX + BOOKSHELF_FOLDER_ICON_SIZE + 6, iconY + 7, folderMeta.c_str(), true);
 
-      const int titleTop = iconY + BOOKSHELF_FOLDER_ICON_SIZE + 12;
+      const int titleTop = iconY + BOOKSHELF_FOLDER_ICON_SIZE + 10;
       const int titleBottom = statusStripTop - 6;
-      const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 3);
+      const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 4);
       int lineY = titleTop;
       for (const auto& line : titleLines) {
         if (lineY > titleBottom - renderer.getLineHeight(UI_10_FONT_ID)) break;
@@ -1025,24 +1021,24 @@ void FileBrowserActivity::renderLibraryDashboard(const Rect& rect, const int pag
     const bool selected = selectorIndex == static_cast<size_t>(index);
     drawContainedCard(renderer, card, selected, 7);
 
-    const int pad = 14;
+    const int pad = 16;
     const Rect inner = insetRect(card, pad);
-    const int iconSize = 32;
+    const int iconSize = 36;
     const int iconX = inner.x;
     const int iconY = inner.y;
     const bool browse = index < static_cast<int>(libraryFileStates.size()) && libraryFileStates[index] == LIBRARY_VIEW_FILES;
     renderer.drawIcon(browse ? FolderIcon : BookIcon, iconX, iconY, iconSize, iconSize);
 
-    const int textX = iconX + iconSize + 10;
+    const int textX = iconX + iconSize + 12;
     const int textWidth = std::max(0, inner.x + inner.width - textX);
-    const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 2, EpdFontFamily::BOLD);
+    const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 3, EpdFontFamily::BOLD);
     int y = inner.y;
     for (const auto& line : titleLines) {
       renderer.drawText(UI_10_FONT_ID, textX, y, line.c_str(), true, EpdFontFamily::BOLD);
       y += renderer.getLineHeight(UI_10_FONT_ID);
     }
-    const auto subtitleLines = renderer.wrappedText(SMALL_FONT_ID, getEntrySubtitle(index).c_str(), inner.width, 2);
-    y = std::max(y + 5, card.y + 58);
+    const auto subtitleLines = renderer.wrappedText(SMALL_FONT_ID, getEntrySubtitle(index).c_str(), inner.width, 3);
+    y = std::max(y + 8, card.y + 66);
     for (const auto& line : subtitleLines) {
       if (y > inner.y + inner.height - renderer.getLineHeight(SMALL_FONT_ID)) break;
       renderer.drawText(SMALL_FONT_ID, inner.x, y, line.c_str(), true);

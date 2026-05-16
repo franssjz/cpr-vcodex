@@ -28,7 +28,7 @@ constexpr int COVER_WIDTH = 88;
 constexpr int COVER_HEIGHT = 132;
 constexpr int DONUT_RADIUS = 28;
 constexpr int DONUT_THICKNESS = 6;
-constexpr int METRIC_ROW_HEIGHT = 82;
+constexpr int METRIC_ROW_HEIGHT = 88;
 constexpr int TOP_CARD_HEIGHT = 212;
 constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
@@ -305,23 +305,23 @@ void drawStatsTableRow(GfxRenderer& renderer, const Rect& rect, const char* labe
                        const bool selected = false) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  } else {
-    renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   }
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
-  const auto labelLines = renderer.wrappedText(SMALL_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::BOLD);
+  const int pad = 12;
+  const auto labelLines = renderer.wrappedText(SMALL_FONT_ID, label, rect.width - pad * 2, 2, EpdFontFamily::BOLD);
   int y = rect.y + 8;
   for (const auto& line : labelLines) {
-    renderer.drawText(SMALL_FONT_ID, rect.x + 12, y, line.c_str(), true, EpdFontFamily::BOLD);
+    renderer.drawText(SMALL_FONT_ID, rect.x + pad, y, line.c_str(), true, EpdFontFamily::BOLD);
     y += renderer.getLineHeight(SMALL_FONT_ID);
   }
 
-  const auto lines = renderer.wrappedText(UI_10_FONT_ID, value.c_str(), rect.width - 24, 2, EpdFontFamily::REGULAR);
-  y += 4;
+  const auto lines = renderer.wrappedText(UI_10_FONT_ID, value.c_str(), rect.width - pad * 2, 2, EpdFontFamily::REGULAR);
+  const int valueLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  y = std::max(y + 4, rect.y + rect.height - static_cast<int>(lines.size()) * valueLineHeight - 8);
   for (const auto& line : lines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 12, y, line.c_str(), true, EpdFontFamily::REGULAR);
-    y += renderer.getLineHeight(UI_10_FONT_ID);
+    renderer.drawText(UI_10_FONT_ID, rect.x + pad, y, line.c_str(), true, EpdFontFamily::REGULAR);
+    y += valueLineHeight;
   }
 }
 
@@ -549,7 +549,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const std::string currentChapter = book->chapterTitle.empty() ? std::string(tr(STR_NOT_SET)) : book->chapterTitle;
   const int chapterTop = currentY + 4;
   const auto chapterLines =
-      renderer.wrappedText(SMALL_FONT_ID, currentChapter.c_str(), sideTextWidth, 2, EpdFontFamily::REGULAR);
+      renderer.wrappedText(SMALL_FONT_ID, currentChapter.c_str(), sideTextWidth, 1, EpdFontFamily::REGULAR);
 
   int cardsTop = topCard.y + topCard.height + metrics.verticalSpacing + 10;
   const int summaryBannerTop = cardsTop;
@@ -558,9 +558,12 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   }
 
   constexpr int metricRowCount = 12;
-  constexpr int metricRowGap = 8;
-  const int contentBottom = cardsTop + metricRowCount * METRIC_ROW_HEIGHT +
-                            (metricRowCount - 1) * metricRowGap + metrics.verticalSpacing;
+  constexpr int metricColumnCount = 2;
+  constexpr int metricRowGap = 10;
+  constexpr int metricColumnGap = 10;
+  const int metricRows = (metricRowCount + metricColumnCount - 1) / metricColumnCount;
+  const int contentBottom = cardsTop + metricRows * METRIC_ROW_HEIGHT + (metricRows - 1) * metricRowGap +
+                            metrics.verticalSpacing;
   maxScrollOffset = std::max(0, contentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
   const int scrollDy = -scrollOffset;
@@ -629,13 +632,16 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
             : progressGainValue;
 
     const Rect tableRect{metrics.contentSidePadding, drawCardsTop, pageWidth - metrics.contentSidePadding * 2,
-                         metricRowCount * METRIC_ROW_HEIGHT + (metricRowCount - 1) * metricRowGap};
+                         metricRows * METRIC_ROW_HEIGHT + (metricRows - 1) * metricRowGap};
+    const int metricCardW = (tableRect.width - metricColumnGap) / metricColumnCount;
     int rowIndex = 0;
     const auto drawRow = [&](const char* label, const std::string& value) {
-      drawStatsTableRow(renderer,
-                        Rect{tableRect.x, tableRect.y + rowIndex * (METRIC_ROW_HEIGHT + metricRowGap), tableRect.width,
-                             METRIC_ROW_HEIGHT},
-                        label, value);
+      const int metricRow = rowIndex / metricColumnCount;
+      const int metricColumn = rowIndex % metricColumnCount;
+      const Rect cardRect{tableRect.x + metricColumn * (metricCardW + metricColumnGap),
+                          tableRect.y + metricRow * (METRIC_ROW_HEIGHT + metricRowGap), metricCardW,
+                          METRIC_ROW_HEIGHT};
+      drawStatsTableRow(renderer, cardRect, label, value);
       rowIndex++;
     };
     drawRow(tr(STR_LAST_SESSION), ReadingStatsAnalytics::formatDurationHm(book->lastSessionMs));
