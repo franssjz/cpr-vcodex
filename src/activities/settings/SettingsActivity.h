@@ -40,9 +40,11 @@ enum class SettingAction {
   OrderAppsShortcuts,
   Bookmarks,
   Favorites,
-  Flashcards,
   SleepApp,
   IfFound,
+  FontSelection,
+  FontDownload,
+  InstalledFonts,
 };
 
 struct SettingInfo {

@@ -28,9 +28,8 @@
 namespace {
 constexpr uint8_t FONT_FAMILY_SCHEMA_VERSION = 2;
 constexpr uint8_t FONT_SIZE_SCHEMA_VERSION = 2;
-constexpr uint8_t UI_THEME_SCHEMA_VERSION = 2;
+constexpr uint8_t UI_THEME_SCHEMA_VERSION = 4;
 constexpr uint8_t TEXT_DARKNESS_SCHEMA_VERSION = 2;
-constexpr uint8_t FLASHCARD_STUDY_MODE_SCHEMA_VERSION = 2;
 
 class HalFileStream : public Stream {
  public:
@@ -175,35 +174,6 @@ uint8_t migrateStoredUiTheme(const uint8_t rawUiTheme, const uint8_t schemaVersi
   return migratedTheme;
 }
 
-uint8_t migrateStoredFlashcardStudyMode(const uint8_t rawMode, const uint8_t schemaVersion, const uint8_t currentDefault,
-                                        bool* needsResave) {
-  if (schemaVersion >= FLASHCARD_STUDY_MODE_SCHEMA_VERSION) {
-    const uint8_t clampedMode = rawMode < static_cast<uint8_t>(CrossPointSettings::FLASHCARD_STUDY_MODE_COUNT)
-                                    ? rawMode
-                                    : currentDefault;
-    if (clampedMode != rawMode && needsResave) *needsResave = true;
-    return clampedMode;
-  }
-
-  // Legacy mapping before Due existed:
-  // - 0 -> Scheduled
-  // - 1 -> Infinite
-  uint8_t migratedMode = currentDefault;
-  switch (rawMode) {
-    case 0:
-      migratedMode = CrossPointSettings::FLASHCARD_STUDY_SCHEDULED;
-      break;
-    case 1:
-      migratedMode = CrossPointSettings::FLASHCARD_STUDY_INFINITE;
-      break;
-    default:
-      migratedMode = currentDefault;
-      break;
-  }
-
-  if (migratedMode != rawMode && needsResave) *needsResave = true;
-  return migratedMode;
-}
 }  // namespace
 
 // Convert legacy settings.
@@ -283,6 +253,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("sleepScreen", s.sleepScreen, CrossPointSettings::SLEEP_SCREEN_MODE_COUNT);
   loadEnum("sleepScreenCoverMode", s.sleepScreenCoverMode, CrossPointSettings::SLEEP_SCREEN_COVER_MODE_COUNT);
   loadEnum("sleepScreenCoverFilter", s.sleepScreenCoverFilter, CrossPointSettings::SLEEP_SCREEN_COVER_FILTER_COUNT);
+  loadEnum("sleepRefreshMode", s.sleepRefreshMode, CrossPointSettings::SLEEP_REFRESH_COUNT);
   loadEnum("hideBatteryPercentage", s.hideBatteryPercentage, CrossPointSettings::HIDE_BATTERY_PERCENTAGE_COUNT);
   loadEnum("refreshFrequency", s.refreshFrequency, CrossPointSettings::REFRESH_FREQUENCY_COUNT);
   {
@@ -290,6 +261,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     const uint8_t uiThemeSchemaVersion = doc["uiThemeSchemaVersion"] | static_cast<uint8_t>(0);
     s.uiTheme = migrateStoredUiTheme(rawUiTheme, uiThemeSchemaVersion, s.uiTheme, needsResave);
   }
+  loadToggle("showCurrentBookCard", s.showCurrentBookCard);
   loadToggle("fadingFix", s.fadingFix);
   loadToggle("darkMode", s.darkMode);
 
@@ -299,6 +271,11 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     if (needsResave) *needsResave = true;
   } else {
     s.fontFamily = rawFontFamily;
+  }
+  {
+    const std::string sdFontFamilyName = doc["sdFontFamilyName"] | std::string("");
+    strncpy(s.sdFontFamilyName, sdFontFamilyName.c_str(), sizeof(s.sdFontFamilyName) - 1);
+    s.sdFontFamilyName[sizeof(s.sdFontFamilyName) - 1] = '\0';
   }
 
   loadEnum("fontSize", s.fontSize, CrossPointSettings::FONT_SIZE_COUNT);
@@ -349,6 +326,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   loadEnum("sleepTimeout", s.sleepTimeout, CrossPointSettings::SLEEP_TIMEOUT_COUNT);
   loadToggle("showHiddenFiles", s.showHiddenFiles);
+  loadEnum("fileBrowserView", s.fileBrowserView, CrossPointSettings::FILE_BROWSER_VIEW_COUNT);
+  loadEnum("bookshelfColumns", s.bookshelfColumns, CrossPointSettings::BOOKSHELF_COLUMNS_COUNT);
 
   loadString("opdsServerUrl", s.opdsServerUrl, sizeof(s.opdsServerUrl));
   loadString("opdsUsername", s.opdsUsername, sizeof(s.opdsUsername));
@@ -372,6 +351,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("statusBarTitle", s.statusBarTitle, CrossPointSettings::STATUS_BAR_TITLE_COUNT);
   loadEnum("statusBarTimeLeft", s.statusBarTimeLeft, CrossPointSettings::STATUS_BAR_TIME_LEFT_COUNT);
   loadToggle("statusBarBattery", s.statusBarBattery);
+  loadEnum("statusBarPlacement", s.statusBarPlacement, CrossPointSettings::STATUS_BAR_PLACEMENT_COUNT);
 
   using S = CrossPointSettings;
   s.frontButtonBack =
@@ -400,15 +380,6 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       TimeZoneRegistry::clampPresetIndex(doc["timeZonePreset"] | TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX);
   s.dateFormat = clamp(doc["dateFormat"] | s.dateFormat, S::DATE_FORMAT_COUNT, s.dateFormat);
   s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);
-  {
-    const uint8_t rawFlashcardStudyMode = doc["flashcardStudyMode"] | s.flashcardStudyMode;
-    const uint8_t flashcardStudyModeSchemaVersion = doc["flashcardStudyModeSchemaVersion"] | static_cast<uint8_t>(0);
-    s.flashcardStudyMode = migrateStoredFlashcardStudyMode(rawFlashcardStudyMode, flashcardStudyModeSchemaVersion,
-                                                           s.flashcardStudyMode, needsResave);
-  }
-  s.flashcardSessionSize =
-      clamp(doc["flashcardSessionSize"] | s.flashcardSessionSize, S::FLASHCARD_SESSION_SIZE_COUNT,
-            s.flashcardSessionSize);
   s.showStatsAfterReading =
       clamp(doc["showStatsAfterReading"] | s.showStatsAfterReading, static_cast<uint8_t>(2), s.showStatsAfterReading);
   s.achievementsEnabled =
@@ -467,10 +438,6 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["favoritesShortcut"] | s.favoritesShortcut, shortcutLocationCount, s.favoritesShortcut);
   s.favoritesShortcutOrder =
       clamp(doc["favoritesShortcutOrder"] | s.favoritesShortcutOrder, shortcutOrderCount, s.favoritesShortcutOrder);
-  s.flashcardsShortcut =
-      clamp(doc["flashcardsShortcut"] | s.flashcardsShortcut, shortcutLocationCount, s.flashcardsShortcut);
-  s.flashcardsShortcutOrder =
-      clamp(doc["flashcardsShortcutOrder"] | s.flashcardsShortcutOrder, shortcutOrderCount, s.flashcardsShortcutOrder);
   s.fileTransferShortcut =
       clamp(doc["fileTransferShortcut"] | s.fileTransferShortcut, shortcutLocationCount, s.fileTransferShortcut);
   s.fileTransferShortcutOrder = clamp(doc["fileTransferShortcutOrder"] | s.fileTransferShortcutOrder,
@@ -519,9 +486,6 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   s.favoritesShortcutVisible =
       clamp(doc["favoritesShortcutVisible"] | s.favoritesShortcutVisible, static_cast<uint8_t>(2),
             s.favoritesShortcutVisible);
-  s.flashcardsShortcutVisible =
-      clamp(doc["flashcardsShortcutVisible"] | s.flashcardsShortcutVisible, static_cast<uint8_t>(2),
-            s.flashcardsShortcutVisible);
   s.fileTransferShortcutVisible =
       clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible, static_cast<uint8_t>(2),
             s.fileTransferShortcutVisible);
@@ -647,14 +611,17 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepScreen"] = s.sleepScreen;
   doc["sleepScreenCoverMode"] = s.sleepScreenCoverMode;
   doc["sleepScreenCoverFilter"] = s.sleepScreenCoverFilter;
+  doc["sleepRefreshMode"] = s.sleepRefreshMode;
   doc["hideBatteryPercentage"] = s.hideBatteryPercentage;
   doc["refreshFrequency"] = s.refreshFrequency;
   doc["uiTheme"] = s.uiTheme;
   doc["uiThemeSchemaVersion"] = UI_THEME_SCHEMA_VERSION;
+  doc["showCurrentBookCard"] = s.showCurrentBookCard;
   doc["fadingFix"] = s.fadingFix;
   doc["darkMode"] = s.darkMode;
 
   doc["fontFamily"] = s.fontFamily;
+  doc["sdFontFamilyName"] = s.sdFontFamilyName;
   doc["fontFamilySchemaVersion"] = FONT_FAMILY_SCHEMA_VERSION;
   doc["fontSize"] = s.fontSize;
   doc["fontSizeSchemaVersion"] = FONT_SIZE_SCHEMA_VERSION;
@@ -679,15 +646,14 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   doc["sleepTimeout"] = s.sleepTimeout;
   doc["showHiddenFiles"] = s.showHiddenFiles;
+  doc["fileBrowserView"] = s.fileBrowserView;
+  doc["bookshelfColumns"] = s.bookshelfColumns;
 
   doc["displayDay"] = s.displayDay;
   doc["syncDayWifiChoice"] = s.syncDayWifiChoice;
   doc["syncDayReminderStarts"] = s.syncDayReminderStarts;
   doc["dateFormat"] = s.dateFormat;
   doc["dailyGoalTarget"] = s.dailyGoalTarget;
-  doc["flashcardStudyModeSchemaVersion"] = FLASHCARD_STUDY_MODE_SCHEMA_VERSION;
-  doc["flashcardStudyMode"] = s.flashcardStudyMode;
-  doc["flashcardSessionSize"] = s.flashcardSessionSize;
   doc["showStatsAfterReading"] = s.showStatsAfterReading;
   doc["achievementsEnabled"] = s.achievementsEnabled;
   doc["achievementPopups"] = s.achievementPopups;
@@ -704,6 +670,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["statusBarTitle"] = s.statusBarTitle;
   doc["statusBarTimeLeft"] = s.statusBarTimeLeft;
   doc["statusBarBattery"] = s.statusBarBattery;
+  doc["statusBarPlacement"] = s.statusBarPlacement;
 
   // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.
   doc["frontButtonBack"] = s.frontButtonBack;
@@ -741,8 +708,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["bookmarksShortcutOrder"] = s.bookmarksShortcutOrder;
   doc["favoritesShortcut"] = s.favoritesShortcut;
   doc["favoritesShortcutOrder"] = s.favoritesShortcutOrder;
-  doc["flashcardsShortcut"] = s.flashcardsShortcut;
-  doc["flashcardsShortcutOrder"] = s.flashcardsShortcutOrder;
   doc["fileTransferShortcut"] = s.fileTransferShortcut;
   doc["fileTransferShortcutOrder"] = s.fileTransferShortcutOrder;
   doc["sleepShortcut"] = s.sleepShortcut;
@@ -762,7 +727,6 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["recentBooksShortcutVisible"] = s.recentBooksShortcutVisible;
   doc["bookmarksShortcutVisible"] = s.bookmarksShortcutVisible;
   doc["favoritesShortcutVisible"] = s.favoritesShortcutVisible;
-  doc["flashcardsShortcutVisible"] = s.flashcardsShortcutVisible;
   doc["fileTransferShortcutVisible"] = s.fileTransferShortcutVisible;
   doc["sleepShortcutVisible"] = s.sleepShortcutVisible;
   doc["opdsBrowserShortcutVisible"] = s.opdsBrowserShortcutVisible;
@@ -852,6 +816,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   } else {
     s.fontFamily = rawFontFamily;
   }
+  {
+    const std::string sdFontFamilyName = doc["sdFontFamilyName"] | std::string("");
+    strncpy(s.sdFontFamilyName, sdFontFamilyName.c_str(), sizeof(s.sdFontFamilyName) - 1);
+    s.sdFontFamilyName[sizeof(s.sdFontFamilyName) - 1] = '\0';
+  }
 
   using S = CrossPointSettings;
   s.frontButtonBack =
@@ -882,15 +851,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.opdsFilenameFormat =
       clamp(doc["opdsFilenameFormat"] | s.opdsFilenameFormat, S::OPDS_FILENAME_FORMAT_COUNT, s.opdsFilenameFormat);
   s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);
-  {
-    const uint8_t rawFlashcardStudyMode = doc["flashcardStudyMode"] | s.flashcardStudyMode;
-    const uint8_t flashcardStudyModeSchemaVersion = doc["flashcardStudyModeSchemaVersion"] | static_cast<uint8_t>(0);
-    s.flashcardStudyMode = migrateStoredFlashcardStudyMode(rawFlashcardStudyMode, flashcardStudyModeSchemaVersion,
-                                                           s.flashcardStudyMode, nullptr);
-  }
-  s.flashcardSessionSize =
-      clamp(doc["flashcardSessionSize"] | s.flashcardSessionSize, S::FLASHCARD_SESSION_SIZE_COUNT,
-            s.flashcardSessionSize);
   s.showStatsAfterReading =
       clamp(doc["showStatsAfterReading"] | s.showStatsAfterReading, static_cast<uint8_t>(2), s.showStatsAfterReading);
   s.achievementsEnabled =
@@ -949,10 +909,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clamp(doc["favoritesShortcut"] | s.favoritesShortcut, shortcutLocationCount, s.favoritesShortcut);
   s.favoritesShortcutOrder =
       clamp(doc["favoritesShortcutOrder"] | s.favoritesShortcutOrder, shortcutOrderCount, s.favoritesShortcutOrder);
-  s.flashcardsShortcut =
-      clamp(doc["flashcardsShortcut"] | s.flashcardsShortcut, shortcutLocationCount, s.flashcardsShortcut);
-  s.flashcardsShortcutOrder =
-      clamp(doc["flashcardsShortcutOrder"] | s.flashcardsShortcutOrder, shortcutOrderCount, s.flashcardsShortcutOrder);
   s.fileTransferShortcut =
       clamp(doc["fileTransferShortcut"] | s.fileTransferShortcut, shortcutLocationCount, s.fileTransferShortcut);
   s.fileTransferShortcutOrder = clamp(doc["fileTransferShortcutOrder"] | s.fileTransferShortcutOrder,
@@ -1001,9 +957,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.favoritesShortcutVisible =
       clamp(doc["favoritesShortcutVisible"] | s.favoritesShortcutVisible, static_cast<uint8_t>(2),
             s.favoritesShortcutVisible);
-  s.flashcardsShortcutVisible =
-      clamp(doc["flashcardsShortcutVisible"] | s.flashcardsShortcutVisible, static_cast<uint8_t>(2),
-            s.flashcardsShortcutVisible);
   s.fileTransferShortcutVisible =
       clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible, static_cast<uint8_t>(2),
             s.fileTransferShortcutVisible);

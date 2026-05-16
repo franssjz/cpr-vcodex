@@ -1,146 +1,135 @@
 # CPR-vCodex Stats
 
-CPR-vCodex Stats is an unofficial, Codex-assisted firmware fork for the
-Xteink X4 e-reader. It is based on CPR-vCodex, which is itself based on
-CrossPoint Reader, but this repository is now its own experiment: a reading
-firmware build focused on deeper reading statistics, completion estimates, and
-more useful reader analytics.
+CPR-vCodex Stats is an unofficial firmware fork for the Xteink X4 e-reader.
 
-This project is not affiliated with Xteink, CrossPoint Reader, or the upstream
-CPR-vCodex maintainer. It is a personal fork built with AI-assisted development
-using Codex and tested primarily for Daniel's own Xteink X4 workflow.
+It is based on CPR-vCodex, which itself is based on CrossPoint Reader. This
+fork keeps the same core reading foundation but focuses more on reading
+statistics, reader customization, cleaner menus, and a more polished e-reader
+experience.
 
-Use it at your own risk. Custom firmware can fail to flash, behave differently
-than expected, lose reading data, or require recovery flashing. Back up your SD
-card and exported reading stats before installing any release from this fork.
+This project is unofficial and is not affiliated with Xteink, CrossPoint
+Reader, or CPR-vCodex. Use it at your own risk. Custom firmware can fail to
+flash, behave unexpectedly, lose data, or require recovery flashing.
 
-## What This Fork Changes
+## Why this fork exists
 
-The first goal is to make reading progress more understandable without adding
-friction while reading.
+This fork was made to make the Xteink X4 feel better as a daily e-reader.
 
-The current stats work adds:
+Main goals:
 
-- estimated time left for the whole book;
-- estimated time left for the current chapter;
-- average reading session length;
-- average reading-day length;
-- persisted chapter reading-time state for better chapter estimates;
-- browser stats-editor support for the new chapter estimate fields;
-- release artifacts and auto-flash metadata pointing to this fork's published
-  firmware.
+- better reading statistics
+- clearer reading progress
+- useful time-left estimates
+- cleaner Home, Library, and Reader menus
+- improved reader customization
+- custom font support
+- a more focused e-reader UI
 
-These estimates are intentionally conservative. If there is not enough reading
-history yet, the device should say to read more before trusting the estimate.
-The chapter estimate becomes useful only after the firmware has watched progress
-inside the current chapter for a while.
+The goal is not to replace CrossPoint Reader completely. This fork selectively
+builds on it while keeping the firmware lightweight enough for the ESP32-C3.
 
-## What Is Inherited
+## Main changes
 
-This fork still includes many existing CPR-vCodex and CrossPoint Reader features,
-including:
+Compared with upstream firmware, this fork focuses on:
 
-- EPUB, TXT, Markdown, and XTC reading support;
-- existing reading stats, heatmap, day detail, and reading profile screens;
-- manual reading-time correction;
-- achievements;
-- bookmarks and recent books;
-- OPDS and KOReader Sync related features;
-- sleep-screen tools;
-- browser-based file transfer and settings tools;
-- multilingual UI support.
+- expanded Reading Stats
+- Reading Profile summaries
+- book and chapter time-left estimates
+- cleaner Library / Bookshelf views
+- LyraVcodex2 as the main visual direction
+- custom SD-card reader fonts
+- reader quick settings improvements
+- status bar customization
+- removed Flashcards to recover firmware space
 
-Those inherited features are not claimed as newly created here. This repository
-builds on them and changes the direction toward more detailed reading analytics.
+Other inherited features such as EPUB/TXT/XTC reading, OPDS, KOReader Sync,
+bookmarks, favorites, sleep tools, file transfer, and OTA support remain based
+on upstream work unless otherwise changed.
 
 ## Installation
 
-The easiest install path is:
-
-1. Open the latest release on GitHub:
-   Latest Releases
-
-2. Download the newest firmware .bin file.
-
+1. Open the latest release on GitHub.
+2. Download the `.bin` firmware file.
 3. Turn on and unlock the Xteink X4.
-
-4. Open:
-   https://xteink.dve.al/
-
-in Chrome or Edge.
-
-5. Choose the downloaded .bin file using the OTA flash controls.
-
+4. Open https://xteink.dve.al/ in Chrome or Edge.
+5. Select the downloaded `.bin` file.
 6. Flash the firmware and wait for completion.
+7. Restart the device if needed.
 
-Before flashing:
+## Custom fonts
 
-- back up your SD card;
-- export reading stats if they matter to you;
-- keep a copy of older working firmware builds.
+Custom reader fonts use the `.cpfont` format.
 
-This fork is experimental custom firmware and may behave differently from upstream CPR-vCodex releases.
+Recommended SD card folders:
 
-## Reading Stats Behavior
+```text
+/.fonts
+/fonts
+cat > README.md <<'EOF'
+# CPR-vCodex Stats
 
-The stats system tracks reading sessions and progress while books are open. The
-new estimate fields are derived from that existing stats flow.
+CPR-vCodex Stats is an unofficial firmware fork for the Xteink X4 e-reader.
 
-Book time-left estimate:
+It is based on CPR-vCodex, which itself is based on CrossPoint Reader. This
+fork keeps the same core reading foundation but focuses more on reading
+statistics, reader customization, cleaner menus, and a more polished e-reader
+experience.
 
-- uses tracked progress gained during valid reading sessions;
-- waits until there is enough tracked reading time or progress gain to make a
-  reasonable estimate;
-- displays an approximate remaining duration, or `More data` when confidence is
-  too low.
+This project is unofficial and is not affiliated with Xteink, CrossPoint
+Reader, or CPR-vCodex. Use it at your own risk. Custom firmware can fail to
+flash, behave unexpectedly, lose data, or require recovery flashing.
 
-Chapter time-left estimate:
+## Why this fork exists
 
-- tracks time spent in the current chapter;
-- records the chapter progress point where timing started;
-- estimates remaining chapter time from progress made inside that chapter;
-- resets when the current chapter changes.
+This fork was made to make the Xteink X4 feel better as a daily e-reader.
 
-Average session:
+Main goals:
 
-- divides total recorded reading time by counted reading sessions.
+- better reading statistics
+- clearer reading progress
+- useful time-left estimates
+- cleaner Home, Library, and Reader menus
+- improved reader customization
+- custom font support
+- a more focused e-reader UI
 
-Average reading day:
+The goal is not to replace CrossPoint Reader completely. This fork selectively
+builds on it while keeping the firmware lightweight enough for the ESP32-C3.
 
-- divides total recorded reading time by days that have nonzero reading time.
+## Main changes
 
-## Data And Privacy
+Compared with upstream firmware, this fork focuses on:
 
-Reading stats are stored locally on the device and can be exported for editing.
-The browser stats editor is designed to work locally in the browser. It should
-not upload private reading data.
+- expanded Reading Stats
+- Reading Profile summaries
+- book and chapter time-left estimates
+- cleaner Library / Bookshelf views
+- LyraVcodex2 as the main visual direction
+- custom SD-card reader fonts
+- reader quick settings improvements
+- status bar customization
+- removed Flashcards to recover firmware space
 
-Before flashing, exporting, importing, or manually editing stats, keep a backup
-of:
+Other inherited features such as EPUB/TXT/XTC reading, OPDS, KOReader Sync,
+bookmarks, favorites, sleep tools, file transfer, and OTA support remain based
+on upstream work unless otherwise changed.
 
-- the SD card;
-- exported reading stats;
-- any books or documents that are not stored elsewhere.
+## Installation
 
-## Release Files
+1. Open the latest release on GitHub.
+2. Download the `.bin` firmware file.
+3. Turn on and unlock the Xteink X4.
+4. Open https://xteink.dve.al/ in Chrome or Edge.
+5. Select the downloaded `.bin` file.
+6. Flash the firmware and wait for completion.
+7. Restart the device if needed.
 
-A GitHub release can contain several files. For this fork:
+## Custom fonts
 
-- `.bin` is the firmware file to flash;
-- `.json` is build metadata;
-- `firmware-budget.json` is a machine-readable firmware size and RAM report;
-- `firmware-budget.md` is the same budget report in a readable format.
+Custom reader fonts use the `.cpfont` format.
 
-For normal flashing, use the `.bin` file.
+Recommended SD card folders:
 
-
-## Credits
-
-This fork exists because of prior work from:
-
-- CrossPoint Reader, the original firmware base;
-- CPR-vCodex, the upstream fork this repository was cloned from;
-- the Xteink X4 community;
-
-Again: this project is unofficial, unaffiliated, experimental, and provided with
-no warranty.
+```text
+/.fonts
+/fonts

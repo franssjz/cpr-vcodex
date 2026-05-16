@@ -43,6 +43,11 @@ struct ReadingProfileMetricCardCache {
   std::vector<std::string> tertiaryLabelLines;
 };
 
+struct ReadingProfileInsightCard {
+  std::string value;
+  StrId labelId = StrId::STR_NONE_OPT;
+};
+
 class ReadingProfileActivity final : public Activity {
   int scrollOffset = 0;
   int maxScrollOffset = 0;
@@ -50,6 +55,8 @@ class ReadingProfileActivity final : public Activity {
   int scrollDirection = 0;
   bool profileCacheValid = false;
   ReadingProfileSummary profileSummary;
+  std::array<ReadingProfileInsightCard, 10> insightCards;
+  std::array<std::vector<std::string>, 10> cachedInsightLabelLines;
   std::array<std::vector<std::string>, 4> cachedAxisLabelLines;
   std::array<std::vector<std::string>, 4> cachedSectionDescriptionLines;
   std::array<ReadingProfileMetricCardCache, 4> cachedMetricCardLines;

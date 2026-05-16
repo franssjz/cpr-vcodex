@@ -24,6 +24,7 @@ constexpr uint32_t MAX_CHECKPOINT_SLEEP_SECONDS = 12UL * 60UL * 60UL;
 constexpr size_t MAX_SESSION_LOG_ENTRIES = 256;
 constexpr size_t MAX_BOOK_PROGRESS_SAMPLES = 32;
 constexpr size_t MAX_BOOK_ESTIMATE_SAMPLES = 8;
+constexpr uint8_t COMPLETED_BOOK_CORRECTION_THRESHOLD_PERCENT = 98;
 
 uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 100); }
 
@@ -766,6 +767,9 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   book.chapterProgressPercent = clampedChapterProgress;
   if (book.lastProgressPercent >= 100) {
     book.completed = true;
+  } else if (book.completed && book.lastProgressPercent < COMPLETED_BOOK_CORRECTION_THRESHOLD_PERCENT) {
+    book.completed = false;
+    book.completedAt = 0;
   }
 
   updateBookReadTimestamp(book, TimeUtils::getAuthoritativeTimestamp());
@@ -860,7 +864,10 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   const bool progressChanged = book.lastProgressPercent != clampedBookProgress;
   const bool chapterTitleChanged = book.chapterTitle != chapterTitle;
   const bool chapterProgressChanged = book.chapterProgressPercent != clampedChapterProgress;
-  const bool completionChanged = !book.completed && (completed || clampedBookProgress >= 100);
+  const bool shouldMarkCompleted = completed || clampedBookProgress >= 100;
+  const bool shouldClearCompleted =
+      book.completed && !completed && clampedBookProgress < COMPLETED_BOOK_CORRECTION_THRESHOLD_PERCENT;
+  const bool completionChanged = (!book.completed && shouldMarkCompleted) || shouldClearCompleted;
 
   if (!progressChanged && !chapterTitleChanged && !chapterProgressChanged && !completionChanged) {
     return;
@@ -873,12 +880,15 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   }
   book.chapterTitle = chapterTitle;
   book.chapterProgressPercent = clampedChapterProgress;
-  if (completed || clampedBookProgress >= 100) {
+  if (shouldMarkCompleted) {
     book.completed = true;
+  } else if (shouldClearCompleted) {
+    book.completed = false;
+    book.completedAt = 0;
   }
 
   updateBookReadTimestamp(book, TimeUtils::getAuthoritativeTimestamp());
-  if (completionChanged && book.completedAt == 0) {
+  if (completionChanged && book.completed && book.completedAt == 0) {
     book.completedAt = book.lastReadAt;
   }
   updateActiveProgressSample(book, book.lastReadAt);

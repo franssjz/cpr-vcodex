@@ -16,7 +16,6 @@ enum class BootStage : uint8_t {
   ReadingStats,
   RecentBooks,
   Favorites,
-  Flashcards,
   Achievements,
   RouteDecision,
   Completed,
@@ -40,7 +39,6 @@ bool shouldSkipState();
 bool shouldSkipReadingStats();
 bool shouldSkipRecentBooks();
 bool shouldSkipFavorites();
-bool shouldSkipFlashcards();
 bool shouldSkipAchievements();
 
 }  // namespace BootRecovery

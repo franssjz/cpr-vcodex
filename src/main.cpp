@@ -20,13 +20,14 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FavoritesStore.h"
-#include "FlashcardsStore.h"
 #include "KOReaderCredentialStore.h"
+#include "LibraryMetadataStore.h"
 #include "MappedInputManager.h"
 #include "AchievementsStore.h"
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "UiFontSelection.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
@@ -41,7 +42,8 @@ MappedInputManager mappedInputManager(gpio);
 GfxRenderer renderer(display);
 ActivityManager activityManager(renderer, mappedInputManager);
 FontDecompressor fontDecompressor;
-FontCacheManager fontCacheManager(renderer.getFontMap());
+FontCacheManager fontCacheManager(renderer.getFontMap(), renderer.getSdCardFonts());
+SdCardFontSystem sdFontSystem;
 
 // Fonts
 EpdFont bookerly14RegularFont(&bookerly_14_regular);
@@ -392,6 +394,7 @@ void setup() {
 
   BootRecovery::enterStage(BootRecovery::BootStage::DisplayAndFonts);
   setupDisplayAndFonts();
+  sdFontSystem.begin(renderer);
 
   activityManager.goToBoot();
 
@@ -399,7 +402,6 @@ void setup() {
   const bool skipReadingStatsLoad = manualSafeBoot || BootRecovery::shouldSkipReadingStats();
   const bool skipRecentBooksLoad = manualSafeBoot || BootRecovery::shouldSkipRecentBooks();
   const bool skipFavoritesLoad = manualSafeBoot || BootRecovery::shouldSkipFavorites();
-  const bool skipFlashcardsLoad = manualSafeBoot || BootRecovery::shouldSkipFlashcards();
   const bool skipAchievementsLoad = manualSafeBoot || BootRecovery::shouldSkipAchievements();
   const bool forceHomeBoot = manualSafeBoot || BootRecovery::shouldForceHome();
 
@@ -431,11 +433,8 @@ void setup() {
     FAVORITES.loadFromFile();
   }
 
-  if (skipFlashcardsLoad) {
-    logSkip("Skipping flashcards load due to recovery mode");
-  } else {
-    BootRecovery::enterStage(BootRecovery::BootStage::Flashcards);
-    FLASHCARDS.loadFromFile();
+  if (!manualSafeBoot) {
+    LIBRARY_METADATA.loadFromFile();
   }
 
   if (skipAchievementsLoad) {

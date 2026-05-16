@@ -11,8 +11,9 @@
 #include "fontIds.h"
 
 namespace {
-constexpr int MENU_ITEMS = 7;
-const StrId menuNames[MENU_ITEMS] = {StrId::STR_CHAPTER_PAGE_COUNT,
+constexpr int MENU_ITEMS = 8;
+const StrId menuNames[MENU_ITEMS] = {StrId::STR_STATUS_BAR_POSITION,
+                                     StrId::STR_CHAPTER_PAGE_COUNT,
                                      StrId::STR_BOOK_PROGRESS_PERCENTAGE,
                                      StrId::STR_PROGRESS_BAR,
                                      StrId::STR_PROGRESS_BAR_THICKNESS,
@@ -30,10 +31,11 @@ constexpr int TITLE_ITEMS = 3;
 const StrId titleNames[TITLE_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
 constexpr int TIME_LEFT_ITEMS = 3;
 const StrId timeLeftNames[TIME_LEFT_ITEMS] = {StrId::STR_HIDE, StrId::STR_BOOK, StrId::STR_CHAPTER};
+constexpr int PLACEMENT_ITEMS = 3;
+const StrId placementNames[PLACEMENT_ITEMS] = {StrId::STR_BOTTOM, StrId::STR_TOP, StrId::STR_HIDE};
 
-const int widthMargin = 10;
-const int verticalPreviewPadding = 50;
-const int verticalPreviewTextPadding = 40;
+constexpr int PREVIEW_RESERVED_HEIGHT = 86;
+constexpr int PREVIEW_BOTTOM_PADDING = 48;
 }  // namespace
 
 void StatusBarSettingsActivity::onEnter() {
@@ -57,6 +59,9 @@ void StatusBarSettingsActivity::onEnter() {
 
   if (SETTINGS.statusBarTimeLeft >= TIME_LEFT_ITEMS) {
     SETTINGS.statusBarTimeLeft = CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE;
+  }
+  if (SETTINGS.statusBarPlacement >= PLACEMENT_ITEMS) {
+    SETTINGS.statusBarPlacement = CrossPointSettings::STATUS_BAR_BOTTOM;
   }
 
   requestUpdate();
@@ -100,25 +105,28 @@ void StatusBarSettingsActivity::loop() {
 
 void StatusBarSettingsActivity::handleSelection() {
   if (selectedIndex == 0) {
+    // Placement
+    SETTINGS.statusBarPlacement = (SETTINGS.statusBarPlacement + 1) % PLACEMENT_ITEMS;
+  } else if (selectedIndex == 1) {
     // Chapter Page Count
     SETTINGS.statusBarChapterPageCount = (SETTINGS.statusBarChapterPageCount + 1) % 2;
-  } else if (selectedIndex == 1) {
+  } else if (selectedIndex == 2) {
     // Book Progress %
     SETTINGS.statusBarBookProgressPercentage = (SETTINGS.statusBarBookProgressPercentage + 1) % 2;
-  } else if (selectedIndex == 2) {
+  } else if (selectedIndex == 3) {
     // Progress Bar
     SETTINGS.statusBarProgressBar = (SETTINGS.statusBarProgressBar + 1) % PROGRESS_BAR_ITEMS;
-  } else if (selectedIndex == 3) {
+  } else if (selectedIndex == 4) {
     // Progress Bar Thickness
     SETTINGS.statusBarProgressBarThickness =
         (SETTINGS.statusBarProgressBarThickness + 1) % PROGRESS_BAR_THICKNESS_ITEMS;
-  } else if (selectedIndex == 4) {
+  } else if (selectedIndex == 5) {
     // Chapter Title
     SETTINGS.statusBarTitle = (SETTINGS.statusBarTitle + 1) % TITLE_ITEMS;
-  } else if (selectedIndex == 5) {
+  } else if (selectedIndex == 6) {
     // Estimated Time Left
     SETTINGS.statusBarTimeLeft = (SETTINGS.statusBarTimeLeft + 1) % TIME_LEFT_ITEMS;
-  } else if (selectedIndex == 6) {
+  } else if (selectedIndex == 7) {
     // Show Battery
     SETTINGS.statusBarBattery = (SETTINGS.statusBarBattery + 1) % 2;
   }
@@ -135,7 +143,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_CUSTOMISE_STATUS_BAR));
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const int contentHeight =
+      pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2 - PREVIEW_RESERVED_HEIGHT;
   GUI.drawList(
       renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(MENU_ITEMS),
       static_cast<int>(selectedIndex), [](int index) { return std::string(I18N.get(menuNames[index])); }, nullptr,
@@ -143,18 +152,20 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
       [this](int index) {
         // Draw status for each setting
         if (index == 0) {
-          return SETTINGS.statusBarChapterPageCount ? tr(STR_SHOW) : tr(STR_HIDE);
+          return I18N.get(placementNames[SETTINGS.statusBarPlacement]);
         } else if (index == 1) {
-          return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
+          return SETTINGS.statusBarChapterPageCount ? tr(STR_SHOW) : tr(STR_HIDE);
         } else if (index == 2) {
-          return I18N.get(progressBarNames[SETTINGS.statusBarProgressBar]);
+          return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
         } else if (index == 3) {
-          return I18N.get(progressBarThicknessNames[SETTINGS.statusBarProgressBarThickness]);
+          return I18N.get(progressBarNames[SETTINGS.statusBarProgressBar]);
         } else if (index == 4) {
-          return I18N.get(titleNames[SETTINGS.statusBarTitle]);
+          return I18N.get(progressBarThicknessNames[SETTINGS.statusBarProgressBarThickness]);
         } else if (index == 5) {
-          return I18N.get(timeLeftNames[SETTINGS.statusBarTimeLeft]);
+          return I18N.get(titleNames[SETTINGS.statusBarTitle]);
         } else if (index == 6) {
+          return I18N.get(timeLeftNames[SETTINGS.statusBarTimeLeft]);
+        } else if (index == 7) {
           return SETTINGS.statusBarBattery ? tr(STR_SHOW) : tr(STR_HIDE);
         } else {
           return tr(STR_HIDE);
@@ -173,11 +184,14 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     title = tr(STR_EXAMPLE_CHAPTER);
   }
 
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, "~1h 20m");
+  // Keep the settings preview stable even when the actual reader placement is Top or Hidden.
+  const uint8_t savedPlacement = SETTINGS.statusBarPlacement;
+  SETTINGS.statusBarPlacement = CrossPointSettings::STATUS_BAR_BOTTOM;
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, PREVIEW_BOTTOM_PADDING, 0, "~1h 20m");
+  SETTINGS.statusBarPlacement = savedPlacement;
 
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
-                    renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() - verticalPreviewPadding -
-                        verticalPreviewTextPadding,
+                    renderer.getScreenHeight() - metrics.buttonHintsHeight - PREVIEW_RESERVED_HEIGHT + 8,
                     tr(STR_PREVIEW));
 
   renderer.displayBuffer();

@@ -7,7 +7,6 @@
 
 #include "AchievementsStore.h"
 #include "FavoritesStore.h"
-#include "FlashcardsStore.h"
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
@@ -15,11 +14,6 @@
 #include "util/TimeUtils.h"
 
 namespace {
-bool hasFlashcardStatsToShow(const FlashcardDeckRecord& record) {
-  return record.sessionCount > 0 || record.seenCards > 0 || record.totalReviewed > 0 || record.totalCorrect > 0 ||
-         record.totalWrong > 0 || record.totalSkipped > 0 || record.lastReviewedAt > 0;
-}
-
 std::string formatDurationHmCompact(const uint64_t totalMs) {
   const uint64_t totalMinutes = totalMs / 60000ULL;
   const uint64_t hours = totalMinutes / 60ULL;
@@ -51,18 +45,6 @@ std::string getSyncDayShortcutSubtitle() {
 std::string getRecentBooksShortcutSubtitle() { return std::to_string(RECENT_BOOKS.getCount()); }
 
 std::string getFavoritesShortcutSubtitle() { return std::to_string(FAVORITES.getCount()); }
-
-std::string getFlashcardsShortcutSubtitle() {
-  const int recentCount = static_cast<int>(FLASHCARDS.getRecentDecks().size());
-  int statsCount = 0;
-  for (const auto& record : FLASHCARDS.getKnownDecks()) {
-    if (hasFlashcardStatsToShow(record)) {
-      statsCount++;
-    }
-  }
-
-  return std::to_string(recentCount) + " | " + std::to_string(statsCount);
-}
 
 std::string getSleepShortcutSubtitle() {
   const std::string selectedDirectory = SleepImageUtils::resolveConfiguredSleepDirectory();
@@ -102,8 +84,6 @@ std::string ShortcutUiMetadata::getSubtitle(const ShortcutDefinition& definition
       return getRecentBooksShortcutSubtitle();
     case ShortcutId::Favorites:
       return getFavoritesShortcutSubtitle();
-    case ShortcutId::Flashcards:
-      return getFlashcardsShortcutSubtitle();
     case ShortcutId::Sleep:
       return getSleepShortcutSubtitle();
     case ShortcutId::FileTransfer:

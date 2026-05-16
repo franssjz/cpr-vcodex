@@ -16,24 +16,19 @@
 #include <string>
 #include <vector>
 
-#include "BookReadingAdjustmentActivity.h"
 #include "ReadingStatsStore.h"
 #include "components/UITheme.h"
-#include "components/icons/settings2.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ReadingStatsAnalytics.h"
 #include "util/TimeUtils.h"
 
 namespace {
-constexpr int COVER_WIDTH = 104;
-constexpr int COVER_HEIGHT = 154;
-constexpr int DONUT_RADIUS = 24;
-constexpr int DONUT_THICKNESS = 5;
+constexpr int COVER_WIDTH = 112;
+constexpr int COVER_HEIGHT = 166;
+constexpr int DONUT_RADIUS = 28;
+constexpr int DONUT_THICKNESS = 6;
 constexpr int METRIC_ROW_HEIGHT = 70;
-constexpr int DETAIL_FOCUS_ITEM_COUNT = 2;
-constexpr int DETAIL_ADJUST_FOCUS_INDEX = 1;
-constexpr int ADJUST_BUTTON_SIZE = 54;
 constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 128;
@@ -105,7 +100,7 @@ std::string resolveStoredCoverPath(const std::string& coverBmpPath) {
   }
 
   if (coverBmpPath.find("[HEIGHT]") != std::string::npos) {
-    const int candidateHeights[] = {COVER_HEIGHT, 160, 240, 400};
+    const int candidateHeights[] = {COVER_HEIGHT, 166, 160, 154, 140, 240, 400};
     for (const int height : candidateHeights) {
       const std::string resolved = UITheme::getCoverThumbPath(coverBmpPath, height);
       if (Storage.exists(resolved.c_str())) {
@@ -254,7 +249,7 @@ bool pointInProgressArc(const int dx, const int dy, const float progress) {
 }
 
 void drawDonutGauge(GfxRenderer& renderer, const int cx, const int cy, const int radius, const int thickness,
-                    const uint8_t percent, const char* label) {
+                    const uint8_t percent, const char* label = "") {
   const int innerRadius = std::max(2, radius - thickness);
   const int outer2 = radius * radius;
   const int inner2 = innerRadius * innerRadius;
@@ -275,21 +270,10 @@ void drawDonutGauge(GfxRenderer& renderer, const int cx, const int cy, const int
   const std::string percentText = std::to_string(std::min<int>(percent, 100)) + "%";
   const int percentWidth = renderer.getTextWidth(UI_10_FONT_ID, percentText.c_str(), EpdFontFamily::BOLD);
   renderer.drawText(UI_10_FONT_ID, cx - percentWidth / 2, cy - 7, percentText.c_str(), true, EpdFontFamily::BOLD);
-  const std::string labelText = renderer.truncatedText(SMALL_FONT_ID, label, radius * 2 + 8);
-  const int labelWidth = renderer.getTextWidth(SMALL_FONT_ID, labelText.c_str());
-  renderer.drawText(SMALL_FONT_ID, cx - labelWidth / 2, cy + radius + 7, labelText.c_str());
-}
-
-void drawAdjustTimeButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
-  if (selected) {
-    renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
+  if (label != nullptr && label[0] != '\0') {
+    const int labelWidth = renderer.getTextWidth(SMALL_FONT_ID, label);
+    renderer.drawText(SMALL_FONT_ID, cx - labelWidth / 2, cy + radius + 7, label);
   }
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height, selected ? 2 : 1, true);
-
-  constexpr int iconSize = 32;
-  const int iconX = rect.x + (rect.width - iconSize) / 2;
-  const int iconY = rect.y + (rect.height - iconSize) / 2;
-  renderer.drawIcon(Settings2Icon, iconX, iconY, iconSize, iconSize);
 }
 
 Rect offsetRect(Rect rect, const int dy) {
@@ -390,7 +374,6 @@ void ReadingStatsDetailActivity::onEnter() {
   invalidateBaseScreenBuffer();
   resolvedCoverBmpPath.clear();
   coverLoadPending = false;
-  selectedStatsItem = 0;
   scrollOffset = 0;
   maxScrollOffset = 0;
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
@@ -459,27 +442,6 @@ void ReadingStatsDetailActivity::freeBaseScreenBuffer() {
   invalidateBaseScreenBuffer();
 }
 
-void ReadingStatsDetailActivity::openAdjustment() {
-  const auto* book = findBook(bookPath);
-  if (book == nullptr) {
-    requestUpdate();
-    return;
-  }
-
-  startActivityForResult(
-      std::make_unique<BookReadingAdjustmentActivity>(renderer, mappedInput, book->path, getDisplayTitle(*book)),
-      [this](const ActivityResult&) {
-        guardChildReturn();
-        requestUpdate();
-      });
-}
-
-void ReadingStatsDetailActivity::guardChildReturn() {
-  invalidateBaseScreenBuffer();
-  waitForBackRelease = true;
-  waitForConfirmRelease = true;
-}
-
 void ReadingStatsDetailActivity::loop() {
   if (waitForBackRelease) {
     if (!mappedInput.isPressed(MappedInputManager::Button::Back) &&
@@ -508,7 +470,6 @@ void ReadingStatsDetailActivity::loop() {
       return false;
     }
     scrollOffset = nextOffset;
-    selectedStatsItem = 0;
     invalidateBaseScreenBuffer();
     requestUpdate();
     return true;
@@ -516,32 +477,18 @@ void ReadingStatsDetailActivity::loop() {
 
   buttonNavigator.onNextPress([&]() {
     if (maxScrollOffset > 0) {
-      if (scrollOffset == 0 && selectedStatsItem == 0) {
-        selectedStatsItem = DETAIL_ADJUST_FOCUS_INDEX;
-        requestUpdate();
-        return;
-      }
       if (scrollOffset < maxScrollOffset && scrollBy(DETAIL_SCROLL_STEP)) {
         return;
       }
       return;
     }
-
-    selectedStatsItem = ButtonNavigator::nextIndex(selectedStatsItem, DETAIL_FOCUS_ITEM_COUNT);
-    requestUpdate();
   });
   buttonNavigator.onPreviousPress([&]() {
     if (maxScrollOffset > 0) {
       if (scrollOffset > 0 && scrollBy(-DETAIL_SCROLL_STEP)) {
         return;
       }
-      selectedStatsItem = ButtonNavigator::previousIndex(selectedStatsItem, DETAIL_FOCUS_ITEM_COUNT);
-      requestUpdate();
-      return;
     }
-
-    selectedStatsItem = ButtonNavigator::previousIndex(selectedStatsItem, DETAIL_FOCUS_ITEM_COUNT);
-    requestUpdate();
   });
 
   if (coverLoadPending) {
@@ -554,11 +501,6 @@ void ReadingStatsDetailActivity::loop() {
         requestUpdate();
       }
     }
-    return;
-  }
-
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && selectedStatsItem == DETAIL_ADJUST_FOCUS_INDEX) {
-    openAdjustment();
     return;
   }
 
@@ -591,28 +533,28 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int viewportBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const Rect coverBaseRect{metrics.contentSidePadding, contentTop, COVER_WIDTH, COVER_HEIGHT};
-  const Rect adjustButtonBaseRect{coverBaseRect.x + (coverBaseRect.width - ADJUST_BUTTON_SIZE) / 2,
-                                  coverBaseRect.y + coverBaseRect.height + metrics.verticalSpacing,
-                                  ADJUST_BUTTON_SIZE, ADJUST_BUTTON_SIZE};
-  const int donutAreaX = coverBaseRect.x + coverBaseRect.width + 12;
-  const int donutAreaWidth = pageWidth - donutAreaX - metrics.contentSidePadding;
-  const int firstDonutX = donutAreaX + std::min(28, donutAreaWidth / 3);
-  const int secondDonutX = donutAreaX + donutAreaWidth - std::min(28, donutAreaWidth / 3);
-  const int donutY = contentTop + 42;
-  const int titleTop = contentTop + COVER_HEIGHT + metrics.verticalSpacing + 4;
-  const int titleWidth = pageWidth - metrics.contentSidePadding * 2;
+  const int sideTextX = coverBaseRect.x + coverBaseRect.width + 12;
+  const int sideTextWidth = pageWidth - sideTextX - metrics.contentSidePadding;
+  const int titleTop = contentTop + 4;
+  const int fullWidth = pageWidth - metrics.contentSidePadding * 2;
   const auto wrappedTitle =
-      renderer.wrappedText(UI_12_FONT_ID, getDisplayTitle(*book).c_str(), titleWidth, 2, EpdFontFamily::BOLD);
+      renderer.wrappedText(UI_12_FONT_ID, getDisplayTitle(*book).c_str(), sideTextWidth, 2, EpdFontFamily::BOLD);
   int currentY = titleTop + static_cast<int>(wrappedTitle.size()) * renderer.getLineHeight(UI_12_FONT_ID);
   const int authorTop = currentY + 4;
   currentY += book->author.empty() ? 6 : renderer.getLineHeight(UI_10_FONT_ID) + 8;
+  const int chapterDonutX = sideTextX + DONUT_RADIUS;
+  const int bookDonutX = sideTextX + sideTextWidth - DONUT_RADIUS;
+  const int donutY = currentY + DONUT_RADIUS + 8;
+  const int headerBottom =
+      std::max(coverBaseRect.y + coverBaseRect.height,
+               donutY + DONUT_RADIUS + renderer.getLineHeight(SMALL_FONT_ID) + 10);
   const std::string currentChapter = book->chapterTitle.empty() ? std::string(tr(STR_NOT_SET)) : book->chapterTitle;
-  const int chapterTop = currentY + 4;
+  const int chapterTop = headerBottom + metrics.verticalSpacing + 6;
   const auto chapterLines =
-      renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), titleWidth, 2, EpdFontFamily::REGULAR);
+      renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), fullWidth, 2, EpdFontFamily::REGULAR);
   currentY = chapterTop + static_cast<int>(chapterLines.size()) * renderer.getLineHeight(UI_10_FONT_ID) + 8;
 
-  int cardsTop = std::max(adjustButtonBaseRect.y + adjustButtonBaseRect.height, currentY) + metrics.verticalSpacing + 10;
+  int cardsTop = currentY + metrics.verticalSpacing + 10;
   const int summaryBannerTop = cardsTop;
   if (showCompletionBanner) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
@@ -624,30 +566,27 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
   const int scrollDy = -scrollOffset;
   const Rect coverRect = offsetRect(coverBaseRect, scrollDy);
-  const Rect adjustButtonRect = offsetRect(adjustButtonBaseRect, scrollDy);
-  const bool adjustSelected = scrollOffset == 0 && selectedStatsItem == DETAIL_ADJUST_FOCUS_INDEX;
 
   const bool baseScreenRestored = restoreBaseScreenBuffer();
   if (!baseScreenRestored) {
     renderer.clearScreen();
     drawCover(renderer, coverRect, resolvedCoverBmpPath);
-    drawAdjustTimeButton(renderer, adjustButtonRect, false);
 
-    drawDonutGauge(renderer, firstDonutX, donutY + scrollDy, DONUT_RADIUS, DONUT_THICKNESS,
+    drawDonutGauge(renderer, bookDonutX, donutY + scrollDy, DONUT_RADIUS, DONUT_THICKNESS,
                    book->lastProgressPercent, tr(STR_BOOK));
-    drawDonutGauge(renderer, secondDonutX, donutY + scrollDy, DONUT_RADIUS, DONUT_THICKNESS,
+    drawDonutGauge(renderer, chapterDonutX, donutY + scrollDy, DONUT_RADIUS, DONUT_THICKNESS,
                    book->chapterProgressPercent, tr(STR_CHAPTER));
 
     currentY = titleTop + scrollDy;
     for (const auto& line : wrappedTitle) {
-      renderer.drawText(UI_12_FONT_ID, metrics.contentSidePadding, currentY, line.c_str(), true, EpdFontFamily::BOLD);
+      renderer.drawText(UI_12_FONT_ID, sideTextX, currentY, line.c_str(), true, EpdFontFamily::BOLD);
       currentY += renderer.getLineHeight(UI_12_FONT_ID);
     }
 
     if (!book->author.empty()) {
       const std::string author =
-          renderer.truncatedText(UI_10_FONT_ID, book->author.c_str(), titleWidth, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, authorTop + scrollDy, author.c_str());
+          renderer.truncatedText(UI_10_FONT_ID, book->author.c_str(), sideTextWidth, EpdFontFamily::REGULAR);
+      renderer.drawText(UI_10_FONT_ID, sideTextX, authorTop + scrollDy, author.c_str());
     }
 
     int chapterY = chapterTop + scrollDy;
@@ -726,11 +665,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     storeBaseScreenBuffer();
   }
 
-  if (adjustSelected) {
-    drawAdjustTimeButton(renderer, adjustButtonRect, true);
-  }
-
-  const char* confirmLabel = adjustSelected ? tr(STR_ADJUST) : (Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "");
+  const char* confirmLabel = Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "";
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

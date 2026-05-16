@@ -8,7 +8,6 @@
 #include "AchievementsActivity.h"
 #include "BookmarksAppActivity.h"
 #include "FavoritesAppActivity.h"
-#include "FlashcardsAppActivity.h"
 #include "IfFoundActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingProfileActivity.h"
@@ -23,8 +22,7 @@
 
 namespace {
 bool shouldHideStatsForkShortcut(const ShortcutDefinition* definition) {
-  return definition != nullptr &&
-         (definition->id == ShortcutId::Bookmarks || definition->id == ShortcutId::Flashcards);
+  return definition != nullptr && definition->id == ShortcutId::Bookmarks;
 }
 
 std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItems, const int itemsPerPage) {
@@ -189,9 +187,6 @@ void AppsActivity::openSelectedApp() {
       break;
     case ShortcutId::Favorites:
       activity = std::make_unique<FavoritesAppActivity>(renderer, mappedInput);
-      break;
-    case ShortcutId::Flashcards:
-      activity = std::make_unique<FlashcardsAppActivity>(renderer, mappedInput);
       break;
     case ShortcutId::FileTransfer:
       activityManager.goToFileTransfer();

@@ -17,6 +17,7 @@
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
 #include "KOReaderSettingsActivity.h"
+#include "FontSelectionActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
 #include "OpdsServerListActivity.h"
@@ -31,7 +32,6 @@
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
 #include "activities/apps/FavoritesAppActivity.h"
-#include "activities/apps/FlashcardsAppActivity.h"
 #include "activities/apps/IfFoundActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
@@ -42,6 +42,7 @@
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "SdCardFontGlobals.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ShortcutRegistry.h"
 #include "util/ShortcutUiMetadata.h"
@@ -63,13 +64,21 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
                         {StrId::STR_FIT, StrId::STR_CROP}),
       SettingInfo::Enum(StrId::STR_SLEEP_COVER_FILTER, &CrossPointSettings::sleepScreenCoverFilter,
                         {StrId::STR_NONE_OPT, StrId::STR_FILTER_CONTRAST, StrId::STR_INVERTED}),
+      SettingInfo::Enum(StrId::STR_SLEEP_REFRESH, &CrossPointSettings::sleepRefreshMode,
+                        {StrId::STR_STATE_OFF, StrId::STR_SLEEP_REFRESH_SOFT, StrId::STR_SLEEP_REFRESH_FULL}),
       SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                         {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}),
       SettingInfo::Enum(
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30}),
       SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM}),
+                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2,
+                         StrId::STR_THEME_ROUNDEDRAFF}),
+      SettingInfo::Enum(StrId::STR_FILE_BROWSER_VIEW, &CrossPointSettings::fileBrowserView,
+                        {StrId::STR_FILE_VIEW_LIST, StrId::STR_FILE_VIEW_BOOKSHELF}),
+      SettingInfo::Enum(StrId::STR_BOOKSHELF_COLUMNS, &CrossPointSettings::bookshelfColumns,
+                        {StrId::STR_NUM_2, StrId::STR_NUM_3}),
+      SettingInfo::Toggle(StrId::STR_SHOW_CURRENT_BOOK_CARD, &CrossPointSettings::showCurrentBookCard),
       SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix),
   };
@@ -78,8 +87,11 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
 
 const std::vector<SettingInfo>& getDeviceReaderSettings() {
   static const std::vector<SettingInfo> settings = {
-      SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                        {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND}),
+      SettingInfo::Section(StrId::STR_FONTS),
+      SettingInfo::Action(StrId::STR_FONT_FAMILY, SettingAction::FontSelection),
+      SettingInfo::Action(StrId::STR_FONT_MANAGER, SettingAction::FontSelection),
+      SettingInfo::Action(StrId::STR_DOWNLOAD_FONTS, SettingAction::FontDownload),
+      SettingInfo::Action(StrId::STR_INSTALLED_FONTS, SettingAction::InstalledFonts),
       SettingInfo::Enum(
           StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
           {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}),
@@ -269,6 +281,16 @@ std::string getNetworkSettingValueText() {
   return std::string(tr(STR_STATE_OFF));
 }
 
+std::string getReaderFontSettingValueText() {
+  if (SETTINGS.sdFontFamilyName[0] != '\0') {
+    return SETTINGS.sdFontFamilyName;
+  }
+  static constexpr StrId labels[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
+  const size_t labelCount = sizeof(labels) / sizeof(labels[0]);
+  const size_t safeIndex = std::min<size_t>(SETTINGS.fontFamily, labelCount - 1);
+  return I18N.get(labels[safeIndex]);
+}
+
 std::string getShortcutLocationSettingValueText() {
   int homeCount = 1;  // Apps hub is always in Home.
   int appsCount = 0;
@@ -318,6 +340,10 @@ std::string getSettingValueText(const SettingInfo& setting) {
   }
   if (setting.type == SettingType::ACTION) {
     switch (setting.action) {
+      case SettingAction::FontSelection:
+      case SettingAction::FontDownload:
+      case SettingAction::InstalledFonts:
+        return getReaderFontSettingValueText();
       case SettingAction::Network:
         return getNetworkSettingValueText();
       case SettingAction::CheckForUpdates:
@@ -330,10 +356,6 @@ std::string getSettingValueText(const SettingInfo& setting) {
       }
       case SettingAction::Achievements: {
         const auto* definition = findShortcutDefinition(ShortcutId::Achievements);
-        return definition ? ShortcutUiMetadata::getSubtitle(*definition) : "";
-      }
-      case SettingAction::Flashcards: {
-        const auto* definition = findShortcutDefinition(ShortcutId::Flashcards);
         return definition ? ShortcutUiMetadata::getSubtitle(*definition) : "";
       }
       case SettingAction::SleepApp: {
@@ -356,6 +378,17 @@ std::string getSettingValueText(const SettingInfo& setting) {
 }
 
 const char* getSettingNameText(const SettingInfo& setting) { return I18N.get(setting.nameId); }
+
+bool shouldShowDeviceSetting(const SettingInfo& setting) {
+  if (setting.nameId == StrId::STR_SHOW_CURRENT_BOOK_CARD) {
+    return SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2;
+  }
+  if (setting.nameId == StrId::STR_BOOKSHELF_COLUMNS) {
+    return SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
+           SETTINGS.fileBrowserView == CrossPointSettings::FILE_BROWSER_BOOKSHELF;
+  }
+  return true;
+}
 }  // namespace
 
 void SettingsActivity::onEnter() {
@@ -372,10 +405,6 @@ void SettingsActivity::onEnter() {
 }
 
 void SettingsActivity::buildSettingsLists() {
-  if (settingsListsBuilt) {
-    return;
-  }
-
   // Device settings intentionally avoid the shared web/API settings list.
   // That shared list carries dynamic/web metadata and is the wrong dependency
   // for the on-device settings screen.
@@ -397,7 +426,7 @@ void SettingsActivity::buildSettingsLists() {
   appSettings.reserve(deviceApps.size());
 
   for (const auto& setting : deviceDisplay) {
-    displaySettings.push_back(&setting);
+    if (shouldShowDeviceSetting(setting)) displaySettings.push_back(&setting);
   }
   for (const auto& setting : deviceReader) {
     readerSettings.push_back(&setting);
@@ -406,7 +435,7 @@ void SettingsActivity::buildSettingsLists() {
     controlsSettings.push_back(&setting);
   }
   for (const auto& setting : deviceSystem) {
-    systemSettings.push_back(&setting);
+    if (shouldShowDeviceSetting(setting)) systemSettings.push_back(&setting);
   }
   for (const auto& setting : deviceApps) {
     appSettings.push_back(&setting);
@@ -563,6 +592,11 @@ void SettingsActivity::toggleCurrentSetting() {
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    if (setting.nameId == StrId::STR_UI_THEME || setting.nameId == StrId::STR_FILE_BROWSER_VIEW) {
+      buildSettingsLists();
+      enterCategory(selectedCategoryIndex);
+      selectedSettingIndex = std::min(selectedSettingIndex, settingsCount);
+    }
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     const int8_t currentValue = SETTINGS.*(setting.valuePtr);
     if (currentValue + setting.valueRange.step > setting.valueRange.max) {
@@ -582,6 +616,12 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::KOReaderSync:
         startActivityForResult(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::FontSelection:
+      case SettingAction::FontDownload:
+      case SettingAction::InstalledFonts:
+        startActivityForResult(std::make_unique<FontSelectionActivity>(renderer, mappedInput, &sdFontSystem.registry()),
+                               resultHandler);
         break;
       case SettingAction::OPDSBrowser:
         startActivityForResult(std::make_unique<OpdsServerListActivity>(renderer, mappedInput), resultHandler);
@@ -696,9 +736,6 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::Favorites:
         startActivityForResult(std::make_unique<FavoritesAppActivity>(renderer, mappedInput), resultHandler);
         break;
-      case SettingAction::Flashcards:
-        startActivityForResult(std::make_unique<FlashcardsAppActivity>(renderer, mappedInput), resultHandler);
-        break;
       case SettingAction::SleepApp:
         startActivityForResult(std::make_unique<SleepAppActivity>(renderer, mappedInput), resultHandler);
         break;
@@ -737,7 +774,7 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
   }
 
   const int rowHeight = metrics.listRowHeight;
-  const int sectionHeight = 40;
+  const int sectionHeight = 42;
   const int sidePadding = metrics.contentSidePadding;
   constexpr int scrollBarWidth = 4;
   constexpr int scrollBarGap = 6;
@@ -788,17 +825,23 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
 
     if (setting->type == SettingType::SECTION) {
       renderer.drawText(UI_10_FONT_ID, rowX, currentY + 4, getSettingNameText(*setting), true, EpdFontFamily::BOLD);
-      renderer.drawLine(rowX, currentY + itemHeight - 5, rowX + rowWidth, currentY + itemHeight - 5, true);
+      renderer.drawLine(rowX, currentY + itemHeight - 5, rowX + rowWidth, currentY + itemHeight - 5,
+                        SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 ? 1 : 2, true);
       currentY += itemHeight;
       renderedHeight += itemHeight;
       continue;
     }
 
     const bool selected = selectedSettingIndex == index + 1;
-    const Rect rowRect{rowX, currentY, rowWidth, itemHeight - 4};
+    const Rect rowRect{rowX, currentY + 2, rowWidth, itemHeight - 6};
     if (selected) {
-      renderer.fillRectDither(rowRect.x, rowRect.y, rowRect.width, rowRect.height, Color::LightGray);
-      renderer.drawRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
+      if (SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2) {
+        renderer.drawRoundedRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height, 1, 6, true);
+        renderer.drawRoundedRect(rowRect.x + 2, rowRect.y + 2, rowRect.width - 4, rowRect.height - 4, 1, 5, true);
+      } else {
+        renderer.fillRectDither(rowRect.x, rowRect.y, rowRect.width, rowRect.height, Color::LightGray);
+        renderer.drawRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
+      }
     }
 
     const std::string valueText = getSettingValueText(*setting);
@@ -827,10 +870,10 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
       const int labelWidth = rowRect.width - leftPadding - rightPadding - (sideNoteWidth > 0 ? sideNoteWidth + 12 : 0);
       const std::string titleText =
           renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 9, titleText.c_str(), true,
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 10, titleText.c_str(), true,
                         EpdFontFamily::REGULAR);
       if (!truncatedSideNote.empty()) {
-        renderer.drawText(SMALL_FONT_ID, rowRect.x + rowRect.width - rightPadding - sideNoteWidth, rowRect.y + 11,
+        renderer.drawText(SMALL_FONT_ID, rowRect.x + rowRect.width - rightPadding - sideNoteWidth, rowRect.y + 12,
                           truncatedSideNote.c_str(), true, EpdFontFamily::REGULAR);
       }
     } else {
@@ -838,13 +881,16 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
       const std::string titleText =
           renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
 
-      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 9, titleText.c_str(), true,
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 10, titleText.c_str(), true,
                         EpdFontFamily::REGULAR);
       if (!valueText.empty()) {
-        renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - rightPadding - valueWidth, rowRect.y + 9,
+        renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - rightPadding - valueWidth, rowRect.y + 10,
                           valueText.c_str(), true, EpdFontFamily::REGULAR);
       }
     }
+
+    const int separatorY = currentY + itemHeight - 1;
+    renderer.drawLine(rowX + leftPadding, separatorY, rowX + rowWidth - rightPadding, separatorY, true);
 
     currentY += itemHeight;
     renderedHeight += itemHeight;

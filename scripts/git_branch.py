@@ -2,8 +2,8 @@
 PlatformIO pre-build script for CPR-vCodex versioning.
 
 Version scheme:
-  - default/dev builds:  <base>.<release>.dev<dev_counter>
-  - gh_release builds:   <base>.<release>
+  - default builds:      <base>
+  - gh_release builds:   <base>
 
 Release builds intentionally do not persist the release counter in this
 pre-build script. The post-build packaging script advances the counter only
@@ -18,7 +18,7 @@ import sys
 
 COUNTER_DIR = "artifacts"
 RELEASE_COUNTER_FILE = ".release-counter.txt"
-DEV_COUNTER_FILE_TEMPLATE = ".dev-counter-r{release}.txt"
+DEV_COUNTER_FILE_TEMPLATE = ".dev-counter-{key}.txt"
 INITIAL_RELEASE_NUMBER = 2
 
 
@@ -157,10 +157,13 @@ def preview_next_release_number(project_dir, base_version):
     return next_release, counter_path
 
 
-def release_number_from_tag(base_version):
+def release_number_from_tag(project_dir, base_version):
     tag = os.environ.get("VCODEX_RELEASE_TAG") or os.environ.get("GITHUB_REF_NAME")
     if not tag:
         return None
+
+    if tag in (base_version, f"v{base_version}"):
+        return get_current_release_number(project_dir, base_version)[0], tag
 
     match = re.fullmatch(rf"{re.escape(base_version)}\.(\d+)-cpr-vcodex", tag)
     if not match:
@@ -169,9 +172,10 @@ def release_number_from_tag(base_version):
     return int(match.group(1)), tag
 
 
-def next_dev_counter(project_dir, release_number):
+def next_dev_counter(project_dir, counter_key):
     counter_dir = _ensure_counter_dir(project_dir)
-    counter_path = os.path.join(counter_dir, DEV_COUNTER_FILE_TEMPLATE.format(release=release_number))
+    safe_key = re.sub(r"[^A-Za-z0-9_.-]+", "_", counter_key)
+    counter_path = os.path.join(counter_dir, DEV_COUNTER_FILE_TEMPLATE.format(key=safe_key))
     current_value = _read_counter(counter_path, 0)
     next_value = current_value + 1
     _write_counter(counter_path, next_value)
@@ -188,20 +192,20 @@ def inject_version(env):
 
     if env_name == "default":
         release_number, release_counter_path = get_current_release_number(project_dir, base_version)
-        build_counter, counter_path = next_dev_counter(project_dir, release_number)
-        short_sha = get_git_short_sha(project_dir)
-        version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
-        build_kind = "dev"
+        build_counter = release_number
+        counter_path = release_counter_path
+        version_string = base_version
+        build_kind = "local"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
     else:
-        tagged_release = release_number_from_tag(base_version)
+        tagged_release = release_number_from_tag(project_dir, base_version)
         if tagged_release:
             release_number, tag = tagged_release
             counter_path = f"release tag {tag}"
         else:
             release_number, counter_path = preview_next_release_number(project_dir, base_version)
         build_counter = release_number
-        version_string = f"{base_version}.{release_number}"
+        version_string = base_version
         build_kind = "release"
 
     env.Append(

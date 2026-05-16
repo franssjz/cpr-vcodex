@@ -13,6 +13,7 @@ class SleepActivity final : public Activity {
   void onEnter() override;
 
  private:
+  void applySleepRefreshCleanup() const;
   void renderDefaultSleepScreen() const;
   void renderCustomSleepScreen() const;
   void renderCoverSleepScreen() const;

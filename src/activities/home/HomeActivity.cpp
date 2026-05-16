@@ -24,7 +24,6 @@
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
 #include "activities/apps/FavoritesAppActivity.h"
-#include "activities/apps/FlashcardsAppActivity.h"
 #include "activities/apps/IfFoundActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
@@ -41,6 +40,7 @@
 namespace {
 constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
 constexpr int HOME_SHORTCUT_PAGE_SIZE = 4;
+constexpr int LYRA_VCODEX2_COMPACT_DASHBOARD_HEIGHT = 286;
 
 struct HomeShortcutEntry {
   const ShortcutDefinition* definition = nullptr;
@@ -104,6 +104,22 @@ bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
 int HomeActivity::getMenuItemCount() const {
   auto entries = getHomeShortcutEntries(hasOpdsServers);
   return static_cast<int>(recentBooks.size()) + static_cast<int>(entries.size());
+}
+
+int HomeActivity::getRecentBookLoadCount() const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2) {
+    return SETTINGS.showCurrentBookCard ? 2 : 1;
+  }
+  return metrics.homeRecentBooksCount;
+}
+
+int HomeActivity::getDashboardHeight() const {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 && SETTINGS.showCurrentBookCard == 0) {
+    return LYRA_VCODEX2_COMPACT_DASHBOARD_HEIGHT;
+  }
+  return metrics.homeCoverTileHeight;
 }
 
 void HomeActivity::loadRecentBooks(const int maxBooks) {
@@ -205,7 +221,7 @@ void HomeActivity::onEnter() {
   recentsLoaded = false;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  loadRecentBooks(metrics.homeRecentBooksCount);
+  loadRecentBooks(getRecentBookLoadCount());
   recentsLoaded = !needsRecentCoverLoad(metrics.homeCoverHeight);
 
   requestUpdate();
@@ -322,8 +338,7 @@ void HomeActivity::loop() {
               }
 
               if (RECENT_BOOKS.removeBook(selectedBook.path)) {
-                const auto& metrics = UITheme::getInstance().getMetrics();
-                loadRecentBooks(metrics.homeRecentBooksCount);
+                loadRecentBooks(getRecentBookLoadCount());
                 if (recentBooks.empty()) {
                   selectorIndex = 0;
                 } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
@@ -393,10 +408,6 @@ void HomeActivity::loop() {
           startActivityForResult(std::make_unique<FavoritesAppActivity>(renderer, mappedInput),
                                  [this](const ActivityResult&) { requestUpdate(); });
           break;
-        case ShortcutId::Flashcards:
-          startActivityForResult(std::make_unique<FlashcardsAppActivity>(renderer, mappedInput),
-                                 [this](const ActivityResult&) { requestUpdate(); });
-          break;
         case ShortcutId::FileTransfer:
           activityManager.goToFileTransfer();
           break;
@@ -418,19 +429,20 @@ void HomeActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   renderer.clearScreen();
   bool bufferRestored = coverBufferStored && restoreCoverBuffer();
+  const int dashboardHeight = getDashboardHeight();
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.homeTopPadding}, nullptr, nullptr);
   HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
 
-  GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
+  GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, dashboardHeight},
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
   auto homeEntries = getHomeShortcutEntries(hasOpdsServers);
   const int selectedHomeIndex = selectorIndex - static_cast<int>(recentBooks.size());
   const Rect shortcutsRect{
-      0, metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing, pageWidth,
-      pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
+      0, metrics.homeTopPadding + dashboardHeight + metrics.verticalSpacing, pageWidth,
+      pageHeight - (metrics.homeTopPadding + dashboardHeight + metrics.verticalSpacing +
                     metrics.buttonHintsHeight + metrics.verticalSpacing)};
   const Rect menuRect = shortcutsRect;
 

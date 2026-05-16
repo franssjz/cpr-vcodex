@@ -18,6 +18,7 @@
 #include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -393,6 +394,7 @@ void TxtReaderActivity::initializeReader() {
   }
 
   // Store current settings for cache validation
+  sdFontSystem.ensureLoaded(renderer);
   cachedFontId = SETTINGS.getReaderFontId();
   cachedScreenMargin = SETTINGS.screenMargin;
   cachedParagraphAlignment = SETTINGS.paragraphAlignment;
@@ -403,8 +405,13 @@ void TxtReaderActivity::initializeReader() {
   cachedOrientedMarginTop += cachedScreenMargin;
   cachedOrientedMarginLeft += cachedScreenMargin;
   cachedOrientedMarginRight += cachedScreenMargin;
-  cachedOrientedMarginBottom +=
-      std::max(cachedScreenMargin, static_cast<uint8_t>(UITheme::getInstance().getStatusBarHeight()));
+  const uint8_t statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+  if (SETTINGS.statusBarPlacement == CrossPointSettings::STATUS_BAR_TOP) {
+    cachedOrientedMarginTop += std::max(cachedScreenMargin, statusBarHeight);
+    cachedOrientedMarginBottom += cachedScreenMargin;
+  } else {
+    cachedOrientedMarginBottom += std::max(cachedScreenMargin, statusBarHeight);
+  }
 
   viewportWidth = renderer.getScreenWidth() - cachedOrientedMarginLeft - cachedOrientedMarginRight;
   const int viewportHeight = renderer.getScreenHeight() - cachedOrientedMarginTop - cachedOrientedMarginBottom;

@@ -30,9 +30,10 @@ python -X utf8 -m platformio run -e default -j 1
 - Base version lives in `platformio.ini` under `[crosspoint]`.
 - `scripts/git_branch.py` injects `CROSSPOINT_VERSION`,
   `VCODEX_RELEASE_SEQ`, and build kind defines.
-- Development builds include a `.devN-<sha>` suffix.
+- Local and release artifacts use the public base version, for example
+  `1.3.2-cpr-vcodex.bin`.
 - Release builds are tag-driven when `VCODEX_RELEASE_TAG` or `GITHUB_REF_NAME`
-  matches `<base>.<release>-cpr-vcodex`.
+  matches `v<base>` or `<base>`.
 - Local release counters under `artifacts/` are ignored by git. Do not rely on
   them as the only source of published release truth.
 

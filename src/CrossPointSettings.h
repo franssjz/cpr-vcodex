@@ -59,6 +59,12 @@ class CrossPointSettings {
   };
   enum STATUS_BAR_TITLE { BOOK_TITLE = 0, CHAPTER_TITLE = 1, HIDE_TITLE = 2, STATUS_BAR_TITLE_COUNT };
   enum STATUS_BAR_TIME_LEFT { TIME_LEFT_HIDE = 0, TIME_LEFT_BOOK = 1, TIME_LEFT_CHAPTER = 2, STATUS_BAR_TIME_LEFT_COUNT };
+  enum STATUS_BAR_PLACEMENT {
+    STATUS_BAR_BOTTOM = 0,
+    STATUS_BAR_TOP = 1,
+    STATUS_BAR_HIDDEN = 2,
+    STATUS_BAR_PLACEMENT_COUNT
+  };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -156,9 +162,7 @@ class CrossPointSettings {
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // UI Theme
-  // Value 2 used to be Lyra Carousel; keep it invalid so old settings
-  // migrate back to the default theme.
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, UI_THEME_COUNT = 2 };
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_VCODEX2 = 2, ROUNDEDRAFF = 3, UI_THEME_COUNT = 4 };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -176,20 +180,6 @@ class CrossPointSettings {
     DAILY_GOAL_45_MIN = 2,
     DAILY_GOAL_60_MIN = 3,
     DAILY_GOAL_TARGET_COUNT
-  };
-  enum FLASHCARD_STUDY_MODE {
-    FLASHCARD_STUDY_DUE = 0,
-    FLASHCARD_STUDY_SCHEDULED = 1,
-    FLASHCARD_STUDY_INFINITE = 2,
-    FLASHCARD_STUDY_MODE_COUNT
-  };
-  enum FLASHCARD_SESSION_SIZE {
-    FLASHCARD_SESSION_10 = 0,
-    FLASHCARD_SESSION_20 = 1,
-    FLASHCARD_SESSION_30 = 2,
-    FLASHCARD_SESSION_50 = 3,
-    FLASHCARD_SESSION_ALL = 4,
-    FLASHCARD_SESSION_SIZE_COUNT
   };
   enum SYNC_DAY_REMINDER_STARTS {
     SYNC_DAY_REMINDER_OFF = 0,
@@ -212,6 +202,9 @@ class CrossPointSettings {
     SHORTCUT_LOCATION_COUNT
   };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
+  enum FILE_BROWSER_VIEW { FILE_BROWSER_LIST = 0, FILE_BROWSER_BOOKSHELF = 1, FILE_BROWSER_VIEW_COUNT };
+  enum BOOKSHELF_COLUMNS { BOOKSHELF_COLUMNS_2 = 0, BOOKSHELF_COLUMNS_3 = 1, BOOKSHELF_COLUMNS_COUNT };
+  enum SLEEP_REFRESH_MODE { SLEEP_REFRESH_OFF = 0, SLEEP_REFRESH_SOFT = 1, SLEEP_REFRESH_FULL = 2, SLEEP_REFRESH_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -222,6 +215,7 @@ class CrossPointSettings {
   uint8_t sleepScreenCoverMode = FIT;
   // Sleep screen cover filter
   uint8_t sleepScreenCoverFilter = NO_FILTER;
+  uint8_t sleepRefreshMode = SLEEP_REFRESH_SOFT;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
@@ -231,6 +225,7 @@ class CrossPointSettings {
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarTimeLeft = TIME_LEFT_BOOK;
   uint8_t statusBarBattery = 1;
+  uint8_t statusBarPlacement = STATUS_BAR_BOTTOM;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
@@ -252,7 +247,13 @@ class CrossPointSettings {
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
+  static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
+  using SdFontIdResolver = int (*)(void* ctx, const char* familyName, uint8_t fontSize);
+
   uint8_t fontFamily = BOOKERLY;
+  char sdFontFamilyName[32] = "";
+  SdFontIdResolver sdFontIdResolver = nullptr;
+  void* sdFontResolverCtx = nullptr;
   uint8_t fontSize = MEDIUM;
   uint8_t lineSpacing = NORMAL;
   uint8_t paragraphAlignment = JUSTIFIED;
@@ -277,7 +278,8 @@ class CrossPointSettings {
   // Long-press chapter skip on side buttons
   uint8_t longPressChapterSkip = 1;
   // UI Theme
-  uint8_t uiTheme = LYRA_CUSTOM;
+  uint8_t uiTheme = LYRA_VCODEX2;
+  uint8_t showCurrentBookCard = 1;
   // Experimental global dark mode for the device UI and supported readers.
   uint8_t darkMode = 0;
   // Home/apps helpers
@@ -290,8 +292,6 @@ class CrossPointSettings {
   uint8_t timeZonePreset = 0;
   uint8_t dateFormat = DATE_DD_MM_YYYY;
   uint8_t dailyGoalTarget = DAILY_GOAL_30_MIN;
-  uint8_t flashcardStudyMode = FLASHCARD_STUDY_DUE;
-  uint8_t flashcardSessionSize = FLASHCARD_SESSION_ALL;
   uint8_t showStatsAfterReading = 1;
   uint8_t achievementsEnabled = 1;
   uint8_t achievementPopups = 1;
@@ -322,8 +322,6 @@ class CrossPointSettings {
   uint8_t bookmarksShortcutOrder = 12;
   uint8_t favoritesShortcut = SHORTCUT_APPS;
   uint8_t favoritesShortcutOrder = 13;
-  uint8_t flashcardsShortcut = SHORTCUT_APPS;
-  uint8_t flashcardsShortcutOrder = 14;
   uint8_t fileTransferShortcut = SHORTCUT_APPS;
   uint8_t fileTransferShortcutOrder = 15;
   uint8_t sleepShortcut = SHORTCUT_APPS;
@@ -333,26 +331,27 @@ class CrossPointSettings {
   uint8_t browseFilesShortcutVisible = 1;
   uint8_t statsShortcutVisible = 1;
   uint8_t syncDayShortcutVisible = 1;
-  uint8_t settingsShortcutVisible = 1;
-  uint8_t readingStatsShortcutVisible = 1;
-  uint8_t readingHeatmapShortcutVisible = 1;
-  uint8_t readingProfileShortcutVisible = 1;
-  uint8_t achievementsShortcutVisible = 1;
-  uint8_t ifFoundShortcutVisible = 1;
-  uint8_t readMeShortcutVisible = 1;
-  uint8_t recentBooksShortcutVisible = 1;
+  uint8_t settingsShortcutVisible = 0;
+  uint8_t readingStatsShortcutVisible = 0;
+  uint8_t readingHeatmapShortcutVisible = 0;
+  uint8_t readingProfileShortcutVisible = 0;
+  uint8_t achievementsShortcutVisible = 0;
+  uint8_t ifFoundShortcutVisible = 0;
+  uint8_t readMeShortcutVisible = 0;
+  uint8_t recentBooksShortcutVisible = 0;
   uint8_t bookmarksShortcutVisible = 0;
-  uint8_t favoritesShortcutVisible = 1;
-  uint8_t flashcardsShortcutVisible = 0;
-  uint8_t fileTransferShortcutVisible = 1;
-  uint8_t sleepShortcutVisible = 1;
-  uint8_t opdsBrowserShortcutVisible = 1;
+  uint8_t favoritesShortcutVisible = 0;
+  uint8_t fileTransferShortcutVisible = 0;
+  uint8_t sleepShortcutVisible = 0;
+  uint8_t opdsBrowserShortcutVisible = 0;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
   uint8_t embeddedStyle = 1;
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
+  uint8_t fileBrowserView = FILE_BROWSER_BOOKSHELF;
+  uint8_t bookshelfColumns = BOOKSHELF_COLUMNS_3;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
 

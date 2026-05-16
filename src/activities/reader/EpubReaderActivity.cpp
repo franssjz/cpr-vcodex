@@ -28,6 +28,7 @@
 #include "ReaderQuickSettingsActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "activities/settings/StatusBarSettingsActivity.h"
 #include "components/UITheme.h"
@@ -59,7 +60,8 @@ constexpr StrId QS_FONT_SIZE_LABELS[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, S
 constexpr StrId QS_LINE_SPACING_LABELS[] = {StrId::STR_TIGHT, StrId::STR_NORMAL, StrId::STR_WIDE};
 constexpr StrId QS_ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
                                          StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
-constexpr StrId QS_THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM};
+constexpr StrId QS_THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
+                                     StrId::STR_THEME_LYRA_VCODEX2, StrId::STR_THEME_ROUNDEDRAFF};
 constexpr StrId QS_DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
 constexpr StrId QS_TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
                                              StrId::STR_EXTRA_DARK};
@@ -239,6 +241,7 @@ void EpubReaderActivity::onEnter() {
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+  sdFontSystem.ensureLoaded(renderer);
 
   epub->setupCacheDir();
   applyPendingSyncSession();
@@ -1085,6 +1088,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   orientedMarginRight += SETTINGS.screenMargin;
 
   const uint8_t statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+  const bool statusBarAtTop = SETTINGS.statusBarPlacement == CrossPointSettings::STATUS_BAR_TOP;
 
   // reserves space for automatic page turn indicator when no status bar or progress bar only
   if (automaticPageTurnActive &&
@@ -1092,6 +1096,8 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     orientedMarginBottom +=
         std::max(SETTINGS.screenMargin,
                  static_cast<uint8_t>(statusBarHeight + UITheme::getInstance().getMetrics().statusBarVerticalMargin));
+  } else if (statusBarAtTop) {
+    orientedMarginTop += std::max(SETTINGS.screenMargin, statusBarHeight);
   } else {
     orientedMarginBottom += std::max(SETTINGS.screenMargin, statusBarHeight);
   }

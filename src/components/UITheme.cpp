@@ -10,6 +10,8 @@
 #include "RecentBooksStore.h"
 #include "components/themes/lyra/LyraCustomTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
+#include "components/themes/lyra/LyraVcodex2Theme.h"
+#include "components/themes/roundedraff/RoundedRaffTheme.h"
 
 namespace {
 constexpr int SKIP_PAGE_MS = 700;
@@ -33,6 +35,16 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra theme");
       currentTheme = std::make_unique<LyraTheme>();
       currentMetrics = &LyraMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::LYRA_VCODEX2:
+      LOG_DBG("UI", "Using LyraVcodex2 theme");
+      currentTheme = std::make_unique<LyraVcodex2Theme>();
+      currentMetrics = &LyraVcodex2Metrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::ROUNDEDRAFF:
+      LOG_DBG("UI", "Using RoundedRaff theme");
+      currentTheme = std::make_unique<RoundedRaffTheme>();
+      currentMetrics = &RoundedRaffMetrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_CUSTOM:
     default:
@@ -87,6 +99,9 @@ UIIcon UITheme::getFileIcon(const std::string& filename) {
 
 int UITheme::getStatusBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.statusBarPlacement == CrossPointSettings::STATUS_BAR_HIDDEN) {
+    return 0;
+  }
 
   // Add status bar margin
   const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.statusBarBookProgressPercentage ||
@@ -101,6 +116,9 @@ int UITheme::getStatusBarHeight() {
 
 int UITheme::getProgressBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
+  if (SETTINGS.statusBarPlacement == CrossPointSettings::STATUS_BAR_HIDDEN) {
+    return 0;
+  }
   const bool showProgressBar =
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);

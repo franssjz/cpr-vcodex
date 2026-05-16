@@ -16,7 +16,6 @@ class ReadingStatsDetailActivity final : public Activity {
   std::string resolvedCoverBmpPath;
   ReadingStatsDetailContext context;
   bool coverLoadPending = false;
-  int selectedStatsItem = 0;
   bool waitForConfirmRelease = false;
   bool waitForBackRelease = false;
   bool baseScreenBufferStored = false;
@@ -27,8 +26,6 @@ class ReadingStatsDetailActivity final : public Activity {
   int scrollOffset = 0;
   int maxScrollOffset = 0;
 
-  void openAdjustment();
-  void guardChildReturn();
   bool storeBaseScreenBuffer();
   bool restoreBaseScreenBuffer();
   void invalidateBaseScreenBuffer();

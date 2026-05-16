@@ -12,6 +12,7 @@ class ReaderQuickSettingsActivity final : public Activity {
   bool waitForBackRelease = false;
 
   void adjustSelected(int direction);
+  void openFontPicker();
   int currentItemCount() const;
 
  public:

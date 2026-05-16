@@ -14,13 +14,18 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ReadingStatsAnalytics.h"
 #include "util/TimeUtils.h"
 
 namespace {
-constexpr int RADAR_RADIUS = 64;
+constexpr int RADAR_RADIUS = 56;
 constexpr int CONTENT_TOP_GAP = 18;
-constexpr int RADAR_TOP_GAP = 34;
-constexpr int RADAR_SECTION_HEIGHT = 252;
+constexpr int INSIGHT_CARD_HEIGHT = 70;
+constexpr int INSIGHT_CARD_GAP = 12;
+constexpr int INSIGHT_SECTION_TITLE_HEIGHT = 22;
+constexpr int INSIGHT_SECTION_GAP = 24;
+constexpr int RADAR_TOP_GAP = 52;
+constexpr int RADAR_SECTION_HEIGHT = 236;
 constexpr int SCORE_TOP_GAP = 20;
 constexpr int SCORE_CARD_HEIGHT = 74;
 constexpr int SECTION_TITLE_HEIGHT = 20;
@@ -32,7 +37,7 @@ constexpr int SECTION_CARD_GAP = 16;
 constexpr int SECTION_ROW_GAP = 20;
 constexpr int SECTION_EXTRA_CARD_ROW_GAP = 12;
 constexpr int CONTENT_SCROLL_STEP = 110;
-constexpr int RADAR_CENTER_Y_OFFSET = 108;
+constexpr int RADAR_CENTER_Y_OFFSET = 104;
 constexpr uint32_t SCROLL_REPEAT_START_MS = 260;
 constexpr uint32_t SCROLL_REPEAT_INTERVAL_MS = 130;
 constexpr uint32_t LAST_7_DAYS = 7;
@@ -42,6 +47,8 @@ constexpr uint32_t THIRTY_MINUTES_MS = 30U * 60U * 1000U;
 enum class AxisLabelAlign { Left, Center, Right };
 
 constexpr size_t PROFILE_SECTION_COUNT = 4;
+constexpr size_t INSIGHT_CARD_COUNT = 10;
+constexpr int INSIGHT_SECTION_COUNT = 3;
 constexpr std::array<int, PROFILE_SECTION_COUNT> AXIS_LABEL_WIDTHS = {112, 144, 126, 126};
 constexpr std::array<AxisLabelAlign, PROFILE_SECTION_COUNT> AXIS_LABEL_ALIGNS = {AxisLabelAlign::Center,
                                                                                   AxisLabelAlign::Center,
@@ -53,6 +60,18 @@ using AxisSummary = ReadingProfileAxisSummary;
 struct ProfileSection {
   const AxisSummary* summary = nullptr;
   StrId descriptionId = StrId::STR_NONE_OPT;
+};
+
+struct InsightSection {
+  StrId titleId = StrId::STR_NONE_OPT;
+  size_t startIndex = 0;
+  size_t count = 0;
+};
+
+constexpr std::array<InsightSection, INSIGHT_SECTION_COUNT> INSIGHT_SECTIONS = {
+    InsightSection{StrId::STR_READING_SUMMARY, 0, 4},
+    InsightSection{StrId::STR_READING_HABITS, 4, 4},
+    InsightSection{StrId::STR_PREDICTIONS, 8, 2},
 };
 
 int roundDiv(const int numerator, const int denominator) {
@@ -67,6 +86,8 @@ int clampPercent(const int value) { return std::clamp(value, 0, 100); }
 std::string formatFraction(const int value, const int total) { return std::to_string(value) + "/" + std::to_string(total); }
 
 std::string formatPercentLabel(const int value) { return std::to_string(clampPercent(value)) + "%"; }
+
+std::string formatDaysLabel(const int days) { return std::to_string(std::max(0, days)) + "d"; }
 
 std::string formatTenths(const int tenths) {
   const int whole = tenths / 10;
@@ -95,6 +116,129 @@ uint32_t getDisplayReferenceDayOrdinal() {
   }
 
   return latestDayOrdinal;
+}
+
+uint64_t getTotalReadingMs() {
+  uint64_t totalMs = 0;
+  for (const auto& book : READING_STATS.getBooks()) {
+    totalMs += book.totalReadingMs;
+  }
+  return totalMs;
+}
+
+int getActiveBookCount() {
+  int count = 0;
+  for (const auto& book : READING_STATS.getBooks()) {
+    if (!book.completed && book.lastProgressPercent > 0 && book.lastProgressPercent < 100) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+int getFinishedBookCount() {
+  int count = 0;
+  for (const auto& book : READING_STATS.getBooks()) {
+    if (book.completed || book.lastProgressPercent >= 100) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+uint64_t getReadingMsSince(const uint32_t startDayOrdinal, const uint32_t referenceDayOrdinal, int* readingDays = nullptr) {
+  uint64_t totalMs = 0;
+  int days = 0;
+  for (const auto& day : READING_STATS.getReadingDays()) {
+    if (day.dayOrdinal < startDayOrdinal || day.dayOrdinal > referenceDayOrdinal || day.readingMs == 0) {
+      continue;
+    }
+    totalMs += day.readingMs;
+    ++days;
+  }
+  if (readingDays != nullptr) {
+    *readingDays = days;
+  }
+  return totalMs;
+}
+
+int getCurrentReadStreak(const uint32_t referenceDayOrdinal) {
+  if (referenceDayOrdinal == 0) return 0;
+  int streak = 0;
+  uint32_t day = referenceDayOrdinal;
+  while (true) {
+    bool readOnDay = false;
+    for (auto it = READING_STATS.getReadingDays().rbegin(); it != READING_STATS.getReadingDays().rend(); ++it) {
+      if (it->dayOrdinal < day) break;
+      if (it->dayOrdinal == day && it->readingMs > 0) {
+        readOnDay = true;
+        break;
+      }
+    }
+    if (!readOnDay) break;
+    ++streak;
+    if (day == 0) break;
+    --day;
+  }
+  return streak;
+}
+
+StrId getConsistencyLabel(const ReadingProfileSummary& summary, const uint64_t weekMs) {
+  if (summary.daysRead >= 5 && summary.bestDaySharePercent <= 45) return StrId::STR_CONSISTENT_READER;
+  if (summary.daysRead >= 3) return StrId::STR_BUILDING_HABIT;
+  if (summary.daysRead > 0 && summary.bestDaySharePercent >= 70 && weekMs >= THIRTY_MINUTES_MS) {
+    return StrId::STR_SPRINT_READER;
+  }
+  if (summary.daysRead > 0) return StrId::STR_RETURNING_READER;
+  return StrId::STR_LEARNING;
+}
+
+ReadingStatsAnalytics::EstimateConfidence getOverallEstimateConfidence() {
+  int high = 0;
+  int medium = 0;
+  int low = 0;
+  for (const auto& book : READING_STATS.getBooks()) {
+    if (book.completed || book.lastProgressPercent == 0 || book.lastProgressPercent >= 100) {
+      continue;
+    }
+    const auto estimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(book);
+    if (estimate.ready && estimate.confidence == ReadingStatsAnalytics::EstimateConfidence::HIGH_CONFIDENCE) {
+      ++high;
+    } else if (estimate.ready && estimate.confidence == ReadingStatsAnalytics::EstimateConfidence::MEDIUM_CONFIDENCE) {
+      ++medium;
+    } else {
+      ++low;
+    }
+  }
+  if (high > 0) return ReadingStatsAnalytics::EstimateConfidence::HIGH_CONFIDENCE;
+  if (medium > 0) return ReadingStatsAnalytics::EstimateConfidence::MEDIUM_CONFIDENCE;
+  return ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE;
+}
+
+std::string buildFinishEstimateLabel() {
+  uint64_t bestRemainingMs = 0;
+  ReadingStatsAnalytics::EstimateConfidence bestConfidence = ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE;
+  for (const auto& book : READING_STATS.getBooks()) {
+    if (book.completed || book.lastProgressPercent == 0 || book.lastProgressPercent >= 100) {
+      continue;
+    }
+    const auto estimate = ReadingStatsAnalytics::buildBookTimeLeftEstimate(book);
+    if (!estimate.ready || estimate.remainingMs == 0 ||
+        estimate.confidence == ReadingStatsAnalytics::EstimateConfidence::LOW_CONFIDENCE) {
+      continue;
+    }
+    if (bestRemainingMs == 0 || estimate.remainingMs < bestRemainingMs ||
+        static_cast<uint8_t>(estimate.confidence) > static_cast<uint8_t>(bestConfidence)) {
+      bestRemainingMs = estimate.remainingMs;
+      bestConfidence = estimate.confidence;
+    }
+  }
+  if (bestRemainingMs == 0) return tr(STR_LEARNING);
+
+  const uint64_t days = (bestRemainingMs + 24ULL * 60ULL * 60ULL * 1000ULL - 1) / (24ULL * 60ULL * 60ULL * 1000ULL);
+  if (days <= 1) return tr(STR_TOMORROW);
+  if (days <= 14) return std::to_string(days) + " " + tr(STR_DAYS);
+  return ReadingStatsAnalytics::formatDurationHm(bestRemainingMs);
 }
 
 bool shouldDrawDitheredPixel(const int x, const int y, const Color color) {
@@ -185,6 +329,28 @@ void drawCompactMetricCard(GfxRenderer& renderer, const Rect& rect, const std::s
   }
 }
 
+void drawContainedInsightCard(GfxRenderer& renderer, const Rect& rect, const std::string& value,
+                              const std::vector<std::string>& labelLines) {
+  constexpr int pad = 10;
+  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
+  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
+
+  int labelY = rect.y + 8;
+  const int labelBottom = rect.y + 8 + renderer.getLineHeight(UI_10_FONT_ID) * 2;
+  for (const auto& line : labelLines) {
+    if (labelY > labelBottom - renderer.getLineHeight(UI_10_FONT_ID)) break;
+    renderer.drawText(UI_10_FONT_ID, rect.x + pad, labelY, line.c_str());
+    labelY += renderer.getLineHeight(UI_10_FONT_ID);
+  }
+
+  const int valueFont =
+      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - pad * 2 ? UI_12_FONT_ID
+                                                                                                        : UI_10_FONT_ID;
+  const std::string safeValue = renderer.truncatedText(valueFont, value.c_str(), rect.width - pad * 2, EpdFontFamily::BOLD);
+  const int valueY = rect.y + rect.height - renderer.getLineHeight(valueFont) - 10;
+  renderer.drawText(valueFont, rect.x + pad, valueY, safeValue.c_str(), true, EpdFontFamily::BOLD);
+}
+
 int getSectionCardHeight(const AxisSummary& axis) {
   return axis.tertiaryLabelId != StrId::STR_NONE_OPT ? SECTION_TERTIARY_CARD_HEIGHT : SECTION_CARD_HEIGHT;
 }
@@ -265,9 +431,20 @@ std::array<ProfileSection, 4> getProfileSections(const ReadingProfileSummary& su
           ProfileSection{&summary.depth, getSectionDescriptionId(summary.depth.labelId)}};
 }
 
+int getInsightDashboardHeight() {
+  int totalHeight = 0;
+  for (const auto& section : INSIGHT_SECTIONS) {
+    const int rows = static_cast<int>((section.count + 1) / 2);
+    totalHeight += INSIGHT_SECTION_TITLE_HEIGHT + rows * INSIGHT_CARD_HEIGHT +
+                   std::max(0, rows - 1) * INSIGHT_CARD_GAP + INSIGHT_SECTION_GAP;
+  }
+  return totalHeight;
+}
+
 int getContentBottom(const GfxRenderer& renderer, const int contentTop, const ReadingProfileSummary& summary,
                      const std::array<std::vector<std::string>, 4>& sectionDescriptionLines) {
-  int sectionTop = contentTop + RADAR_TOP_GAP + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP + SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
+  int sectionTop = contentTop + getInsightDashboardHeight() + RADAR_TOP_GAP + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP +
+                   SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
   const auto sections = getProfileSections(summary);
   for (size_t index = 0; index < sections.size(); ++index) {
     const auto& section = sections[index];
@@ -454,18 +631,45 @@ ReadingProfileSummary buildReadingProfileSummary() {
 
   return summary;
 }
+
+std::array<ReadingProfileInsightCard, INSIGHT_CARD_COUNT> buildInsightCards(const ReadingProfileSummary& summary) {
+  std::array<ReadingProfileInsightCard, INSIGHT_CARD_COUNT> cards = {};
+  const uint32_t referenceDayOrdinal = getDisplayReferenceDayOrdinal();
+  const uint32_t weekStart = referenceDayOrdinal >= (LAST_7_DAYS - 1) ? referenceDayOrdinal - (LAST_7_DAYS - 1) : 0;
+  int weekReadingDays = 0;
+  const uint64_t weekMs = referenceDayOrdinal == 0 ? 0 : getReadingMsSince(weekStart, referenceDayOrdinal, &weekReadingDays);
+  const auto confidence = getOverallEstimateConfidence();
+
+  cards[0] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatDurationHm(getTotalReadingMs()), StrId::STR_TOTAL_READING_TIME};
+  cards[1] = ReadingProfileInsightCard{formatDaysLabel(getCurrentReadStreak(referenceDayOrdinal)), StrId::STR_CURRENT_STREAK};
+  cards[2] = ReadingProfileInsightCard{std::to_string(getActiveBookCount()), StrId::STR_ACTIVE_BOOKS};
+  cards[3] = ReadingProfileInsightCard{std::to_string(getFinishedBookCount()), StrId::STR_BOOKS_FINISHED};
+  cards[4] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatDurationHm(ReadingStatsAnalytics::getAverageSessionMs()), StrId::STR_AVG_SESSION};
+  cards[5] = ReadingProfileInsightCard{std::to_string(weekReadingDays) + "/7", StrId::STR_READING_DAYS_THIS_WEEK};
+  cards[6] = ReadingProfileInsightCard{I18N.get(getConsistencyLabel(summary, weekMs)), StrId::STR_HABIT_TYPE};
+  cards[7] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatDurationHm(weekMs), StrId::STR_THIS_WEEK};
+  cards[8] = ReadingProfileInsightCard{ReadingStatsAnalytics::formatEstimateConfidence(confidence), StrId::STR_ESTIMATE_CONFIDENCE};
+  cards[9] = ReadingProfileInsightCard{buildFinishEstimateLabel(), StrId::STR_FINISH_PREDICTION};
+  return cards;
+}
 }  // namespace
 
 void ReadingProfileActivity::rebuildProfileCache() {
   profileSummary = buildReadingProfileSummary();
+  insightCards = buildInsightCards(profileSummary);
   const auto sections = getProfileSections(profileSummary);
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   const int sidePadding = metrics.contentSidePadding;
   const int textWidth = pageWidth - sidePadding * 2;
   const int contentTop = metrics.topPadding + metrics.headerHeight + CONTENT_TOP_GAP;
+  const int insightCardWidth = (pageWidth - sidePadding * 2 - INSIGHT_CARD_GAP) / 2;
+  for (size_t index = 0; index < insightCards.size(); ++index) {
+    cachedInsightLabelLines[index] =
+        getMetricCardLabelLines(renderer, insightCardWidth - 20, insightCards[index].labelId);
+  }
 
-  cachedRadarTop = contentTop + RADAR_TOP_GAP;
+  cachedRadarTop = contentTop + getInsightDashboardHeight() + RADAR_TOP_GAP;
   cachedScoreTop = cachedRadarTop + RADAR_SECTION_HEIGHT + SCORE_TOP_GAP;
 
   int sectionTop = cachedScoreTop + SCORE_CARD_HEIGHT + SECTION_ROW_GAP;
@@ -574,10 +778,40 @@ void ReadingProfileActivity::render(RenderLock&&) {
   maxScrollOffset = std::max(0, cachedContentBottom - viewportBottom);
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
 
+  const int insightCardWidth = (pageWidth - sidePadding * 2 - INSIGHT_CARD_GAP) / 2;
+  int insightY = contentTop - scrollOffset;
+  for (const auto& insightSection : INSIGHT_SECTIONS) {
+    if (intersectsVertical(insightY, INSIGHT_SECTION_TITLE_HEIGHT, viewportTop, viewportBottom)) {
+      renderer.drawText(UI_10_FONT_ID, sidePadding, insightY, I18N.get(insightSection.titleId), true,
+                        EpdFontFamily::BOLD);
+    }
+    insightY += INSIGHT_SECTION_TITLE_HEIGHT;
+    const int sectionRows = static_cast<int>((insightSection.count + 1) / 2);
+    for (int row = 0; row < sectionRows; ++row) {
+      const int cardY = insightY + row * (INSIGHT_CARD_HEIGHT + INSIGHT_CARD_GAP);
+      for (int column = 0; column < 2; ++column) {
+        const size_t cardIndex = insightSection.startIndex + static_cast<size_t>(row * 2 + column);
+        if (cardIndex >= insightSection.startIndex + insightSection.count || cardIndex >= insightCards.size()) {
+          continue;
+        }
+        const int cardX = sidePadding + column * (insightCardWidth + INSIGHT_CARD_GAP);
+        if (!intersectsVertical(cardY, INSIGHT_CARD_HEIGHT, viewportTop, viewportBottom)) {
+          continue;
+        }
+        drawContainedInsightCard(renderer, Rect{cardX, cardY, insightCardWidth, INSIGHT_CARD_HEIGHT},
+                                 insightCards[cardIndex].value, cachedInsightLabelLines[cardIndex]);
+      }
+    }
+    insightY += sectionRows * INSIGHT_CARD_HEIGHT + std::max(0, sectionRows - 1) * INSIGHT_CARD_GAP +
+                INSIGHT_SECTION_GAP;
+  }
+
   const int radarTop = cachedRadarTop - scrollOffset;
   const int radarCenterX = pageWidth / 2;
   const int radarCenterY = radarTop + RADAR_CENTER_Y_OFFSET;
   if (intersectsVertical(radarTop - 32, RADAR_SECTION_HEIGHT + 64, viewportTop, viewportBottom)) {
+    renderer.drawText(UI_10_FONT_ID, sidePadding, radarTop - 38, tr(STR_PROFILE_SHAPE), true, EpdFontFamily::BOLD);
+    renderer.drawRect(sidePadding, radarTop - 16, pageWidth - sidePadding * 2, RADAR_SECTION_HEIGHT + 12);
     const int radarXs[4] = {radarCenterX, radarCenterX + RADAR_RADIUS, radarCenterX, radarCenterX - RADAR_RADIUS};
     const int radarYs[4] = {radarCenterY - RADAR_RADIUS, radarCenterY, radarCenterY + RADAR_RADIUS, radarCenterY};
 

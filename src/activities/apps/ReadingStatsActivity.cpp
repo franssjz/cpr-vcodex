@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include "ReadingStatsDetailActivity.h"
 #include "ReadingStatsExtendedActivity.h"
@@ -15,12 +16,12 @@
 #include "util/ReadingStatsAnalytics.h"
 
 namespace {
-constexpr int SUMMARY_PANEL_HEIGHT = 140;
+constexpr int SUMMARY_PANEL_HEIGHT = 196;
 constexpr int DETAILS_BUTTON_HEIGHT = 38;
 constexpr int LIST_HEADER_HEIGHT = 34;
 constexpr int LIST_HEADER_BOTTOM_GAP = 10;
-constexpr int BOOK_ROW_HEIGHT = 106;
-constexpr int BOOK_ROW_GAP = 10;
+constexpr int BOOK_ROW_HEIGHT = 118;
+constexpr int BOOK_ROW_GAP = 12;
 constexpr int BOOKS_PER_PAGE = 2;
 
 std::string getBookTitle(const ReadingBookStats& book) { return book.title.empty() ? book.path : book.title; }
@@ -30,6 +31,83 @@ std::string getBookSubtitle(const ReadingBookStats& book) {
     return book.author;
   }
   return book.completed ? std::string(tr(STR_DONE)) : std::string(tr(STR_IN_PROGRESS));
+}
+
+bool isCompletedBook(const ReadingBookStats& book) { return book.completed || book.lastProgressPercent >= 100; }
+
+struct BookSections {
+  std::vector<int> started;
+  std::vector<int> finished;
+
+  int totalRows() const { return static_cast<int>(started.size() + finished.size()); }
+};
+
+BookSections buildBookSections(const std::vector<ReadingBookStats>& books) {
+  BookSections sections;
+  sections.started.reserve(books.size());
+  sections.finished.reserve(books.size());
+  for (int index = 0; index < static_cast<int>(books.size()); ++index) {
+    if (isCompletedBook(books[index])) {
+      sections.finished.push_back(index);
+    } else {
+      sections.started.push_back(index);
+    }
+  }
+  return sections;
+}
+
+const ReadingBookStats* summaryBook(const std::vector<ReadingBookStats>& books, const BookSections& sections) {
+  if (!sections.started.empty()) {
+    return &books[sections.started.front()];
+  }
+  return books.empty() ? nullptr : &books.front();
+}
+
+const std::vector<int>& activeSection(const BookSections& sections, const int selectedIndex) {
+  if (sections.started.empty()) {
+    return sections.finished;
+  }
+  const int flatBookIndex = std::max(0, selectedIndex - 1);
+  if (flatBookIndex >= static_cast<int>(sections.started.size())) {
+    return sections.finished;
+  }
+  return sections.started;
+}
+
+bool activeSectionIsFinished(const BookSections& sections, const int selectedIndex) {
+  if (sections.finished.empty()) {
+    return false;
+  }
+  if (sections.started.empty()) {
+    return true;
+  }
+  return selectedIndex > static_cast<int>(sections.started.size());
+}
+
+int selectedLocalIndex(const BookSections& sections, const int selectedIndex) {
+  if (selectedIndex <= 0) {
+    return 0;
+  }
+  const int flatBookIndex = selectedIndex - 1;
+  if (!sections.started.empty() && flatBookIndex < static_cast<int>(sections.started.size())) {
+    return flatBookIndex;
+  }
+  return std::max(0, flatBookIndex - static_cast<int>(sections.started.size()));
+}
+
+int originalBookIndexForSelection(const BookSections& sections, const int selectedIndex) {
+  if (selectedIndex <= 0) {
+    return -1;
+  }
+  const int flatBookIndex = selectedIndex - 1;
+  if (flatBookIndex < static_cast<int>(sections.started.size())) {
+    return sections.started[flatBookIndex];
+  }
+  const int finishedIndex = flatBookIndex - static_cast<int>(sections.started.size());
+  if (finishedIndex >= 0 && finishedIndex < static_cast<int>(sections.finished.size())) {
+    return sections.finished[finishedIndex];
+  }
+  return -1;
 }
 
 void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t percent);
@@ -49,24 +127,21 @@ void drawMoreDetailsButton(GfxRenderer& renderer, const Rect& rect, const bool s
 
 void drawSummaryLine(GfxRenderer& renderer, const int x, const int y, const int width, const char* label,
                      const std::string& value) {
-  const int labelWidth = (width * 52) / 100;
-  const std::string labelText = renderer.truncatedText(UI_10_FONT_ID, label, labelWidth - 4, EpdFontFamily::REGULAR);
-  const std::string valueText =
-      renderer.truncatedText(UI_10_FONT_ID, value.c_str(), width - labelWidth - 8, EpdFontFamily::BOLD);
-  renderer.drawText(UI_10_FONT_ID, x, y, labelText.c_str());
-  renderer.drawText(UI_10_FONT_ID, x + labelWidth + 8, y, valueText.c_str(), true, EpdFontFamily::BOLD);
+  renderer.drawText(SMALL_FONT_ID, x, y, label);
+  const std::string valueText = renderer.truncatedText(UI_10_FONT_ID, value.c_str(), width, EpdFontFamily::BOLD);
+  renderer.drawText(UI_10_FONT_ID, x, y + 14, valueText.c_str(), true, EpdFontFamily::BOLD);
 }
 
-void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t todayReadingMs) {
+void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t todayReadingMs,
+                      const BookSections& sections) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
   const int pad = 12;
-  renderer.drawText(UI_12_FONT_ID, rect.x + pad, rect.y + 10, tr(STR_READING_STATS), true, EpdFontFamily::BOLD);
 
   const auto& books = READING_STATS.getBooks();
-  const int heroTop = rect.y + 38;
-  renderer.drawLine(rect.x, heroTop - 7, rect.x + rect.width, heroTop - 7);
-  if (!books.empty()) {
-    const auto& recent = books.front();
+  const int heroTop = rect.y + 12;
+  const ReadingBookStats* recentBook = summaryBook(books, sections);
+  if (recentBook != nullptr) {
+    const auto& recent = *recentBook;
     const int titleWidth = rect.width - pad * 2 - 62;
     const std::string title =
         renderer.truncatedText(UI_12_FONT_ID, getBookTitle(recent).c_str(), titleWidth, EpdFontFamily::BOLD);
@@ -76,23 +151,25 @@ void drawSummaryPanel(GfxRenderer& renderer, const Rect& rect, const uint64_t to
     renderer.drawText(UI_10_FONT_ID, rect.x + pad, heroTop + 23, author.c_str());
     renderer.drawText(UI_12_FONT_ID, rect.x + rect.width - pad - 46, heroTop + 5,
                       (std::to_string(recent.lastProgressPercent) + "%").c_str(), true, EpdFontFamily::BOLD);
-    drawMiniProgressBar(renderer, Rect{rect.x + pad, heroTop + 48, rect.width - pad * 2, 8},
+    drawMiniProgressBar(renderer, Rect{rect.x + pad, heroTop + 64, rect.width - pad * 2, 8},
                         recent.lastProgressPercent);
   } else {
     renderer.drawText(UI_10_FONT_ID, rect.x + pad, heroTop + 20, tr(STR_NO_READING_STATS));
   }
 
-  const int statsTop = rect.y + rect.height - 46;
-  renderer.drawLine(rect.x, statsTop - 7, rect.x + rect.width, statsTop - 7);
-  const int columnGap = 14;
+  const int statsTop = rect.y + 108;
+  renderer.drawLine(rect.x, statsTop - 10, rect.x + rect.width, statsTop - 10);
+  const int columnGap = 18;
+  const int rowGap = 8;
   const int columnWidth = (rect.width - pad * 2 - columnGap) / 2;
+  const int secondColumnX = rect.x + pad + columnWidth + columnGap;
   drawSummaryLine(renderer, rect.x + pad, statsTop, columnWidth, tr(STR_TODAY),
                   ReadingStatsAnalytics::formatDurationHm(todayReadingMs));
-  drawSummaryLine(renderer, rect.x + pad + columnWidth + columnGap, statsTop, columnWidth, tr(STR_STREAK),
+  drawSummaryLine(renderer, secondColumnX, statsTop, columnWidth, tr(STR_READ_STREAK),
                   std::to_string(READING_STATS.getCurrentStreakDays()));
-  drawSummaryLine(renderer, rect.x + pad, statsTop + 22, columnWidth, tr(STR_READING_TIME),
+  drawSummaryLine(renderer, rect.x + pad, statsTop + 26 + rowGap, columnWidth, tr(STR_TOTAL_TIME),
                   ReadingStatsAnalytics::formatDurationHm(READING_STATS.getTotalReadingMs()));
-  drawSummaryLine(renderer, rect.x + pad + columnWidth + columnGap, statsTop + 22, columnWidth, tr(STR_BOOKS_FINISHED),
+  drawSummaryLine(renderer, secondColumnX, statsTop + 26 + rowGap, columnWidth, tr(STR_DONE),
                   std::to_string(READING_STATS.getBooksFinishedCount()));
 }
 
@@ -120,8 +197,8 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
   const int textWidth = rect.width - sidePadding * 2 - progressBlockWidth - 12;
   const int titleY = innerY;
   const int subtitleY = innerY + 26;
-  const int metaY = subtitleY + 24;
-  const int progressBarY = rect.y + rect.height - 18;
+  const int metaY = subtitleY + 28;
+  const int progressBarY = rect.y + rect.height - 20;
 
   const std::string title =
       renderer.truncatedText(UI_12_FONT_ID, getBookTitle(book).c_str(), textWidth - 4, EpdFontFamily::BOLD);
@@ -138,8 +215,10 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
                     true, EpdFontFamily::BOLD);
   renderer.drawLine(innerX + 4, titleY + 44, innerX + progressBlockWidth - 4, titleY + 44);
 
-  renderer.drawText(SMALL_FONT_ID, textX, metaY, tr(STR_READING_TIME));
-  renderer.drawText(UI_10_FONT_ID, textX, metaY + 16, totalTimeText.c_str(), true, EpdFontFamily::BOLD);
+  const std::string readText = std::string(tr(STR_TOTAL_TIME)) + ": " + totalTimeText;
+  const std::string clippedReadText =
+      renderer.truncatedText(UI_10_FONT_ID, readText.c_str(), textWidth - 4, EpdFontFamily::BOLD);
+  renderer.drawText(UI_10_FONT_ID, textX, metaY, clippedReadText.c_str(), true, EpdFontFamily::BOLD);
 
   drawMiniProgressBar(renderer, Rect{innerX, progressBarY, rect.width - sidePadding * 2, 8}, book.lastProgressPercent);
 }
@@ -147,15 +226,16 @@ void drawBookRow(GfxRenderer& renderer, const Rect& rect, const ReadingBookStats
 
 void ReadingStatsActivity::onEnter() {
   Activity::onEnter();
-  selectedIndex = READING_STATS.getBooks().empty() ? 0 : 1;
+  const BookSections sections = buildBookSections(READING_STATS.getBooks());
+  selectedIndex = sections.totalRows() == 0 ? 0 : 1;
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   waitForBackRelease = false;
   requestUpdate();
 }
 
 void ReadingStatsActivity::loop() {
-  const int bookCount = static_cast<int>(READING_STATS.getBooks().size());
-  const int selectableCount = bookCount + 1;
+  const BookSections sections = buildBookSections(READING_STATS.getBooks());
+  const int selectableCount = sections.totalRows() + 1;
   const int pageItems = BOOKS_PER_PAGE;
 
   if (waitForBackRelease) {
@@ -224,6 +304,7 @@ void ReadingStatsActivity::loop() {
 
 void ReadingStatsActivity::openSelectedEntry() {
   const auto& books = READING_STATS.getBooks();
+  const BookSections sections = buildBookSections(books);
   if (selectedIndex == 0) {
     startActivityForResult(std::make_unique<ReadingStatsExtendedActivity>(renderer, mappedInput),
                            [this](const ActivityResult&) {
@@ -232,7 +313,7 @@ void ReadingStatsActivity::openSelectedEntry() {
                            });
     return;
   }
-  const int bookIndex = selectedIndex - 1;
+  const int bookIndex = originalBookIndexForSelection(sections, selectedIndex);
   if (bookIndex < 0 || bookIndex >= static_cast<int>(books.size())) {
     return;
   }
@@ -255,38 +336,43 @@ void ReadingStatsActivity::render(RenderLock&&) {
   const int summaryTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int detailsTop = summaryTop + SUMMARY_PANEL_HEIGHT + metrics.verticalSpacing;
   const uint64_t todayReadingMs = READING_STATS.getTodayReadingMs();
+  const auto& books = READING_STATS.getBooks();
+  const BookSections sections = buildBookSections(books);
 
   HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_READING_STATS));
 
   drawSummaryPanel(renderer, Rect{sidePadding, summaryTop, pageWidth - sidePadding * 2, SUMMARY_PANEL_HEIGHT},
-                   todayReadingMs);
+                   todayReadingMs, sections);
 
   drawMoreDetailsButton(renderer, Rect{sidePadding, detailsTop, pageWidth - sidePadding * 2, DETAILS_BUTTON_HEIGHT},
                         selectedIndex == 0);
 
   const int listHeaderTop = detailsTop + DETAILS_BUTTON_HEIGHT + metrics.verticalSpacing;
-  const auto& books = READING_STATS.getBooks();
-  const int totalPages = std::max(1, static_cast<int>((books.size() + BOOKS_PER_PAGE - 1) / BOOKS_PER_PAGE));
-  const int currentPage = books.empty() || selectedIndex == 0 ? 1 : ((selectedIndex - 1) / BOOKS_PER_PAGE) + 1;
+  const bool showingFinished = activeSectionIsFinished(sections, selectedIndex);
+  const auto& section = activeSection(sections, selectedIndex);
+  const int totalPages = std::max(1, static_cast<int>((section.size() + BOOKS_PER_PAGE - 1) / BOOKS_PER_PAGE));
+  const int localSelectedBookIndex = selectedIndex == 0 ? 0 : selectedLocalIndex(sections, selectedIndex);
+  const int currentPage = section.empty() || selectedIndex == 0 ? 1 : (localSelectedBookIndex / BOOKS_PER_PAGE) + 1;
   const std::string bookCountLabel = std::to_string(currentPage) + "/" + std::to_string(totalPages);
-  const std::string startedBooksLabel =
-      std::string(tr(STR_STARTED_BOOKS)) + " (" + std::to_string(READING_STATS.getBooksStartedCount()) + ")";
-  GUI.drawSubHeader(renderer, Rect{0, listHeaderTop, pageWidth, LIST_HEADER_HEIGHT}, startedBooksLabel.c_str(),
+  const char* sectionTitle = showingFinished ? tr(STR_BOOKS_FINISHED) : tr(STR_STARTED_BOOKS);
+  const std::string sectionLabel = std::string(sectionTitle) + " (" + std::to_string(section.size()) + ")";
+  GUI.drawSubHeader(renderer, Rect{0, listHeaderTop, pageWidth, LIST_HEADER_HEIGHT}, sectionLabel.c_str(),
                     bookCountLabel.c_str());
 
   const int contentTop = listHeaderTop + LIST_HEADER_HEIGHT + LIST_HEADER_BOTTOM_GAP;
 
-  if (books.empty()) {
+  if (sections.totalRows() == 0) {
     renderer.drawText(UI_10_FONT_ID, sidePadding, contentTop + 20, tr(STR_NO_READING_STATS));
   } else {
-    const int selectedBookIndex = std::max(0, selectedIndex - 1);
-    const int pageStartIndex = (selectedBookIndex / BOOKS_PER_PAGE) * BOOKS_PER_PAGE;
-    const int pageEndIndex = std::min(static_cast<int>(books.size()), pageStartIndex + BOOKS_PER_PAGE);
-    for (int index = pageStartIndex; index < pageEndIndex; ++index) {
-      const int rowIndex = index - pageStartIndex;
+    const int pageStartIndex = (localSelectedBookIndex / BOOKS_PER_PAGE) * BOOKS_PER_PAGE;
+    const int pageEndIndex = std::min(static_cast<int>(section.size()), pageStartIndex + BOOKS_PER_PAGE);
+    for (int localIndex = pageStartIndex; localIndex < pageEndIndex; ++localIndex) {
+      const int rowIndex = localIndex - pageStartIndex;
       const int rowY = contentTop + rowIndex * (BOOK_ROW_HEIGHT + BOOK_ROW_GAP);
-      drawBookRow(renderer, Rect{sidePadding, rowY, pageWidth - sidePadding * 2, BOOK_ROW_HEIGHT}, books[index],
-                  selectedIndex == index + 1);
+      const int originalBookIndex = section[localIndex];
+      const int selectedOriginalBookIndex = originalBookIndexForSelection(sections, selectedIndex);
+      drawBookRow(renderer, Rect{sidePadding, rowY, pageWidth - sidePadding * 2, BOOK_ROW_HEIGHT},
+                  books[originalBookIndex], selectedOriginalBookIndex == originalBookIndex);
     }
   }
 

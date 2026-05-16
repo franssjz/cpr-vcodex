@@ -33,6 +33,7 @@ bool usesCustomSleepImages() {
   return SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM ||
          (SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM && !APP_STATE.lastSleepFromReader);
 }
+
 }  // namespace
 
 void SleepActivity::onEnter() {
@@ -54,6 +55,8 @@ void SleepActivity::onEnter() {
     }
   }
 
+  applySleepRefreshCleanup();
+
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
       return renderBlankSleepScreen();
@@ -74,6 +77,22 @@ void SleepActivity::onEnter() {
 
   if (restoreDarkMode) {
     renderer.setDarkMode(true);
+  }
+}
+
+void SleepActivity::applySleepRefreshCleanup() const {
+  switch (SETTINGS.sleepRefreshMode) {
+    case CrossPointSettings::SLEEP_REFRESH_SOFT:
+      renderer.clearScreen();
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      break;
+    case CrossPointSettings::SLEEP_REFRESH_FULL:
+      renderer.clearScreen();
+      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+      break;
+    case CrossPointSettings::SLEEP_REFRESH_OFF:
+    default:
+      break;
   }
 }
 
@@ -263,7 +282,6 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
   }
 
   LOG_DBG("SLP", "drawing to %d x %d", x, y);
-  renderer.clearScreen();
 
   const bool hasGreyscale = bitmap.hasGreyscale() &&
                             SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
@@ -306,7 +324,6 @@ bool SleepActivity::renderPngSleepScreen(const std::string& sourcePath) const {
     return false;
   }
 
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   return true;
 }
