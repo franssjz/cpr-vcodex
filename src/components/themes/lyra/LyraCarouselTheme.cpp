@@ -124,7 +124,7 @@ uint8_t getBookProgressPercent(const RecentBook& recentBook) {
   if (stats == nullptr) {
     return 0;
   }
-  return stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100);
+  return std::min<uint8_t>(stats->lastProgressPercent, 100);
 }
 
 void drawProgressBadge(GfxRenderer& renderer, const RecentBook& book, const int coverX, const int coverY,

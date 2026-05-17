@@ -329,7 +329,7 @@ uint8_t getCarouselBookProgressPercent(const RecentBook& recentBook) {
   if (stats == nullptr) {
     return 0;
   }
-  return stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100);
+  return std::min<uint8_t>(stats->lastProgressPercent, 100);
 }
 
 uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int centerIdx, const int screenWidth,
