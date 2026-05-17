@@ -2,66 +2,166 @@
 
 CPR-vCodex Stats is an unofficial firmware fork for the Xteink X4 e-reader.
 
-It is based on CPR-vCodex, which itself is based on CrossPoint Reader. This
-fork keeps the same core reading foundation but focuses more on reading
-statistics, reader customization, cleaner menus, and a more polished e-reader
-experience.
+It is based on CPR-vCodex and CrossPoint Reader, but focuses on creating a cleaner, faster, and more reader-focused e-ink experience with improved reading statistics, navigation, library organization, and reader customization.
 
-This project is unofficial and is not affiliated with Xteink, CrossPoint
-Reader, or CPR-vCodex. Use it at your own risk. Custom firmware can fail to
-flash, behave unexpectedly, lose data, or require recovery flashing.
+This project is unofficial and is not affiliated with Xteink, CrossPoint Reader, or CPR-vCodex.
 
-## Why this fork exists
+Use custom firmware at your own risk. Always back up your SD card and reading data before flashing.
 
-This fork was made to make the Xteink X4 feel better as a daily e-reader.
+---
 
-Main goals:
+# Main Goals
 
-- better reading statistics
-- clearer reading progress
-- useful time-left estimates
-- cleaner Home, Library, and Reader menus
-- improved reader customization
-- custom font support
-- a more focused e-reader UI
+The goals of this fork are to:
 
-The goal is not to replace CrossPoint Reader completely. This fork selectively
-builds on it while keeping the firmware lightweight enough for the ESP32-C3.
+- provide reading estimates and reading information based on user reading behavior
+- improve Reading Stats and reading history systems
+- improve reader customization
+- improve library organization and navigation
+- modernize the Xteink X4 reading experience
+- keep the firmware lightweight enough for the ESP32-C3
 
-## Main changes
+The goal is not to completely replace CrossPoint Reader, but to build on it while improving the overall reading experience.
 
-Compared with upstream firmware, this fork focuses on:
+---
 
-- expanded Reading Stats
-- Reading Profile summaries
-- book and chapter time-left estimates
-- cleaner Library / Bookshelf views
-- LyraVcodex2 as the main visual direction
-- custom SD-card reader fonts
-- reader quick settings improvements
-- status bar customization
-- removed Flashcards to recover firmware space
+# Main Features
 
-Other inherited features such as EPUB/TXT/XTC reading, OPDS, KOReader Sync,
-bookmarks, favorites, sleep tools, file transfer, and OTA support remain based
-on upstream work unless otherwise changed.
+## Reading Stats
 
-## Installation
+Expanded Reading Stats system including:
 
-1. Open the latest release on GitHub.
-2. Download the `.bin` firmware file.
-3. Turn on and unlock the Xteink X4.
-4. Open https://xteink.dve.al/ in Chrome or Edge.
-5. Select the downloaded `.bin` file.
-6. Flash the firmware and wait for completion.
-7. Restart the device if needed.
+- current reading tracking
+- total reading time
+- reading streaks
+- started books
+- finished books
+- time-left estimates
+- book-specific stats pages
+- reading progress summaries
+- reading session history
+- hidden/remove-from-stats support
 
-## Custom fonts
+Book-specific stats pages include:
 
-Custom reader fonts use the `.cpfont` format.
+- current chapter
+- book progress
+- chapter progress
+- reading confidence
+- reading pace information
 
-Recommended SD card folders:
+---
 
-```text
-/.fonts
-/fonts
+## Reader Navigation
+
+Reader navigation improvements include:
+
+- hold-Back quick navigation menu
+- Recent Books quick switcher
+- nested Back behavior
+- Book Info placeholder pages
+- improved Reader Quick Settings behavior
+
+The navigation system is designed to reduce friction while reading.
+
+---
+
+## Browse Files & Library
+
+Library and Browse Files behavior has been redesigned for speed and consistency.
+
+Features include:
+
+- lightweight placeholder-based rendering
+- improved card layouts
+- Bookshelf-style library browsing
+- Continue Reading
+- To Read
+- Finished organization
+- virtual Finished/Read separation
+- configurable Browse Files layouts
+- cleaner navigation consistency
+
+The firmware avoids heavy cover loading during normal library browsing to preserve responsiveness.
+
+---
+
+## Reading Profile
+
+Reading Profile was inherited from upstream CPR-vCodex and remains available as part of the firmware.
+
+It provides:
+
+- reading consistency information
+- pacing trends
+- engagement summaries
+- reading habit information
+- reading summaries and predictions
+
+---
+
+## Custom Fonts
+
+Custom font support is inherited and adapted from upstream CPR-vCodex/CrossPoint functionality.
+
+Features include:
+
+- Reader Font Family selection
+- Manage Fonts system
+- install/uninstall support
+- downloadable font catalog
+- .cpfont support
+- built-in font fallback behavior
+
+---
+
+## Themes
+
+Current themes include:
+
+- Lyra
+- LyraVcodex
+- LyraVcodex2
+- RoundedRaff
+
+RoundedRaff is adapted from upstream CrossPoint work.
+
+LyraVcodex2 is the primary UI direction for this fork and focuses on:
+
+- cleaner spacing
+- softer card layouts
+- better dashboard organization
+- more modern e-reader presentation
+
+---
+
+# Installation
+
+1. Download the latest .bin release.
+2. Turn on and unlock the Xteink X4.
+3. Open:
+   https://xteink.dve.al/
+4. Select the firmware .bin.
+5. Flash the firmware.
+6. Restart the device if needed.
+
+---
+
+# Release Files
+
+| File | Purpose |
+|---|---|
+| .bin | firmware image |
+| .json | firmware metadata |
+
+---
+
+# Credits
+
+This project builds on work from:
+
+- CrossPoint Reader
+- CPR-vCodex
+- the Xteink X4 community
+
+CPR-vCodex Stats is an unofficial experimental fork created to explore a more modern and reader-focused direction for the Xteink X4.
