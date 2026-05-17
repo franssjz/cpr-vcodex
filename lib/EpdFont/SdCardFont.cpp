@@ -1183,6 +1183,26 @@ int SdCardFont::buildAdvanceTable(const char* utf8Text, uint8_t styleMask) {
   return totalMissed;
 }
 
+int SdCardFont::buildAdvanceTable(const std::vector<std::string>& words, bool includeHyphen, uint8_t styleMask) {
+  if (words.empty()) {
+    return buildAdvanceTable("", styleMask);
+  }
+
+  size_t totalSize = includeHyphen ? 1 : 0;
+  if (!words.empty()) totalSize += words.size() - 1;
+  for (const auto& word : words) totalSize += word.size();
+
+  std::string allText;
+  allText.reserve(totalSize);
+  for (size_t i = 0; i < words.size(); i++) {
+    if (i > 0) allText += ' ';
+    allText += words[i];
+  }
+  if (includeHyphen) allText += '-';
+
+  return buildAdvanceTable(allText.c_str(), styleMask);
+}
+
 // --- Stats ---
 
 void SdCardFont::logStats(const char* label) {

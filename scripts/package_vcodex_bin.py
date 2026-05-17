@@ -9,7 +9,7 @@ from pathlib import Path
 Import("env")
 
 README_PATH = "README.md"
-RELEASE_COUNTER_PATH = Path("artifacts") / ".release-counter.txt"
+RELEASE_COUNTER_FILE_TEMPLATE = ".release-counter-{base}.txt"
 RELEASE_DRY_RUN_ENV = "VCODEX_RELEASE_DRY_RUN"
 
 
@@ -34,6 +34,25 @@ def extract_define_int(name: str) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def counter_token(base_version: str) -> str:
+    return re.sub(r"[^0-9A-Za-z]+", "-", base_version).strip("-") or "unknown"
+
+
+def extract_base_version(version: str) -> str:
+    explicit_base = extract_define("VCODEX_BASE_VERSION")
+    if explicit_base != "unknown":
+        return explicit_base
+
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)\.\d+(?:\..*)?", version)
+    if match:
+        return match.group(1)
+    return "unknown"
+
+
+def release_counter_path(project_dir: Path, base_version: str) -> Path:
+    return project_dir / "artifacts" / RELEASE_COUNTER_FILE_TEMPLATE.format(base=counter_token(base_version))
 
 
 def update_readme_release_version(project_dir: Path, artifact_name: str) -> None:
@@ -61,12 +80,12 @@ def update_readme_release_version(project_dir: Path, artifact_name: str) -> None
         print(f"Updated README current release to {artifact_name[:-4]}")
 
 
-def persist_release_counter(project_dir: Path, build_seq: int | None) -> None:
+def persist_release_counter(project_dir: Path, base_version: str, build_seq: int | None) -> None:
     if build_seq is None:
         print("Release counter update skipped: missing VCODEX_BUILD_SEQ")
         return
 
-    counter_path = project_dir / RELEASE_COUNTER_PATH
+    counter_path = release_counter_path(project_dir, base_version)
     counter_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = counter_path.with_suffix(counter_path.suffix + ".tmp")
     temp_path.write_text(f"{build_seq}\n", encoding="utf-8")
@@ -85,6 +104,7 @@ def package_vcodex_bin(source, target, env):
         return
 
     version = extract_define("CROSSPOINT_VERSION")
+    base_version = extract_base_version(version)
     build_seq = extract_define_int("VCODEX_BUILD_SEQ")
     safe_version = sanitize_filename(version)
 
@@ -112,7 +132,7 @@ def package_vcodex_bin(source, target, env):
     if env.subst("$PIOENV") == "gh_release" and os.environ.get(RELEASE_DRY_RUN_ENV) == "1":
         print(f"Release metadata update skipped: {RELEASE_DRY_RUN_ENV}=1")
     elif env.subst("$PIOENV") == "gh_release":
-        persist_release_counter(project_dir, build_seq)
+        persist_release_counter(project_dir, base_version, build_seq)
         update_readme_release_version(project_dir, artifact_name)
 
     print(f"Packaged vcodex artifact: {artifact_path}")

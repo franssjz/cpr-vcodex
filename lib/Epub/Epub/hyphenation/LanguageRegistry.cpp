@@ -7,7 +7,9 @@
 #include "generated/hyph-es.trie.h"
 #include "generated/hyph-fr.trie.h"
 #include "generated/hyph-it.trie.h"
+#include "generated/hyph-pl.trie.h"
 #include "generated/hyph-ru.trie.h"
+#include "generated/hyph-sv.trie.h"
 #include "generated/hyph-uk.trie.h"
 
 #if CPR_ENABLE_GERMAN_HYPHENATION
@@ -25,6 +27,8 @@ LanguageHyphenator germanHyphenator(de_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator russianHyphenator(ru_patterns, isCyrillicLetter, toLowerCyrillic);
 LanguageHyphenator spanishHyphenator(es_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator italianHyphenator(it_patterns, isLatinLetter, toLowerLatin);
+LanguageHyphenator polishHyphenator(pl_patterns, isLatinLetter, toLowerLatin);
+LanguageHyphenator swedishHyphenator(sv_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator ukrainianHyphenator(uk_patterns, isCyrillicLetter, toLowerCyrillic);
 
 static const LanguageEntry kEntries[] = {
@@ -36,6 +40,8 @@ static const LanguageEntry kEntries[] = {
     {"russian", "ru", &russianHyphenator},
     {"spanish", "es", &spanishHyphenator},
     {"italian", "it", &italianHyphenator},
+    {"polish", "pl", &polishHyphenator},
+    {"swedish", "sv", &swedishHyphenator},
     {"ukrainian", "uk", &ukrainianHyphenator},
 };
 

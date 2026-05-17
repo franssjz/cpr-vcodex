@@ -492,6 +492,12 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<TextLine>& o
   }
   buffer[chunkSize] = '\0';
 
+  // SD-card fonts need advance metrics before wrapping text. Prime them once
+  // per chunk so TXT/Markdown readers do not thrash the small overflow glyph cache.
+  if (renderer.isSdCardFont(cachedFontId)) {
+    renderer.ensureSdCardFontReady(cachedFontId, reinterpret_cast<const char*>(buffer), /*styleMask=*/0x0F);
+  }
+
   // Parse lines from buffer
   size_t pos = 0;
 

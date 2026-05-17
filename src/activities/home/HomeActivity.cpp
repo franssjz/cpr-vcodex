@@ -415,7 +415,7 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
     if (static_cast<int>(recentBooks.size()) >= maxBooks) {
       break;
     }
-    if (Storage.exists(book.path.c_str())) {
+    if (!RecentBooksStore::isMissing(book)) {
       recentBooks.push_back(book);
     }
   }

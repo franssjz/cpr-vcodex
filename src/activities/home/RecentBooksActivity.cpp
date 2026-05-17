@@ -43,6 +43,10 @@ void RecentBooksActivity::loadRecentBooks() {
 void RecentBooksActivity::onEnter() {
   Activity::onEnter();
 
+  if (RECENT_BOOKS.pruneMissing()) {
+    RECENT_BOOKS.saveToFile();
+  }
+
   // Load data
   loadRecentBooks();
 

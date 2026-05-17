@@ -13,9 +13,12 @@ uint32_t toLowerLatinImpl(const uint32_t cp) {
     return cp + 0x20;
   }
 
+  if ((cp >= 0x0100 && cp <= 0x0137 && (cp % 2 == 0)) || (cp >= 0x0139 && cp <= 0x0148 && (cp % 2 == 1)) ||
+      (cp >= 0x014A && cp <= 0x0177 && (cp % 2 == 0)) || (cp >= 0x0179 && cp <= 0x017E && (cp % 2 == 1))) {
+    return cp + 1;
+  }
+
   switch (cp) {
-    case 0x0152:      // Œ
-      return 0x0153;  // œ
     case 0x0178:      // Ÿ
       return 0x00FF;  // ÿ
     case 0x1E9E:      // ẞ
@@ -51,6 +54,10 @@ bool isLatinLetter(const uint32_t cp) {
 
   if (((cp >= 0x00C0 && cp <= 0x00D6) || (cp >= 0x00D8 && cp <= 0x00F6) || (cp >= 0x00F8 && cp <= 0x00FF)) &&
       cp != 0x00D7 && cp != 0x00F7) {
+    return true;
+  }
+
+  if (cp >= 0x0100 && cp <= 0x017F) {
     return true;
   }
 
@@ -273,6 +280,30 @@ std::vector<CodepointInfo> collectCodepoints(const std::string& word) {
             case 0x0079:
               composed = 0x00FD;
               break;  // y -> ý
+            case 0x0043:
+              composed = 0x0106;
+              break;
+            case 0x0063:
+              composed = 0x0107;
+              break;
+            case 0x004E:
+              composed = 0x0143;
+              break;
+            case 0x006E:
+              composed = 0x0144;
+              break;
+            case 0x0053:
+              composed = 0x015A;
+              break;
+            case 0x0073:
+              composed = 0x015B;
+              break;
+            case 0x005A:
+              composed = 0x0179;
+              break;
+            case 0x007A:
+              composed = 0x017A;
+              break;
             default:
               break;
           }
@@ -373,6 +404,18 @@ std::vector<CodepointInfo> collectCodepoints(const std::string& word) {
               break;
           }
           break;
+        case 0x0307:  // dot above
+          switch (prev) {
+            case 0x005A:
+              composed = 0x017B;
+              break;
+            case 0x007A:
+              composed = 0x017C;
+              break;
+            default:
+              break;
+          }
+          break;
         case 0x0327:  // cedilla
           switch (prev) {
             case 0x0043:
@@ -381,6 +424,24 @@ std::vector<CodepointInfo> collectCodepoints(const std::string& word) {
             case 0x0063:
               composed = 0x00E7;
               break;  // c -> ç
+            default:
+              break;
+          }
+          break;
+        case 0x0328:  // ogonek
+          switch (prev) {
+            case 0x0041:
+              composed = 0x0104;
+              break;
+            case 0x0061:
+              composed = 0x0105;
+              break;
+            case 0x0045:
+              composed = 0x0118;
+              break;
+            case 0x0065:
+              composed = 0x0119;
+              break;
             default:
               break;
           }

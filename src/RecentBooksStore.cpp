@@ -119,6 +119,9 @@ void RecentBooksStore::normalizeBooks() {
 
 void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
                                const std::string& coverBmpPath, const std::string& bookId) {
+  // Drop stale entries first so a new add cannot evict a valid book in their stead.
+  pruneMissing();
+
   const std::string normalizedPath = BookIdentity::normalizePath(path);
   const std::string resolvedBookId =
       !bookId.empty() ? bookId : (!normalizedPath.empty() ? BookIdentity::resolveStableBookId(normalizedPath) : "");
@@ -167,6 +170,17 @@ bool RecentBooksStore::removeBook(const std::string& key) {
   recentBooks.erase(recentBooks.begin() + existingIndex);
   saveToFile();
   return true;
+}
+
+bool RecentBooksStore::isMissing(const RecentBook& book) {
+  return book.path.empty() || !Storage.exists(book.path.c_str());
+}
+
+bool RecentBooksStore::pruneMissing() {
+  const size_t before = recentBooks.size();
+  recentBooks.erase(std::remove_if(recentBooks.begin(), recentBooks.end(), &RecentBooksStore::isMissing),
+                    recentBooks.end());
+  return recentBooks.size() != before;
 }
 
 bool RecentBooksStore::saveToFile() const {

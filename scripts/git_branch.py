@@ -17,9 +17,9 @@ import subprocess
 import sys
 
 COUNTER_DIR = "artifacts"
-RELEASE_COUNTER_FILE = ".release-counter.txt"
-DEV_COUNTER_FILE_TEMPLATE = ".dev-counter-r{release}.txt"
-INITIAL_RELEASE_NUMBER = 2
+RELEASE_COUNTER_FILE_TEMPLATE = ".release-counter-{base}.txt"
+DEV_COUNTER_FILE_TEMPLATE = ".dev-counter-{base}-r{release}.txt"
+INITIAL_RELEASE_NUMBER = 0
 
 
 def warn(msg):
@@ -63,6 +63,15 @@ def _ensure_counter_dir(project_dir):
     counter_dir = os.path.join(project_dir, COUNTER_DIR)
     os.makedirs(counter_dir, exist_ok=True)
     return counter_dir
+
+
+def _counter_token(base_version):
+    return re.sub(r"[^0-9A-Za-z]+", "-", base_version).strip("-") or "unknown"
+
+
+def _release_counter_path(project_dir, base_version):
+    counter_dir = _ensure_counter_dir(project_dir)
+    return os.path.join(counter_dir, RELEASE_COUNTER_FILE_TEMPLATE.format(base=_counter_token(base_version)))
 
 
 def _read_counter(counter_path, default_value):
@@ -133,8 +142,7 @@ def _write_counter(counter_path, value):
 
 
 def get_current_release_number(project_dir, base_version):
-    counter_dir = _ensure_counter_dir(project_dir)
-    counter_path = os.path.join(counter_dir, RELEASE_COUNTER_FILE)
+    counter_path = _release_counter_path(project_dir, base_version)
     counter_value = _read_counter(counter_path, INITIAL_RELEASE_NUMBER)
     published_values = [
         value
@@ -148,6 +156,13 @@ def get_current_release_number(project_dir, base_version):
     source = counter_path
     if release_number != counter_value:
         source = f"{counter_path} (raised by published release metadata)"
+    return release_number, source
+
+
+def get_dev_release_number(project_dir, base_version):
+    release_number, source = get_current_release_number(project_dir, base_version)
+    if release_number == 0:
+        return 1, f"{source} (new base line starts at .1)"
     return release_number, source
 
 
@@ -169,9 +184,11 @@ def release_number_from_tag(base_version):
     return int(match.group(1)), tag
 
 
-def next_dev_counter(project_dir, release_number):
+def next_dev_counter(project_dir, base_version, release_number):
     counter_dir = _ensure_counter_dir(project_dir)
-    counter_path = os.path.join(counter_dir, DEV_COUNTER_FILE_TEMPLATE.format(release=release_number))
+    counter_path = os.path.join(
+        counter_dir, DEV_COUNTER_FILE_TEMPLATE.format(base=_counter_token(base_version), release=release_number)
+    )
     current_value = _read_counter(counter_path, 0)
     next_value = current_value + 1
     _write_counter(counter_path, next_value)
@@ -187,8 +204,8 @@ def inject_version(env):
     base_version = get_base_version(project_dir)
 
     if env_name == "default":
-        release_number, release_counter_path = get_current_release_number(project_dir, base_version)
-        build_counter, counter_path = next_dev_counter(project_dir, release_number)
+        release_number, release_counter_path = get_dev_release_number(project_dir, base_version)
+        build_counter, counter_path = next_dev_counter(project_dir, base_version, release_number)
         short_sha = get_git_short_sha(project_dir)
         version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
         build_kind = "dev"
@@ -207,6 +224,7 @@ def inject_version(env):
     env.Append(
         CPPDEFINES=[
             ("CROSSPOINT_VERSION", f'\\"{version_string}\\"'),
+            ("VCODEX_BASE_VERSION", f'\\"{base_version}\\"'),
             ("VCODEX_BUILD_SEQ", build_counter),
             ("VCODEX_RELEASE_SEQ", release_number),
             ("VCODEX_BUILD_KIND", f'\\"{build_kind}\\"'),

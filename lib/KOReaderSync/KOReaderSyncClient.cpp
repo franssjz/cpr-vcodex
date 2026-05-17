@@ -268,24 +268,6 @@ esp_err_t httpEventHandler(esp_http_client_event_t* evt) {
   return ESP_OK;
 }
 
-std::string base64Encode(const std::string& input) {
-  static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  std::string out;
-  out.reserve(((input.size() + 2) / 3) * 4);
-  int val = 0, valb = -6;
-  for (unsigned char c : input) {
-    val = (val << 8) + c;
-    valb += 8;
-    while (valb >= 0) {
-      out.push_back(table[(val >> valb) & 0x3F]);
-      valb -= 6;
-    }
-  }
-  if (valb > -6) out.push_back(table[((val << 8) >> (valb + 8)) & 0x3F]);
-  while (out.size() % 4) out.push_back('=');
-  return out;
-}
-
 // Refuse to attempt a TLS handshake when fragmentation makes it doomed.
 // Total free heap misleads because fragmentation can leave no block big enough.
 bool checkHeapForTls() {
@@ -345,11 +327,6 @@ void applyAuthHeaders(esp_http_client_handle_t client) {
   esp_http_client_set_header(client, "Accept", "application/vnd.koreader.v1+json");
   esp_http_client_set_header(client, "x-auth-user", KOREADER_STORE.getUsername().c_str());
   esp_http_client_set_header(client, "x-auth-key", KOREADER_STORE.getMd5Password().c_str());
-
-  // Manual Basic Auth — esp_http_client lacks setAuthorization().
-  // Needed for Calibre-Web-Automated which requires RFC 7617 Basic Auth.
-  std::string credentials = KOREADER_STORE.getUsername() + ":" + KOREADER_STORE.getPassword();
-  esp_http_client_set_header(client, "Authorization", ("Basic " + base64Encode(credentials)).c_str());
 }
 
 esp_http_client_handle_t createClient(const char* url, ResponseBuffer* buf,
@@ -376,6 +353,9 @@ esp_http_client_handle_t createClient(const char* url, ResponseBuffer* buf,
   }
   config.keep_alive_enable = g_keepSessionOpen;
   config.max_redirection_count = 3;
+  config.username = KOREADER_STORE.getUsername().c_str();
+  config.password = KOREADER_STORE.getPassword().c_str();
+  config.auth_type = HTTP_AUTH_TYPE_BASIC;
 
   esp_http_client_handle_t client = esp_http_client_init(&config);
   if (!client) return nullptr;
