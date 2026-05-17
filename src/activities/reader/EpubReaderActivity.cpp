@@ -215,6 +215,7 @@ void EpubReaderActivity::onEnter() {
   bookmarkStore.load(epub->getCachePath(), stableBookId);
 
   FsFile f;
+  bool loadedProgress = false;
   bool loadedFromLegacy = false;
   const std::string stableProgressPath = getStableProgressPath(stableBookId);
   const std::string legacyProgressPath = getLegacyProgressPath(*epub);
@@ -234,6 +235,7 @@ void EpubReaderActivity::onEnter() {
         nextPageNumber = 0;
       }
       cachedSpineIndex = currentSpineIndex;
+      loadedProgress = true;
       LOG_DBG("ERS", "Loaded cache: %d, %d", currentSpineIndex, nextPageNumber);
     }
     if (dataSize == 6) {
@@ -244,9 +246,8 @@ void EpubReaderActivity::onEnter() {
       saveProgress(currentSpineIndex, nextPageNumber, cachedChapterTotalPageCount);
     }
   }
-  // We may want a better condition to detect if we are opening for the first time.
-  // This will trigger if the book is re-opened at Chapter 0.
-  if (currentSpineIndex == 0) {
+  // Only apply the EPUB text reference on first open; a saved position in spine 0 is valid progress.
+  if (!loadedProgress && currentSpineIndex == 0) {
     int textSpineIndex = epub->getSpineIndexForTextReference();
     if (textSpineIndex != 0) {
       currentSpineIndex = textSpineIndex;
