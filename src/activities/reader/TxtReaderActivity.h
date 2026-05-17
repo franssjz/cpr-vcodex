@@ -61,6 +61,8 @@ class TxtReaderActivity final : public Activity {
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
+  std::string moveCompletedBookIfEnabled();
+  void exitReaderAfterOptionalCompletedMove();
 
  public:
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt)

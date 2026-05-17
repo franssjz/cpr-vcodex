@@ -41,6 +41,9 @@ class RecentBooksStore {
 
   void updateBook(const std::string& path, const std::string& title, const std::string& author,
                   const std::string& coverBmpPath, const std::string& bookId = "");
+  bool updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title = "",
+                      const std::string& author = "", const std::string& coverBmpPath = "",
+                      const std::string& bookId = "");
 
   bool removeBook(const std::string& key);
 

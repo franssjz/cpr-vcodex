@@ -20,6 +20,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
+#include "util/CompletedBookMover.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -496,13 +497,20 @@ void KOReaderSyncActivity::returnAfterAutoPush() {
   APP_STATE.koReaderSyncSession.clear();
   APP_STATE.saveToFile();
 
+  std::string finalBookPath = epubPath;
+  const auto moveResult = CompletedBookMover::moveCompletedBookIfEnabled(epubPath);
+  if (moveResult.moved) {
+    finalBookPath = moveResult.destinationPath;
+  }
+
   showPendingAchievementPopups(renderer);
 
   const auto snapshot = READING_STATS.getLastSessionSnapshot();
-  const bool countedSession = snapshot.valid && snapshot.counted && snapshot.path == epubPath;
-  if (SETTINGS.showStatsAfterReading && countedSession && !epubPath.empty()) {
+  const bool countedSession =
+      snapshot.valid && snapshot.counted && (snapshot.path == epubPath || snapshot.path == finalBookPath);
+  if (SETTINGS.showStatsAfterReading && countedSession && !finalBookPath.empty()) {
     activityManager.replaceActivity(
-        std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, epubPath, ReadingStatsDetailContext{true}));
+        std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, finalBookPath, ReadingStatsDetailContext{true}));
   } else {
     activityManager.goHome();
   }

@@ -425,6 +425,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
             s.flashcardSessionSize);
   s.showStatsAfterReading =
       clamp(doc["showStatsAfterReading"] | s.showStatsAfterReading, static_cast<uint8_t>(2), s.showStatsAfterReading);
+  s.moveCompletedBooks =
+      clamp(doc["moveCompletedBooks"] | s.moveCompletedBooks, static_cast<uint8_t>(2), s.moveCompletedBooks);
   s.achievementsEnabled =
       clamp(doc["achievementsEnabled"] | s.achievementsEnabled, static_cast<uint8_t>(2), s.achievementsEnabled);
   s.achievementPopups =
@@ -716,6 +718,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["flashcardStudyMode"] = s.flashcardStudyMode;
   doc["flashcardSessionSize"] = s.flashcardSessionSize;
   doc["showStatsAfterReading"] = s.showStatsAfterReading;
+  doc["moveCompletedBooks"] = s.moveCompletedBooks;
   doc["achievementsEnabled"] = s.achievementsEnabled;
   doc["achievementPopups"] = s.achievementPopups;
 

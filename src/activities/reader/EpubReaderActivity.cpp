@@ -30,10 +30,12 @@
 #include "RecentBooksStore.h"
 #include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/CompletedBookMover.h"
 #include "util/ScreenshotUtil.h"
 
 namespace {
@@ -396,10 +398,11 @@ void EpubReaderActivity::loop() {
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+    const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
     ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
     showPendingAchievementPopups(renderer);
-    activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+    activityManager.goToFileBrowser(fileBrowserPath);
     return;
   }
 
@@ -413,7 +416,7 @@ void EpubReaderActivity::loop() {
     if (tryAutoPushOnClose()) {
       return;
     }
-    exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
+    exitReaderAfterOptionalCompletedMove();
     return;
   }
 
@@ -432,7 +435,7 @@ void EpubReaderActivity::loop() {
       if (tryAutoPushOnClose()) {
         return;
       }
-      exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
+      exitReaderAfterOptionalCompletedMove();
     } else {
       currentSpineIndex = epub->getSpineItemsCount() - 1;
       nextPageNumber = 0;
@@ -758,8 +761,23 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       if (tryAutoPushOnClose()) {
         return;
       }
-      exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
+      exitReaderAfterOptionalCompletedMove();
       return;
+    }
+    case EpubReaderMenuActivity::MenuAction::MARK_AS_FINISHED: {
+      const std::string title = epub ? epub->getTitle() : "";
+      READING_STATS.noteActivity();
+      startActivityForResult(
+          std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_MARK_AS_FINISHED_CONFIRM), title),
+          [this](const ActivityResult& result) {
+            READING_STATS.resumeSession();
+            if (!result.isCancelled) {
+              markCurrentBookAsFinished();
+            } else {
+              requestUpdate();
+            }
+          });
+      break;
     }
     case EpubReaderMenuActivity::MenuAction::DELETE_CACHE: {
       {
@@ -778,7 +796,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           }
         }
       }
-      exitReaderToHomeOrStats(renderer, mappedInput, epub ? epub->getPath() : "");
+      exitReaderAfterOptionalCompletedMove();
       return;
     }
     case EpubReaderMenuActivity::MenuAction::SCREENSHOT: {
@@ -866,6 +884,51 @@ bool EpubReaderActivity::tryAutoPushOnClose() {
   LOG_DBG("ERS", "Auto-push KOReader sync before closing: spine=%d page=%d", currentSpineIndex, currentPage);
   launchKOReaderSync(SyncLaunchMode::AUTO_PUSH);
   return true;
+}
+
+std::string EpubReaderActivity::moveCompletedBookIfEnabled() {
+  if (!epub) {
+    return "";
+  }
+
+  const std::string sourcePath = epub->getPath();
+  if (!SETTINGS.moveCompletedBooks) {
+    return sourcePath;
+  }
+
+  const auto* statsBook = READING_STATS.findBook(!stableBookId.empty() ? stableBookId : sourcePath);
+  if (!statsBook || !statsBook->completed) {
+    return sourcePath;
+  }
+
+  const std::string title = epub->getTitle();
+  const std::string author = epub->getAuthor();
+  const std::string coverBmpPath = epub->getCoverBmpPath();
+  {
+    RenderLock lock(*this);
+    section.reset();
+    epub.reset();
+  }
+
+  const auto moveResult =
+      CompletedBookMover::moveCompletedBookIfEnabled(sourcePath, title, author, coverBmpPath, stableBookId);
+  return moveResult.moved ? moveResult.destinationPath : sourcePath;
+}
+
+void EpubReaderActivity::exitReaderAfterOptionalCompletedMove() {
+  const std::string exitPath = moveCompletedBookIfEnabled();
+  exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
+}
+
+void EpubReaderActivity::markCurrentBookAsFinished() {
+  if (!epub) {
+    activityManager.goHome();
+    return;
+  }
+
+  READING_STATS.noteActivity();
+  markStatsCompletedAtEnd(*epub, currentSpineIndex);
+  exitReaderAfterOptionalCompletedMove();
 }
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {

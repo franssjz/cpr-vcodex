@@ -161,6 +161,39 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
   }
 }
 
+bool RecentBooksStore::updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title,
+                                      const std::string& author, const std::string& coverBmpPath,
+                                      const std::string& bookId) {
+  const std::string normalizedNewPath = BookIdentity::normalizePath(newPath);
+  if (normalizedNewPath.empty()) {
+    return false;
+  }
+
+  const std::string resolvedBookId =
+      !bookId.empty() ? bookId : (!normalizedNewPath.empty() ? BookIdentity::resolveStableBookId(normalizedNewPath) : "");
+  const int existingIndex = findBookIndex(oldKey, resolvedBookId);
+  if (existingIndex < 0) {
+    return false;
+  }
+
+  RecentBook& book = recentBooks[existingIndex];
+  if (!resolvedBookId.empty()) {
+    book.bookId = resolvedBookId;
+  }
+  book.path = normalizedNewPath;
+  if (!title.empty()) {
+    book.title = title;
+  }
+  if (!author.empty()) {
+    book.author = author;
+  }
+  if (!coverBmpPath.empty()) {
+    book.coverBmpPath = coverBmpPath;
+  }
+  saveToFile();
+  return true;
+}
+
 bool RecentBooksStore::removeBook(const std::string& key) {
   const int existingIndex = findBookIndex(key, key);
   if (existingIndex < 0) {

@@ -25,6 +25,7 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/CompletedBookMover.h"
 
 namespace {
 constexpr unsigned long goHomeMs = 1000;
@@ -173,16 +174,17 @@ void XtcReaderActivity::loop() {
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= goHomeMs) {
+    const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
     ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
     showPendingAchievementPopups(renderer);
-    activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
+    activityManager.goToFileBrowser(fileBrowserPath);
     return;
   }
 
   // Short press BACK goes directly to home
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
-    exitReaderToHomeOrStats(renderer, mappedInput, xtc->getPath());
+    exitReaderAfterOptionalCompletedMove();
     return;
   }
 
@@ -199,7 +201,7 @@ void XtcReaderActivity::loop() {
   // At end of the book, forward button goes home and back button returns to last page
   if (currentPage >= xtc->getPageCount()) {
     if (nextTriggered) {
-      exitReaderToHomeOrStats(renderer, mappedInput, xtc->getPath());
+      exitReaderAfterOptionalCompletedMove();
     } else {
       currentPage = xtc->getPageCount() - 1;
       requestUpdate();
@@ -234,6 +236,36 @@ void XtcReaderActivity::requestCurrentPageFullRefresh() {
   READING_STATS.noteActivity();
   pendingForceFullRefresh = true;
   requestUpdate();
+}
+
+std::string XtcReaderActivity::moveCompletedBookIfEnabled() {
+  if (!xtc) {
+    return "";
+  }
+
+  const std::string sourcePath = xtc->getPath();
+  if (!SETTINGS.moveCompletedBooks) {
+    return sourcePath;
+  }
+
+  const auto* statsBook = READING_STATS.findBook(!stableBookId.empty() ? stableBookId : sourcePath);
+  if (!statsBook || !statsBook->completed) {
+    return sourcePath;
+  }
+
+  const std::string title = xtc->getTitle();
+  const std::string author = xtc->getAuthor();
+  const std::string coverBmpPath = xtc->getCoverBmpPath();
+  xtc.reset();
+
+  const auto moveResult =
+      CompletedBookMover::moveCompletedBookIfEnabled(sourcePath, title, author, coverBmpPath, stableBookId);
+  return moveResult.moved ? moveResult.destinationPath : sourcePath;
+}
+
+void XtcReaderActivity::exitReaderAfterOptionalCompletedMove() {
+  const std::string exitPath = moveCompletedBookIfEnabled();
+  exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
 
 void XtcReaderActivity::render(RenderLock&&) {

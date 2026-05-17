@@ -37,6 +37,8 @@ class XtcReaderActivity final : public Activity {
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
+  std::string moveCompletedBookIfEnabled();
+  void exitReaderAfterOptionalCompletedMove();
 
  public:
   explicit XtcReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Xtc> xtc)

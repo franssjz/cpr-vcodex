@@ -123,6 +123,8 @@ const std::vector<SettingInfo>& getSettingsList() {
                         "flashcardSessionSize", StrId::STR_APPS),
       SettingInfo::Toggle(StrId::STR_SHOW_AFTER_READING, &CrossPointSettings::showStatsAfterReading,
                           "showStatsAfterReading", StrId::STR_APPS),
+      SettingInfo::Toggle(StrId::STR_MOVE_COMPLETED_BOOKS, &CrossPointSettings::moveCompletedBooks,
+                          "moveCompletedBooks", StrId::STR_APPS),
       SettingInfo::Toggle(StrId::STR_ENABLE_ACHIEVEMENTS, &CrossPointSettings::achievementsEnabled,
                           "achievementsEnabled", StrId::STR_APPS),
       SettingInfo::Toggle(StrId::STR_ACHIEVEMENT_POPUPS, &CrossPointSettings::achievementPopups,

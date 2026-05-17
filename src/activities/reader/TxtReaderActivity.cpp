@@ -24,6 +24,7 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/CompletedBookMover.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
@@ -344,17 +345,18 @@ void TxtReaderActivity::loop() {
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+    const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
     ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
     showPendingAchievementPopups(renderer);
-    activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+    activityManager.goToFileBrowser(fileBrowserPath);
     return;
   }
 
   // Short press BACK goes directly to home
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
-    exitReaderToHomeOrStats(renderer, mappedInput, txt ? txt->getPath() : "");
+    exitReaderAfterOptionalCompletedMove();
     return;
   }
 
@@ -378,7 +380,7 @@ void TxtReaderActivity::loop() {
       requestUpdate();
     } else {
       READING_STATS.updateProgress(100, true, "", 100);
-      exitReaderToHomeOrStats(renderer, mappedInput, txt ? txt->getPath() : "");
+      exitReaderAfterOptionalCompletedMove();
     }
   }
 }
@@ -387,6 +389,35 @@ void TxtReaderActivity::requestCurrentPageFullRefresh() {
   READING_STATS.noteActivity();
   pendingForceFullRefresh = true;
   requestUpdate();
+}
+
+std::string TxtReaderActivity::moveCompletedBookIfEnabled() {
+  if (!txt) {
+    return "";
+  }
+
+  const std::string sourcePath = txt->getPath();
+  if (!SETTINGS.moveCompletedBooks) {
+    return sourcePath;
+  }
+
+  const auto* statsBook = READING_STATS.findBook(!stableBookId.empty() ? stableBookId : sourcePath);
+  if (!statsBook || !statsBook->completed) {
+    return sourcePath;
+  }
+
+  const std::string title = txt->getTitle();
+  const std::string coverBmpPath = txt->getCoverBmpPath();
+  txt.reset();
+
+  const auto moveResult =
+      CompletedBookMover::moveCompletedBookIfEnabled(sourcePath, title, "", coverBmpPath, stableBookId);
+  return moveResult.moved ? moveResult.destinationPath : sourcePath;
+}
+
+void TxtReaderActivity::exitReaderAfterOptionalCompletedMove() {
+  const std::string exitPath = moveCompletedBookIfEnabled();
+  exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
 
 void TxtReaderActivity::initializeReader() {

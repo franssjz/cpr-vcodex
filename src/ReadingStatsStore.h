@@ -144,6 +144,9 @@ class ReadingStatsStore {
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,
                           const std::string& coverBmpPath);
+  bool updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title = "",
+                      const std::string& author = "", const std::string& coverBmpPath = "",
+                      const std::string& bookId = "");
   bool removeBook(const std::string& path);
   const ReadingBookStats* findBook(const std::string& key) const;
   const ReadingBookStats* findMatchingBookForPath(const std::string& path, const std::string& title = "",

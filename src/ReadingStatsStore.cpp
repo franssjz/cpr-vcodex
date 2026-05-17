@@ -795,6 +795,45 @@ bool ReadingStatsStore::updateBookMetadata(const std::string& path, const std::s
   return changed;
 }
 
+bool ReadingStatsStore::updateBookPath(const std::string& oldKey, const std::string& newPath,
+                                       const std::string& title, const std::string& author,
+                                       const std::string& coverBmpPath, const std::string& bookId) {
+  const std::string normalizedNewPath = BookIdentity::normalizePath(newPath);
+  if (normalizedNewPath.empty() || shouldIgnorePath(normalizedNewPath)) {
+    return false;
+  }
+
+  size_t index = findBookIndexByPath(oldKey);
+  if (index >= books.size() && !bookId.empty()) {
+    index = findBookIndexByBookId(bookId);
+  }
+  if (index >= books.size()) {
+    return false;
+  }
+
+  auto& book = books[index];
+  if (!bookId.empty() &&
+      (book.bookId.empty() || (BookIdentity::isLegacyBookId(book.bookId) && !BookIdentity::isLegacyBookId(bookId)))) {
+    book.bookId = bookId;
+  }
+
+  rememberBookPath(book, oldKey);
+  rememberBookPath(book, normalizedNewPath);
+  if (!title.empty()) {
+    book.title = title;
+  }
+  if (!author.empty()) {
+    book.author = author;
+  }
+  if (!coverBmpPath.empty()) {
+    book.coverBmpPath = coverBmpPath;
+  }
+
+  markDirty();
+  saveToFile();
+  return true;
+}
+
 bool ReadingStatsStore::removeBook(const std::string& path) {
   const size_t index = findBookIndexByPath(path);
   if (index >= books.size()) {

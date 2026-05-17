@@ -315,6 +315,7 @@ class CrossPointSettings {
   uint8_t flashcardStudyMode = FLASHCARD_STUDY_DUE;
   uint8_t flashcardSessionSize = FLASHCARD_SESSION_ALL;
   uint8_t showStatsAfterReading = 1;
+  uint8_t moveCompletedBooks = 0;
   uint8_t achievementsEnabled = 1;
   uint8_t achievementPopups = 1;
   uint8_t appsHubShortcutOrder = 1;
