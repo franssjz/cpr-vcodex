@@ -33,7 +33,6 @@ class FileBrowserActivity final : public Activity {
   std::vector<std::string> entryPaths;
   std::vector<std::string> entryTitles;
   std::vector<std::string> entrySubtitles;
-  std::vector<std::string> entryCoverPaths;
 
   // Data loading
   void loadFiles();
