@@ -36,6 +36,8 @@ constexpr int BOOK_COVER_RATIO_W = 2;
 constexpr int BOOK_COVER_RATIO_H = 3;
 constexpr int CARD_PAD = 12;
 constexpr int CARD_FOCUS_INSET = 4;
+constexpr int COVER_ANALYSIS_MAX_SAMPLES = 1200;
+constexpr size_t COVER_DECISION_CACHE_MAX = 24;
 constexpr uint8_t MEANINGFUL_PROGRESS_PERCENT = 2;
 constexpr uint8_t LIBRARY_VIEW_DASHBOARD = 1;
 constexpr uint8_t LIBRARY_VIEW_CONTINUE = 2;
@@ -58,6 +60,31 @@ enum LibraryCardState : uint8_t {
   LIBRARY_STATE_TO_READ = 3,
   LIBRARY_STATE_PINNED = 4,
 };
+
+struct CoverToneAnalysis {
+  int dark = 0;
+  int mid = 0;
+  int light = 0;
+  int samples = 0;
+
+  bool shouldInvert() const {
+    if (samples < 32) return false;
+    const int darkish = dark + mid;
+    return darkish * 100 / samples >= 78 && light * 100 / samples <= 18;
+  }
+};
+
+struct CoverRenderDecision {
+  std::string coverPath;
+  std::string resolvedPath;
+  int targetHeight = 0;
+  bool invert = false;
+};
+
+std::vector<CoverRenderDecision>& getCoverDecisionCache() {
+  static std::vector<CoverRenderDecision> cache;
+  return cache;
+}
 
 const uint8_t* fileIconBitmap(const std::string& filename) {
   if (!filename.empty() && filename.back() == '/') {
@@ -138,34 +165,125 @@ std::string findCachedCoverForBook(const std::string& path) {
   return "";
 }
 
-std::string findCachedCoverForFolder(const std::string& folderPath) {
-  std::string prefix = folderPath;
-  if (prefix.empty() || prefix.back() != '/') prefix += "/";
+CoverToneAnalysis analyzeCoverTone(const Bitmap& bitmap) {
+  CoverToneAnalysis analysis;
+  const int outputRowSize = (bitmap.getWidth() + 3) / 4;
+  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
+  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
 
-  for (const auto& book : READING_STATS.getBooks()) {
-    if (book.path.rfind(prefix, 0) == 0 && hasCachedCover(book.coverBmpPath)) {
-      return book.coverBmpPath;
+  if (!outputRow || !rowBytes || bitmap.rewindToData() != BmpReaderError::Ok) {
+    free(outputRow);
+    free(rowBytes);
+    return analysis;
+  }
+
+  const int targetRowSamples = std::max(1, COVER_ANALYSIS_MAX_SAMPLES / std::max(1, bitmap.getHeight()));
+  const int xStep = std::max(1, bitmap.getWidth() / targetRowSamples);
+  for (int y = 0; y < bitmap.getHeight(); ++y) {
+    if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) break;
+    for (int x = 0; x < bitmap.getWidth(); x += xStep) {
+      const uint8_t val = (outputRow[x / 4] >> (6 - ((x * 2) % 8))) & 0x03;
+      if (val == 0) {
+        ++analysis.dark;
+      } else if (val == 3) {
+        ++analysis.light;
+      } else {
+        ++analysis.mid;
+      }
+      ++analysis.samples;
     }
   }
 
-  for (const RecentBook& recentBook : RECENT_BOOKS.getBooks()) {
-    if (recentBook.path.rfind(prefix, 0) == 0 && hasCachedCover(recentBook.coverBmpPath)) {
-      return recentBook.coverBmpPath;
+  bitmap.rewindToData();
+  free(outputRow);
+  free(rowBytes);
+  return analysis;
+}
+
+void drawInvertedBitmapCover(GfxRenderer& renderer, const Bitmap& bitmap, const Rect& frame) {
+  const int outputRowSize = (bitmap.getWidth() + 3) / 4;
+  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
+  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
+
+  if (!outputRow || !rowBytes || bitmap.rewindToData() != BmpReaderError::Ok) {
+    free(outputRow);
+    free(rowBytes);
+    return;
+  }
+
+  const float scaleX = static_cast<float>(frame.width) / static_cast<float>(std::max(1, bitmap.getWidth()));
+  const float scaleY = static_cast<float>(frame.height) / static_cast<float>(std::max(1, bitmap.getHeight()));
+  for (int bmpY = 0; bmpY < bitmap.getHeight(); ++bmpY) {
+    if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) break;
+    const int sourceY = bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY;
+    const int screenY = frame.y + static_cast<int>(sourceY * scaleY);
+    if (screenY < frame.y || screenY >= frame.y + frame.height) continue;
+
+    for (int bmpX = 0; bmpX < bitmap.getWidth(); ++bmpX) {
+      const int screenX = frame.x + static_cast<int>(bmpX * scaleX);
+      if (screenX < frame.x || screenX >= frame.x + frame.width) continue;
+
+      const uint8_t sourceVal = (outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8))) & 0x03;
+      const uint8_t val = 3 - sourceVal;
+      const bool drawBlack = val == 0 || (val == 1 && ((screenX + screenY) & 1) == 0) ||
+                             (val == 2 && (screenX & 1) == 0 && (screenY & 1) == 0);
+      if (drawBlack) renderer.drawPixel(screenX, screenY, true);
     }
   }
-  return "";
+
+  bitmap.rewindToData();
+  free(outputRow);
+  free(rowBytes);
+}
+
+CoverRenderDecision getCoverRenderDecision(const std::string& coverPath, const int targetHeight) {
+  CoverRenderDecision empty;
+  if (coverPath.empty()) return empty;
+
+  const std::string resolved = resolveCachedCoverPath(coverPath, targetHeight);
+  if (resolved.empty()) return empty;
+
+  auto& cache = getCoverDecisionCache();
+  for (auto it = cache.begin(); it != cache.end(); ++it) {
+    if (it->coverPath == coverPath && it->resolvedPath == resolved && it->targetHeight == targetHeight) {
+      CoverRenderDecision decision = *it;
+      if (it != cache.begin()) {
+        cache.erase(it);
+        cache.insert(cache.begin(), decision);
+      }
+      return decision;
+    }
+  }
+
+  CoverRenderDecision decision{coverPath, resolved, targetHeight, false};
+  FsFile file;
+  if (Storage.openFileForRead("FBC", resolved, file)) {
+    Bitmap bitmap(file);
+    if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+      decision.invert = analyzeCoverTone(bitmap).shouldInvert();
+    }
+    file.close();
+  }
+
+  cache.insert(cache.begin(), decision);
+  if (cache.size() > COVER_DECISION_CACHE_MAX) cache.pop_back();
+  return decision;
 }
 
 bool drawCachedCover(GfxRenderer& renderer, const Rect& bounds, const std::string& coverPath, const uint8_t* fallbackIcon) {
-  const std::string resolved = resolveCachedCoverPath(coverPath, bounds.height);
+  const CoverRenderDecision decision = getCoverRenderDecision(coverPath, bounds.height);
   Rect frame = coverFrameForRatio(bounds, 0, 0);
-  if (!resolved.empty()) {
+  if (!decision.resolvedPath.empty()) {
     FsFile file;
-    if (Storage.openFileForRead("FBC", resolved, file)) {
+    if (Storage.openFileForRead("FBC", decision.resolvedPath, file)) {
       Bitmap bitmap(file);
       if (bitmap.parseHeaders() == BmpReaderError::Ok) {
         frame = coverFrameForRatio(bounds, std::max(1, bitmap.getWidth()), std::max(1, bitmap.getHeight()));
-        renderer.drawBitmap(bitmap, frame.x, frame.y, frame.width, frame.height);
+        if (decision.invert) {
+          drawInvertedBitmapCover(renderer, bitmap, frame);
+        } else {
+          renderer.drawBitmap(bitmap, frame.x, frame.y, frame.width, frame.height);
+        }
         renderer.drawRoundedRect(frame.x, frame.y, frame.width, frame.height, 1, 5, true);
         file.close();
         return true;
@@ -417,7 +535,7 @@ void FileBrowserActivity::loadFilesystemFiles() {
       entryPaths.push_back(fullPathPrefix + entry);
       entryTitles.push_back(getFileName(entry));
       entrySubtitles.emplace_back();
-      entryCoverPaths.push_back(findCachedCoverForFolder(fullPathPrefix + entry));
+      entryCoverPaths.emplace_back();
       continue;
     }
 
@@ -877,7 +995,7 @@ int FileBrowserActivity::getBookshelfCardHeight() const {
   if (isLibraryDashboard()) return 146;
   const bool insideFolder = basepath != "/";
   if (isLibraryShelf()) return getBookshelfColumns() == 2 ? 238 : 204;
-  return getBookshelfColumns() == 2 ? (insideFolder ? 224 : 210) : (insideFolder ? 204 : 198);
+  return getBookshelfColumns() == 2 ? (insideFolder ? 224 : 154) : (insideFolder ? 204 : 132);
 }
 
 int FileBrowserActivity::getPageItems(const int contentHeight) const {
@@ -889,7 +1007,9 @@ int FileBrowserActivity::getPageItems(const int contentHeight) const {
     }
     const int rowStride = getBookshelfCardHeight() + BOOKSHELF_CARD_GAP;
     const int rows = std::max(1, (contentHeight + BOOKSHELF_CARD_GAP) / rowStride);
-    return std::min(6, rows * getBookshelfColumns());
+    const bool insideFolder = basepath != "/";
+    return insideFolder || isLibraryShelf() ? std::min(6, rows * getBookshelfColumns())
+                                            : std::min(9, rows * getBookshelfColumns());
   }
   const int reserved = renderer.getLineHeight(SMALL_FONT_ID) + UITheme::getInstance().getMetrics().verticalSpacing;
   return UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false, reserved);
@@ -1037,21 +1157,14 @@ void FileBrowserActivity::renderBookshelf(const Rect& rect, const int pageItems)
 
     std::string meta;
     if (isFolder) {
-      const int visualHeight =
-          coverPath.empty() ? BOOKSHELF_FOLDER_ICON_SIZE : std::max(42, std::min(78, statusStripTop - inner.y - 72));
-      const int visualWidth = coverPath.empty() ? BOOKSHELF_FOLDER_ICON_SIZE : std::min(inner.width, visualHeight * BOOK_COVER_RATIO_W / BOOK_COVER_RATIO_H);
-      const int visualX = coverPath.empty() ? inner.x : card.x + (card.width - visualWidth) / 2;
+      const int visualX = inner.x;
       const int visualY = inner.y;
-      if (coverPath.empty()) {
-        renderer.drawIcon(icon, visualX, visualY, BOOKSHELF_FOLDER_ICON_SIZE, BOOKSHELF_FOLDER_ICON_SIZE);
-      } else {
-        drawCachedCover(renderer, Rect{visualX, visualY, visualWidth, visualHeight}, coverPath, FolderIcon);
-      }
+      renderer.drawIcon(icon, visualX, visualY, BOOKSHELF_FOLDER_ICON_SIZE, BOOKSHELF_FOLDER_ICON_SIZE);
       const uint16_t folderItems =
           (index >= 0 && index < static_cast<int>(folderItemCounts.size())) ? folderItemCounts[index] : 0;
       meta = std::to_string(folderItems) + " " + I18N.get(folderItems == 1 ? StrId::STR_ITEM : StrId::STR_ITEMS);
 
-      const int titleTop = visualY + visualHeight + 10;
+      const int titleTop = visualY + BOOKSHELF_FOLDER_ICON_SIZE + 10;
       const int titleBottom = statusStripTop - 6;
       const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, getEntryTitle(index).c_str(), textWidth, 4);
       int lineY = titleTop;
