@@ -44,10 +44,10 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4`; `Xteink X3` compatibility reported by users, not personally tested |
-| Current release (CPR-vCodex) build | [`1.3.0.1-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.3.0.1-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.3.0.2-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.3.0.2-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Latest release notes | - Moved CPR-vCodex onto the CrossPoint Reader `1.3.0` base line and synced selected upstream fixes through [`0af0ad5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/0af0ad5).<br>- Updated `open-x4-sdk` to the current upstream SDK fix for grayscale/AA cleanup after BW buffer restore.<br>- Brought in upstream SD-card font manager/runtime improvements while keeping CPR-vCodex font downloads pinned to this fork's release assets.<br>- Added Polish and Swedish hyphenation data and refreshed Spanish/Italian translations.<br>- Preserved vCodex reader features, stats, `Lyra Carousel`, KOReader sync extensions, and X4-focused settings while leaving risky upstream UI-flow changes out of this release. |
+| Latest release notes | - Added an X3/X4 selector to Auto Flash with model-specific OTA partition validation and write offsets.<br>- Kept X4 as the default Auto Flash target while allowing X3 users to select the correct partition layout before flashing.<br>- Added a browser File Transfer page for viewing, creating, and editing the SD-root `if_found.txt` contact file.<br>- Shared `if_found` file detection and text normalization between the on-device app and the browser editor.<br>- Updated File Transfer pages to use CPR-vCodex branding and a consistent `Home / File Manager / Settings / Fonts / if_found.txt` navigation bar. |
 | Base firmware line | `CrossPoint Reader 1.3.0` |
 | Latest official commit reviewed | [`0af0ad5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/0af0ad5) |
 | Latest official commit incorporated | Selected 1.3.0 reader, SDK, font-manager, SD-font rendering, hyphenation, and tooling updates through [`0af0ad5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/0af0ad5) |
@@ -499,7 +499,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.3.0`
-- current dev build style: `1.3.0.1-cpr-vcodex`
+- current dev build style: `1.3.0.2-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -569,10 +569,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.3.0.1-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.3.0.2-cpr-vcodex
 ```
 
-- push a stable tag named like `1.3.0.1-cpr-vcodex`
+- push a stable tag named like `1.3.0.2-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
 - tagged CI release builds derive the firmware release number from the tag, not

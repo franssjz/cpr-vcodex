@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>if_found.txt - CPR-vCodex</title>
+    <style>
+      :root {
+        --font-color: #333;
+        --bg: #f5f5f5;
+        --title-color: #2c3e50;
+        --card-bg: #FFF;
+        --label-color: #7f8c8d;
+        --border-color: #eee;
+        --accent-color: rgb(110, 154, 130);
+        --accent-hover-color: #5a8c73;
+        --danger-color: #e74c3c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --font-color: #f5f5f5;
+          --bg: #333;
+          --title-color: #ecf0f1;
+          --card-bg: #444;
+          --label-color: #bdc3c7;
+          --border-color: #555;
+          color-scheme: dark;
+        }
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: var(--bg);
+        color: var(--font-color);
+      }
+      h1 {
+        color: var(--title-color);
+        border-bottom: 2px solid var(--accent-color);
+        padding-bottom: 10px;
+      }
+      h2 {
+        color: var(--title-color);
+        margin-top: 0;
+      }
+      .card {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .nav-links {
+        margin: 20px 0;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .nav-links a {
+        padding: 10px 20px;
+        color: var(--font-color);
+        text-decoration: none;
+        border-radius: 4px;
+      }
+      .nav-links a.active {
+        background-color: var(--accent-color);
+        color: white;
+      }
+      .nav-links a:not(.active):hover {
+        background-color: var(--accent-hover-color);
+        color: white;
+      }
+      .meta {
+        color: var(--label-color);
+        font-size: 0.95em;
+        margin-bottom: 12px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 320px;
+        box-sizing: border-box;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--font-color);
+        font: 15px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+        resize: vertical;
+      }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .counter {
+        color: var(--label-color);
+        font-size: 0.9em;
+      }
+      .counter.too-large {
+        color: var(--danger-color);
+        font-weight: 600;
+      }
+      .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+        background: var(--accent-color);
+        color: white;
+      }
+      .btn:hover {
+        background: var(--accent-hover-color);
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .message {
+        margin-top: 12px;
+        padding: 10px;
+        border-radius: 4px;
+        display: none;
+      }
+      .message.ok {
+        display: block;
+        background: #d4edda;
+        color: #155724;
+      }
+      .message.err {
+        display: block;
+        background: #f8d7da;
+        color: #721c24;
+      }
+      @media (max-width: 600px) {
+        body {
+          padding: 10px;
+          font-size: 14px;
+        }
+        .card {
+          padding: 12px;
+          margin: 10px 0;
+        }
+        h1 {
+          font-size: 1.3em;
+        }
+        .nav-links a {
+          padding: 8px 12px;
+          font-size: 0.9em;
+        }
+        textarea {
+          min-height: 260px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CPR-vCodex</h1>
+
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/files">File Manager</a>
+      <a href="/settings">Settings</a>
+      <a href="/fonts">Fonts</a>
+      <a href="/if-found" class="active">if_found.txt</a>
+    </div>
+
+    <div class="card">
+      <h2>if_found.txt</h2>
+      <p class="meta" id="fileMeta">Loading...</p>
+      <textarea id="content" spellcheck="false" placeholder="Name, contact details, reward note, or any message you want shown by the If Found app."></textarea>
+      <div class="toolbar">
+        <span class="counter" id="counter"></span>
+        <button class="btn" id="saveBtn" type="button" onclick="saveIfFound()">Save</button>
+      </div>
+      <div class="message" id="message"></div>
+    </div>
+
+    <script>
+      let maxBytes = 8192;
+      let currentPath = '/if_found.txt';
+
+      function byteLength(value) {
+        if (window.TextEncoder) return new TextEncoder().encode(value).length;
+        return unescape(encodeURIComponent(value)).length;
+      }
+
+      function showMessage(text, isError) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.className = 'message ' + (isError ? 'err' : 'ok');
+      }
+
+      function updateCounter() {
+        const textarea = document.getElementById('content');
+        const counter = document.getElementById('counter');
+        const saveBtn = document.getElementById('saveBtn');
+        const bytes = byteLength(textarea.value);
+        counter.textContent = bytes + ' / ' + maxBytes + ' bytes';
+        counter.classList.toggle('too-large', bytes > maxBytes);
+        saveBtn.disabled = bytes > maxBytes;
+      }
+
+      async function loadIfFound() {
+        try {
+          const res = await fetch('/api/if-found');
+          if (!res.ok) throw new Error('Could not load if_found.txt');
+          const data = await res.json();
+          currentPath = data.path || '/if_found.txt';
+          maxBytes = data.maxBytes || 8192;
+          document.getElementById('content').value = data.content || '';
+          document.getElementById('fileMeta').textContent = data.exists
+            ? 'Editing ' + currentPath
+            : currentPath + ' does not exist yet. Saving will create it in the SD root.';
+          updateCounter();
+        } catch (err) {
+          showMessage(err.message || 'Could not load if_found.txt', true);
+          updateCounter();
+        }
+      }
+
+      async function saveIfFound() {
+        const textarea = document.getElementById('content');
+        const saveBtn = document.getElementById('saveBtn');
+        const bytes = byteLength(textarea.value);
+        if (bytes > maxBytes) {
+          showMessage('Content is too large to save.', true);
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        try {
+          const res = await fetch('/api/if-found', {
+            method: 'POST',
+            headers: {'Content-Type': 'text/plain; charset=utf-8'},
+            body: textarea.value
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Save failed');
+          currentPath = data.path || currentPath;
+          document.getElementById('fileMeta').textContent = 'Editing ' + currentPath;
+          showMessage('Saved successfully.', false);
+        } catch (err) {
+          showMessage(err.message || 'Save failed', true);
+        } finally {
+          saveBtn.textContent = 'Save';
+          saveBtn.disabled = byteLength(textarea.value) > maxBytes;
+          updateCounter();
+        }
+      }
+
+      document.getElementById('content').addEventListener('input', updateCounter);
+      loadIfFound();
+    </script>
+  </body>
+</html>

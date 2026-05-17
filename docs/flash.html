@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X4 using a browser-based Web Serial installer.">
+  <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X3 or X4 using a browser-based Web Serial installer.">
   <title>Auto Flash - CPR-vCodex</title>
   <link rel="stylesheet" href="assets/site.css">
   <style>
@@ -185,6 +185,67 @@
     .flash-panel {
       display: grid;
       gap: 14px;
+    }
+
+    .device-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+
+    .device-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .device-box p {
+      margin: 5px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .device-options {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .device-option {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .device-option[aria-checked="true"] {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .device-option:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .device-option strong {
+      font-size: 15px;
+    }
+
+    .device-option span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .version-box {
@@ -402,6 +463,10 @@
       .grid {
         grid-template-columns: 1fr;
       }
+
+      .device-options {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -427,7 +492,7 @@
     <section class="hero">
       <p class="eyebrow" data-site-i18n="flashEyebrow">Browser-based installer</p>
       <h1 data-site-i18n="flashTitle">Flash CPR-vCodex</h1>
-      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
+      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X3 or X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
     </section>
 
     <section class="grid">
@@ -443,7 +508,7 @@
           <div class="step">
             <div>
               <h3 data-site-i18n="cableTitle">Use a data USB-C cable</h3>
-              <p data-site-i18n="cableText">Connect the Xteink X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
+              <p data-site-i18n="cableText">Connect the Xteink X3 or X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
             </div>
           </div>
           <div class="step">
@@ -462,9 +527,24 @@
       </article>
 
       <aside class="card flash-panel">
+        <div class="device-box">
+          <span class="device-label" id="device-model-title" data-site-i18n="deviceModelTitle">Device model</span>
+          <p data-site-i18n="deviceModelText">Choose the exact model before flashing. X3 and X4 use different OTA app partition sizes.</p>
+          <div class="device-options" role="radiogroup" aria-labelledby="device-model-title">
+            <button class="device-option" type="button" role="radio" aria-checked="true" data-device="x4">
+              <strong data-site-i18n="deviceX4">Xteink X4</strong>
+              <span>6.4 MB OTA slot</span>
+            </button>
+            <button class="device-option" type="button" role="radio" aria-checked="false" data-device="x3">
+              <strong data-site-i18n="deviceX3">Xteink X3</strong>
+              <span>7.4 MB OTA slot</span>
+            </button>
+          </div>
+        </div>
+
         <div class="version-box">
           <span data-site-i18n="latestPackage">Latest firmware package</span>
-          <strong id="firmware-version">1.3.0.1-cpr-vcodex</strong>
+          <strong id="firmware-version">1.3.0.2-cpr-vcodex</strong>
           <dl class="firmware-details">
             <div class="detail-row">
               <dt class="detail-label" data-site-i18n="firmwareSource">Source</dt>
@@ -472,7 +552,7 @@
             </div>
             <div class="detail-row">
               <dt class="detail-label" data-site-i18n="firmwareAsset">Asset</dt>
-              <dd class="detail-value" id="firmware-asset">1.3.0.1-cpr-vcodex.bin</dd>
+              <dd class="detail-value" id="firmware-asset">1.3.0.2-cpr-vcodex.bin</dd>
             </div>
             <div class="detail-row">
               <dt class="detail-label" data-site-i18n="firmwareSize">Size</dt>
@@ -497,7 +577,7 @@
           <span id="error-message"></span>
         </div>
 
-        <button class="button primary" id="flash-button" type="button" data-site-i18n="flashButton">Flash CPR-vCodex Firmware</button>
+        <button class="button primary" id="flash-button" type="button">Flash CPR-vCodex Firmware for Xteink X4</button>
 
         <div class="runner" id="runner" aria-live="polite">
           <ol id="step-list"></ol>
@@ -506,7 +586,7 @@
         <p class="status" id="status" data-site-i18n="readyStatus">Ready. Clicking Flash will open the browser serial device chooser.</p>
 
         <div class="actions">
-          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.1-cpr-vcodex/1.3.0.1-cpr-vcodex.bin" data-site-i18n="downloadBin">Download .bin</a>
+          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.2-cpr-vcodex/1.3.0.2-cpr-vcodex.bin" data-site-i18n="downloadBin">Download .bin</a>
           <a class="button" href="https://xteink.dve.al/" rel="noopener" data-site-i18n="communityFlasher">Community flasher</a>
         </div>
 
@@ -534,11 +614,41 @@ pio run -e gh_release -t upload</code></pre>
     const PARTITION_TABLE_SIZE = 0x2000;
     const OTADATA_OFFSET = 0xe000;
     const OTADATA_SIZE = 0x2000;
-    const APP_SIZE = 0x640000;
     const APP_MIN_SIZE = 0xf0000;
-    const APP_OFFSETS = {
-      app0: 0x10000,
-      app1: 0x650000
+    const DEVICE_STORAGE_KEY = "cprVcodexFlashDevice";
+    const DEVICE_CONFIGS = {
+      x4: {
+        label: "Xteink X4",
+        appSize: 0x640000,
+        appOffsets: {
+          app0: 0x10000,
+          app1: 0x650000
+        },
+        partitions: [
+          {type: "data-nvs", offset: 36864, size: 20480},
+          {type: "data-ota", offset: 57344, size: 8192},
+          {type: "app-ota_0", offset: 65536, size: 6553600},
+          {type: "app-ota_1", offset: 6619136, size: 6553600},
+          {type: "data-spiffs", offset: 13172736, size: 3538944},
+          {type: "data-coredump", offset: 16711680, size: 65536}
+        ]
+      },
+      x3: {
+        label: "Xteink X3",
+        appSize: 0x770000,
+        appOffsets: {
+          app0: 0x10000,
+          app1: 0x780000
+        },
+        partitions: [
+          {type: "data-nvs", offset: 36864, size: 20480},
+          {type: "data-ota", offset: 57344, size: 8192},
+          {type: "app-ota_0", offset: 65536, size: 7798784},
+          {type: "app-ota_1", offset: 7864320, size: 7798784},
+          {type: "data-spiffs", offset: 15663104, size: 1048576},
+          {type: "data-coredump", offset: 16711680, size: 65536}
+        ]
+      }
     };
     const STEP_IDS = [
       "connect",
@@ -558,14 +668,6 @@ pio run -e gh_release -t upload</code></pre>
       "flash-otadata": "stepFlashOtadata",
       reset: "stepReset"
     };
-    const EXPECTED_PARTITION_TABLE = [
-      {type: "data-nvs", offset: 36864, size: 20480},
-      {type: "data-ota", offset: 57344, size: 8192},
-      {type: "app-ota_0", offset: 65536, size: 6553600},
-      {type: "app-ota_1", offset: 6619136, size: 6553600},
-      {type: "data-spiffs", offset: 13172736, size: 3538944},
-      {type: "data-coredump", offset: 16711680, size: 65536}
-    ];
     const PARTITION_TYPES = {
       0x00: {
         0x00: "app-factory",
@@ -590,16 +692,16 @@ pio run -e gh_release -t upload</code></pre>
       }
     };
     const FALLBACK_RELEASE = {
-      version: "1.3.0.1-cpr-vcodex",
+      version: "1.3.0.2-cpr-vcodex",
       firmwareUrl: "firmware/firmware.bin",
-      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.1-cpr-vcodex/1.3.0.1-cpr-vcodex.bin",
-      size: 6179312,
-      sha256: "c2777f17f307c234a2ec1e49acb3a8cf0617b0ff6b3a5dc4b13ad6ecc16bc3e6",
+      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.2-cpr-vcodex/1.3.0.2-cpr-vcodex.bin",
+      size: 6183680,
+      sha256: "d684487a5cefd642a62fe3b2a3fa9ea396ed705887b0412e5bd66a58fd7ede54",
       source: {
         type: "github-release",
         repo: "franssjz/cpr-vcodex",
-        tag: "1.3.0.1-cpr-vcodex",
-        asset: "1.3.0.1-cpr-vcodex.bin"
+        tag: "1.3.0.2-cpr-vcodex",
+        asset: "1.3.0.2-cpr-vcodex.bin"
       }
     };
 
@@ -616,14 +718,20 @@ pio run -e gh_release -t upload</code></pre>
       downloadLink: document.getElementById("download-link"),
       unsupported: document.getElementById("unsupported"),
       errorBox: document.getElementById("error-box"),
-      errorMessage: document.getElementById("error-message")
+      errorMessage: document.getElementById("error-message"),
+      deviceOptions: document.querySelectorAll("[data-device]")
     };
 
     const firmware = {...FALLBACK_RELEASE};
     const stepNodes = new Map();
     let currentTransport = null;
+    let selectedDevice = localStorage.getItem(DEVICE_STORAGE_KEY);
+    if (!DEVICE_CONFIGS[selectedDevice]) {
+      selectedDevice = "x4";
+    }
+    const webSerialSupported = "serial" in navigator;
 
-    if (!("serial" in navigator)) {
+    if (!webSerialSupported) {
       els.unsupported.classList.add("active");
       els.flashButton.disabled = true;
     }
@@ -643,11 +751,21 @@ pio run -e gh_release -t upload</code></pre>
       .catch(() => updateFirmwareDetails());
 
     updateFirmwareDetails();
+    updateDeviceSelection();
 
+    els.deviceOptions.forEach(button => {
+      button.addEventListener("click", () => {
+        selectedDevice = button.dataset.device;
+        localStorage.setItem(DEVICE_STORAGE_KEY, selectedDevice);
+        updateDeviceSelection();
+      });
+    });
+    window.addEventListener("cpr-tools-language-change", updateDeviceSelection);
     els.flashButton.addEventListener("click", startFlash);
 
     async function startFlash() {
       let loader = null;
+      const device = getDeviceConfig();
       setError("");
       setStatus(siteT("choosePort"));
       resetSteps();
@@ -673,8 +791,8 @@ pio run -e gh_release -t upload</code></pre>
 
         await runStep("partition", async () => {
           const table = parsePartitionTable(await readFlashBytes(loader, PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE));
-          validatePartitionTable(table);
-          updateStep("partition", {detail: siteT("partitionOk")});
+          validatePartitionTable(table, device);
+          updateStep("partition", {detail: siteT("partitionOk", {device: device.label})});
         });
 
         const firmwareData = await runStep("download", async () => {
@@ -684,8 +802,12 @@ pio run -e gh_release -t upload</code></pre>
             throw new Error(`${siteT("firmwareDownloadFailed")}: HTTP ${response.status}`);
           }
           const data = new Uint8Array(await response.arrayBuffer());
-          if (data.length > APP_SIZE) {
-            throw new Error(siteT("firmwareTooLarge", {size: formatBytes(data.length)}));
+          if (data.length > device.appSize) {
+            throw new Error(siteT("firmwareTooLarge", {
+              size: formatBytes(data.length),
+              max: formatBytes(device.appSize),
+              device: device.label
+            }));
           }
           if (data.length < APP_MIN_SIZE) {
             throw new Error(siteT("firmwareTooSmall"));
@@ -724,9 +846,9 @@ pio run -e gh_release -t upload</code></pre>
         await runStep("flash-app", async () => {
           updateStep("flash-app", {
             name: `${siteT("stepFlashApp")} (${targetPartition})`,
-            detail: siteT("writingOffset", {offset: hex(APP_OFFSETS[targetPartition])})
+            detail: siteT("writingOffset", {offset: hex(device.appOffsets[targetPartition])})
           });
-          await writeBytes(loader, APP_OFFSETS[targetPartition], firmwareData, (fileIndex, written, total) => {
+          await writeBytes(loader, device.appOffsets[targetPartition], firmwareData, (fileIndex, written, total) => {
             updateStep("flash-app", {
               progress: percent(written, total),
               detail: `${formatBytes(written)} / ${formatBytes(total)}`
@@ -897,9 +1019,9 @@ pio run -e gh_release -t upload</code></pre>
       return partitions;
     }
 
-    function validatePartitionTable(table) {
-      const ok = table.length === EXPECTED_PARTITION_TABLE.length &&
-        EXPECTED_PARTITION_TABLE.every((expected, index) => {
+    function validatePartitionTable(table, device) {
+      const ok = table.length === device.partitions.length &&
+        device.partitions.every((expected, index) => {
           const actual = table[index];
           return actual &&
             actual.type === expected.type &&
@@ -908,7 +1030,8 @@ pio run -e gh_release -t upload</code></pre>
         });
       if (!ok) {
         throw new Error(
-          `${siteT("partitionUnexpected")}\n` +
+          `${siteT("partitionUnexpected", {device: device.label})}\n` +
+          `Selected model: ${device.label}\n` +
           JSON.stringify(table, null, 2)
         );
       }
@@ -1059,8 +1182,11 @@ pio run -e gh_release -t upload</code></pre>
     }
 
     function setRunning(isRunning) {
-      els.flashButton.disabled = isRunning;
-      els.flashButton.textContent = isRunning ? siteT("flashing") : siteT("flashButton");
+      els.flashButton.disabled = isRunning || !webSerialSupported;
+      els.flashButton.textContent = isRunning ? siteT("flashing") : flashButtonLabel();
+      els.deviceOptions.forEach(button => {
+        button.disabled = isRunning;
+      });
     }
 
     function setStatus(message, tone) {
@@ -1106,6 +1232,28 @@ pio run -e gh_release -t upload</code></pre>
       els.sha.textContent = firmware.sha256 ? shortSha(firmware.sha256) : siteT("firmwareSourceUnknown");
       els.sha.title = firmware.sha256 || "";
       els.downloadLink.href = firmware.downloadUrl;
+      updateDeviceSelection();
+    }
+
+    function updateDeviceSelection() {
+      const device = getDeviceConfig();
+      els.deviceOptions.forEach(button => {
+        button.setAttribute("aria-checked", button.dataset.device === selectedDevice ? "true" : "false");
+      });
+      if (!els.flashButton.disabled || !webSerialSupported) {
+        els.flashButton.textContent = flashButtonLabel();
+      }
+      els.flashButton.setAttribute("aria-label", flashButtonLabel());
+      els.flashButton.title = flashButtonLabel();
+      els.downloadLink.title = `${firmware.version} for ${device.label}`;
+    }
+
+    function getDeviceConfig() {
+      return DEVICE_CONFIGS[selectedDevice] || DEVICE_CONFIGS.x4;
+    }
+
+    function flashButtonLabel() {
+      return siteT("flashButtonForDevice", {device: getDeviceConfig().label});
     }
 
     function shortSha(value) {

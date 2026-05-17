@@ -26,8 +26,10 @@
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
+#include "html/IfFoundPageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
+#include "util/IfFoundFile.h"
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -517,6 +519,11 @@ void CrossPointWebServer::begin() {
   server->on("/api/fonts/upload", HTTP_POST, [this] { handleFontUpload(); }, [this] { handleFontUploadData(); });
   server->on("/api/fonts/delete", HTTP_POST, [this] { handleFontDelete(); });
 
+  // If Found contact-card endpoints
+  server->on("/if-found", HTTP_GET, [this] { handleIfFoundPage(); });
+  server->on("/api/if-found", HTTP_GET, [this] { handleGetIfFound(); });
+  server->on("/api/if-found", HTTP_POST, [this] { handlePostIfFound(); });
+
   // OPDS server endpoints
   server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
   server->on("/api/opds", HTTP_POST, [this] { handlePostOpdsServer(); });
@@ -805,6 +812,11 @@ void CrossPointWebServer::handleFontsPage() const {
   LOG_DBG("WEB", "Served fonts page");
 }
 
+void CrossPointWebServer::handleIfFoundPage() const {
+  sendHtmlContent(server.get(), IfFoundPageHtml, sizeof(IfFoundPageHtml));
+  LOG_DBG("WEB", "Served if_found page");
+}
+
 void CrossPointWebServer::handleFontList() const {
   const_cast<SdCardFontSystem&>(sdFontSystem).refreshIfDirty();
   const auto& families = sdFontSystem.registry().getFamilies();
@@ -983,6 +995,72 @@ void CrossPointWebServer::handleFontDelete() {
     server->send(500, "application/json", "{\"error\":\"Delete failed\"}");
     LOG_ERR("WEB", "Failed to delete font family: %s", familyName);
   }
+}
+
+void CrossPointWebServer::handleGetIfFound() const {
+  std::string path = IfFoundFile::findPath();
+  const bool exists = !path.empty();
+  if (!exists) {
+    path = IfFoundFile::DEFAULT_PATH;
+  }
+  const std::string content = exists ? IfFoundFile::readNormalized(path) : "";
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("{\"exists\":");
+  server->sendContent(exists ? "true" : "false");
+  server->sendContent(",\"path\":");
+  sendJsonEscaped(server.get(), path.c_str());
+  server->sendContent(",\"maxBytes\":");
+  char buffer[24];
+  snprintf(buffer, sizeof(buffer), "%u", static_cast<unsigned>(IfFoundFile::MAX_BYTES));
+  server->sendContent(buffer);
+  server->sendContent(",\"content\":");
+  sendJsonEscaped(server.get(), content.c_str());
+  server->sendContent("}");
+  server->sendContent("");
+  LOG_DBG("WEB", "Served if_found content path=%s exists=%d bytes=%u", path.c_str(), exists,
+          static_cast<unsigned>(content.size()));
+}
+
+void CrossPointWebServer::handlePostIfFound() {
+  const String content = server->arg("plain");
+  if (static_cast<size_t>(content.length()) > IfFoundFile::MAX_BYTES) {
+    server->send(413, "application/json", "{\"error\":\"Content is too large\"}");
+    return;
+  }
+
+  std::string path = IfFoundFile::findPath();
+  if (path.empty()) {
+    path = IfFoundFile::DEFAULT_PATH;
+  }
+
+  FsFile file;
+  if (!Storage.openFileForWrite("IFF", path, file)) {
+    server->send(500, "application/json", "{\"error\":\"Could not open if_found.txt for writing\"}");
+    return;
+  }
+
+  const size_t expected = static_cast<size_t>(content.length());
+  const size_t written = expected == 0 ? 0 : file.write(reinterpret_cast<const uint8_t*>(content.c_str()), expected);
+  file.close();
+
+  if (written != expected) {
+    server->send(500, "application/json", "{\"error\":\"Could not write the complete file\"}");
+    return;
+  }
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("{\"ok\":true,\"path\":");
+  sendJsonEscaped(server.get(), path.c_str());
+  server->sendContent(",\"bytes\":");
+  char buffer[24];
+  snprintf(buffer, sizeof(buffer), "%u", static_cast<unsigned>(written));
+  server->sendContent(buffer);
+  server->sendContent("}");
+  server->sendContent("");
+  LOG_DBG("WEB", "Saved if_found content path=%s bytes=%u", path.c_str(), static_cast<unsigned>(written));
 }
 
 void CrossPointWebServer::handleFileListData() const {

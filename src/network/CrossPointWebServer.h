@@ -116,6 +116,11 @@ class CrossPointWebServer {
   void handleFontUploadData();
   void handleFontDelete();
 
+  // If Found contact-card handlers
+  void handleIfFoundPage() const;
+  void handleGetIfFound() const;
+  void handlePostIfFound();
+
   // Font upload state
   struct FontUploadState {
     FsFile file;
