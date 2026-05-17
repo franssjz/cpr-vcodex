@@ -1424,7 +1424,6 @@ bool JsonSettingsIO::saveAchievements(const AchievementsStore& store, const char
   doc["lastGoalDayOrdinal"] = store.lastGoalDayOrdinal;
   doc["resetDayOrdinal"] = store.resetDayOrdinal;
   doc["resetDayBaselineMs"] = store.resetDayBaselineMs;
-  doc["lastProcessedSessionSerial"] = store.lastProcessedSessionSerial;
 
   JsonArray states = doc["states"].to<JsonArray>();
   for (const auto& state : store.states) {
@@ -1472,7 +1471,8 @@ bool JsonSettingsIO::loadAchievements(AchievementsStore& store, const char* json
   store.lastGoalDayOrdinal = doc["lastGoalDayOrdinal"] | static_cast<uint32_t>(0);
   store.resetDayOrdinal = doc["resetDayOrdinal"] | static_cast<uint32_t>(0);
   store.resetDayBaselineMs = doc["resetDayBaselineMs"] | static_cast<uint64_t>(0);
-  store.lastProcessedSessionSerial = doc["lastProcessedSessionSerial"] | static_cast<uint32_t>(0);
+  // Session serials are runtime-only; persisted values collide after ReadingStatsStore resets on reboot.
+  store.lastProcessedSessionSerial = 0;
 
   JsonArray states = doc["states"].as<JsonArray>();
   size_t stateIndex = 0;

@@ -560,7 +560,8 @@ bool AchievementsStore::loadFromFile() {
     return false;
   }
 
-  dirty = false;
+  const bool loadNeedsSave = dirty;
+  dirty = loadNeedsSave;
   if (refreshGoalDerivedProgressFromStats()) {
     markDirty();
   }
