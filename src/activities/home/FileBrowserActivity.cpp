@@ -515,14 +515,17 @@ void FileBrowserActivity::addLibraryBook(const std::string& path, const std::str
 
   files.push_back(path);
   entryPaths.push_back(path);
-  RecentBook gridBook;
-  gridBook.path = path;
-  gridBook.title = title;
-  gridBook.author = author;
-  gridBook.coverBmpPath = coverPath;
-  std::string thumbPath = RecentBooksGrid::resolveExistingCoverPath(gridBook);
-  if (thumbPath.empty()) {
-    thumbPath = RecentBooksGrid::loadSingleCover(renderer, gridBook);
+  std::string thumbPath;
+  if (state != LIBRARY_STATE_FINISHED) {
+    RecentBook gridBook;
+    gridBook.path = path;
+    gridBook.title = title;
+    gridBook.author = author;
+    gridBook.coverBmpPath = coverPath;
+    thumbPath = RecentBooksGrid::resolveExistingCoverPath(gridBook);
+    if (thumbPath.empty()) {
+      thumbPath = RecentBooksGrid::loadSingleCover(renderer, gridBook);
+    }
   }
   entryCoverPaths.push_back((!thumbPath.empty() && Storage.exists(thumbPath.c_str())) ? thumbPath : "");
   const size_t slash = path.find_last_of('/');

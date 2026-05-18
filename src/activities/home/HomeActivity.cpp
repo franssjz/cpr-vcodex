@@ -292,6 +292,11 @@ void HomeActivity::loop() {
       const bool recentBooksAccessSelected = SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
                                              SETTINGS.showCurrentBookCard != 0 && selectorIndex == 1;
       if (recentBooksAccessSelected) {
+        if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS && recentBooks.size() > 1 &&
+            Storage.exists(recentBooks[1].path.c_str())) {
+          onSelectBook(recentBooks[1].path);
+          return;
+        }
         activityManager.goToRecentBooks();
         return;
       }
