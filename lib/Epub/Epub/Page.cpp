@@ -1,5 +1,6 @@
 #include "Page.h"
 
+#include <FontCacheManager.h>
 #include <Logging.h>
 #include <Serialization.h>
 
@@ -54,6 +55,15 @@ void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, co
                   const uint8_t bionicReadingMode) const {
   for (auto& element : elements) {
     element->render(renderer, fontId, xOffset, yOffset, bionicReadingMode);
+  }
+}
+
+void Page::recordFontUsage(FontCacheManager& fontCacheManager, const int fontId) const {
+  for (const auto& element : elements) {
+    if (element->getTag() == TAG_PageLine) {
+      const auto& line = static_cast<const PageLine&>(*element);
+      line.getBlock()->recordFontUsage(fontCacheManager, fontId);
+    }
   }
 }
 

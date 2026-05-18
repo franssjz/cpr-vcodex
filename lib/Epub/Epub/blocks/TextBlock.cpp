@@ -1,5 +1,6 @@
 #include "TextBlock.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
@@ -64,6 +65,18 @@ void drawDecorationLine(const GfxRenderer& renderer, const int startX, const int
   renderer.drawLine(startX, lineY, startX + width - 1, lineY, DECORATION_LINE_THICKNESS, true);
 }
 }  // namespace
+
+void TextBlock::recordFontUsage(FontCacheManager& fontCacheManager, const int fontId) const {
+  if (words.size() != wordStyles.size()) {
+    LOG_ERR("TXB", "Font usage scan skipped: size mismatch (words=%u, styles=%u)\n", (uint32_t)words.size(),
+            (uint32_t)wordStyles.size());
+    return;
+  }
+
+  for (size_t i = 0; i < words.size(); i++) {
+    fontCacheManager.recordText(words[i].c_str(), fontId, wordStyles[i]);
+  }
+}
 
 void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y,
                        const uint8_t bionicReadingMode) const {

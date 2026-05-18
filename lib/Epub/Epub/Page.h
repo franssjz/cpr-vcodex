@@ -10,6 +10,8 @@
 #include "blocks/ImageBlock.h"
 #include "blocks/TextBlock.h"
 
+class FontCacheManager;
+
 enum PageElementTag : uint8_t {
   TAG_PageLine = 1,
   TAG_PageImage = 2,  // New tag
@@ -73,6 +75,7 @@ class Page {
   }
 
   void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, uint8_t bionicReadingMode = 0) const;
+  void recordFontUsage(FontCacheManager& fontCacheManager, int fontId) const;
   void renderImages(GfxRenderer& renderer, int xOffset, int yOffset) const;
   bool serialize(FsFile& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);
