@@ -1,12 +1,18 @@
 #include "UITheme.h"
 
+#include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Txt.h>
+#include <Xtc.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
@@ -20,6 +26,59 @@ constexpr char kWidthPlaceholder[] = "[WIDTH]";
 constexpr char kHeightPlaceholder[] = "[HEIGHT]";
 constexpr size_t kWidthPlaceholderLength = sizeof(kWidthPlaceholder) - 1;
 constexpr size_t kHeightPlaceholderLength = sizeof(kHeightPlaceholder) - 1;
+constexpr size_t kCoverResolverCacheMax = 24;
+
+struct CoverResolverCacheEntry {
+  std::string bookPath;
+  std::string coverBmpPath;
+  int width = 0;
+  int height = 0;
+  std::string resolvedPath;
+};
+
+std::vector<CoverResolverCacheEntry>& coverResolverCache() {
+  static std::vector<CoverResolverCacheEntry> cache;
+  return cache;
+}
+
+std::string getCachedBookCoverPath(const std::string& bookPath, const std::string& coverBmpPath, const int width,
+                                   const int height) {
+  auto& cache = coverResolverCache();
+  for (auto it = cache.begin(); it != cache.end(); ++it) {
+    if (it->bookPath != bookPath || it->coverBmpPath != coverBmpPath || it->width != width || it->height != height) {
+      continue;
+    }
+    if (!it->resolvedPath.empty() && Storage.exists(it->resolvedPath.c_str())) {
+      if (it != cache.begin()) {
+        CoverResolverCacheEntry entry = *it;
+        cache.erase(it);
+        cache.insert(cache.begin(), std::move(entry));
+      }
+      return cache.front().resolvedPath;
+    }
+    cache.erase(it);
+    return "";
+  }
+  return "";
+}
+
+void rememberBookCoverPath(const std::string& bookPath, const std::string& coverBmpPath, const int width,
+                           const int height, const std::string& resolvedPath) {
+  if (resolvedPath.empty()) {
+    return;
+  }
+
+  auto& cache = coverResolverCache();
+  cache.erase(std::remove_if(cache.begin(), cache.end(), [&](const CoverResolverCacheEntry& entry) {
+                return entry.bookPath == bookPath && entry.coverBmpPath == coverBmpPath && entry.width == width &&
+                       entry.height == height;
+              }),
+              cache.end());
+  cache.insert(cache.begin(), CoverResolverCacheEntry{bookPath, coverBmpPath, width, height, resolvedPath});
+  if (cache.size() > kCoverResolverCacheMax) {
+    cache.pop_back();
+  }
+}
 }  // namespace
 
 UITheme UITheme::instance;
@@ -158,6 +217,62 @@ std::string UITheme::resolveCoverThumbPath(const std::string& coverBmpPath, cons
   }
 
   return Storage.exists(coverBmpPath.c_str()) ? coverBmpPath : "";
+}
+
+std::string UITheme::resolveBookCoverThumbPath(const std::string& bookPath, const std::string& coverBmpPath,
+                                               const int preferredWidth, const int preferredHeight) {
+  const std::string cached = getCachedBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight);
+  if (!cached.empty()) {
+    return cached;
+  }
+
+  const std::string storedCover = resolveCoverThumbPath(coverBmpPath, preferredWidth, preferredHeight);
+  if (!storedCover.empty()) {
+    rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, storedCover);
+    return storedCover;
+  }
+
+  if (bookPath.empty()) {
+    return "";
+  }
+
+  if (FsHelpers::hasEpubExtension(bookPath)) {
+    Epub epub(bookPath, "/.crosspoint");
+    const std::string thumb = resolveCoverThumbPath(epub.getThumbBmpPath(), preferredWidth, preferredHeight);
+    if (!thumb.empty()) {
+      rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, thumb);
+      return thumb;
+    }
+    const std::string cover = resolveCoverThumbPath(epub.getCoverBmpPath(false), preferredWidth, preferredHeight);
+    if (!cover.empty()) {
+      rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, cover);
+      return cover;
+    }
+    const std::string croppedCover = resolveCoverThumbPath(epub.getCoverBmpPath(true), preferredWidth, preferredHeight);
+    rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, croppedCover);
+    return croppedCover;
+  }
+
+  if (FsHelpers::hasXtcExtension(bookPath)) {
+    Xtc xtc(bookPath, "/.crosspoint");
+    const std::string thumb = resolveCoverThumbPath(xtc.getThumbBmpPath(), preferredWidth, preferredHeight);
+    if (!thumb.empty()) {
+      rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, thumb);
+      return thumb;
+    }
+    const std::string cover = resolveCoverThumbPath(xtc.getCoverBmpPath(), preferredWidth, preferredHeight);
+    rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, cover);
+    return cover;
+  }
+
+  if (FsHelpers::hasTxtExtension(bookPath) || FsHelpers::hasMarkdownExtension(bookPath)) {
+    Txt txt(bookPath, "/.crosspoint");
+    const std::string cover = resolveCoverThumbPath(txt.getCoverBmpPath(), preferredWidth, preferredHeight);
+    rememberBookCoverPath(bookPath, coverBmpPath, preferredWidth, preferredHeight, cover);
+    return cover;
+  }
+
+  return "";
 }
 
 UIIcon UITheme::getFileIcon(const std::string& filename) {

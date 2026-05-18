@@ -18,19 +18,19 @@ void drawHeaderTopLine(const GfxRenderer& renderer, const ThemeMetrics& metrics,
                        const std::string& dateText, const std::string& reminderText) {
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-  const int batteryX = pageWidth - 12 - metrics.batteryWidth;
-  int rightEdge = batteryX - 8;
-
-  if (showBatteryPercentage) {
-    const std::string batteryText = std::to_string(powerManager.getBatteryPercentage()) + "%";
-    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText.c_str()) + 4;
-  }
+  constexpr int batteryTextSpacing = 4;
+  const int maxBatteryPercentWidth =
+      showBatteryPercentage ? renderer.getTextWidth(SMALL_FONT_ID, "100%") + batteryTextSpacing : 0;
+  const int batteryReserve = metrics.batteryWidth + maxBatteryPercentWidth + 24;
+  const int rightEdge = std::max(metrics.contentSidePadding, pageWidth - batteryReserve);
 
   int dateX = rightEdge;
   if (!dateText.empty()) {
-    const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, dateText.c_str());
+    const int maxDateWidth = std::max(0, rightEdge - metrics.contentSidePadding);
+    const std::string safeDate = renderer.truncatedText(SMALL_FONT_ID, dateText.c_str(), maxDateWidth);
+    const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, safeDate.c_str());
     dateX = std::max(metrics.contentSidePadding, rightEdge - dateWidth);
-    renderer.drawText(SMALL_FONT_ID, dateX, metrics.topPadding + 5, dateText.c_str());
+    renderer.drawText(SMALL_FONT_ID, dateX, metrics.topPadding + 5, safeDate.c_str());
   }
 
   if (!reminderText.empty()) {

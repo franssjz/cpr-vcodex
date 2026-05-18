@@ -115,8 +115,8 @@ const ReadingBookStats* findBook(const std::string& bookPath) {
   return nullptr;
 }
 
-std::string resolveStoredCoverPath(const std::string& coverBmpPath) {
-  return UITheme::resolveCoverThumbPath(coverBmpPath, COVER_WIDTH, COVER_HEIGHT);
+std::string resolveStoredCoverPath(const std::string& bookPath, const std::string& coverBmpPath) {
+  return UITheme::resolveBookCoverThumbPath(bookPath, coverBmpPath, COVER_WIDTH, COVER_HEIGHT);
 }
 
 std::string findRecentBookCoverPath(const ReadingBookStats& book) {
@@ -128,7 +128,7 @@ std::string findRecentBookCoverPath(const ReadingBookStats& book) {
       continue;
     }
 
-    const std::string resolved = resolveStoredCoverPath(recentBook.coverBmpPath);
+    const std::string resolved = resolveStoredCoverPath(recentBook.path, recentBook.coverBmpPath);
     if (!resolved.empty()) {
       READING_STATS.updateBookMetadata(book.path, recentBook.title, recentBook.author, recentBook.coverBmpPath);
       rememberResolvedCoverPath(withCoverPath(book, recentBook.coverBmpPath), resolved);
@@ -149,7 +149,7 @@ std::string ensureCoverPath(const ReadingBookStats& book) {
     return recentResolved;
   }
 
-  std::string resolved = resolveStoredCoverPath(book.coverBmpPath);
+  std::string resolved = resolveStoredCoverPath(book.path, book.coverBmpPath);
   if (!resolved.empty()) {
     rememberResolvedCoverPath(book, resolved);
     return resolved;
@@ -164,7 +164,7 @@ std::string findFastCoverPath(const ReadingBookStats& book) {
     return cachedResolvedPath;
   }
 
-  std::string resolved = resolveStoredCoverPath(book.coverBmpPath);
+  std::string resolved = resolveStoredCoverPath(book.path, book.coverBmpPath);
   if (!resolved.empty()) {
     rememberResolvedCoverPath(book, resolved);
     return resolved;
@@ -181,13 +181,13 @@ std::string findFastCoverPath(const ReadingBookStats& book) {
 
   if (FsHelpers::hasEpubExtension(book.path)) {
     Epub epub(book.path, "/.crosspoint");
-    resolved = resolveStoredCoverPath(epub.getCoverBmpPath());
+    resolved = resolveStoredCoverPath(book.path, epub.getCoverBmpPath());
   } else if (FsHelpers::hasXtcExtension(book.path)) {
     Xtc xtc(book.path, "/.crosspoint");
-    resolved = resolveStoredCoverPath(xtc.getCoverBmpPath());
+    resolved = resolveStoredCoverPath(book.path, xtc.getCoverBmpPath());
   } else if (FsHelpers::hasTxtExtension(book.path) || FsHelpers::hasMarkdownExtension(book.path)) {
     Txt txt(book.path, "/.crosspoint");
-    resolved = resolveStoredCoverPath(txt.getCoverBmpPath());
+    resolved = resolveStoredCoverPath(book.path, txt.getCoverBmpPath());
   }
 
   if (!resolved.empty()) {

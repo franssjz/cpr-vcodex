@@ -127,13 +127,13 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
   recentBooks.clear();
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
+  const bool prioritizeCurrentBook =
+      SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 && SETTINGS.showCurrentBookCard != 0 &&
+      !APP_STATE.openEpubPath.empty();
 
-  for (const RecentBook& book : books) {
-    if (static_cast<int>(recentBooks.size()) >= maxBooks) {
-      break;
-    }
-    if (!Storage.exists(book.path.c_str())) {
-      continue;
+  auto appendResolvedBook = [this, maxBooks](const RecentBook& book) {
+    if (static_cast<int>(recentBooks.size()) >= maxBooks || !Storage.exists(book.path.c_str())) {
+      return;
     }
     RecentBook resolvedBook = book;
     const auto* statsBook = READING_STATS.findMatchingBookForPath(book.path, book.title, book.author);
@@ -141,6 +141,25 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
       resolvedBook.coverBmpPath = statsBook->coverBmpPath;
     }
     recentBooks.push_back(resolvedBook);
+  };
+
+  if (prioritizeCurrentBook) {
+    for (const RecentBook& book : books) {
+      if (book.path == APP_STATE.openEpubPath) {
+        appendResolvedBook(book);
+        break;
+      }
+    }
+  }
+
+  for (const RecentBook& book : books) {
+    if (static_cast<int>(recentBooks.size()) >= maxBooks) {
+      break;
+    }
+    if (prioritizeCurrentBook && book.path == APP_STATE.openEpubPath) {
+      continue;
+    }
+    appendResolvedBook(book);
   }
 }
 

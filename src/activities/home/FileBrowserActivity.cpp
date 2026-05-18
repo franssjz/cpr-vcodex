@@ -508,7 +508,7 @@ void FileBrowserActivity::addLibraryBook(const std::string& path, const std::str
   files.push_back(path);
   entryPaths.push_back(path);
   const std::string thumbPath =
-      coverPath.empty() ? "" : UITheme::resolveCoverThumbPath(coverPath, SHELF_COVER_WIDTH, SHELF_COVER_HEIGHT);
+      UITheme::resolveBookCoverThumbPath(path, coverPath, SHELF_COVER_WIDTH, SHELF_COVER_HEIGHT);
   entryCoverPaths.push_back((!thumbPath.empty() && Storage.exists(thumbPath.c_str())) ? thumbPath : "");
   const size_t slash = path.find_last_of('/');
   const std::string fallbackName = slash == std::string::npos ? path : path.substr(slash + 1);

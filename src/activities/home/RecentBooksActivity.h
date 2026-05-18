@@ -19,6 +19,7 @@ class RecentBooksActivity final : public Activity {
   std::vector<RecentBook> recentBooks;
   std::vector<uint8_t> recentBookCompletedStates;
   std::vector<std::string> recentCoverPaths;
+  std::vector<uint8_t> recentCoverResolvedStates;
   std::vector<std::string> recentProgressLabels;
   int loadedPageStart = -1;
 

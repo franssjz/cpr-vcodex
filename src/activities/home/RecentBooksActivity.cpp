@@ -14,16 +14,11 @@
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/RecentBooksGridUi.h"
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
 constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
-constexpr int RECENT_GRID_COLUMNS = 3;
-constexpr int RECENT_GRID_ITEMS = 9;
-constexpr int RECENT_COVER_W = 120;
-constexpr int RECENT_COVER_H = 176;
-constexpr int RECENT_GRID_GAP = 8;
-
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
 }
@@ -41,24 +36,13 @@ std::string recentProgress(const RecentBook& book) {
   return statsBook == nullptr ? "" : std::to_string(statsBook->lastProgressPercent) + "%";
 }
 
-void drawRecentPlaceholder(GfxRenderer& renderer, const Rect& rect) {
-  renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, 4, true);
-  const int bookW = std::min(rect.width - 12, std::max(34, rect.width * 2 / 3));
-  const int bookH = std::min(rect.height - 12, std::max(48, rect.height - 18));
-  const int bookX = rect.x + (rect.width - bookW) / 2;
-  const int bookY = rect.y + (rect.height - bookH) / 2;
-  renderer.drawRoundedRect(bookX, bookY, bookW, bookH, 2, 4, true);
-  renderer.drawLine(bookX + 8, bookY + 4, bookX + 8, bookY + bookH - 5, true);
-  renderer.drawLine(bookX + 14, bookY + 12, bookX + bookW - 9, bookY + 12, 2, true);
-  renderer.drawLine(bookX + 14, bookY + 24, bookX + bookW - 12, bookY + 24, true);
-  renderer.drawLine(bookX + 14, bookY + 36, bookX + bookW - 16, bookY + 36, true);
-}
 }  // namespace
 
 void RecentBooksActivity::loadRecentBooks() {
   recentBooks.clear();
   recentBookCompletedStates.clear();
   recentCoverPaths.clear();
+  recentCoverResolvedStates.clear();
   recentProgressLabels.clear();
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(books.size());
@@ -78,6 +62,7 @@ void RecentBooksActivity::loadRecentBooks() {
     recentBookCompletedStates.push_back((statsBook != nullptr && statsBook->completed) ? 1 : 0);
   }
   recentCoverPaths.assign(recentBooks.size(), "");
+  recentCoverResolvedStates.assign(recentBooks.size(), 0);
   recentProgressLabels.assign(recentBooks.size(), "");
   loadedPageStart = -1;
 }
@@ -97,6 +82,7 @@ void RecentBooksActivity::onExit() {
   recentBooks.clear();
   recentBookCompletedStates.clear();
   recentCoverPaths.clear();
+  recentCoverResolvedStates.clear();
   recentProgressLabels.clear();
 }
 
@@ -106,12 +92,17 @@ void RecentBooksActivity::loadVisiblePageMetadata(const int pageItems) {
   if (pageStart == loadedPageStart) return;
   const int pageEnd = std::min(pageStart + pageItems, static_cast<int>(recentBooks.size()));
   for (int index = pageStart; index < pageEnd; ++index) {
-    recentProgressLabels[index] = recentProgress(recentBooks[index]);
-    if (!recentBooks[index].coverBmpPath.empty()) {
-      const std::string coverPath =
-          UITheme::resolveCoverThumbPath(recentBooks[index].coverBmpPath, RECENT_COVER_W, RECENT_COVER_H);
-      recentCoverPaths[index] = (!coverPath.empty() && Storage.exists(coverPath.c_str())) ? coverPath : "";
+    if (recentProgressLabels[index].empty()) {
+      recentProgressLabels[index] = recentProgress(recentBooks[index]);
     }
+    if (index >= static_cast<int>(recentCoverResolvedStates.size()) || recentCoverResolvedStates[index] != 0) {
+      continue;
+    }
+    const std::string coverPath = UITheme::resolveBookCoverThumbPath(
+        recentBooks[index].path, recentBooks[index].coverBmpPath, RecentBooksGridUi::kCoverWidth,
+        RecentBooksGridUi::kCoverHeight);
+    recentCoverPaths[index] = (!coverPath.empty() && Storage.exists(coverPath.c_str())) ? coverPath : "";
+    recentCoverResolvedStates[index] = 1;
   }
   loadedPageStart = pageStart;
 }
@@ -119,7 +110,8 @@ void RecentBooksActivity::loadVisiblePageMetadata(const int pageItems) {
 void RecentBooksActivity::loop() {
   const bool gridView = SETTINGS.recentBooksView == CrossPointSettings::RECENT_BOOKS_GRID;
   const int pageItems =
-      gridView ? RECENT_GRID_ITEMS : UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, true);
+      gridView ? RecentBooksGridUi::kMainItemsPerPage
+               : UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, true);
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (!recentBooks.empty() && selectorIndex < static_cast<int>(recentBooks.size())) {
@@ -162,25 +154,55 @@ void RecentBooksActivity::loop() {
 
   int listSize = static_cast<int>(recentBooks.size());
 
-  buttonNavigator.onNextRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+  auto moveSelection = [this](const int next) {
+    selectorIndex = static_cast<size_t>(next);
+    loadVisiblePageMetadata(RecentBooksGridUi::kMainItemsPerPage);
     requestUpdate();
-  });
+  };
 
-  buttonNavigator.onPreviousRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
-
-  buttonNavigator.onNextContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+  if (gridView) {
+    buttonNavigator.onRelease({MappedInputManager::Button::Right}, [this, listSize, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
+    });
+    buttonNavigator.onRelease({MappedInputManager::Button::Left}, [this, listSize, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
+    });
+    buttonNavigator.onRelease({MappedInputManager::Button::Down}, [this, listSize, pageItems, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
+    });
+    buttonNavigator.onRelease({MappedInputManager::Button::Up}, [this, listSize, pageItems, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
+    });
+    buttonNavigator.onContinuous({MappedInputManager::Button::Right}, [this, listSize, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
+    });
+    buttonNavigator.onContinuous({MappedInputManager::Button::Left}, [this, listSize, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
+    });
+    buttonNavigator.onContinuous({MappedInputManager::Button::Down}, [this, listSize, pageItems, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
+    });
+    buttonNavigator.onContinuous({MappedInputManager::Button::Up}, [this, listSize, pageItems, moveSelection] {
+      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
+    });
+  } else {
+    buttonNavigator.onNextRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousRelease([this, listSize] {
+      selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
+      requestUpdate();
+    });
+    buttonNavigator.onNextContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
+      selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
+      requestUpdate();
+    });
+  }
 }
 
 void RecentBooksActivity::render(RenderLock&&) {
@@ -195,7 +217,8 @@ void RecentBooksActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const bool gridView = SETTINGS.recentBooksView == CrossPointSettings::RECENT_BOOKS_GRID;
-  const int pageItems = gridView ? RECENT_GRID_ITEMS : UITheme::getNumberOfItemsPerPage(renderer, true, false, true, true);
+  const int pageItems = gridView ? RecentBooksGridUi::kMainItemsPerPage
+                                 : UITheme::getNumberOfItemsPerPage(renderer, true, false, true, true);
   loadVisiblePageMetadata(pageItems);
 
   // Recent tab
@@ -214,46 +237,57 @@ void RecentBooksActivity::render(RenderLock&&) {
   } else {
     const int pageStart = (static_cast<int>(selectorIndex) / pageItems) * pageItems;
     const int pageEnd = std::min(static_cast<int>(recentBooks.size()), pageStart + pageItems);
-    const int gridWidth = RECENT_GRID_COLUMNS * RECENT_COVER_W + (RECENT_GRID_COLUMNS - 1) * RECENT_GRID_GAP;
+    const int gridWidth = RecentBooksGridUi::kColumns * RecentBooksGridUi::kCoverWidth +
+                          (RecentBooksGridUi::kColumns - 1) * RecentBooksGridUi::kCoverGap;
     const int startX = (pageWidth - gridWidth) / 2;
-    const int gridTop = contentTop + 56;
-    const int rowGap = 4;
+    const int metadataTop = contentTop;
+    const int gridTop = metadataTop + RecentBooksGridUi::kMetadataBandHeight + RecentBooksGridUi::kCoverGap;
 
     const std::string title = renderer.truncatedText(UI_10_FONT_ID, recentTitle(recentBooks[selectorIndex]).c_str(),
                                                      pageWidth - metrics.contentSidePadding * 2, EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_10_FONT_ID, contentTop + 2, title.c_str(), true, EpdFontFamily::BOLD);
-    const std::string subtitle = recentBooks[selectorIndex].author.empty() ? recentProgressLabels[selectorIndex]
-                                                                           : recentBooks[selectorIndex].author;
-    if (!subtitle.empty()) {
-      const std::string safeSubtitle =
-          renderer.truncatedText(SMALL_FONT_ID, subtitle.c_str(), pageWidth - metrics.contentSidePadding * 2);
-      renderer.drawCenteredText(SMALL_FONT_ID, contentTop + 20, safeSubtitle.c_str(), true);
+    renderer.drawCenteredText(UI_10_FONT_ID, metadataTop + 2, title.c_str(), true, EpdFontFamily::BOLD);
+
+    std::string detailLine = recentBooks[selectorIndex].author;
+    if (!recentProgressLabels[selectorIndex].empty()) {
+      if (!detailLine.empty()) detailLine += "  |  ";
+      detailLine += recentProgressLabels[selectorIndex];
     }
-    if (!recentProgressLabels[selectorIndex].empty() && !recentBooks[selectorIndex].author.empty()) {
-      renderer.drawCenteredText(SMALL_FONT_ID, contentTop + 36, recentProgressLabels[selectorIndex].c_str(), true);
+    if (!detailLine.empty()) {
+      const std::string safeDetail =
+          renderer.truncatedText(SMALL_FONT_ID, detailLine.c_str(), pageWidth - metrics.contentSidePadding * 2);
+      renderer.drawCenteredText(SMALL_FONT_ID, metadataTop + 22, safeDetail.c_str(), true);
     }
+    renderer.drawLine(metrics.contentSidePadding, gridTop - 8, pageWidth - metrics.contentSidePadding, gridTop - 8,
+                      true);
 
     for (int index = pageStart; index < pageEnd; ++index) {
       const int local = index - pageStart;
-      const int col = local % RECENT_GRID_COLUMNS;
-      const int row = local / RECENT_GRID_COLUMNS;
-      const Rect cover{startX + col * (RECENT_COVER_W + RECENT_GRID_GAP), gridTop + row * (RECENT_COVER_H + rowGap),
-                       RECENT_COVER_W, RECENT_COVER_H};
+      const int col = local % RecentBooksGridUi::kColumns;
+      const int row = local / RecentBooksGridUi::kColumns;
+      const Rect cover{startX + col * (RecentBooksGridUi::kCoverWidth + RecentBooksGridUi::kCoverGap),
+                       gridTop + row * (RecentBooksGridUi::kCoverHeight + RecentBooksGridUi::kRowGap),
+                       RecentBooksGridUi::kCoverWidth, RecentBooksGridUi::kCoverHeight};
       bool drawn = false;
       if (!recentCoverPaths[index].empty()) {
         FsFile file;
         if (Storage.openFileForRead("RBA", recentCoverPaths[index], file)) {
           Bitmap bitmap(file);
           if (bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
-            renderer.drawBitmap(bitmap, cover.x, cover.y, cover.width, cover.height);
+            float cropX = 0.0f;
+            float cropY = 0.0f;
+            RecentBooksGridUi::calculateCoverFillCrop(bitmap, cropX, cropY);
+            renderer.drawBitmap(bitmap, cover.x, cover.y, cover.width, cover.height, cropX, cropY);
             drawn = true;
           }
           file.close();
         }
       }
-      if (!drawn) drawRecentPlaceholder(renderer, cover);
+      if (!drawn) RecentBooksGridUi::drawPlaceholder(renderer, cover);
       if (index == static_cast<int>(selectorIndex)) {
-        renderer.drawRoundedRect(cover.x - 4, cover.y - 4, cover.width + 8, cover.height + 8, 2, 5, true);
+        renderer.drawRoundedRect(cover.x - 4, cover.y - 4, cover.width + 8, cover.height + 8, 3,
+                                 RecentBooksGridUi::kCoverCornerRadius + 4, true);
+        renderer.drawRoundedRect(cover.x - 6, cover.y - 6, cover.width + 12, cover.height + 12, 1,
+                                 RecentBooksGridUi::kCoverCornerRadius + 6, true);
       }
     }
 
@@ -277,7 +311,7 @@ void RecentBooksActivity::render(RenderLock&&) {
   }
 
   // Help text
-  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

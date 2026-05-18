@@ -136,8 +136,8 @@ bool drawCover(GfxRenderer& renderer, const RecentBook& book, const int x, const
                const int height) {
   bool hasCover = false;
   Rect frame = coverFrameForRatio(x, y, width, height, 0, 0);
-  if (!book.coverBmpPath.empty()) {
-    const std::string coverBmpPath = UITheme::resolveCoverThumbPath(book.coverBmpPath, width, height);
+  const std::string coverBmpPath = UITheme::resolveBookCoverThumbPath(book.path, book.coverBmpPath, width, height);
+  if (!coverBmpPath.empty()) {
     FsFile file;
     if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
       Bitmap bitmap(file);
@@ -162,22 +162,28 @@ bool drawCover(GfxRenderer& renderer, const RecentBook& book, const int x, const
 
 void drawUpNextCard(GfxRenderer& renderer, const Rect& rect, const RecentBook& book, const bool selected) {
   drawCardSurface(renderer, rect, selected);
-  const int labelX = rect.x + SP_16;
-  const int titleX = rect.x + 112;
-  const int titleW = rect.width - (titleX - rect.x) - SP_16;
+  const int contentX = rect.x + SP_16;
+  const int contentW = rect.width - SP_16 * 2;
   const uint8_t progressPercent = progressForBook(book);
   const std::string progressText = std::to_string(progressPercent) + "%";
-  renderer.drawText(SMALL_FONT_ID, labelX, rect.y + SP_12, tr(STR_MENU_RECENT_BOOKS), true);
-  renderer.drawText(UI_10_FONT_ID, labelX, rect.y + 44, progressText.c_str(), true, EpdFontFamily::BOLD);
-  const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, book.title.c_str(), titleW, 2, EpdFontFamily::BOLD);
-  int titleY = rect.y + 16;
+  const int progressW = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
+  const int labelW = std::max(0, contentW - progressW - SP_12);
+  const std::string label = renderer.truncatedText(SMALL_FONT_ID, tr(STR_MENU_RECENT_BOOKS), labelW);
+  renderer.drawText(SMALL_FONT_ID, contentX, rect.y + SP_8, label.c_str(), true);
+  renderer.drawText(SMALL_FONT_ID, contentX + contentW - progressW, rect.y + SP_8, progressText.c_str(), true,
+                    EpdFontFamily::BOLD);
+
+  const auto titleLines = renderer.wrappedText(UI_10_FONT_ID, book.title.c_str(), contentW, 2, EpdFontFamily::BOLD);
+  int titleY = rect.y + 28;
+  const int titleBottom = rect.y + rect.height - renderer.getLineHeight(SMALL_FONT_ID) - SP_8;
   for (const auto& line : titleLines) {
-    renderer.drawText(UI_10_FONT_ID, titleX, titleY, line.c_str(), true, EpdFontFamily::BOLD);
+    if (titleY > titleBottom) break;
+    renderer.drawText(UI_10_FONT_ID, contentX, titleY, line.c_str(), true, EpdFontFamily::BOLD);
     titleY += renderer.getLineHeight(UI_10_FONT_ID);
   }
-  const std::string author = renderer.truncatedText(SMALL_FONT_ID, book.author.c_str(), titleW);
-  if (!author.empty() && titleY <= rect.y + rect.height - renderer.getLineHeight(SMALL_FONT_ID) - SP_8) {
-    renderer.drawText(SMALL_FONT_ID, titleX, titleY + SP_4, author.c_str(), true);
+  const std::string author = renderer.truncatedText(SMALL_FONT_ID, book.author.c_str(), contentW);
+  if (!author.empty() && titleY <= titleBottom) {
+    renderer.drawText(SMALL_FONT_ID, contentX, titleY + SP_4, author.c_str(), true);
   }
 }
 

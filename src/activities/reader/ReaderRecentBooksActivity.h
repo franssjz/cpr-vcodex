@@ -21,6 +21,7 @@ class ReaderRecentBooksActivity final : public Activity {
   std::string currentPath;
   std::vector<RecentBook> books;
   std::vector<std::string> coverPaths;
+  std::vector<uint8_t> coverPathResolvedStates;
   std::vector<std::string> progressLabels;
   int selectedIndex = 0;
   int loadedPageStart = -1;
