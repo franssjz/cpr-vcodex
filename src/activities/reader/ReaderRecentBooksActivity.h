@@ -6,6 +6,7 @@
 #include "RecentBooksStore.h"
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
+#include "util/RecentBooksGrid.h"
 
 class ReaderRecentBooksActivity final : public Activity {
  public:
@@ -19,10 +20,7 @@ class ReaderRecentBooksActivity final : public Activity {
 
  private:
   std::string currentPath;
-  std::vector<RecentBook> books;
-  std::vector<std::string> coverPaths;
-  std::vector<uint8_t> coverPathResolvedStates;
-  std::vector<std::string> progressLabels;
+  std::vector<RecentBooksGrid::BookState> books;
   int selectedIndex = 0;
   int loadedPageStart = -1;
   bool waitForBackRelease = false;

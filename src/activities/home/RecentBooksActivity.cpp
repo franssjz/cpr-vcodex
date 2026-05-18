@@ -14,7 +14,7 @@
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/RecentBooksGridUi.h"
+#include "util/RecentBooksGrid.h"
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
@@ -23,27 +23,11 @@ std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
 }
 
-std::string recentTitle(const RecentBook& book) {
-  if (!book.title.empty()) return book.title;
-  const size_t slash = book.path.find_last_of('/');
-  const std::string name = slash == std::string::npos ? book.path : book.path.substr(slash + 1);
-  const size_t dot = name.find_last_of('.');
-  return dot == std::string::npos ? name : name.substr(0, dot);
-}
-
-std::string recentProgress(const RecentBook& book) {
-  const auto* statsBook = READING_STATS.findBook(!book.bookId.empty() ? book.bookId : book.path);
-  return statsBook == nullptr ? "" : std::to_string(statsBook->lastProgressPercent) + "%";
-}
-
 }  // namespace
 
 void RecentBooksActivity::loadRecentBooks() {
   recentBooks.clear();
   recentBookCompletedStates.clear();
-  recentCoverPaths.clear();
-  recentCoverResolvedStates.clear();
-  recentProgressLabels.clear();
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(books.size());
   recentBookCompletedStates.reserve(books.size());
@@ -58,12 +42,9 @@ void RecentBooksActivity::loadRecentBooks() {
     if (resolvedBook.coverBmpPath.empty() && statsBook != nullptr && !statsBook->coverBmpPath.empty()) {
       resolvedBook.coverBmpPath = statsBook->coverBmpPath;
     }
-    recentBooks.push_back(resolvedBook);
+    recentBooks.push_back(RecentBooksGrid::BookState{resolvedBook});
     recentBookCompletedStates.push_back((statsBook != nullptr && statsBook->completed) ? 1 : 0);
   }
-  recentCoverPaths.assign(recentBooks.size(), "");
-  recentCoverResolvedStates.assign(recentBooks.size(), 0);
-  recentProgressLabels.assign(recentBooks.size(), "");
   loadedPageStart = -1;
 }
 
@@ -81,42 +62,24 @@ void RecentBooksActivity::onExit() {
   Activity::onExit();
   recentBooks.clear();
   recentBookCompletedStates.clear();
-  recentCoverPaths.clear();
-  recentCoverResolvedStates.clear();
-  recentProgressLabels.clear();
 }
 
 void RecentBooksActivity::loadVisiblePageMetadata(const int pageItems) {
   if (recentBooks.empty() || pageItems <= 0) return;
   const int pageStart = (static_cast<int>(selectorIndex) / pageItems) * pageItems;
-  if (pageStart == loadedPageStart) return;
-  const int pageEnd = std::min(pageStart + pageItems, static_cast<int>(recentBooks.size()));
-  for (int index = pageStart; index < pageEnd; ++index) {
-    if (recentProgressLabels[index].empty()) {
-      recentProgressLabels[index] = recentProgress(recentBooks[index]);
-    }
-    if (index >= static_cast<int>(recentCoverResolvedStates.size()) || recentCoverResolvedStates[index] != 0) {
-      continue;
-    }
-    const std::string coverPath = UITheme::resolveBookCoverThumbPath(
-        recentBooks[index].path, recentBooks[index].coverBmpPath, RecentBooksGridUi::kCoverWidth,
-        RecentBooksGridUi::kCoverHeight);
-    recentCoverPaths[index] = (!coverPath.empty() && Storage.exists(coverPath.c_str())) ? coverPath : "";
-    recentCoverResolvedStates[index] = 1;
-  }
-  loadedPageStart = pageStart;
+  RecentBooksGrid::ensurePageProgress(recentBooks, pageStart, pageItems);
 }
 
 void RecentBooksActivity::loop() {
   const bool gridView = SETTINGS.recentBooksView == CrossPointSettings::RECENT_BOOKS_GRID;
   const int pageItems =
-      gridView ? RecentBooksGridUi::kMainItemsPerPage
+      gridView ? RecentBooksGrid::kItemsPerPage
                : UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, true);
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (!recentBooks.empty() && selectorIndex < static_cast<int>(recentBooks.size())) {
       if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
-        const RecentBook selectedBook = recentBooks[selectorIndex];
+        const RecentBook selectedBook = recentBooks[selectorIndex].book;
         const size_t currentSelection = selectorIndex;
         startActivityForResult(
             std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
@@ -142,8 +105,8 @@ void RecentBooksActivity::loop() {
         return;
       }
 
-      LOG_DBG("RBA", "Selected recent book: %s", recentBooks[selectorIndex].path.c_str());
-      onSelectBook(recentBooks[selectorIndex].path);
+      LOG_DBG("RBA", "Selected recent book: %s", recentBooks[selectorIndex].book.path.c_str());
+      onSelectBook(recentBooks[selectorIndex].book.path);
       return;
     }
   }
@@ -156,34 +119,34 @@ void RecentBooksActivity::loop() {
 
   auto moveSelection = [this](const int next) {
     selectorIndex = static_cast<size_t>(next);
-    loadVisiblePageMetadata(RecentBooksGridUi::kMainItemsPerPage);
+    loadVisiblePageMetadata(RecentBooksGrid::kItemsPerPage);
     requestUpdate();
   };
 
   if (gridView) {
     buttonNavigator.onRelease({MappedInputManager::Button::Right}, [this, listSize, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
+      moveSelection(RecentBooksGrid::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
     });
     buttonNavigator.onRelease({MappedInputManager::Button::Left}, [this, listSize, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
+      moveSelection(RecentBooksGrid::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
     });
     buttonNavigator.onRelease({MappedInputManager::Button::Down}, [this, listSize, pageItems, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
+      moveSelection(RecentBooksGrid::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
     });
     buttonNavigator.onRelease({MappedInputManager::Button::Up}, [this, listSize, pageItems, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
+      moveSelection(RecentBooksGrid::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
     });
     buttonNavigator.onContinuous({MappedInputManager::Button::Right}, [this, listSize, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
+      moveSelection(RecentBooksGrid::moveHorizontal(static_cast<int>(selectorIndex), listSize, true));
     });
     buttonNavigator.onContinuous({MappedInputManager::Button::Left}, [this, listSize, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
+      moveSelection(RecentBooksGrid::moveHorizontal(static_cast<int>(selectorIndex), listSize, false));
     });
     buttonNavigator.onContinuous({MappedInputManager::Button::Down}, [this, listSize, pageItems, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
+      moveSelection(RecentBooksGrid::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, true));
     });
     buttonNavigator.onContinuous({MappedInputManager::Button::Up}, [this, listSize, pageItems, moveSelection] {
-      moveSelection(RecentBooksGridUi::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
+      moveSelection(RecentBooksGrid::moveVertical(static_cast<int>(selectorIndex), listSize, pageItems, false));
     });
   } else {
     buttonNavigator.onNextRelease([this, listSize] {
@@ -217,7 +180,7 @@ void RecentBooksActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const bool gridView = SETTINGS.recentBooksView == CrossPointSettings::RECENT_BOOKS_GRID;
-  const int pageItems = gridView ? RecentBooksGridUi::kMainItemsPerPage
+  const int pageItems = gridView ? RecentBooksGrid::kItemsPerPage
                                  : UITheme::getNumberOfItemsPerPage(renderer, true, false, true, true);
   loadVisiblePageMetadata(pageItems);
 
@@ -227,86 +190,34 @@ void RecentBooksActivity::render(RenderLock&&) {
   } else if (!gridView) {
     GUI.drawList(
         renderer, Rect{0, contentTop, pageWidth, contentHeight}, recentBooks.size(), selectorIndex,
-        [this](int index) { return recentTitle(recentBooks[index]); },
+        [this](int index) { return RecentBooksGrid::titleFor(recentBooks[index].book); },
         [this](int index) {
-          return recentBooks[index].author.empty() ? recentProgressLabels[index] : recentBooks[index].author;
+          return recentBooks[index].book.author.empty() ? recentBooks[index].progressLabel : recentBooks[index].book.author;
         },
-        [this](int index) { return UITheme::getFileIcon(recentBooks[index].path); }, nullptr, false,
+        [this](int index) { return UITheme::getFileIcon(recentBooks[index].book.path); }, nullptr, false,
         [this](int index) { return index >= 0 && index < static_cast<int>(recentBookCompletedStates.size()) &&
                                    recentBookCompletedStates[index] != 0; });
   } else {
     const int pageStart = (static_cast<int>(selectorIndex) / pageItems) * pageItems;
     const int pageEnd = std::min(static_cast<int>(recentBooks.size()), pageStart + pageItems);
-    const int gridWidth = RecentBooksGridUi::kColumns * RecentBooksGridUi::kCoverWidth +
-                          (RecentBooksGridUi::kColumns - 1) * RecentBooksGridUi::kCoverGap;
+    const int gridWidth = RecentBooksGrid::kColumns * RecentBooksGrid::kCoverWidth +
+                          (RecentBooksGrid::kColumns - 1) * RecentBooksGrid::kGridSpacing;
     const int startX = (pageWidth - gridWidth) / 2;
     const int metadataTop = contentTop;
-    const int gridTop = metadataTop + RecentBooksGridUi::kMetadataBandHeight + RecentBooksGridUi::kCoverGap;
+    const int gridTop = metadataTop + RecentBooksGrid::kTitleStripHeight + RecentBooksGrid::kTitleGridGap;
 
-    const std::string title = renderer.truncatedText(UI_10_FONT_ID, recentTitle(recentBooks[selectorIndex]).c_str(),
-                                                     pageWidth - metrics.contentSidePadding * 2, EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_10_FONT_ID, metadataTop + 2, title.c_str(), true, EpdFontFamily::BOLD);
-
-    std::string detailLine = recentBooks[selectorIndex].author;
-    if (!recentProgressLabels[selectorIndex].empty()) {
-      if (!detailLine.empty()) detailLine += "  |  ";
-      detailLine += recentProgressLabels[selectorIndex];
-    }
-    if (!detailLine.empty()) {
-      const std::string safeDetail =
-          renderer.truncatedText(SMALL_FONT_ID, detailLine.c_str(), pageWidth - metrics.contentSidePadding * 2);
-      renderer.drawCenteredText(SMALL_FONT_ID, metadataTop + 22, safeDetail.c_str(), true);
-    }
+    RecentBooksGrid::drawSelectedTitle(renderer, recentBooks, static_cast<int>(selectorIndex), startX, metadataTop,
+                                       gridWidth);
     renderer.drawLine(metrics.contentSidePadding, gridTop - 8, pageWidth - metrics.contentSidePadding, gridTop - 8,
                       true);
-
-    for (int index = pageStart; index < pageEnd; ++index) {
-      const int local = index - pageStart;
-      const int col = local % RecentBooksGridUi::kColumns;
-      const int row = local / RecentBooksGridUi::kColumns;
-      const Rect cover{startX + col * (RecentBooksGridUi::kCoverWidth + RecentBooksGridUi::kCoverGap),
-                       gridTop + row * (RecentBooksGridUi::kCoverHeight + RecentBooksGridUi::kRowGap),
-                       RecentBooksGridUi::kCoverWidth, RecentBooksGridUi::kCoverHeight};
-      bool drawn = false;
-      if (!recentCoverPaths[index].empty()) {
-        FsFile file;
-        if (Storage.openFileForRead("RBA", recentCoverPaths[index], file)) {
-          Bitmap bitmap(file);
-          if (bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
-            float cropX = 0.0f;
-            float cropY = 0.0f;
-            RecentBooksGridUi::calculateCoverFillCrop(bitmap, cropX, cropY);
-            renderer.drawBitmap(bitmap, cover.x, cover.y, cover.width, cover.height, cropX, cropY);
-            drawn = true;
-          }
-          file.close();
-        }
-      }
-      if (!drawn) RecentBooksGridUi::drawPlaceholder(renderer, cover);
-      if (index == static_cast<int>(selectorIndex)) {
-        renderer.drawRoundedRect(cover.x - 4, cover.y - 4, cover.width + 8, cover.height + 8, 3,
-                                 RecentBooksGridUi::kCoverCornerRadius + 4, true);
-        renderer.drawRoundedRect(cover.x - 6, cover.y - 6, cover.width + 12, cover.height + 12, 1,
-                                 RecentBooksGridUi::kCoverCornerRadius + 6, true);
-      }
-    }
+    RecentBooksGrid::drawGrid(renderer, recentBooks, static_cast<int>(selectorIndex), pageStart, pageEnd - pageStart,
+                              startX, gridTop);
 
     const int totalPages = (static_cast<int>(recentBooks.size()) + pageItems - 1) / pageItems;
     if (totalPages > 1) {
       const int currentPage = selectorIndex / pageItems;
-      const int dotSize = 5;
-      const int dotGap = 8;
-      const int dotsWidth = totalPages * dotSize + (totalPages - 1) * dotGap;
       const int dotsY = contentTop + contentHeight - 12;
-      int dotX = (pageWidth - dotsWidth) / 2;
-      for (int page = 0; page < totalPages; ++page) {
-        if (page == currentPage) {
-          renderer.fillRect(dotX, dotsY, dotSize, dotSize, true);
-        } else {
-          renderer.drawRect(dotX, dotsY, dotSize, dotSize, true);
-        }
-        dotX += dotSize + dotGap;
-      }
+      RecentBooksGrid::drawPageDots(renderer, pageWidth, dotsY, totalPages, currentPage);
     }
   }
 
@@ -315,4 +226,15 @@ void RecentBooksActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
+
+  if (gridView && !recentBooks.empty()) {
+    const int pageStart = (static_cast<int>(selectorIndex) / pageItems) * pageItems;
+    if (pageStart != loadedPageStart) {
+      const bool generated = RecentBooksGrid::loadPageCovers(renderer, recentBooks, pageStart, pageItems);
+      loadedPageStart = pageStart;
+      if (generated) {
+        requestUpdate();
+      }
+    }
+  }
 }

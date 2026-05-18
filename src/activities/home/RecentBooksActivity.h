@@ -8,6 +8,7 @@
 #include "../Activity.h"
 #include "RecentBooksStore.h"
 #include "util/ButtonNavigator.h"
+#include "util/RecentBooksGrid.h"
 
 class RecentBooksActivity final : public Activity {
  private:
@@ -16,11 +17,8 @@ class RecentBooksActivity final : public Activity {
   size_t selectorIndex = 0;
 
   // Recent tab state
-  std::vector<RecentBook> recentBooks;
+  std::vector<RecentBooksGrid::BookState> recentBooks;
   std::vector<uint8_t> recentBookCompletedStates;
-  std::vector<std::string> recentCoverPaths;
-  std::vector<uint8_t> recentCoverResolvedStates;
-  std::vector<std::string> recentProgressLabels;
   int loadedPageStart = -1;
 
   // Data loading
