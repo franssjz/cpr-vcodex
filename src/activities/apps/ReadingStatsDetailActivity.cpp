@@ -22,15 +22,16 @@
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ReadingStatsAnalytics.h"
+#include "util/RecentBooksGrid.h"
 #include "util/TimeUtils.h"
 
 namespace {
-constexpr int COVER_WIDTH = 88;
-constexpr int COVER_HEIGHT = 132;
+constexpr int COVER_WIDTH = RecentBooksGrid::kCoverWidth;
+constexpr int COVER_HEIGHT = RecentBooksGrid::kCoverHeight;
 constexpr int DONUT_RADIUS = 28;
 constexpr int DONUT_THICKNESS = 6;
 constexpr int METRIC_ROW_HEIGHT = 104;
-constexpr int TOP_CARD_HEIGHT = 212;
+constexpr int TOP_CARD_HEIGHT = 258;
 constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 110;
@@ -116,7 +117,10 @@ const ReadingBookStats* findBook(const std::string& bookPath) {
 }
 
 std::string resolveStoredCoverPath(const std::string& bookPath, const std::string& coverBmpPath) {
-  return UITheme::resolveBookCoverThumbPath(bookPath, coverBmpPath, COVER_WIDTH, COVER_HEIGHT);
+  RecentBook book;
+  book.path = bookPath;
+  book.coverBmpPath = coverBmpPath;
+  return RecentBooksGrid::resolveExistingCoverPath(book);
 }
 
 std::string findRecentBookCoverPath(const ReadingBookStats& book) {
@@ -138,7 +142,7 @@ std::string findRecentBookCoverPath(const ReadingBookStats& book) {
   return "";
 }
 
-std::string ensureCoverPath(const ReadingBookStats& book) {
+std::string ensureCoverPath(GfxRenderer& renderer, const ReadingBookStats& book) {
   const std::string cachedResolvedPath = getCachedResolvedCoverPath(book);
   if (!cachedResolvedPath.empty()) {
     return cachedResolvedPath;
@@ -149,9 +153,11 @@ std::string ensureCoverPath(const ReadingBookStats& book) {
     return recentResolved;
   }
 
-  std::string resolved = resolveStoredCoverPath(book.path, book.coverBmpPath);
+  RecentBook gridBook{book.bookId, book.path, book.title, book.author, book.coverBmpPath};
+  std::string resolved = RecentBooksGrid::loadSingleCover(renderer, gridBook);
   if (!resolved.empty()) {
-    rememberResolvedCoverPath(book, resolved);
+    READING_STATS.updateBookMetadata(book.path, gridBook.title, gridBook.author, gridBook.coverBmpPath);
+    rememberResolvedCoverPath(withCoverPath(book, gridBook.coverBmpPath), resolved);
     return resolved;
   }
 
@@ -588,7 +594,7 @@ void ReadingStatsDetailActivity::loop() {
   if (coverLoadPending) {
     coverLoadPending = false;
     if (const auto* book = findBook(bookPath)) {
-      const std::string resolvedCoverPath = ensureCoverPath(*book);
+      const std::string resolvedCoverPath = ensureCoverPath(renderer, *book);
       if (!resolvedCoverPath.empty() && resolvedCoverPath != resolvedCoverBmpPath) {
         resolvedCoverBmpPath = resolvedCoverPath;
         invalidateBaseScreenBuffer();

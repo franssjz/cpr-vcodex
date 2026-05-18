@@ -24,6 +24,7 @@
 #include "components/icons/image24.h"
 #include "components/icons/text.h"
 #include "fontIds.h"
+#include "util/RecentBooksGrid.h"
 
 std::string getFileExtension(std::string filename);
 std::string getFileName(std::string filename);
@@ -34,8 +35,8 @@ constexpr int BOOKSHELF_CARD_GAP = 8;
 constexpr int BOOKSHELF_FOLDER_ICON_SIZE = 28;
 constexpr int CARD_PAD = 12;
 constexpr int CARD_FOCUS_INSET = 4;
-constexpr int SHELF_COVER_WIDTH = 104;
-constexpr int SHELF_COVER_HEIGHT = 154;
+constexpr int SHELF_COVER_WIDTH = RecentBooksGrid::kCoverWidth;
+constexpr int SHELF_COVER_HEIGHT = RecentBooksGrid::kCoverHeight;
 constexpr uint8_t MEANINGFUL_PROGRESS_PERCENT = 2;
 constexpr uint8_t LIBRARY_VIEW_DASHBOARD = 1;
 constexpr uint8_t LIBRARY_VIEW_CONTINUE = 2;
@@ -134,8 +135,15 @@ bool drawCachedCover(GfxRenderer& renderer, const std::string& coverPath, const 
   Bitmap bitmap(file);
   const bool ok = bitmap.parseHeaders() == BmpReaderError::Ok && bitmap.getWidth() > 0 && bitmap.getHeight() > 0;
   if (ok) {
-    renderer.drawBitmap(bitmap, rect.x, rect.y, rect.width, rect.height);
-    renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 1, 5, true);
+    float cropX = 0.0f;
+    float cropY = 0.0f;
+    RecentBooksGrid::calculateCoverFillCrop(bitmap, cropX, cropY);
+    renderer.fillRoundedRect(rect.x, rect.y, rect.width, rect.height, RecentBooksGrid::kCoverCornerRadius,
+                             Color::White);
+    renderer.drawBitmap(bitmap, rect.x, rect.y, rect.width, rect.height, cropX, cropY);
+    renderer.maskRoundedRectOutsideCorners(rect.x, rect.y, rect.width, rect.height,
+                                           RecentBooksGrid::kCoverCornerRadius, Color::White);
+    renderer.drawRoundedRect(rect.x, rect.y, rect.width, rect.height, 2, RecentBooksGrid::kCoverCornerRadius, true);
   }
   file.close();
   return ok;
@@ -507,8 +515,15 @@ void FileBrowserActivity::addLibraryBook(const std::string& path, const std::str
 
   files.push_back(path);
   entryPaths.push_back(path);
-  const std::string thumbPath =
-      UITheme::resolveBookCoverThumbPath(path, coverPath, SHELF_COVER_WIDTH, SHELF_COVER_HEIGHT);
+  RecentBook gridBook;
+  gridBook.path = path;
+  gridBook.title = title;
+  gridBook.author = author;
+  gridBook.coverBmpPath = coverPath;
+  std::string thumbPath = RecentBooksGrid::resolveExistingCoverPath(gridBook);
+  if (thumbPath.empty()) {
+    thumbPath = RecentBooksGrid::loadSingleCover(renderer, gridBook);
+  }
   entryCoverPaths.push_back((!thumbPath.empty() && Storage.exists(thumbPath.c_str())) ? thumbPath : "");
   const size_t slash = path.find_last_of('/');
   const std::string fallbackName = slash == std::string::npos ? path : path.substr(slash + 1);

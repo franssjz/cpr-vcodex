@@ -265,6 +265,23 @@ inline bool loadPageCovers(GfxRenderer& renderer, std::vector<BookState>& books,
   return showingLoading;
 }
 
+inline std::string resolveExistingCoverPath(RecentBook& book) {
+  ensureReusableCoverPath(book);
+  if (book.coverBmpPath.empty()) {
+    return "";
+  }
+  const std::string thumbPath = UITheme::getCoverThumbPath(book.coverBmpPath, kCoverWidth, kCoverHeight);
+  return (!thumbPath.empty() && Storage.exists(thumbPath.c_str())) ? thumbPath : "";
+}
+
+inline std::string loadSingleCover(GfxRenderer& renderer, RecentBook& book) {
+  std::vector<BookState> books;
+  books.push_back(BookState{book});
+  loadPageCovers(renderer, books, 0, 1);
+  book = books.front().book;
+  return books.front().coverPath;
+}
+
 inline void drawSelectedTitle(GfxRenderer& renderer, const std::vector<BookState>& books, const int selectedIndex,
                               const int x, const int y, const int width) {
   if (selectedIndex < 0 || selectedIndex >= static_cast<int>(books.size())) return;
