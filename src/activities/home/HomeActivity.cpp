@@ -20,6 +20,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
+#include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
@@ -134,80 +135,24 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
     if (!Storage.exists(book.path.c_str())) {
       continue;
     }
-    recentBooks.push_back(book);
+    RecentBook resolvedBook = book;
+    const auto* statsBook = READING_STATS.findMatchingBookForPath(book.path, book.title, book.author);
+    if (resolvedBook.coverBmpPath.empty() && statsBook != nullptr && !statsBook->coverBmpPath.empty()) {
+      resolvedBook.coverBmpPath = statsBook->coverBmpPath;
+    }
+    recentBooks.push_back(resolvedBook);
   }
 }
 
 bool HomeActivity::needsRecentCoverLoad(const int coverHeight) const {
-  for (const RecentBook& book : recentBooks) {
-    if (book.coverBmpPath.empty()) {
-      continue;
-    }
-
-    const bool missingThumb = !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
-    if (missingThumb && (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path))) {
-      return true;
-    }
-  }
+  (void)coverHeight;
   return false;
 }
 
 void HomeActivity::loadRecentCovers(int coverHeight) {
-  recentsLoading = true;
-  bool showingLoading = false;
-  Rect popupRect;
-  bool needsRefresh = false;
-
-  int progress = 0;
-  for (RecentBook& book : recentBooks) {
-    if (!book.coverBmpPath.empty()) {
-      const bool missingThumb = !Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight).c_str());
-      if (missingThumb) {
-        if (FsHelpers::hasEpubExtension(book.path)) {
-          Epub epub(book.path, "/.crosspoint");
-          epub.load(false, true);
-
-          if (!showingLoading) {
-            showingLoading = true;
-            popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
-          }
-          GUI.fillPopupProgress(renderer, popupRect,
-                                10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-          const bool success = epub.generateThumbBmp(coverHeight);
-          if (!success) {
-            RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
-            book.coverBmpPath = "";
-          }
-          coverRendered = false;
-          needsRefresh = true;
-        } else if (FsHelpers::hasXtcExtension(book.path)) {
-          Xtc xtc(book.path, "/.crosspoint");
-          if (xtc.load()) {
-            if (!showingLoading) {
-              showingLoading = true;
-              popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
-            }
-            GUI.fillPopupProgress(renderer, popupRect,
-                                  10 + progress * (90 / std::max(1, static_cast<int>(recentBooks.size()))));
-            const bool success = xtc.generateThumbBmp(coverHeight);
-            if (!success) {
-              RECENT_BOOKS.updateBook(book.path, book.title, book.author, "");
-              book.coverBmpPath = "";
-            }
-            coverRendered = false;
-            needsRefresh = true;
-          }
-        }
-      }
-    }
-    progress++;
-  }
-
+  (void)coverHeight;
   recentsLoaded = true;
   recentsLoading = false;
-  if (needsRefresh) {
-    requestUpdate();
-  }
 }
 
 void HomeActivity::onEnter() {
@@ -325,6 +270,12 @@ void HomeActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (selectorIndex < recentBooks.size()) {
+      const bool recentBooksAccessSelected = SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
+                                             SETTINGS.showCurrentBookCard != 0 && selectorIndex == 1;
+      if (recentBooksAccessSelected) {
+        activityManager.goToRecentBooks();
+        return;
+      }
       if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
         const RecentBook selectedBook = recentBooks[selectorIndex];
         const int currentSelection = selectorIndex;

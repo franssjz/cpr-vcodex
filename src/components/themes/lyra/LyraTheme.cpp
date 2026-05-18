@@ -527,7 +527,7 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
       if (coverPath.empty()) {
         hasCover = false;
       } else {
-        const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, LyraMetrics::values.homeCoverHeight);
+        const std::string coverBmpPath = UITheme::resolveCoverThumbPath(coverPath, 0, LyraMetrics::values.homeCoverHeight);
 
         // First time: load cover from SD and render
         FsFile file;

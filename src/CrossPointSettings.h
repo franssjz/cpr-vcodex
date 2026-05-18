@@ -162,7 +162,7 @@ class CrossPointSettings {
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
   // UI Theme
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_VCODEX2 = 2, ROUNDEDRAFF = 3, UI_THEME_COUNT = 4 };
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_VCODEX2 = 2, UI_THEME_COUNT = 3 };
   enum DATE_FORMAT {
     DATE_DD_MM_YYYY = 0,
     DATE_MM_DD_YYYY = 1,
@@ -204,6 +204,7 @@ class CrossPointSettings {
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
   enum FILE_BROWSER_VIEW { FILE_BROWSER_LIST = 0, FILE_BROWSER_BOOKSHELF = 1, FILE_BROWSER_VIEW_COUNT };
   enum BOOKSHELF_COLUMNS { BOOKSHELF_COLUMNS_2 = 0, BOOKSHELF_COLUMNS_3 = 1, BOOKSHELF_COLUMNS_COUNT };
+  enum RECENT_BOOKS_VIEW { RECENT_BOOKS_LIST = 0, RECENT_BOOKS_GRID = 1, RECENT_BOOKS_VIEW_COUNT };
   enum SLEEP_REFRESH_MODE { SLEEP_REFRESH_OFF = 0, SLEEP_REFRESH_SOFT = 1, SLEEP_REFRESH_FULL = 2, SLEEP_REFRESH_COUNT };
 
   // Image rendering in EPUB reader
@@ -298,14 +299,14 @@ class CrossPointSettings {
   uint8_t appsHubShortcutOrder = 1;
   uint8_t browseFilesShortcut = SHORTCUT_HOME;
   uint8_t browseFilesShortcutOrder = 0;
-  uint8_t statsShortcut = SHORTCUT_HOME;
-  uint8_t statsShortcutOrder = 2;
+  uint8_t statsShortcut = SHORTCUT_APPS;
+  uint8_t statsShortcutOrder = 4;
   uint8_t syncDayShortcut = SHORTCUT_HOME;
   uint8_t syncDayShortcutOrder = 3;
   uint8_t settingsShortcut = SHORTCUT_APPS;
   uint8_t settingsShortcutOrder = 4;
-  uint8_t readingStatsShortcut = SHORTCUT_APPS;
-  uint8_t readingStatsShortcutOrder = 5;
+  uint8_t readingStatsShortcut = SHORTCUT_HOME;
+  uint8_t readingStatsShortcutOrder = 2;
   uint8_t readingHeatmapShortcut = SHORTCUT_APPS;
   uint8_t readingHeatmapShortcutOrder = 6;
   uint8_t readingProfileShortcut = SHORTCUT_APPS;
@@ -329,21 +330,21 @@ class CrossPointSettings {
   uint8_t opdsBrowserShortcut = SHORTCUT_APPS;
   uint8_t opdsBrowserShortcutOrder = 17;
   uint8_t browseFilesShortcutVisible = 1;
-  uint8_t statsShortcutVisible = 1;
+  uint8_t statsShortcutVisible = 0;
   uint8_t syncDayShortcutVisible = 1;
-  uint8_t settingsShortcutVisible = 0;
-  uint8_t readingStatsShortcutVisible = 0;
-  uint8_t readingHeatmapShortcutVisible = 0;
-  uint8_t readingProfileShortcutVisible = 0;
-  uint8_t achievementsShortcutVisible = 0;
-  uint8_t ifFoundShortcutVisible = 0;
-  uint8_t readMeShortcutVisible = 0;
+  uint8_t settingsShortcutVisible = 1;
+  uint8_t readingStatsShortcutVisible = 1;
+  uint8_t readingHeatmapShortcutVisible = 1;
+  uint8_t readingProfileShortcutVisible = 1;
+  uint8_t achievementsShortcutVisible = 1;
+  uint8_t ifFoundShortcutVisible = 1;
+  uint8_t readMeShortcutVisible = 1;
   uint8_t recentBooksShortcutVisible = 0;
-  uint8_t bookmarksShortcutVisible = 0;
-  uint8_t favoritesShortcutVisible = 0;
-  uint8_t fileTransferShortcutVisible = 0;
-  uint8_t sleepShortcutVisible = 0;
-  uint8_t opdsBrowserShortcutVisible = 0;
+  uint8_t bookmarksShortcutVisible = 1;
+  uint8_t favoritesShortcutVisible = 1;
+  uint8_t fileTransferShortcutVisible = 1;
+  uint8_t sleepShortcutVisible = 1;
+  uint8_t opdsBrowserShortcutVisible = 1;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
@@ -352,6 +353,7 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   uint8_t fileBrowserView = FILE_BROWSER_BOOKSHELF;
   uint8_t bookshelfColumns = BOOKSHELF_COLUMNS_3;
+  uint8_t recentBooksView = RECENT_BOOKS_GRID;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
 

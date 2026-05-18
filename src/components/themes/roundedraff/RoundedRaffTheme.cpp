@@ -242,7 +242,7 @@ void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
       bool hasCover = !book.coverBmpPath.empty();
       if (hasCover) {
         const std::string coverBmpPath =
-            UITheme::getCoverThumbPath(book.coverBmpPath, RoundedRaffMetrics::values.homeCoverHeight);
+            UITheme::resolveCoverThumbPath(book.coverBmpPath, 0, RoundedRaffMetrics::values.homeCoverHeight);
         FsFile file;
         if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
           Bitmap bitmap(file);

@@ -12,6 +12,7 @@ class AppsActivity final : public Activity {
   std::vector<const ShortcutDefinition*> appShortcuts;
   std::vector<std::string> shortcutSubtitles;
 
+  void loadAppShortcuts();
   void openSelectedApp();
   void rebuildShortcutSubtitles();
 

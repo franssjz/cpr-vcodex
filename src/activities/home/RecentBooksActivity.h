@@ -18,9 +18,13 @@ class RecentBooksActivity final : public Activity {
   // Recent tab state
   std::vector<RecentBook> recentBooks;
   std::vector<uint8_t> recentBookCompletedStates;
+  std::vector<std::string> recentCoverPaths;
+  std::vector<std::string> recentProgressLabels;
+  int loadedPageStart = -1;
 
   // Data loading
   void loadRecentBooks();
+  void loadVisiblePageMetadata(int pageItems);
 
  public:
   explicit RecentBooksActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

@@ -116,19 +116,7 @@ const ReadingBookStats* findBook(const std::string& bookPath) {
 }
 
 std::string resolveStoredCoverPath(const std::string& coverBmpPath) {
-  if (coverBmpPath.empty()) {
-    return "";
-  }
-
-  const int candidateHeights[] = {COVER_HEIGHT, 166, 164, 160, 154, 140, 240, 400};
-  for (const int height : candidateHeights) {
-    const std::string resolved = UITheme::getCoverThumbPath(coverBmpPath, height);
-    if (Storage.exists(resolved.c_str())) {
-      return resolved;
-    }
-  }
-
-  return Storage.exists(coverBmpPath.c_str()) ? coverBmpPath : "";
+  return UITheme::resolveCoverThumbPath(coverBmpPath, COVER_WIDTH, COVER_HEIGHT);
 }
 
 std::string findRecentBookCoverPath(const ReadingBookStats& book) {
@@ -156,13 +144,18 @@ std::string ensureCoverPath(const ReadingBookStats& book) {
     return cachedResolvedPath;
   }
 
+  const std::string recentResolved = findRecentBookCoverPath(book);
+  if (!recentResolved.empty()) {
+    return recentResolved;
+  }
+
   std::string resolved = resolveStoredCoverPath(book.coverBmpPath);
   if (!resolved.empty()) {
     rememberResolvedCoverPath(book, resolved);
     return resolved;
   }
 
-  return findRecentBookCoverPath(book);
+  return "";
 }
 
 std::string findFastCoverPath(const ReadingBookStats& book) {

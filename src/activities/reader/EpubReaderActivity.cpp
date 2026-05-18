@@ -65,7 +65,7 @@ constexpr StrId QS_LINE_SPACING_LABELS[] = {StrId::STR_TIGHT, StrId::STR_NORMAL,
 constexpr StrId QS_ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
                                          StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
 constexpr StrId QS_THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
-                                     StrId::STR_THEME_LYRA_VCODEX2, StrId::STR_THEME_ROUNDEDRAFF};
+                                     StrId::STR_THEME_LYRA_VCODEX2};
 constexpr StrId QS_DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
 constexpr StrId QS_TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
                                              StrId::STR_EXTRA_DARK};
@@ -811,7 +811,11 @@ void EpubReaderActivity::openRecentBooksSwitcher() {
 
 void EpubReaderActivity::openBookInfoPlaceholder() {
   READING_STATS.noteActivity();
-  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, epub->getTitle()),
+  const int tocIndex = epub->getTocIndexForSpineIndex(currentSpineIndex);
+  const std::string currentChapter = tocIndex >= 0 ? epub->getTocItem(tocIndex).title : "";
+  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, epub->getPath(),
+                                                                  epub->getTitle(), epub->getAuthor(),
+                                                                  epub->getLanguage(), currentChapter),
                          [this](const ActivityResult&) {
                            READING_STATS.resumeSession();
                            openReaderNavigationMenu();

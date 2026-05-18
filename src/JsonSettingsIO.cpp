@@ -383,6 +383,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   s.timeZonePreset =
       TimeZoneRegistry::clampPresetIndex(doc["timeZonePreset"] | TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX);
   s.dateFormat = clamp(doc["dateFormat"] | s.dateFormat, S::DATE_FORMAT_COUNT, s.dateFormat);
+  s.recentBooksView =
+      clamp(doc["recentBooksView"] | s.recentBooksView, S::RECENT_BOOKS_VIEW_COUNT, s.recentBooksView);
   s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);
   s.showStatsAfterReading =
       clamp(doc["showStatsAfterReading"] | s.showStatsAfterReading, static_cast<uint8_t>(2), s.showStatsAfterReading);
@@ -685,6 +687,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepDirectory"] = s.sleepDirectory;
   doc["sleepImageOrder"] = s.sleepImageOrder;
   doc["timeZonePreset"] = TimeZoneRegistry::clampPresetIndex(s.timeZonePreset);
+  doc["recentBooksView"] = s.recentBooksView;
   doc["appsHubShortcutOrder"] = s.appsHubShortcutOrder;
   doc["browseFilesShortcut"] = s.browseFilesShortcut;
   doc["browseFilesShortcutOrder"] = s.browseFilesShortcutOrder;
@@ -852,6 +855,8 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.timeZonePreset =
       TimeZoneRegistry::clampPresetIndex(doc["timeZonePreset"] | TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX);
   s.dateFormat = clamp(doc["dateFormat"] | s.dateFormat, S::DATE_FORMAT_COUNT, s.dateFormat);
+  s.recentBooksView =
+      clamp(doc["recentBooksView"] | s.recentBooksView, S::RECENT_BOOKS_VIEW_COUNT, s.recentBooksView);
   s.opdsFilenameFormat =
       clamp(doc["opdsFilenameFormat"] | s.opdsFilenameFormat, S::OPDS_FILENAME_FORMAT_COUNT, s.opdsFilenameFormat);
   s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);

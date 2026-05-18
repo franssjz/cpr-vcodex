@@ -21,10 +21,6 @@
 #include "util/ShortcutUiMetadata.h"
 
 namespace {
-bool shouldHideStatsForkShortcut(const ShortcutDefinition* definition) {
-  return definition != nullptr && definition->id == ShortcutId::Bookmarks;
-}
-
 std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItems, const int itemsPerPage) {
   if (totalItems <= 0) {
     return "";
@@ -35,23 +31,54 @@ std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItem
   const int totalPages = (totalItems + safeItemsPerPage - 1) / safeItemsPerPage;
   return std::to_string(currentPage) + "/" + std::to_string(totalPages) + " | " + std::to_string(totalItems);
 }
+
+bool hasShortcut(const std::vector<const ShortcutDefinition*>& shortcuts, const ShortcutId id) {
+  return std::any_of(shortcuts.begin(), shortcuts.end(),
+                     [id](const ShortcutDefinition* definition) { return definition && definition->id == id; });
+}
+
+bool shortcutAvailableInFirmware(const ShortcutDefinition& definition) {
+  if (definition.id == ShortcutId::OpdsBrowser) {
+    return OPDS_STORE.hasServers();
+  }
+  return true;
+}
 }  // namespace
 
 void AppsActivity::onEnter() {
   Activity::onEnter();
-  appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
-  appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(), shouldHideStatsForkShortcut),
-                     appShortcuts.end());
-  if (!OPDS_STORE.hasServers()) {
-    appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(),
-                                      [](const ShortcutDefinition* definition) {
-                                        return definition && definition->id == ShortcutId::OpdsBrowser;
-                                      }),
-                       appShortcuts.end());
-  }
+  loadAppShortcuts();
   selectedIndex = 0;
   rebuildShortcutSubtitles();
   requestUpdate();
+}
+
+void AppsActivity::loadAppShortcuts() {
+  appShortcuts.clear();
+  for (const auto& definition : getShortcutDefinitions()) {
+    const auto location = static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr));
+    if (shortcutAvailableInFirmware(definition) && location == CrossPointSettings::SHORTCUT_APPS &&
+        getShortcutVisibility(definition)) {
+      appShortcuts.push_back(&definition);
+    }
+  }
+  std::stable_sort(appShortcuts.begin(), appShortcuts.end(),
+                   [](const ShortcutDefinition* lhs, const ShortcutDefinition* rhs) {
+                     return getShortcutOrder(*lhs) < getShortcutOrder(*rhs);
+                   });
+  appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(),
+                                    [](const ShortcutDefinition* definition) {
+                                      return definition == nullptr || !shortcutAvailableInFirmware(*definition);
+                                    }),
+                     appShortcuts.end());
+
+  // Apps is the safety drawer. Settings must remain reachable even if an older
+  // settings file hid every app shortcut or moved Settings out of Apps.
+  if (!hasShortcut(appShortcuts, ShortcutId::Settings)) {
+    if (const ShortcutDefinition* settings = findShortcutDefinition(ShortcutId::Settings)) {
+      appShortcuts.push_back(settings);
+    }
+  }
 }
 
 void AppsActivity::loop() {
@@ -200,9 +227,7 @@ void AppsActivity::openSelectedApp() {
   }
 
   startActivityForResult(std::move(activity), [this](const ActivityResult&) {
-    appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
-    appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(), shouldHideStatsForkShortcut),
-                       appShortcuts.end());
+    loadAppShortcuts();
     rebuildShortcutSubtitles();
     if (!appShortcuts.empty()) {
       selectedIndex = std::min(selectedIndex, static_cast<int>(appShortcuts.size()) - 1);

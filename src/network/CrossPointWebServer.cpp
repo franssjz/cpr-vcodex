@@ -15,6 +15,7 @@
 #include <cstring>
 
 #include "AchievementsStore.h"
+#include "BookMetadataStore.h"
 #include "CrossPointSettings.h"
 #include "KOReaderCredentialStore.h"
 #include "OpdsServerStore.h"
@@ -25,6 +26,7 @@
 #include "html/HomePageHtml.generated.h"
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
+#include "util/BookIdentity.h"
 
 namespace {
 // Folders/files to hide from the web interface file browser
@@ -82,6 +84,10 @@ void clearEpubCacheIfNeeded(const String& filePath) {
     Epub(filePath.c_str(), "/.crosspoint").clearCache();
     LOG_DBG("WEB", "Cleared epub cache for: %s", filePath.c_str());
   }
+}
+
+void importCalibreSidecarIfAvailable(const String& filePath) {
+  BOOK_METADATA.importSidecarForTransferredFile(std::string{filePath.c_str(), filePath.length()});
 }
 
 String normalizeWebPath(const String& inputPath) {
@@ -239,8 +245,8 @@ constexpr StrId OPT_SLEEP_FILTER[] = {StrId::STR_NONE_OPT, StrId::STR_FILTER_CON
 constexpr StrId OPT_HIDE_BATTERY[] = {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS};
 constexpr StrId OPT_REFRESH_FREQ[] = {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10,
                                       StrId::STR_PAGES_15, StrId::STR_PAGES_30};
-constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2,
-                                  StrId::STR_THEME_ROUNDEDRAFF};
+constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
+                                  StrId::STR_THEME_LYRA_VCODEX2};
 constexpr StrId OPT_FONT_FAMILY[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
 constexpr StrId OPT_FONT_SIZE[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
                                    StrId::STR_X_LARGE};
@@ -339,8 +345,6 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_TOGGLE(StrId::STR_ACHIEVEMENT_POPUPS, achievementPopups, "achievementPopups", StrId::STR_APPS),
 
     WEB_ENUM(StrId::STR_BROWSE_FILES, browseFilesShortcut, OPT_SHORTCUT_LOCATION, "browseFilesShortcut",
-             StrId::STR_SHORTCUTS_SECTION),
-    WEB_ENUM(StrId::STR_STATS_SHORTCUT, statsShortcut, OPT_SHORTCUT_LOCATION, "statsShortcut",
              StrId::STR_SHORTCUTS_SECTION),
     WEB_ENUM(StrId::STR_SYNC_DAY, syncDayShortcut, OPT_SHORTCUT_LOCATION, "syncDayShortcut",
              StrId::STR_SHORTCUTS_SECTION),
@@ -490,6 +494,7 @@ void CrossPointWebServer::begin() {
   server->on("/settings", HTTP_GET, [this] { handleSettingsPage(); });
   server->on("/api/settings", HTTP_GET, [this] { handleGetSettings(); });
   server->on("/api/settings", HTTP_POST, [this] { handlePostSettings(); });
+  server->on("/api/book-metadata", HTTP_POST, [this] { handlePostBookMetadata(); });
 
   // OPDS server endpoints
   server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
@@ -1043,6 +1048,7 @@ void CrossPointWebServer::handleUpload(UploadState& state) const {
         if (!filePath.endsWith("/")) filePath += "/";
         filePath += state.fileName;
         clearEpubCacheIfNeeded(filePath);
+        importCalibreSidecarIfAvailable(filePath);
       }
     }
   } else if (upload.status == UPLOAD_FILE_ABORTED) {
@@ -1641,6 +1647,30 @@ void CrossPointWebServer::handlePostSettings() {
   server->send(200, "text/plain", String("Applied ") + String(applied) + " setting(s)");
 }
 
+void CrossPointWebServer::handlePostBookMetadata() {
+  if (!server->hasArg("path")) {
+    server->send(400, "application/json", "{\"ok\":false,\"error\":\"missing path\"}");
+    return;
+  }
+
+  const std::string path = normalizeWebPath(server->arg("path")).c_str();
+  CachedBookMetadata metadata;
+  if (server->hasArg("title")) metadata.title = server->arg("title").c_str();
+  if (server->hasArg("author")) metadata.author = server->arg("author").c_str();
+  if (server->hasArg("series")) metadata.series = server->arg("series").c_str();
+  if (server->hasArg("seriesIndex")) metadata.seriesIndex = server->arg("seriesIndex").c_str();
+  if (server->hasArg("tags")) metadata.tags = server->arg("tags").c_str();
+  if (server->hasArg("publisher")) metadata.publisher = server->arg("publisher").c_str();
+  if (server->hasArg("language")) metadata.language = server->arg("language").c_str();
+  if (server->hasArg("description")) metadata.description = server->arg("description").c_str();
+  if (server->hasArg("identifier")) metadata.identifier = server->arg("identifier").c_str();
+  if (server->hasArg("coverPath")) metadata.coverPath = normalizeWebPath(server->arg("coverPath")).c_str();
+
+  const std::string bookId = Storage.exists(path.c_str()) ? BookIdentity::resolveStableBookId(path) : "";
+  const bool ok = BOOK_METADATA.mergeMetadata(path, bookId, metadata, "calibre-api");
+  server->send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
 // ---- OPDS Server API ----
 
 void CrossPointWebServer::handleGetOpdsServers() const {
@@ -1858,6 +1888,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
             wsLastCompleteAt = millis();
             LOG_DBG("WS", "Zero-byte upload complete: %s", filePath.c_str());
             clearEpubCacheIfNeeded(filePath);
+            importCalibreSidecarIfAvailable(filePath);
             wsServer->sendTXT(num, "DONE");
             wsLastProgressSent = 0;
             break;
@@ -1927,6 +1958,7 @@ void CrossPointWebServer::onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* 
         if (!filePath.endsWith("/")) filePath += "/";
         filePath += wsUploadFileName;
         clearEpubCacheIfNeeded(filePath);
+        importCalibreSidecarIfAvailable(filePath);
 
         wsServer->sendTXT(num, "DONE");
         wsLastProgressSent = 0;

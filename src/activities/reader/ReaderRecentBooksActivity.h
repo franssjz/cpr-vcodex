@@ -20,9 +20,13 @@ class ReaderRecentBooksActivity final : public Activity {
  private:
   std::string currentPath;
   std::vector<RecentBook> books;
+  std::vector<std::string> coverPaths;
+  std::vector<std::string> progressLabels;
   int selectedIndex = 0;
+  int loadedPageStart = -1;
   bool waitForBackRelease = false;
   ButtonNavigator buttonNavigator;
 
   void loadBooks();
+  void loadVisiblePageMetadata();
 };

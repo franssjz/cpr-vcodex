@@ -6,6 +6,8 @@
 #include <Logging.h>
 #include <esp_task_wdt.h>
 
+#include "BookMetadataStore.h"
+
 namespace {
 constexpr const char* HIDDEN_ITEMS[] = {"System Volume Information", "XTCache"};
 
@@ -385,6 +387,7 @@ void WebDAVHandler::handlePut(WebServer& s) {
   }
 
   clearEpubCacheIfNeeded(path);
+  BOOK_METADATA.importSidecarForTransferredFile(std::string{path.c_str(), path.length()});
   s.send(_putExisted ? 204 : 201);
   LOG_DBG("DAV", "PUT complete: %s", path.c_str());
 }

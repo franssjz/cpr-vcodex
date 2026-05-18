@@ -380,7 +380,8 @@ void TxtReaderActivity::openRecentBooksSwitcher() {
 void TxtReaderActivity::openBookInfoPlaceholder() {
   READING_STATS.noteActivity();
   const std::string title = txt ? txt->getTitle() : std::string(tr(STR_BOOK_INFO));
-  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, title),
+  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, txt ? txt->getPath() : "",
+                                                                  title),
                          [this](const ActivityResult&) {
                            READING_STATS.resumeSession();
                            openReaderNavigationMenu();

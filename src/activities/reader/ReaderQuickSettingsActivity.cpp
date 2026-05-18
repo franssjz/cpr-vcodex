@@ -39,7 +39,7 @@ constexpr StrId ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT,
                                       StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
 constexpr StrId BIONIC_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE};
 constexpr StrId THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
-                                  StrId::STR_THEME_LYRA_VCODEX2, StrId::STR_THEME_ROUNDEDRAFF};
+                                  StrId::STR_THEME_LYRA_VCODEX2};
 constexpr StrId DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
 constexpr StrId TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
                                           StrId::STR_EXTRA_DARK};

@@ -193,7 +193,10 @@ void XtcReaderActivity::openRecentBooksSwitcher() {
 void XtcReaderActivity::openBookInfoPlaceholder() {
   READING_STATS.noteActivity();
   const std::string title = xtc ? xtc->getTitle() : std::string(tr(STR_BOOK_INFO));
-  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, title),
+  const std::string author = xtc ? xtc->getAuthor() : "";
+  const std::string chapter = xtc ? getChapterTitleForStats(*xtc, currentPage) : "";
+  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, xtc ? xtc->getPath() : "",
+                                                                  title, author, "", chapter),
                          [this](const ActivityResult&) {
                            READING_STATS.resumeSession();
                            openReaderNavigationMenu();

@@ -112,7 +112,7 @@ inline bool isShortcutAlwaysVisible(const ShortcutDefinition& definition) {
 }
 
 inline bool isStatsForkHiddenShortcut(const ShortcutDefinition& definition) {
-  return definition.id == ShortcutId::Bookmarks;
+  return definition.id == ShortcutId::Stats;
 }
 
 inline uint8_t getShortcutOrder(const ShortcutDefinition& definition, const CrossPointSettings& settings = SETTINGS) {

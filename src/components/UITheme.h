@@ -21,6 +21,9 @@ class UITheme {
   static int getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader, bool hasTabBar, bool hasButtonHints,
                                      bool hasSubtitle, int extraReservedHeight = 0);
   static std::string getCoverThumbPath(std::string coverBmpPath, int coverHeight);
+  static std::string getCoverThumbPath(std::string coverBmpPath, int width, int height);
+  static std::string resolveCoverThumbPath(const std::string& coverBmpPath, int preferredWidth = 0,
+                                           int preferredHeight = 0);
   static UIIcon getFileIcon(const std::string& filename);
   static int getStatusBarHeight();
   static int getProgressBarHeight();

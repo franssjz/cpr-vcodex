@@ -72,12 +72,9 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30}),
       SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2,
-                         StrId::STR_THEME_ROUNDEDRAFF}),
+                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2}),
       SettingInfo::Enum(StrId::STR_FILE_BROWSER_VIEW, &CrossPointSettings::fileBrowserView,
                         {StrId::STR_FILE_VIEW_LIST, StrId::STR_FILE_VIEW_BOOKSHELF}),
-      SettingInfo::Enum(StrId::STR_BOOKSHELF_COLUMNS, &CrossPointSettings::bookshelfColumns,
-                        {StrId::STR_NUM_2, StrId::STR_NUM_3}),
       SettingInfo::Toggle(StrId::STR_SHOW_CURRENT_BOOK_CARD, &CrossPointSettings::showCurrentBookCard),
       SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix),
@@ -121,14 +118,18 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
 const std::vector<SettingInfo>& getDeviceControlsSettings() {
   static const std::vector<SettingInfo> settings = [] {
     std::vector<SettingInfo> result = {
-        SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons),
-        SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
-                          {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}),
-        SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip),
+        SettingInfo::Section(StrId::STR_SHORT_PWR_BTN),
         SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
                           {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH}),
+        SettingInfo::Section(StrId::STR_REMAP_FRONT_BUTTONS),
+        SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons),
+        SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip),
+        SettingInfo::Section(StrId::STR_SIDE_BTN_LAYOUT),
+        SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
+                          {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}),
     };
     if (halTiltSensor.isAvailable()) {
+      result.push_back(SettingInfo::Section(StrId::STR_TILT_PAGE_TURN));
       result.push_back(SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
                                          {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}));
     }
@@ -187,6 +188,8 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
       SettingInfo::Enum(
           StrId::STR_DATE_FORMAT, &CrossPointSettings::dateFormat,
           {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY, StrId::STR_DATE_FORMAT_YYYY_MM_DD}),
+      SettingInfo::Enum(StrId::STR_MENU_RECENT_BOOKS, &CrossPointSettings::recentBooksView,
+                        {StrId::STR_FILE_VIEW_LIST, StrId::STR_FILE_VIEW_GRID}),
       SettingInfo::Section(StrId::STR_READING_STATS),
       SettingInfo::Action(StrId::STR_READING_STATS, SettingAction::ReadingStats),
       SettingInfo::Enum(StrId::STR_DAILY_GOAL, &CrossPointSettings::dailyGoalTarget,
@@ -292,6 +295,9 @@ std::string getShortcutLocationSettingValueText() {
   int homeCount = 1;  // Apps hub is always in Home.
   int appsCount = 0;
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isStatsForkHiddenShortcut(definition)) {
+      continue;
+    }
     const auto location = static_cast<CrossPointSettings::SHORTCUT_LOCATION>(SETTINGS.*(definition.locationPtr));
     if (location == CrossPointSettings::SHORTCUT_HOME) {
       ++homeCount;
@@ -304,12 +310,17 @@ std::string getShortcutLocationSettingValueText() {
 
 std::string getShortcutVisibilitySettingValueText() {
   int visibleCount = 0;
+  int shortcutCount = 0;
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isStatsForkHiddenShortcut(definition)) {
+      continue;
+    }
+    ++shortcutCount;
     if (getShortcutVisibility(definition)) {
       ++visibleCount;
     }
   }
-  return std::to_string(visibleCount) + "/" + std::to_string(getShortcutDefinitions().size());
+  return std::to_string(visibleCount) + "/" + std::to_string(shortcutCount);
 }
 
 std::string getShortcutOrderSettingValueText(const ShortcutOrderGroup group) {
@@ -376,14 +387,10 @@ const char* getSettingNameText(const SettingInfo& setting) { return I18N.get(set
 
 bool shouldShowDeviceSetting(const SettingInfo& setting) {
   if (setting.nameId == StrId::STR_FILE_BROWSER_VIEW) {
-    return SETTINGS.uiTheme != CrossPointSettings::ROUNDEDRAFF;
+    return true;
   }
   if (setting.nameId == StrId::STR_SHOW_CURRENT_BOOK_CARD) {
     return SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2;
-  }
-  if (setting.nameId == StrId::STR_BOOKSHELF_COLUMNS) {
-    return SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
-           SETTINGS.fileBrowserView == CrossPointSettings::FILE_BROWSER_BOOKSHELF;
   }
   return true;
 }

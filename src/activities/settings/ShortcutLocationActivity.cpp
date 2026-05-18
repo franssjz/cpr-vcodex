@@ -23,6 +23,9 @@ void ShortcutLocationActivity::reloadEntries() {
   entries.clear();
   entries.reserve(getShortcutDefinitions().size());
   for (const auto& definition : getShortcutDefinitions()) {
+    if (isStatsForkHiddenShortcut(definition)) {
+      continue;
+    }
     entries.push_back(&definition);
   }
 

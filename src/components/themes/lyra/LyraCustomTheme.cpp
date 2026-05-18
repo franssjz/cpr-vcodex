@@ -68,7 +68,7 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
         if (coverPath.empty()) {
           hasCover = false;
         } else {
-          const std::string coverBmpPath = UITheme::getCoverThumbPath(coverPath, LyraCustomMetrics::values.homeCoverHeight);
+          const std::string coverBmpPath = UITheme::resolveCoverThumbPath(coverPath, 0, LyraCustomMetrics::values.homeCoverHeight);
 
           FsFile file;
           if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
