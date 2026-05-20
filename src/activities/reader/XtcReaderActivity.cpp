@@ -21,7 +21,6 @@
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "EpubReaderPercentSelectionActivity.h"
-#include "ReaderBookInfoActivity.h"
 #include "ReaderJumpMenuActivity.h"
 #include "ReaderNavigationMenuActivity.h"
 #include "ReaderRecentBooksActivity.h"
@@ -111,6 +110,7 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
 
 void XtcReaderActivity::onEnter() {
   Activity::onEnter();
+  mappedInput.setReaderMode(true);
 
   if (!xtc) {
     return;
@@ -136,6 +136,7 @@ void XtcReaderActivity::onEnter() {
 
 void XtcReaderActivity::onExit() {
   Activity::onExit();
+  mappedInput.setReaderMode(false);
 
   APP_STATE.readerActivityLoadCount = 0;
   APP_STATE.saveToFile();
@@ -178,6 +179,7 @@ void XtcReaderActivity::openRecentBooksSwitcher() {
   READING_STATS.noteActivity();
   startActivityForResult(std::make_unique<ReaderRecentBooksActivity>(renderer, mappedInput, xtc ? xtc->getPath() : ""),
                          [this](const ActivityResult& result) {
+                           backLongPressHandled = false;
                            if (!result.isCancelled) {
                              const std::string path = std::get<KeyboardResult>(result.data).text;
                              if (!path.empty()) {
@@ -186,20 +188,7 @@ void XtcReaderActivity::openRecentBooksSwitcher() {
                              }
                            }
                            READING_STATS.resumeSession();
-                           openReaderNavigationMenu();
-                         });
-}
-
-void XtcReaderActivity::openBookInfoPlaceholder() {
-  READING_STATS.noteActivity();
-  const std::string title = xtc ? xtc->getTitle() : std::string(tr(STR_BOOK_INFO));
-  const std::string author = xtc ? xtc->getAuthor() : "";
-  const std::string chapter = xtc ? getChapterTitleForStats(*xtc, currentPage) : "";
-  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, xtc ? xtc->getPath() : "",
-                                                                  title, author, "", chapter),
-                         [this](const ActivityResult&) {
-                           READING_STATS.resumeSession();
-                           openReaderNavigationMenu();
+                           requestUpdate();
                          });
 }
 
@@ -207,9 +196,6 @@ void XtcReaderActivity::handleReaderNavigationAction(const int action) {
   switch (static_cast<ReaderNavigationMenuActivity::Action>(action)) {
     case ReaderNavigationMenuActivity::Action::OPEN_RECENT_BOOKS:
       openRecentBooksSwitcher();
-      break;
-    case ReaderNavigationMenuActivity::Action::BOOK_INFO:
-      openBookInfoPlaceholder();
       break;
   }
 }
@@ -291,13 +277,13 @@ void XtcReaderActivity::loop() {
     }
   }
 
-  // Long press BACK opens the reader navigation menu.
+  // Long press BACK opens Recent Books directly.
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
       mappedInput.getHeldTime() >= goHomeMs) {
     backLongPressHandled = true;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
-    openReaderNavigationMenu();
+    openRecentBooksSwitcher();
     return;
   }
 
@@ -312,7 +298,7 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
+  auto [prevTriggered, nextTriggered, fromSideBtn, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
 
   if (!prevTriggered && !nextTriggered) {
     return;
@@ -333,7 +319,10 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  const bool skipPages = !fromTilt && SETTINGS.longPressChapterSkip && mappedInput.getHeldTime() > skipPageMs;
+  const bool skipPages =
+      !fromTilt && mappedInput.getHeldTime() > skipPageMs &&
+      (fromSideBtn ? SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_CHAPTER_SKIP
+                   : SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP);
   const int skipAmount = skipPages ? 10 : 1;
 
   if (prevTriggered) {

@@ -10,7 +10,7 @@
 
 class ReaderNavigationMenuActivity final : public Activity {
  public:
-  enum class Action { OPEN_RECENT_BOOKS = 0, BOOK_INFO = 1 };
+  enum class Action { OPEN_RECENT_BOOKS = 0 };
 
   explicit ReaderNavigationMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                         const std::string& title);

@@ -4,10 +4,44 @@
 #include <I18n.h>
 
 #include <algorithm>
+#include <iterator>
 
 #include "CrossPointSettings.h"
 #include "KOReaderCredentialStore.h"
 #include "util/ShortcutRegistry.h"
+
+namespace {
+constexpr StrId OPT_POWER_ACTIONS[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_FORCE_REFRESH,
+                                       StrId::STR_SCREENSHOT_BUTTON, StrId::STR_AUTO_TURN_PAGES_PER_MIN};
+constexpr uint8_t OPT_POWER_ACTION_VALUES[] = {CrossPointSettings::IGNORE, CrossPointSettings::SLEEP,
+                                               CrossPointSettings::FORCE_REFRESH, CrossPointSettings::SCREENSHOT,
+                                               CrossPointSettings::CYCLE_PAGE_TURN};
+constexpr StrId OPT_MENU_ACTIONS[] = {StrId::STR_IGNORE,       StrId::STR_BIONIC_READING, StrId::STR_FONT_FAMILY,
+                                      StrId::STR_BOOKMARKS,    StrId::STR_SYNC_PROGRESS,  StrId::STR_MARK_FINISHED,
+                                      StrId::STR_READING_STATS};
+constexpr uint8_t OPT_MENU_ACTION_VALUES[] = {CrossPointSettings::LONG_MENU_OFF,
+                                              CrossPointSettings::LONG_MENU_TOGGLE_BIONIC,
+                                              CrossPointSettings::LONG_MENU_CHANGE_FONT,
+                                              CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK,
+                                              CrossPointSettings::LONG_MENU_SYNC_PROGRESS,
+                                              CrossPointSettings::LONG_MENU_MARK_FINISHED,
+                                              CrossPointSettings::LONG_MENU_READING_STATS};
+constexpr StrId OPT_FRONT_LONG_PRESS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP, StrId::STR_ORIENTATION};
+constexpr StrId OPT_SIDE_LONG_PRESS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP, StrId::STR_ORIENTATION,
+                                         StrId::STR_FONT_SIZE};
+constexpr StrId OPT_ORIENTATION_TARGET[] = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED,
+                                            StrId::STR_LANDSCAPE_CCW, StrId::STR_CYCLE_ORIENTATIONS};
+
+template <size_t N>
+std::vector<StrId> valuesFromArray(const StrId (&values)[N]) {
+  return std::vector<StrId>(std::begin(values), std::end(values));
+}
+
+template <size_t N>
+std::vector<uint8_t> rawValuesFromArray(const uint8_t (&values)[N]) {
+  return std::vector<uint8_t>(std::begin(values), std::end(values));
+}
+}  // namespace
 
 const std::vector<SettingInfo>& getSettingsList() {
   static const std::vector<SettingInfo> list = [] {
@@ -32,9 +66,6 @@ const std::vector<SettingInfo>& getSettingsList() {
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30},
           "refreshFrequency", StrId::STR_CAT_DISPLAY),
-      SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2},
-                        "uiTheme", StrId::STR_CAT_DISPLAY),
       SettingInfo::Enum(StrId::STR_MENU_RECENT_BOOKS, &CrossPointSettings::recentBooksView,
                         {StrId::STR_FILE_VIEW_LIST, StrId::STR_FILE_VIEW_GRID}, "recentBooksView",
                         StrId::STR_CAT_DISPLAY),
@@ -86,11 +117,29 @@ const std::vector<SettingInfo>& getSettingsList() {
       // --- Controls ---
       SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
                         {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}, "sideButtonLayout", StrId::STR_CAT_CONTROLS),
-      SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip, "longPressChapterSkip",
-                          StrId::STR_CAT_CONTROLS),
-      SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                        {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH},
-                        "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_SIDE_BUTTON_HOLD_READER, &CrossPointSettings::sideButtonLongPress,
+                        valuesFromArray(OPT_SIDE_LONG_PRESS), "sideButtonLongPress",
+                        StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_FRONT_BUTTON_HOLD_READER, &CrossPointSettings::longPressButtonBehavior,
+                        valuesFromArray(OPT_FRONT_LONG_PRESS), "longPressButtonBehavior",
+                        StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_READING_ORIENTATION_TARGET, &CrossPointSettings::longPressOrientation,
+                        valuesFromArray(OPT_ORIENTATION_TARGET), "longPressOrientation",
+                        StrId::STR_CAT_CONTROLS),
+      SettingInfo::EnumMapped(StrId::STR_HOLD_MENU_SHORTCUT, &CrossPointSettings::longPressMenuAction,
+                              valuesFromArray(OPT_MENU_ACTIONS), rawValuesFromArray(OPT_MENU_ACTION_VALUES),
+                              "longPressMenuAction", StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_FRONT_BTN_ORIENTATION_AWARE, &CrossPointSettings::frontButtonOrientationAware,
+                        {StrId::STR_STATE_OFF, StrId::STR_NAV_BUTTONS, StrId::STR_ALL_BUTTONS},
+                        "frontButtonOrientationAware", StrId::STR_CAT_CONTROLS),
+      SettingInfo::EnumMapped(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
+                              valuesFromArray(OPT_POWER_ACTIONS), rawValuesFromArray(OPT_POWER_ACTION_VALUES),
+                              "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+      SettingInfo::EnumMapped(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn,
+                              valuesFromArray(OPT_POWER_ACTIONS), rawValuesFromArray(OPT_POWER_ACTION_VALUES),
+                              "longPwrBtn", StrId::STR_CAT_CONTROLS),
+      SettingInfo::Enum(StrId::STR_SIDE_BTN_ORIENTATION_AWARE, &CrossPointSettings::sideButtonOrientationAware,
+                        {StrId::STR_NO, StrId::STR_YES}, "sideButtonOrientationAware", StrId::STR_CAT_CONTROLS),
       SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
                         {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}, "tiltPageTurn",
                         StrId::STR_CAT_CONTROLS),

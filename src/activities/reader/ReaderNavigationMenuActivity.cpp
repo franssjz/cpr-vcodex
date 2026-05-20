@@ -11,9 +11,8 @@
 ReaderNavigationMenuActivity::ReaderNavigationMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                                            const std::string& title)
     : Activity("ReaderNavigationMenu", renderer, mappedInput), title(title) {
-  items.reserve(2);
+  items.reserve(1);
   items.push_back({Action::OPEN_RECENT_BOOKS, StrId::STR_RECENT_BOOKS});
-  items.push_back({Action::BOOK_INFO, StrId::STR_BOOK_INFO});
 }
 
 void ReaderNavigationMenuActivity::onEnter() {

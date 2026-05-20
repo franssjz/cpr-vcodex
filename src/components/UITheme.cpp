@@ -16,8 +16,6 @@
 
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
-#include "components/themes/lyra/LyraCustomTheme.h"
-#include "components/themes/lyra/LyraTheme.h"
 #include "components/themes/lyra/LyraVcodex2Theme.h"
 
 namespace {
@@ -94,28 +92,13 @@ void UITheme::reload() {
 }
 
 void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
-  switch (type) {
-    case CrossPointSettings::UI_THEME::LYRA:
-      LOG_DBG("UI", "Using Lyra theme");
-      currentTheme = std::make_unique<LyraTheme>();
-      currentMetrics = &LyraMetrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::LYRA_VCODEX2:
-      LOG_DBG("UI", "Using LyraVcodex2 theme");
-      currentTheme = std::make_unique<LyraVcodex2Theme>();
-      currentMetrics = &LyraVcodex2Metrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::LYRA_CUSTOM:
-      LOG_DBG("UI", "Using Lyra vCodex theme");
-      currentTheme = std::make_unique<LyraCustomTheme>();
-      currentMetrics = &LyraCustomMetrics::values;
-      break;
-    default:
-      LOG_DBG("UI", "Using LyraVcodex2 fallback theme");
-      currentTheme = std::make_unique<LyraVcodex2Theme>();
-      currentMetrics = &LyraVcodex2Metrics::values;
-      break;
+  if (type != CrossPointSettings::UI_THEME::LYRA_VCODEX2) {
+    LOG_DBG("UI", "Legacy theme %u mapped to LyraVcodex2", static_cast<unsigned>(type));
+  } else {
+    LOG_DBG("UI", "Using LyraVcodex2 theme");
   }
+  currentTheme = std::make_unique<LyraVcodex2Theme>();
+  currentMetrics = &LyraVcodex2Metrics::values;
 }
 
 int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader, bool hasTabBar, bool hasButtonHints,

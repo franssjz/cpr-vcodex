@@ -200,27 +200,29 @@ void CrossPointWebServerActivity::startAccessPoint() {
   LOG_DBG("WEBACT", "Free heap before AP start: %d bytes", ESP.getFreeHeap());
 
   // Configure and start the AP
-  WiFi.mode(WIFI_AP);
-  delay(100);
+WiFi.mode(WIFI_AP);
+delay(100);
 
+#ifndef SIMULATOR
   if (!WiFi.softAPConfig(AP_LOCAL_IP, AP_GATEWAY, AP_SUBNET, AP_DHCP_START, AP_LOCAL_IP)) {
     LOG_DBG("WEBACT", "WARNING: Failed to configure AP DHCP lease range");
   }
+#endif
 
-  // Start soft AP
-  bool apStarted;
-  if (AP_PASSWORD && strlen(AP_PASSWORD) >= 8) {
-    apStarted = WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  } else {
-    // Open network (no password)
-    apStarted = WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
-  }
+// Start soft AP
+bool apStarted;
+if (AP_PASSWORD && strlen(AP_PASSWORD) >= 8) {
+  apStarted = WiFi.softAP(AP_SSID, AP_PASSWORD, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
+} else {
+  // Open network (no password)
+  apStarted = WiFi.softAP(AP_SSID, nullptr, AP_CHANNEL, false, AP_MAX_CONNECTIONS);
+}
 
-  if (!apStarted) {
-    LOG_ERR("WEBACT", "ERROR: Failed to start Access Point!");
-    onGoHome();
-    return;
-  }
+if (!apStarted) {
+  LOG_ERR("WEBACT", "ERROR: Failed to start Access Point!");
+  onGoHome();
+  return;
+}
 
   delay(100);  // Wait for AP to fully initialize
 

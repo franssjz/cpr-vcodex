@@ -65,7 +65,6 @@ class TxtReaderActivity final : public Activity {
   void openReaderNavigationMenu();
   void openJumpMenu();
   void openRecentBooksSwitcher();
-  void openBookInfoPlaceholder();
   void handleReaderNavigationAction(int action);
   void handleJumpMenuAction(int action);
 

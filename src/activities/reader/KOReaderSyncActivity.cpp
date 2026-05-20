@@ -5,9 +5,11 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
+#ifndef SIMULATOR
 #include <esp_heap_caps.h>
 #include <esp_sntp.h>
 #include <esp_system.h>
+#endif
 
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
@@ -22,8 +24,16 @@ namespace {
 constexpr time_t NTP_RESYNC_MIN_INTERVAL_SEC = 15 * 60;
 
 void logSyncMemSnapshot(const char* stage) {
+#ifdef SIMULATOR
+  const uint32_t freeHeap = 1024 * 1024;
+#else
   const uint32_t freeHeap = esp_get_free_heap_size();
+#endif
+#ifdef SIMULATOR
+  const uint32_t contigHeap = 1024 * 1024;
+#else
   const uint32_t contigHeap = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
+#endif
   LOG_DBG("KOSync", "Sync mem[%s]: free=%lu contig=%lu", stage, freeHeap, contigHeap);
 }
 
@@ -62,9 +72,11 @@ bool shouldSyncNtpNow() {
 }
 
 void wifiOff() {
+#ifndef SIMULATOR
   if (esp_sntp_enabled()) {
     esp_sntp_stop();
   }
+#endif
   WiFi.disconnect(false);
   delay(100);
   WiFi.mode(WIFI_OFF);

@@ -208,8 +208,8 @@ void RecentBooksActivity::render(RenderLock&&) {
 
     RecentBooksGrid::drawSelectedTitle(renderer, recentBooks, static_cast<int>(selectorIndex), startX, metadataTop,
                                        gridWidth);
-    renderer.drawLine(metrics.contentSidePadding, gridTop - 8, pageWidth - metrics.contentSidePadding, gridTop - 8,
-                      true);
+    const int dividerY = gridTop - RecentBooksGrid::kMetadataDividerGap;
+    renderer.drawLine(metrics.contentSidePadding, dividerY, pageWidth - metrics.contentSidePadding, dividerY, true);
     RecentBooksGrid::drawGrid(renderer, recentBooks, static_cast<int>(selectorIndex), pageStart, pageEnd - pageStart,
                               startX, gridTop);
 

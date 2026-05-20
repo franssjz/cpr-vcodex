@@ -29,15 +29,8 @@ constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 constexpr uint8_t LEGACY_FONT_SIZE_COUNT = 4;
 
 uint8_t migrateLegacyUiTheme(const uint8_t legacyUiTheme) {
-  switch (legacyUiTheme) {
-    case 0:  // Classic
-    case 1:  // Lyra
-    default:
-      return CrossPointSettings::LYRA;
-    case 2:  // Lyra Extended
-    case 3:  // Lyra Custom
-      return CrossPointSettings::LYRA_CUSTOM;
-  }
+  (void)legacyUiTheme;
+  return CrossPointSettings::LYRA_VCODEX2;
 }
 
 uint8_t migrateLegacyFontSize(const uint8_t legacyFontSize) {
@@ -89,6 +82,23 @@ void CrossPointSettings::validateFrontButtonMapping(CrossPointSettings& settings
         settings.frontButtonConfirm = FRONT_HW_CONFIRM;
         settings.frontButtonLeft = FRONT_HW_LEFT;
         settings.frontButtonRight = FRONT_HW_RIGHT;
+        return;
+      }
+    }
+  }
+}
+
+void CrossPointSettings::validateReaderFrontButtonMapping(CrossPointSettings& settings) {
+  const uint8_t mapping[] = {settings.readerFrontButtonBack, settings.readerFrontButtonConfirm,
+                             settings.readerFrontButtonLeft, settings.readerFrontButtonRight};
+  for (size_t i = 0; i < 4; i++) {
+    for (size_t j = i + 1; j < 4; j++) {
+      if (mapping[i] == mapping[j]) {
+        settings.readerFrontButtonsEnabled = 0;
+        settings.readerFrontButtonBack = FRONT_HW_BACK;
+        settings.readerFrontButtonConfirm = FRONT_HW_CONFIRM;
+        settings.readerFrontButtonLeft = FRONT_HW_LEFT;
+        settings.readerFrontButtonRight = FRONT_HW_RIGHT;
         return;
       }
     }
@@ -246,6 +256,9 @@ bool CrossPointSettings::loadFromBinaryFile() {
     serialization::readPod(inputFile, embeddedStyle);
     if (++settingsRead >= fileSettingsCount) break;
   } while (false);
+
+  sideButtonLongPress = longPressChapterSkip ? SIDE_LONG_CHAPTER_SKIP : SIDE_LONG_OFF;
+  longPressButtonBehavior = longPressChapterSkip ? LONG_PRESS_CHAPTER_SKIP : LONG_PRESS_OFF;
 
   if (frontButtonMappingRead) {
     CrossPointSettings::validateFrontButtonMapping(*this);

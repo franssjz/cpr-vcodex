@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
+#include <iterator>
 
 #include "AchievementsStore.h"
 #include "ButtonRemapActivity.h"
@@ -54,6 +55,41 @@ const StrId SettingsActivity::categoryNames[categoryCount] = {
 
 namespace {
 constexpr size_t SETTINGS_TAB_MAX_CHARS = 10;
+constexpr StrId POWER_ACTION_LABELS[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_FORCE_REFRESH,
+                                         StrId::STR_SCREENSHOT_BUTTON, StrId::STR_AUTO_TURN_PAGES_PER_MIN};
+constexpr uint8_t POWER_ACTION_VALUES[] = {CrossPointSettings::IGNORE, CrossPointSettings::SLEEP,
+                                           CrossPointSettings::FORCE_REFRESH, CrossPointSettings::SCREENSHOT,
+                                           CrossPointSettings::CYCLE_PAGE_TURN};
+constexpr StrId MENU_ACTION_LABELS[] = {StrId::STR_IGNORE,
+                                        StrId::STR_BIONIC_READING,
+                                        StrId::STR_FONT_FAMILY,
+                                        StrId::STR_BOOKMARKS,
+                                        StrId::STR_SYNC_PROGRESS,
+                                        StrId::STR_MARK_FINISHED,
+                                        StrId::STR_READING_STATS};
+constexpr uint8_t MENU_ACTION_VALUES[] = {CrossPointSettings::LONG_MENU_OFF,
+                                          CrossPointSettings::LONG_MENU_TOGGLE_BIONIC,
+                                          CrossPointSettings::LONG_MENU_CHANGE_FONT,
+                                          CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK,
+                                          CrossPointSettings::LONG_MENU_SYNC_PROGRESS,
+                                          CrossPointSettings::LONG_MENU_MARK_FINISHED,
+                                          CrossPointSettings::LONG_MENU_READING_STATS};
+constexpr StrId FRONT_LONG_PRESS_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP,
+                                             StrId::STR_ORIENTATION};
+constexpr StrId SIDE_LONG_PRESS_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP, StrId::STR_ORIENTATION,
+                                            StrId::STR_FONT_SIZE};
+constexpr StrId ORIENTATION_LABELS[] = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED,
+                                        StrId::STR_LANDSCAPE_CCW, StrId::STR_CYCLE_ORIENTATIONS};
+
+template <size_t N>
+std::vector<StrId> valuesFromArray(const StrId (&values)[N]) {
+  return std::vector<StrId>(std::begin(values), std::end(values));
+}
+
+template <size_t N>
+std::vector<uint8_t> rawValuesFromArray(const uint8_t (&values)[N]) {
+  return std::vector<uint8_t>(std::begin(values), std::end(values));
+}
 
 const std::vector<SettingInfo>& getDeviceDisplaySettings() {
   static const std::vector<SettingInfo> settings = {
@@ -71,8 +107,6 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
       SettingInfo::Enum(
           StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
           {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30}),
-      SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
-                        {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM, StrId::STR_THEME_LYRA_VCODEX2}),
       SettingInfo::Enum(StrId::STR_MENU_RECENT_BOOKS, &CrossPointSettings::recentBooksView,
                         {StrId::STR_FILE_VIEW_LIST, StrId::STR_FILE_VIEW_GRID}),
       SettingInfo::Toggle(StrId::STR_SHOW_CURRENT_BOOK_CARD, &CrossPointSettings::showCurrentBookCard),
@@ -118,12 +152,33 @@ const std::vector<SettingInfo>& getDeviceReaderSettings() {
 const std::vector<SettingInfo>& getDeviceControlsSettings() {
   static const std::vector<SettingInfo> settings = [] {
     std::vector<SettingInfo> result = {
-        SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                          {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH}),
+        SettingInfo::Section(StrId::STR_POWER_BUTTON),
+        SettingInfo::EnumMapped(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
+                                valuesFromArray(POWER_ACTION_LABELS), rawValuesFromArray(POWER_ACTION_VALUES)),
+        SettingInfo::EnumMapped(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn,
+                                valuesFromArray(POWER_ACTION_LABELS), rawValuesFromArray(POWER_ACTION_VALUES)),
+        SettingInfo::Section(StrId::STR_FRONT_BUTTONS),
         SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons),
-        SettingInfo::Toggle(StrId::STR_LONG_PRESS_SKIP, &CrossPointSettings::longPressChapterSkip),
+        SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS_READER, SettingAction::RemapReaderFrontButtons),
+        SettingInfo::Enum(StrId::STR_FRONT_BUTTON_HOLD_READER, &CrossPointSettings::longPressButtonBehavior,
+                          valuesFromArray(FRONT_LONG_PRESS_LABELS)),
+        SettingInfo::Enum(StrId::STR_READING_ORIENTATION_TARGET, &CrossPointSettings::longPressOrientation,
+                          valuesFromArray(ORIENTATION_LABELS))
+            .visibleWhen(SettingInfo::Visibility::FrontOrientationTarget),
+        SettingInfo::EnumMapped(StrId::STR_HOLD_MENU_SHORTCUT, &CrossPointSettings::longPressMenuAction,
+                                valuesFromArray(MENU_ACTION_LABELS), rawValuesFromArray(MENU_ACTION_VALUES)),
+        SettingInfo::Enum(StrId::STR_FRONT_BTN_ORIENTATION_AWARE, &CrossPointSettings::frontButtonOrientationAware,
+                          {StrId::STR_STATE_OFF, StrId::STR_NAV_BUTTONS, StrId::STR_ALL_BUTTONS}),
+        SettingInfo::Section(StrId::STR_SIDE_BUTTONS),
         SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
                           {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV}),
+        SettingInfo::Enum(StrId::STR_SIDE_BUTTON_HOLD_READER, &CrossPointSettings::sideButtonLongPress,
+                          valuesFromArray(SIDE_LONG_PRESS_LABELS)),
+        SettingInfo::Enum(StrId::STR_READING_ORIENTATION_TARGET, &CrossPointSettings::longPressOrientation,
+                          valuesFromArray(ORIENTATION_LABELS))
+            .visibleWhen(SettingInfo::Visibility::SideOrientationTarget),
+        SettingInfo::Enum(StrId::STR_SIDE_BTN_ORIENTATION_AWARE, &CrossPointSettings::sideButtonOrientationAware,
+                          {StrId::STR_NO, StrId::STR_YES}),
     };
     if (halTiltSensor.isAvailable()) {
       result.push_back(SettingInfo::Section(StrId::STR_TILT_PAGE_TURN));
@@ -320,6 +375,9 @@ std::string getShortcutOrderSettingValueText(const ShortcutOrderGroup group) {
   return std::to_string(getShortcutOrderEntries(group).size());
 }
 
+size_t getEnumDisplayIndex(const SettingInfo& setting, uint8_t rawValue);
+uint8_t getEnumRawValue(const SettingInfo& setting, int displayIndex);
+
 std::string getSettingValueText(const SettingInfo& setting) {
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     const bool value = SETTINGS.*(setting.valuePtr);
@@ -330,7 +388,7 @@ std::string getSettingValueText(const SettingInfo& setting) {
       return "";
     }
     const uint8_t value = SETTINGS.*(setting.valuePtr);
-    const size_t safeIndex = std::min<size_t>(value, setting.enumValues.size() - 1);
+    const size_t safeIndex = getEnumDisplayIndex(setting, value);
     return I18N.get(setting.enumValues[safeIndex]);
   }
   if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
@@ -378,7 +436,34 @@ std::string getSettingValueText(const SettingInfo& setting) {
 
 const char* getSettingNameText(const SettingInfo& setting) { return I18N.get(setting.nameId); }
 
+size_t getEnumDisplayIndex(const SettingInfo& setting, const uint8_t rawValue) {
+  if (setting.enumRawValues.empty()) {
+    return std::min<size_t>(rawValue, setting.enumValues.empty() ? 0 : setting.enumValues.size() - 1);
+  }
+  const auto it = std::find(setting.enumRawValues.begin(), setting.enumRawValues.end(), rawValue);
+  if (it == setting.enumRawValues.end()) {
+    return 0;
+  }
+  return static_cast<size_t>(std::distance(setting.enumRawValues.begin(), it));
+}
+
+uint8_t getEnumRawValue(const SettingInfo& setting, const int displayIndex) {
+  if (setting.enumRawValues.empty()) {
+    return static_cast<uint8_t>(displayIndex);
+  }
+  if (displayIndex < 0 || displayIndex >= static_cast<int>(setting.enumRawValues.size())) {
+    return setting.enumRawValues.front();
+  }
+  return setting.enumRawValues[static_cast<size_t>(displayIndex)];
+}
+
 bool shouldShowDeviceSetting(const SettingInfo& setting) {
+  if (setting.visibility == SettingInfo::Visibility::FrontOrientationTarget) {
+    return SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_ORIENTATION_CHANGE;
+  }
+  if (setting.visibility == SettingInfo::Visibility::SideOrientationTarget) {
+    return SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_ORIENTATION_CHANGE;
+  }
   if (setting.nameId == StrId::STR_FILE_BROWSER_VIEW) {
     return true;
   }
@@ -473,7 +558,8 @@ bool SettingsActivity::isSelectableSetting(const int settingIndex) const {
   if (currentSettings == nullptr || settingIndex < 0 || settingIndex >= settingsCount) {
     return false;
   }
-  return (*currentSettings)[settingIndex]->type != SettingType::SECTION;
+  const auto& setting = *(*currentSettings)[settingIndex];
+  return shouldShowDeviceSetting(setting) && setting.type != SettingType::SECTION;
 }
 
 int SettingsActivity::firstSelectableSettingIndex() const {
@@ -521,6 +607,28 @@ void SettingsActivity::showTransientPopup(const char* message, const int progres
 
 void SettingsActivity::loop() {
   bool hasChangedCategory = false;
+
+  if (pickerSetting != nullptr) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+      closeEnumPicker(false);
+      return;
+    }
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      closeEnumPicker(true);
+      return;
+    }
+    buttonNavigator.onNextRelease([this] {
+      pickerSelectedIndex =
+          ButtonNavigator::nextIndex(pickerSelectedIndex, static_cast<int>(pickerSetting->enumValues.size()));
+      requestUpdate();
+    });
+    buttonNavigator.onPreviousRelease([this] {
+      pickerSelectedIndex =
+          ButtonNavigator::previousIndex(pickerSelectedIndex, static_cast<int>(pickerSetting->enumValues.size()));
+      requestUpdate();
+    });
+    return;
+  }
 
   // Handle actions with early return
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
@@ -583,13 +691,21 @@ void SettingsActivity::toggleCurrentSetting() {
 
   const auto& setting = *(*currentSettings)[selectedSetting];
 
+  if (selectedCategoryIndex == 2 && setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
+    openEnumPicker(setting);
+    return;
+  }
+
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     // Toggle the boolean value using the member pointer
     const bool currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !currentValue;
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
-    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    const size_t currentDisplayIndex = getEnumDisplayIndex(setting, currentValue);
+    const int nextDisplayIndex = ButtonNavigator::nextIndex(static_cast<int>(currentDisplayIndex),
+                                                            static_cast<int>(setting.enumValues.size()));
+    SETTINGS.*(setting.valuePtr) = getEnumRawValue(setting, nextDisplayIndex);
     if (setting.nameId == StrId::STR_UI_THEME || setting.nameId == StrId::STR_FILE_BROWSER_VIEW) {
       buildSettingsLists();
       enterCategory(selectedCategoryIndex);
@@ -608,6 +724,9 @@ void SettingsActivity::toggleCurrentSetting() {
     switch (setting.action) {
       case SettingAction::RemapFrontButtons:
         startActivityForResult(std::make_unique<ButtonRemapActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::RemapReaderFrontButtons:
+        startActivityForResult(std::make_unique<ButtonRemapActivity>(renderer, mappedInput, true), resultHandler);
         break;
       case SettingAction::CustomiseStatusBar:
         startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput), resultHandler);
@@ -763,7 +882,57 @@ void SettingsActivity::toggleCurrentSetting() {
     requestUpdate(true);
   }
 
+  if (setting.valuePtr == &CrossPointSettings::textDarkness) {
+    renderer.setTextDarkness(SETTINGS.textDarkness);
+    renderer.requestNextFullRefresh();
+  }
+
   SETTINGS.saveToFile();
+}
+
+void SettingsActivity::openEnumPicker(const SettingInfo& setting) {
+  pickerSetting = &setting;
+  pickerSelectedIndex = setting.valuePtr != nullptr ? static_cast<int>(getEnumDisplayIndex(setting, SETTINGS.*(setting.valuePtr))) : 0;
+  if (pickerSelectedIndex < 0 || pickerSelectedIndex >= static_cast<int>(setting.enumValues.size())) {
+    pickerSelectedIndex = 0;
+  }
+  requestUpdate();
+}
+
+void SettingsActivity::closeEnumPicker(const bool apply) {
+  if (pickerSetting == nullptr) {
+    return;
+  }
+
+  if (apply && pickerSetting->valuePtr != nullptr) {
+    SETTINGS.*(pickerSetting->valuePtr) = getEnumRawValue(*pickerSetting, pickerSelectedIndex);
+    SETTINGS.saveToFile();
+  }
+
+  pickerSetting = nullptr;
+  requestUpdate();
+}
+
+void SettingsActivity::renderEnumPicker() const {
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  renderer.clearScreen();
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
+                 getSettingNameText(*pickerSetting));
+  HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
+
+  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
+  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  GUI.drawList(
+      renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(pickerSetting->enumValues.size()),
+      pickerSelectedIndex,
+      [this](int index) { return std::string(I18N.get(pickerSetting->enumValues[static_cast<size_t>(index)])); }, nullptr,
+      nullptr, nullptr, true);
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer();
 }
 
 void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
@@ -773,8 +942,9 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
     return;
   }
 
-  const int rowHeight = metrics.listRowHeight;
-  const int sectionHeight = 42;
+  const bool controlsCategory = selectedCategoryIndex == 2;
+  const int rowHeight = controlsCategory ? 48 : metrics.listRowHeight;
+  const int sectionHeight = controlsCategory ? 30 : 42;
   const int sidePadding = metrics.contentSidePadding;
   constexpr int scrollBarWidth = 4;
   constexpr int scrollBarGap = 6;
@@ -783,6 +953,9 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
   const int viewportHeight = rect.height;
 
   auto getItemHeight = [rowHeight, sectionHeight](const SettingInfo* setting) {
+    if (!shouldShowDeviceSetting(*setting)) {
+      return 0;
+    }
     return setting->type == SettingType::SECTION ? sectionHeight : rowHeight;
   };
 
@@ -819,13 +992,18 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
   for (int index = firstVisibleIndex; index < settingsCount; ++index) {
     const auto& setting = settings[index];
     const int itemHeight = getItemHeight(setting);
+    if (itemHeight == 0) {
+      continue;
+    }
     if (renderedHeight + itemHeight > viewportHeight) {
       break;
     }
 
     if (setting->type == SettingType::SECTION) {
-      renderer.drawText(UI_10_FONT_ID, rowX, currentY + 4, getSettingNameText(*setting), true, EpdFontFamily::BOLD);
-      renderer.drawLine(rowX, currentY + itemHeight - 5, rowX + rowWidth, currentY + itemHeight - 5,
+      const int sectionTextY = currentY + (controlsCategory ? 5 : 4);
+      const int sectionLineY = currentY + itemHeight - (controlsCategory ? 4 : 5);
+      renderer.drawText(UI_10_FONT_ID, rowX, sectionTextY, getSettingNameText(*setting), true, EpdFontFamily::BOLD);
+      renderer.drawLine(rowX, sectionLineY, rowX + rowWidth, sectionLineY,
                         SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 ? 1 : 2, true);
       currentY += itemHeight;
       renderedHeight += itemHeight;
@@ -833,14 +1011,22 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
     }
 
     const bool selected = selectedSettingIndex == index + 1;
-    const Rect rowRect{rowX, currentY + 2, rowWidth, itemHeight - 6};
+    const int rowTopInset = controlsCategory ? 2 : 3;
+    const int rowBottomInset = controlsCategory ? 4 : 5;
+    const Rect rowRect{rowX, currentY + rowTopInset, rowWidth, itemHeight - rowTopInset - rowBottomInset};
+    const Rect highlightRect{rowRect.x, rowRect.y, rowRect.width, rowRect.height};
     if (selected) {
       if (SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2) {
-        renderer.drawRoundedRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height, 1, 6, true);
-        renderer.drawRoundedRect(rowRect.x + 2, rowRect.y + 2, rowRect.width - 4, rowRect.height - 4, 1, 5, true);
+        renderer.drawRoundedRect(highlightRect.x, highlightRect.y, highlightRect.width, highlightRect.height, 1, 6,
+                                 true);
+        if (!controlsCategory) {
+          renderer.drawRoundedRect(highlightRect.x + 2, highlightRect.y + 2, highlightRect.width - 4,
+                                   highlightRect.height - 4, 1, 5, true);
+        }
       } else {
-        renderer.fillRectDither(rowRect.x, rowRect.y, rowRect.width, rowRect.height, Color::LightGray);
-        renderer.drawRect(rowRect.x, rowRect.y, rowRect.width, rowRect.height);
+        renderer.fillRectDither(highlightRect.x, highlightRect.y, highlightRect.width, highlightRect.height,
+                                Color::LightGray);
+        renderer.drawRect(highlightRect.x, highlightRect.y, highlightRect.width, highlightRect.height);
       }
     }
 
@@ -852,11 +1038,30 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
     const std::string sideNote = showExportFileName
                                      ? getReadingStatsExportFileName()
                                      : (showImportFileName ? getLatestReadingStatsImportFileName() : std::string());
-    const int valueWidth =
-        valueText.empty() ? 0 : renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str(), EpdFontFamily::REGULAR);
-    const int leftPadding = 12;
-    const int rightPadding = 12;
-    if (showExportFileName || showImportFileName) {
+    const int leftPadding = controlsCategory ? 14 : 12;
+    const int rightPadding = controlsCategory ? 14 : 12;
+    if (controlsCategory) {
+      const int valueMaxWidth = valueText.empty() ? 0 : std::min(rowRect.width / 2, 170);
+      const std::string valueLine =
+          valueText.empty()
+              ? std::string()
+              : renderer.truncatedText(SMALL_FONT_ID, valueText.c_str(), valueMaxWidth, EpdFontFamily::BOLD);
+      const int valueWidth =
+          valueLine.empty() ? 0 : renderer.getTextWidth(SMALL_FONT_ID, valueLine.c_str(), EpdFontFamily::BOLD);
+      const int labelWidth =
+          rowRect.width - leftPadding - rightPadding - (valueWidth > 0 ? valueWidth + 16 : 0);
+      const std::string titleText =
+          renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
+
+      const int labelY = rowRect.y + std::max(5, (rowRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2);
+      const int valueY = rowRect.y + std::max(5, (rowRect.height - renderer.getLineHeight(SMALL_FONT_ID)) / 2);
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, labelY, titleText.c_str(), true,
+                        EpdFontFamily::REGULAR);
+      if (!valueLine.empty()) {
+        renderer.drawText(SMALL_FONT_ID, rowRect.x + rowRect.width - rightPadding - valueWidth, valueY,
+                          valueLine.c_str(), true, EpdFontFamily::BOLD);
+      }
+    } else if (showExportFileName || showImportFileName) {
       const int sideNoteMaxWidth = rowRect.width / 2 - leftPadding - rightPadding;
       const std::string truncatedSideNote =
           sideNote.empty()
@@ -870,22 +1075,26 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
       const int labelWidth = rowRect.width - leftPadding - rightPadding - (sideNoteWidth > 0 ? sideNoteWidth + 12 : 0);
       const std::string titleText =
           renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
-      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 10, titleText.c_str(), true,
+      const int textY = rowRect.y + std::max(6, (rowRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2);
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, textY, titleText.c_str(), true,
                         EpdFontFamily::REGULAR);
       if (!truncatedSideNote.empty()) {
-        renderer.drawText(SMALL_FONT_ID, rowRect.x + rowRect.width - rightPadding - sideNoteWidth, rowRect.y + 12,
+        renderer.drawText(SMALL_FONT_ID, rowRect.x + rowRect.width - rightPadding - sideNoteWidth, textY + 2,
                           truncatedSideNote.c_str(), true, EpdFontFamily::REGULAR);
       }
     } else {
+      const int valueWidth =
+          valueText.empty() ? 0 : renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str(), EpdFontFamily::REGULAR);
       const int labelWidth = rowRect.width - leftPadding - rightPadding - (valueWidth > 0 ? valueWidth + 12 : 0);
       const std::string titleText =
           renderer.truncatedText(UI_10_FONT_ID, getSettingNameText(*setting), labelWidth, EpdFontFamily::REGULAR);
 
-      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, rowRect.y + 10, titleText.c_str(), true,
+      const int textY = rowRect.y + std::max(6, (rowRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2);
+      renderer.drawText(UI_10_FONT_ID, rowRect.x + leftPadding, textY, titleText.c_str(), true,
                         EpdFontFamily::REGULAR);
       if (!valueText.empty()) {
-        renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - rightPadding - valueWidth, rowRect.y + 10,
-                          valueText.c_str(), true, EpdFontFamily::REGULAR);
+        renderer.drawText(UI_10_FONT_ID, rowRect.x + rowRect.width - rightPadding - valueWidth, textY, valueText.c_str(),
+                          true, EpdFontFamily::REGULAR);
       }
     }
 
@@ -907,6 +1116,11 @@ void SettingsActivity::renderAppSettingsList(const Rect& rect) const {
 }
 
 void SettingsActivity::render(RenderLock&&) {
+  if (pickerSetting != nullptr) {
+    renderEnumPicker();
+    return;
+  }
+
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -964,7 +1178,7 @@ void SettingsActivity::render(RenderLock&&) {
                       pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight +
                                     metrics.buttonHintsHeight + metrics.verticalSpacing * 2 + listBottomGap)};
   const auto& settings = *currentSettings;
-  if (selectedCategoryIndex == 4) {
+  if (selectedCategoryIndex == 2 || selectedCategoryIndex == 4) {
     renderAppSettingsList(listRect);
   } else {
     GUI.drawList(
@@ -979,9 +1193,11 @@ void SettingsActivity::render(RenderLock&&) {
     confirmLabel = I18N.get(categoryNames[(selectedCategoryIndex + 1) % categoryCount]);
   } else {
     const auto& selectedSetting = *(*currentSettings)[selectedSettingIndex - 1];
-    confirmLabel = (selectedSetting.type == SettingType::ACTION || selectedSetting.type == SettingType::SECTION)
-                       ? tr(STR_SELECT)
-                       : tr(STR_TOGGLE);
+    confirmLabel = selectedCategoryIndex == 2 && selectedSetting.type == SettingType::ENUM
+                       ? tr(STR_OPEN)
+                       : ((selectedSetting.type == SettingType::ACTION || selectedSetting.type == SettingType::SECTION)
+                              ? tr(STR_SELECT)
+                              : tr(STR_TOGGLE));
   }
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

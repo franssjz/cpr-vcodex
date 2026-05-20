@@ -6,8 +6,49 @@
 #include <WiFi.h>
 #include <esp_crt_bundle.h>
 #include <esp_err.h>
+#ifndef SIMULATOR
+#ifndef SIMULATOR
 #include <esp_heap_caps.h>
+#else
+#define MALLOC_CAP_8BIT 0
+#define MALLOC_CAP_DEFAULT 0
+#define HTTP_EVENT_REDIRECT 999
+#define ESP_ERR_HTTP_CONNECT -7001
+#define ESP_ERR_HTTP_EAGAIN -7002
+
+static inline uint32_t heap_caps_get_largest_free_block(int) {
+  return 1024 * 1024;
+}
+
+static inline void esp_http_client_set_url(esp_http_client_handle_t, const char*) {}
+
+static inline void esp_http_client_set_method(esp_http_client_handle_t, esp_http_client_method_t) {}
+#endif
+#else
+#define MALLOC_CAP_8BIT 0
+#define MALLOC_CAP_DEFAULT 0
+static inline uint32_t heap_caps_get_largest_free_block(int) { return 1024 * 1024; }
+#endif
 #include <esp_http_client.h>
+
+#ifdef SIMULATOR
+#ifndef HTTP_EVENT_REDIRECT
+#define HTTP_EVENT_REDIRECT 999
+#endif
+#ifndef ESP_ERR_HTTP_CONNECT
+#define ESP_ERR_HTTP_CONNECT -7001
+#endif
+#ifndef ESP_ERR_HTTP_EAGAIN
+#define ESP_ERR_HTTP_EAGAIN -7002
+#endif
+
+#ifndef CPR_SIM_HTTP_CLIENT_SETTERS
+#define CPR_SIM_HTTP_CLIENT_SETTERS
+static inline void esp_http_client_set_url(esp_http_client_handle_t, const char*) {}
+static inline void esp_http_client_set_method(esp_http_client_handle_t, esp_http_client_method_t) {}
+#endif
+#endif
+
 
 #include <algorithm>
 #include <cctype>
@@ -333,7 +374,9 @@ esp_http_client_handle_t createClient(const char* url, ResponseBuffer* buf,
   config.buffer_size_tx = 512;
   config.crt_bundle_attach = esp_crt_bundle_attach;
   config.keep_alive_enable = g_keepSessionOpen;
+#ifndef SIMULATOR
   config.max_redirection_count = 3;
+#endif
 
   esp_http_client_handle_t client = esp_http_client_init(&config);
   if (!client) return nullptr;

@@ -13,9 +13,11 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
+#include "BookReadingAdjustmentActivity.h"
 #include "RecentBooksStore.h"
 #include "ReadingStatsStore.h"
 #include "components/UITheme.h"
@@ -37,6 +39,7 @@ constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 110;
 constexpr uint32_t SCROLL_REPEAT_START_MS = 260;
 constexpr uint32_t SCROLL_REPEAT_INTERVAL_MS = 130;
+constexpr uint32_t ADJUST_READING_TIME_LONG_PRESS_MS = 700;
 constexpr size_t MAX_RESOLVED_COVERS = 16;
 constexpr int COVER_ANALYSIS_MAX_SAMPLES = 1200;
 
@@ -468,6 +471,7 @@ void ReadingStatsDetailActivity::onEnter() {
   maxScrollOffset = 0;
   lastScrollActionMs = 0;
   scrollDirection = 0;
+  confirmLongPressHandled = false;
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   waitForBackRelease = false;
   if (const auto* book = findBook(bookPath)) {
@@ -534,6 +538,28 @@ void ReadingStatsDetailActivity::freeBaseScreenBuffer() {
   invalidateBaseScreenBuffer();
 }
 
+void ReadingStatsDetailActivity::openAdjustment() {
+  const auto* book = findBook(bookPath);
+  if (book == nullptr) {
+    requestUpdate();
+    return;
+  }
+
+  startActivityForResult(
+      std::make_unique<BookReadingAdjustmentActivity>(renderer, mappedInput, bookPath, getDisplayTitle(*book)),
+      [this](const ActivityResult&) {
+        guardChildReturn();
+        requestUpdate();
+      });
+}
+
+void ReadingStatsDetailActivity::guardChildReturn() {
+  invalidateBaseScreenBuffer();
+  waitForBackRelease = true;
+  waitForConfirmRelease = true;
+  confirmLongPressHandled = false;
+}
+
 void ReadingStatsDetailActivity::loop() {
   if (waitForBackRelease) {
     if (!mappedInput.isPressed(MappedInputManager::Button::Back) &&
@@ -553,6 +579,17 @@ void ReadingStatsDetailActivity::loop() {
         !mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       waitForConfirmRelease = false;
     }
+    return;
+  }
+
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    confirmLongPressHandled = false;
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      mappedInput.getHeldTime() >= ADJUST_READING_TIME_LONG_PRESS_MS) {
+    confirmLongPressHandled = true;
+    openAdjustment();
     return;
   }
 
@@ -604,7 +641,14 @@ void ReadingStatsDetailActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && Storage.exists(bookPath.c_str())) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (confirmLongPressHandled) {
+      confirmLongPressHandled = false;
+      return;
+    }
+    if (!Storage.exists(bookPath.c_str())) {
+      return;
+    }
     onSelectBook(bookPath);
   }
 }

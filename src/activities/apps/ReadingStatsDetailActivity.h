@@ -18,6 +18,7 @@ class ReadingStatsDetailActivity final : public Activity {
   bool coverLoadPending = false;
   bool waitForConfirmRelease = false;
   bool waitForBackRelease = false;
+  bool confirmLongPressHandled = false;
   bool baseScreenBufferStored = false;
   uint8_t* baseScreenBuffer = nullptr;
   std::string baseScreenBookPath;
@@ -32,6 +33,8 @@ class ReadingStatsDetailActivity final : public Activity {
   bool restoreBaseScreenBuffer();
   void invalidateBaseScreenBuffer();
   void freeBaseScreenBuffer();
+  void openAdjustment();
+  void guardChildReturn();
 
  public:
   explicit ReadingStatsDetailActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string bookPath,

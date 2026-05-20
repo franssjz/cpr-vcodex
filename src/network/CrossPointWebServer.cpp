@@ -230,6 +230,7 @@ struct WebSettingDef {
   WebSettingType type;
   uint8_t CrossPointSettings::* valuePtr;
   const StrId* options;
+  const uint8_t* optionValues;
   uint8_t optionCount;
   uint8_t min;
   uint8_t max;
@@ -245,8 +246,6 @@ constexpr StrId OPT_SLEEP_FILTER[] = {StrId::STR_NONE_OPT, StrId::STR_FILTER_CON
 constexpr StrId OPT_HIDE_BATTERY[] = {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS};
 constexpr StrId OPT_REFRESH_FREQ[] = {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10,
                                       StrId::STR_PAGES_15, StrId::STR_PAGES_30};
-constexpr StrId OPT_UI_THEME[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
-                                  StrId::STR_THEME_LYRA_VCODEX2};
 constexpr StrId OPT_FONT_FAMILY[] = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_LEXEND};
 constexpr StrId OPT_FONT_SIZE[] = {StrId::STR_X_SMALL, StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE,
                                    StrId::STR_X_LARGE};
@@ -262,8 +261,30 @@ constexpr StrId OPT_READER_REFRESH[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR
                                         StrId::STR_REFRESH_MODE_HALF, StrId::STR_REFRESH_MODE_FULL};
 constexpr StrId OPT_IMAGES[] = {StrId::STR_IMAGES_DISPLAY, StrId::STR_IMAGES_PLACEHOLDER, StrId::STR_IMAGES_SUPPRESS};
 constexpr StrId OPT_SIDE_BUTTONS[] = {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV};
-constexpr StrId OPT_SHORT_PWR[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN,
-                                   StrId::STR_FORCE_REFRESH};
+constexpr StrId OPT_FRONT_ORIENTATION_AWARE[] = {StrId::STR_STATE_OFF, StrId::STR_NAV_BUTTONS,
+                                                 StrId::STR_ALL_BUTTONS};
+constexpr StrId OPT_YES_NO[] = {StrId::STR_NO, StrId::STR_YES};
+constexpr StrId OPT_SHORT_PWR[] = {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_FORCE_REFRESH,
+                                   StrId::STR_SCREENSHOT_BUTTON, StrId::STR_AUTO_TURN_PAGES_PER_MIN};
+constexpr uint8_t OPT_SHORT_PWR_VALUES[] = {CrossPointSettings::IGNORE, CrossPointSettings::SLEEP,
+                                            CrossPointSettings::FORCE_REFRESH, CrossPointSettings::SCREENSHOT,
+                                            CrossPointSettings::CYCLE_PAGE_TURN};
+constexpr StrId OPT_LONG_MENU_ACTION[] = {StrId::STR_IGNORE,       StrId::STR_BIONIC_READING,
+                                          StrId::STR_FONT_FAMILY,  StrId::STR_BOOKMARKS,
+                                          StrId::STR_SYNC_PROGRESS, StrId::STR_MARK_FINISHED,
+                                          StrId::STR_READING_STATS};
+constexpr uint8_t OPT_LONG_MENU_ACTION_VALUES[] = {CrossPointSettings::LONG_MENU_OFF,
+                                                   CrossPointSettings::LONG_MENU_TOGGLE_BIONIC,
+                                                   CrossPointSettings::LONG_MENU_CHANGE_FONT,
+                                                   CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK,
+                                                   CrossPointSettings::LONG_MENU_SYNC_PROGRESS,
+                                                   CrossPointSettings::LONG_MENU_MARK_FINISHED,
+                                                   CrossPointSettings::LONG_MENU_READING_STATS};
+constexpr StrId OPT_FRONT_LONG_PRESS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP, StrId::STR_ORIENTATION};
+constexpr StrId OPT_SIDE_LONG_PRESS[] = {StrId::STR_STATE_OFF, StrId::STR_LONG_PRESS_SKIP, StrId::STR_ORIENTATION,
+                                         StrId::STR_FONT_SIZE};
+constexpr StrId OPT_LONG_PRESS_ORIENTATION[] = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED,
+                                                StrId::STR_LANDSCAPE_CCW, StrId::STR_CYCLE_ORIENTATIONS};
 constexpr StrId OPT_TILT_PAGE_TURN[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED};
 constexpr StrId OPT_SLEEP_TIMEOUT[] = {StrId::STR_MIN_1, StrId::STR_MIN_5, StrId::STR_MIN_10, StrId::STR_MIN_15,
                                        StrId::STR_MIN_30};
@@ -285,15 +306,17 @@ constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_
                                        StrId::STR_PROGRESS_BAR_THICK};
 
 #define WEB_TOGGLE(name, member, key, category) \
-  {name, category, WebSettingType::Toggle, &CrossPointSettings::member, nullptr, 0, 0, 0, 0, WebDynamicSetting::None, key}
+  {name, category, WebSettingType::Toggle, &CrossPointSettings::member, nullptr, nullptr, 0, 0, 0, 0, WebDynamicSetting::None, key}
 #define WEB_ENUM(name, member, opts, key, category)                                                        \
-  {name, category, WebSettingType::Enum, &CrossPointSettings::member, opts, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, WebDynamicSetting::None, key}
+  {name, category, WebSettingType::Enum, &CrossPointSettings::member, opts, nullptr, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, WebDynamicSetting::None, key}
+#define WEB_ENUM_MAPPED(name, member, opts, values, key, category)                                          \
+  {name, category, WebSettingType::Enum, &CrossPointSettings::member, opts, values, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, WebDynamicSetting::None, key}
 #define WEB_VALUE(name, member, lo, hi, inc, key, category) \
-  {name, category, WebSettingType::Value, &CrossPointSettings::member, nullptr, 0, lo, hi, inc, WebDynamicSetting::None, key}
+  {name, category, WebSettingType::Value, &CrossPointSettings::member, nullptr, nullptr, 0, lo, hi, inc, WebDynamicSetting::None, key}
 #define WEB_DYNAMIC(name, kind, type, opts, key, category)                                                  \
-  {name, category, type, nullptr, opts, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, kind, key}
+  {name, category, type, nullptr, opts, nullptr, static_cast<uint8_t>(sizeof(opts) / sizeof(opts[0])), 0, 0, 0, kind, key}
 #define WEB_DYNAMIC_STRING(name, kind, key, category) \
-  {name, category, WebSettingType::String, nullptr, nullptr, 0, 0, 0, 0, kind, key}
+  {name, category, WebSettingType::String, nullptr, nullptr, nullptr, 0, 0, 0, 0, kind, key}
 
 constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_SLEEP_SCREEN, sleepScreen, OPT_SLEEP_SCREEN, "sleepScreen", StrId::STR_CAT_DISPLAY),
@@ -304,7 +327,6 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_HIDE_BATTERY, hideBatteryPercentage, OPT_HIDE_BATTERY, "hideBatteryPercentage",
              StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_REFRESH_FREQ, refreshFrequency, OPT_REFRESH_FREQ, "refreshFrequency", StrId::STR_CAT_DISPLAY),
-    WEB_ENUM(StrId::STR_UI_THEME, uiTheme, OPT_UI_THEME, "uiTheme", StrId::STR_CAT_DISPLAY),
     WEB_TOGGLE(StrId::STR_SHOW_CURRENT_BOOK_CARD, showCurrentBookCard, "showCurrentBookCard", StrId::STR_CAT_DISPLAY),
     WEB_TOGGLE(StrId::STR_DARK_MODE, darkMode, "darkMode", StrId::STR_CAT_DISPLAY),
     WEB_TOGGLE(StrId::STR_SUNLIGHT_FADING_FIX, fadingFix, "fadingFix", StrId::STR_CAT_DISPLAY),
@@ -327,8 +349,22 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
 
     WEB_ENUM(StrId::STR_SIDE_BTN_LAYOUT, sideButtonLayout, OPT_SIDE_BUTTONS, "sideButtonLayout",
              StrId::STR_CAT_CONTROLS),
-    WEB_TOGGLE(StrId::STR_LONG_PRESS_SKIP, longPressChapterSkip, "longPressChapterSkip", StrId::STR_CAT_CONTROLS),
-    WEB_ENUM(StrId::STR_SHORT_PWR_BTN, shortPwrBtn, OPT_SHORT_PWR, "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_SIDE_BUTTON_HOLD_READER, sideButtonLongPress, OPT_SIDE_LONG_PRESS, "sideButtonLongPress",
+             StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_FRONT_BUTTON_HOLD_READER, longPressButtonBehavior, OPT_FRONT_LONG_PRESS,
+             "longPressButtonBehavior", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_READING_ORIENTATION_TARGET, longPressOrientation, OPT_LONG_PRESS_ORIENTATION,
+             "longPressOrientation", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM_MAPPED(StrId::STR_HOLD_MENU_SHORTCUT, longPressMenuAction, OPT_LONG_MENU_ACTION,
+                    OPT_LONG_MENU_ACTION_VALUES, "longPressMenuAction", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_FRONT_BTN_ORIENTATION_AWARE, frontButtonOrientationAware, OPT_FRONT_ORIENTATION_AWARE,
+             "frontButtonOrientationAware", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM_MAPPED(StrId::STR_SHORT_PWR_BTN, shortPwrBtn, OPT_SHORT_PWR, OPT_SHORT_PWR_VALUES, "shortPwrBtn",
+                    StrId::STR_CAT_CONTROLS),
+    WEB_ENUM_MAPPED(StrId::STR_LONG_PRESS_ACTION, longPwrBtn, OPT_SHORT_PWR, OPT_SHORT_PWR_VALUES, "longPwrBtn",
+                    StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_SIDE_BTN_ORIENTATION_AWARE, sideButtonOrientationAware, OPT_YES_NO,
+             "sideButtonOrientationAware", StrId::STR_CAT_CONTROLS),
     WEB_ENUM(StrId::STR_TILT_PAGE_TURN, tiltPageTurn, OPT_TILT_PAGE_TURN, "tiltPageTurn", StrId::STR_CAT_CONTROLS),
 
     WEB_ENUM(StrId::STR_TIME_TO_SLEEP, sleepTimeout, OPT_SLEEP_TIMEOUT, "sleepTimeout", StrId::STR_CAT_SYSTEM),
@@ -398,6 +434,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
 #undef WEB_DYNAMIC_STRING
 #undef WEB_DYNAMIC
 #undef WEB_VALUE
+#undef WEB_ENUM_MAPPED
 #undef WEB_ENUM
 #undef WEB_TOGGLE
 
@@ -411,6 +448,10 @@ const WebSettingDef* findWebSetting(const char* key) {
 }
 
 bool isWebSettingVisible(const WebSettingDef& setting) {
+  if (setting.valuePtr == &CrossPointSettings::longPressOrientation) {
+    return SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_ORIENTATION_CHANGE ||
+           SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_ORIENTATION_CHANGE;
+  }
   return setting.nameId != StrId::STR_TILT_PAGE_TURN || halTiltSensor.isAvailable();
 }
 }  // namespace
@@ -1479,7 +1520,17 @@ void CrossPointWebServer::handleGetSettings() const {
         sendJsonStringField(server.get(), "type", "enum");
         server->sendContent(",", 1);
         if (s.valuePtr) {
-          sendJsonIntField(server.get(), "value", static_cast<int>(SETTINGS.*(s.valuePtr)));
+          int displayValue = static_cast<int>(SETTINGS.*(s.valuePtr));
+          if (s.optionValues) {
+            displayValue = 0;
+            for (uint8_t i = 0; i < s.optionCount; ++i) {
+              if (s.optionValues[i] == SETTINGS.*(s.valuePtr)) {
+                displayValue = i;
+                break;
+              }
+            }
+          }
+          sendJsonIntField(server.get(), "value", displayValue);
         } else if (s.dynamic == WebDynamicSetting::KoMatchMethod) {
           sendJsonIntField(server.get(), "value", static_cast<int>(KOREADER_STORE.getMatchMethod()));
         } else {
@@ -1589,7 +1640,7 @@ void CrossPointWebServer::handlePostSettings() {
         const int val = doc[s.key].as<int>();
         if (val >= 0 && val < static_cast<int>(s.optionCount)) {
           if (s.valuePtr) {
-            SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
+            SETTINGS.*(s.valuePtr) = s.optionValues ? s.optionValues[val] : static_cast<uint8_t>(val);
             saveSettings = true;
           } else if (s.dynamic == WebDynamicSetting::KoMatchMethod) {
             KOREADER_STORE.setMatchMethod(static_cast<DocumentMatchMethod>(val));

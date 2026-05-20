@@ -6,6 +6,7 @@
 #include <optional>
 
 #include "BookmarkStore.h"
+#include "CrossPointSettings.h"
 #include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
 
@@ -34,10 +35,15 @@ class EpubReaderActivity final : public Activity {
   BookmarkStore bookmarkStore;
   bool pendingScreenshot = false;
   bool skipNextButtonCheck = false;  // Skip button processing for one frame after subactivity exit
+  bool longPowerButtonHandled = false;
   bool automaticPageTurnActive = false;
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   bool backLongPressHandled = false;
+  bool confirmLongPressHandled = false;
+  bool turnButtonLongPressHandled = false;
+  bool fixedOrientationToggleActive = false;
+  uint8_t fixedOrientationPrevious = CrossPointSettings::PORTRAIT;
   unsigned long firstConfirmClickMs = 0UL;
   bool quickSettingsOpen = false;
   bool quickSettingsTabFocused = true;
@@ -66,9 +72,23 @@ class EpubReaderActivity final : public Activity {
   void openReaderNavigationMenu();
   void openJumpMenu();
   void openRecentBooksSwitcher();
-  void openBookInfoPlaceholder();
   void handleReaderNavigationAction(int action);
   void handleJumpMenuAction(int action);
+  void executeReaderQuickAction(CrossPointSettings::LONG_PRESS_MENU_ACTION action);
+  bool executeShortPowerButtonAction();
+  bool executeLongPowerButtonAction();
+  bool consumeLongPowerButtonRelease();
+  bool consumeLongPowerButtonHold();
+  void toggleCurrentPageBookmark();
+  void markCurrentBookFinished();
+  void cycleReaderFontFamily();
+  void cycleReaderFontSize();
+  uint8_t resolveLongPressOrientationTarget() const;
+  bool handleImmediateConfirmLongPress();
+  bool handleTurnButtonLongPressRelease();
+  bool handleImmediateTurnButtonLongPress();
+  void skipToChapter(bool forward);
+  void handleTurnButtonLongPress(bool fromSideBtn);
   void applyOrientation(uint8_t orientation);
   void toggleAutoPageTurn(uint8_t selectedPageTurnOption);
   void pageTurn(bool isForwardTurn);

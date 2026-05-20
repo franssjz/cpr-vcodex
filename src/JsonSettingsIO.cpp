@@ -28,7 +28,7 @@
 namespace {
 constexpr uint8_t FONT_FAMILY_SCHEMA_VERSION = 2;
 constexpr uint8_t FONT_SIZE_SCHEMA_VERSION = 2;
-constexpr uint8_t UI_THEME_SCHEMA_VERSION = 4;
+constexpr uint8_t UI_THEME_SCHEMA_VERSION = 5;
 constexpr uint8_t TEXT_DARKNESS_SCHEMA_VERSION = 2;
 
 class HalFileStream : public Stream {
@@ -141,37 +141,12 @@ bool loadJsonDocumentFromFile(const char* moduleName, const char* path, JsonDocu
 
 uint8_t migrateStoredUiTheme(const uint8_t rawUiTheme, const uint8_t schemaVersion, const uint8_t currentDefault,
                              bool* needsResave) {
-  if (schemaVersion >= UI_THEME_SCHEMA_VERSION) {
-    const uint8_t clampedTheme =
-        rawUiTheme < static_cast<uint8_t>(CrossPointSettings::UI_THEME_COUNT) ? rawUiTheme : currentDefault;
-    if (clampedTheme != rawUiTheme && needsResave) *needsResave = true;
-    return clampedTheme;
+  (void)currentDefault;
+  const uint8_t canonicalTheme = CrossPointSettings::LYRA_VCODEX2;
+  if ((schemaVersion < UI_THEME_SCHEMA_VERSION || rawUiTheme != canonicalTheme) && needsResave) {
+    *needsResave = true;
   }
-
-  // Legacy/theme-consolidation migration:
-  // - 0 (Classic) -> Lyra
-  // - 2/3 (Extended/Custom) -> Lyra vCodex
-  // - 1 is ambiguous: in the current 2-theme schema it already means Lyra vCodex,
-  //   while in older schemas it meant Lyra. Prefer preserving the newer stored value.
-  uint8_t migratedTheme = currentDefault;
-  switch (rawUiTheme) {
-    case 0:
-      migratedTheme = CrossPointSettings::LYRA;
-      break;
-    case 1:
-      migratedTheme = CrossPointSettings::LYRA_CUSTOM;
-      break;
-    case 2:
-    case 3:
-      migratedTheme = CrossPointSettings::LYRA_CUSTOM;
-      break;
-    default:
-      migratedTheme = currentDefault;
-      break;
-  }
-
-  if (migratedTheme != rawUiTheme && needsResave) *needsResave = true;
-  return migratedTheme;
+  return canonicalTheme;
 }
 
 }  // namespace
@@ -325,8 +300,52 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("imageRendering", s.imageRendering, CrossPointSettings::IMAGE_RENDERING_COUNT);
 
   loadEnum("sideButtonLayout", s.sideButtonLayout, CrossPointSettings::SIDE_BUTTON_LAYOUT_COUNT);
+  const bool hasSideButtonLongPress = !doc["sideButtonLongPress"].isNull();
+  const bool hasFrontButtonLongPress = !doc["longPressButtonBehavior"].isNull();
   loadToggle("longPressChapterSkip", s.longPressChapterSkip);
+  loadEnum("sideButtonLongPress", s.sideButtonLongPress, CrossPointSettings::SIDE_LONG_PRESS_COUNT);
+  loadEnum("longPressButtonBehavior", s.longPressButtonBehavior, CrossPointSettings::LONG_PRESS_BUTTON_BEHAVIOR_COUNT);
+  loadEnum("longPressMenuAction", s.longPressMenuAction, CrossPointSettings::LONG_PRESS_MENU_ACTION_COUNT);
+  loadEnum("longPressOrientation", s.longPressOrientation, CrossPointSettings::LONG_PRESS_ORIENTATION_COUNT);
+  auto isSupportedPowerAction = [](const uint8_t action) {
+    return action == CrossPointSettings::IGNORE || action == CrossPointSettings::SLEEP ||
+           action == CrossPointSettings::FORCE_REFRESH || action == CrossPointSettings::SCREENSHOT ||
+           action == CrossPointSettings::CYCLE_PAGE_TURN;
+  };
+  auto isSupportedHoldMenuAction = [](const uint8_t action) {
+    return action == CrossPointSettings::LONG_MENU_OFF || action == CrossPointSettings::LONG_MENU_TOGGLE_BIONIC ||
+           action == CrossPointSettings::LONG_MENU_CHANGE_FONT ||
+           action == CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK ||
+           action == CrossPointSettings::LONG_MENU_SYNC_PROGRESS ||
+           action == CrossPointSettings::LONG_MENU_MARK_FINISHED ||
+           action == CrossPointSettings::LONG_MENU_READING_STATS;
+  };
+  if (!isSupportedHoldMenuAction(s.longPressMenuAction)) {
+    s.longPressMenuAction = CrossPointSettings::LONG_MENU_OFF;
+    if (needsResave) *needsResave = true;
+  }
+  if (!hasSideButtonLongPress) {
+    s.sideButtonLongPress =
+        s.longPressChapterSkip ? CrossPointSettings::SIDE_LONG_CHAPTER_SKIP : CrossPointSettings::SIDE_LONG_OFF;
+  }
+  if (!hasFrontButtonLongPress) {
+    s.longPressButtonBehavior =
+        s.longPressChapterSkip ? CrossPointSettings::LONG_PRESS_CHAPTER_SKIP : CrossPointSettings::LONG_PRESS_OFF;
+  }
   loadEnum("shortPwrBtn", s.shortPwrBtn, CrossPointSettings::SHORT_PWRBTN_COUNT);
+  loadEnum("longPwrBtn", s.longPwrBtn, CrossPointSettings::SHORT_PWRBTN_COUNT);
+  if (!isSupportedPowerAction(s.shortPwrBtn)) {
+    s.shortPwrBtn = CrossPointSettings::IGNORE;
+    if (needsResave) *needsResave = true;
+  }
+  if (!isSupportedPowerAction(s.longPwrBtn)) {
+    s.longPwrBtn = CrossPointSettings::IGNORE;
+    if (needsResave) *needsResave = true;
+  }
+  loadEnum("frontButtonOrientationAware", s.frontButtonOrientationAware,
+           CrossPointSettings::FRONT_BUTTON_ORIENTATION_AWARE_COUNT);
+  s.sideButtonOrientationAware = clamp(doc["sideButtonOrientationAware"] | s.sideButtonOrientationAware,
+                                       static_cast<uint8_t>(2), s.sideButtonOrientationAware);
   loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   loadEnum("sleepTimeout", s.sleepTimeout, CrossPointSettings::SLEEP_TIMEOUT_COUNT);
   loadToggle("showHiddenFiles", s.showHiddenFiles);
@@ -366,6 +385,23 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
+  s.readerFrontButtonsEnabled =
+      clamp(doc["readerFrontButtonsEnabled"] | s.readerFrontButtonsEnabled, static_cast<uint8_t>(2),
+            s.readerFrontButtonsEnabled);
+  s.readerFrontButtonBack = clamp(doc["readerFrontButtonBack"] | (uint8_t)S::FRONT_HW_BACK,
+                                  S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
+  s.readerFrontButtonConfirm = clamp(doc["readerFrontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM,
+                                     S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_CONFIRM);
+  s.readerFrontButtonLeft = clamp(doc["readerFrontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT,
+                                  S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
+  s.readerFrontButtonRight = clamp(doc["readerFrontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT,
+                                   S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
+  s.frontButtonOrientationAware =
+      clamp(doc["frontButtonOrientationAware"] | s.frontButtonOrientationAware,
+            S::FRONT_BUTTON_ORIENTATION_AWARE_COUNT, s.frontButtonOrientationAware);
+  s.sideButtonOrientationAware =
+      clamp(doc["sideButtonOrientationAware"] | s.sideButtonOrientationAware, static_cast<uint8_t>(2),
+            s.sideButtonOrientationAware);
   s.displayDay = clamp(doc["displayDay"] | s.displayDay, static_cast<uint8_t>(2), s.displayDay);
   s.autoSyncDay = clamp(doc["autoSyncDay"] | s.autoSyncDay, static_cast<uint8_t>(2), s.autoSyncDay);
   s.syncDayWifiChoice =
@@ -502,6 +538,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
 
   normalizeShortcutOrderSettings(s);
   CrossPointSettings::validateFrontButtonMapping(s);
+  CrossPointSettings::validateReaderFrontButtonMapping(s);
 
   LOG_DBG("CPS", "Settings loaded from file");
   return true;
@@ -647,7 +684,14 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   doc["sideButtonLayout"] = s.sideButtonLayout;
   doc["longPressChapterSkip"] = s.longPressChapterSkip;
+  doc["sideButtonLongPress"] = s.sideButtonLongPress;
+  doc["longPressButtonBehavior"] = s.longPressButtonBehavior;
+  doc["longPressMenuAction"] = s.longPressMenuAction;
+  doc["longPressOrientation"] = s.longPressOrientation;
   doc["shortPwrBtn"] = s.shortPwrBtn;
+  doc["longPwrBtn"] = s.longPwrBtn;
+  doc["frontButtonOrientationAware"] = s.frontButtonOrientationAware;
+  doc["sideButtonOrientationAware"] = s.sideButtonOrientationAware;
   doc["tiltPageTurn"] = s.tiltPageTurn;
 
   doc["sleepTimeout"] = s.sleepTimeout;
@@ -683,6 +727,13 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
+  doc["readerFrontButtonsEnabled"] = s.readerFrontButtonsEnabled;
+  doc["readerFrontButtonBack"] = s.readerFrontButtonBack;
+  doc["readerFrontButtonConfirm"] = s.readerFrontButtonConfirm;
+  doc["readerFrontButtonLeft"] = s.readerFrontButtonLeft;
+  doc["readerFrontButtonRight"] = s.readerFrontButtonRight;
+  doc["frontButtonOrientationAware"] = s.frontButtonOrientationAware;
+  doc["sideButtonOrientationAware"] = s.sideButtonOrientationAware;
   doc["autoSyncDay"] = s.autoSyncDay;
   doc["sleepDirectory"] = s.sleepDirectory;
   doc["sleepImageOrder"] = s.sleepImageOrder;
@@ -976,6 +1027,7 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   normalizeShortcutOrderSettings(s);
   CrossPointSettings::validateFrontButtonMapping(s);
+  CrossPointSettings::validateReaderFrontButtonMapping(s);
 
   LOG_DBG("CPS", "Settings loaded from file");
 

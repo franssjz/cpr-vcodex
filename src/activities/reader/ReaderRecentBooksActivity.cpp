@@ -147,8 +147,8 @@ void ReaderRecentBooksActivity::render(RenderLock&&) {
     RecentBooksGrid::drawSelectedTitle(renderer, books, selectedIndex, startX, metadataTop, gridWidth);
 
     const int gridTop = contentTop + RecentBooksGrid::kTitleStripHeight + RecentBooksGrid::kTitleGridGap;
-    renderer.drawLine(metrics.contentSidePadding, gridTop - 8, pageWidth - metrics.contentSidePadding, gridTop - 8,
-                      true);
+    const int dividerY = gridTop - RecentBooksGrid::kMetadataDividerGap;
+    renderer.drawLine(metrics.contentSidePadding, dividerY, pageWidth - metrics.contentSidePadding, dividerY, true);
     RecentBooksGrid::drawGrid(renderer, books, selectedIndex, pageStart, pageCount, startX, gridTop);
 
     const int totalPages =

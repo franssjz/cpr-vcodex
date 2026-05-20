@@ -71,7 +71,9 @@ class CrossPointSettings {
     LANDSCAPE_CW = 1,   // 800x480 logical coordinates, rotated 180° (swap top/bottom)
     INVERTED = 2,       // 480x800 logical coordinates, inverted
     LANDSCAPE_CCW = 3,  // 800x480 logical coordinates, native panel orientation
-    ORIENTATION_COUNT
+    ORIENTATION_COUNT,
+    CYCLE_ORIENTATIONS = ORIENTATION_COUNT,
+    LONG_PRESS_ORIENTATION_COUNT
   };
 
   // Front button layout options (legacy)
@@ -98,6 +100,12 @@ class CrossPointSettings {
   // Default: Previous, Next
   // Swapped: Next, Previous
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTON_LAYOUT_COUNT };
+  enum FRONT_BUTTON_ORIENTATION_AWARE {
+    FRONT_ORIENTATION_AWARE_OFF = 0,
+    FRONT_ORIENTATION_AWARE_NAV_BUTTONS = 1,
+    FRONT_ORIENTATION_AWARE_ALL_BUTTONS = 2,
+    FRONT_BUTTON_ORIENTATION_AWARE_COUNT
+  };
 
   // Font family options
   enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, LEXEND = 2, FONT_FAMILY_COUNT };
@@ -154,9 +162,52 @@ class CrossPointSettings {
     READER_REFRESH_MODE_COUNT
   };
 
-  // Short power button press actions
-  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, FORCE_REFRESH = 3, SHORT_PWRBTN_COUNT };
+  // Short/long power button press actions
+  enum SHORT_PWRBTN {
+    IGNORE = 0,
+    SLEEP = 1,
+    PAGE_TURN = 2,
+    FORCE_REFRESH = 3,
+    TOGGLE_FONT = 4,
+    TOGGLE_BIONIC_READING = 5,
+    TOGGLE_BOOKMARK = 6,
+    SYNC_PROGRESS = 7,
+    MARK_FINISHED = 8,
+    OPEN_READING_STATS = 9,
+    SCREENSHOT = 10,
+    CYCLE_PAGE_TURN = 11,
+    FILE_TRANSFER = 12,
+    SHORT_PWRBTN_COUNT
+  };
   enum TILT_PAGE_TURN { TILT_OFF = 0, TILT_NORMAL = 1, TILT_INVERTED = 2, TILT_PAGE_TURN_COUNT };
+  enum SIDE_LONG_PRESS {
+    SIDE_LONG_OFF = 0,
+    SIDE_LONG_CHAPTER_SKIP = 1,
+    SIDE_LONG_ORIENTATION_CHANGE = 2,
+    SIDE_LONG_CHANGE_FONT_SIZE = 3,
+    SIDE_LONG_PRESS_COUNT
+  };
+  enum LONG_PRESS_BUTTON_BEHAVIOR {
+    LONG_PRESS_OFF = 0,
+    LONG_PRESS_CHAPTER_SKIP = 1,
+    LONG_PRESS_ORIENTATION_CHANGE = 2,
+    LONG_PRESS_BUTTON_BEHAVIOR_COUNT
+  };
+  enum LONG_PRESS_MENU_ACTION {
+    LONG_MENU_OFF = 0,
+    LONG_MENU_SLEEP = 1,
+    LONG_MENU_CHANGE_FONT = 2,
+    LONG_MENU_TOGGLE_BIONIC = 3,
+    LONG_MENU_TOGGLE_BOOKMARK = 4,
+    LONG_MENU_REFRESH_SCREEN = 5,
+    LONG_MENU_SYNC_PROGRESS = 6,
+    LONG_MENU_MARK_FINISHED = 7,
+    LONG_MENU_READING_STATS = 8,
+    LONG_MENU_SCREENSHOT = 9,
+    LONG_MENU_CYCLE_PAGE_TURN = 10,
+    LONG_MENU_FILE_TRANSFER = 11,
+    LONG_PRESS_MENU_ACTION_COUNT
+  };
 
   // Hide battery percentage
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
@@ -233,6 +284,8 @@ class CrossPointSettings {
   uint8_t textDarkness = TEXT_DARKNESS_NORMAL;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
+  // Long power button action behaviour
+  uint8_t longPwrBtn = SLEEP;
   // Tilt-based page turning (X3 only, requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
   // EPUB reading orientation settings
@@ -247,6 +300,13 @@ class CrossPointSettings {
   uint8_t frontButtonConfirm = FRONT_HW_CONFIRM;
   uint8_t frontButtonLeft = FRONT_HW_LEFT;
   uint8_t frontButtonRight = FRONT_HW_RIGHT;
+  uint8_t frontButtonOrientationAware = FRONT_ORIENTATION_AWARE_OFF;
+  uint8_t sideButtonOrientationAware = 0;
+  uint8_t readerFrontButtonsEnabled = 0;
+  uint8_t readerFrontButtonBack = FRONT_HW_BACK;
+  uint8_t readerFrontButtonConfirm = FRONT_HW_CONFIRM;
+  uint8_t readerFrontButtonLeft = FRONT_HW_LEFT;
+  uint8_t readerFrontButtonRight = FRONT_HW_RIGHT;
   // Reader font settings
   static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   using SdFontIdResolver = int (*)(void* ctx, const char* familyName, uint8_t fontSize);
@@ -278,6 +338,11 @@ class CrossPointSettings {
   uint8_t hideBatteryPercentage = HIDE_NEVER;
   // Long-press chapter skip on side buttons
   uint8_t longPressChapterSkip = 1;
+  // Split CrossInk-style long-press page-turn behavior. Defaults preserve the old shared setting.
+  uint8_t sideButtonLongPress = SIDE_LONG_CHAPTER_SKIP;
+  uint8_t longPressButtonBehavior = LONG_PRESS_CHAPTER_SKIP;
+  uint8_t longPressMenuAction = LONG_MENU_OFF;
+  uint8_t longPressOrientation = LANDSCAPE_CCW;
   // UI Theme
   uint8_t uiTheme = LYRA_VCODEX2;
   uint8_t showCurrentBookCard = 1;
@@ -362,9 +427,15 @@ class CrossPointSettings {
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
 
-  uint16_t getPowerButtonDuration() const {
-    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
+  static constexpr uint16_t POWER_BUTTON_WAKE_SHORT_MS = 10;
+  static constexpr uint16_t POWER_BUTTON_LONG_PRESS_MS = 400;
+
+  uint16_t getPowerButtonWakeDuration() const {
+    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? POWER_BUTTON_WAKE_SHORT_MS
+                                                                    : POWER_BUTTON_LONG_PRESS_MS;
   }
+  uint16_t getPowerButtonDuration() const { return getPowerButtonWakeDuration(); }
+  uint16_t getPowerButtonLongPressDuration() const { return POWER_BUTTON_LONG_PRESS_MS; }
   int getReaderFontId() const;
 
   // If count_only is true, returns the number of settings items that would be written.
@@ -374,6 +445,7 @@ class CrossPointSettings {
   bool loadFromFile();
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
+  static void validateReaderFrontButtonMapping(CrossPointSettings& settings);
 
  private:
   bool loadFromBinaryFile();

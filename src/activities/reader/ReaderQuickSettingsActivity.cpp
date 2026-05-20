@@ -19,15 +19,14 @@ constexpr int TAB_READER = 0;
 constexpr int TAB_DISPLAY = 1;
 constexpr int TAB_COUNT = 2;
 constexpr int READER_ITEM_COUNT = 7;
-constexpr int DISPLAY_ITEM_COUNT = 6;
+constexpr int DISPLAY_ITEM_COUNT = 5;
 
 constexpr StrId TAB_LABELS[TAB_COUNT] = {StrId::STR_CAT_READER, StrId::STR_CAT_DISPLAY};
 constexpr StrId READER_ITEM_LABELS[READER_ITEM_COUNT] = {
     StrId::STR_FONT_FAMILY, StrId::STR_FONT_SIZE,      StrId::STR_LINE_SPACING,
     StrId::STR_SCREEN_MARGIN, StrId::STR_PARA_ALIGNMENT, StrId::STR_EXTRA_SPACING,
     StrId::STR_BIONIC_READING};
-constexpr StrId DISPLAY_ITEM_LABELS[DISPLAY_ITEM_COUNT] = {StrId::STR_UI_THEME, StrId::STR_DARK_MODE,
-                                                           StrId::STR_TEXT_DARKNESS,
+constexpr StrId DISPLAY_ITEM_LABELS[DISPLAY_ITEM_COUNT] = {StrId::STR_DARK_MODE, StrId::STR_TEXT_DARKNESS,
                                                            StrId::STR_READER_REFRESH_MODE, StrId::STR_IMAGES,
                                                            StrId::STR_STATUS_BAR_POSITION};
 
@@ -38,8 +37,6 @@ constexpr StrId LINE_SPACING_LABELS[] = {StrId::STR_TIGHT, StrId::STR_NORMAL, St
 constexpr StrId ALIGNMENT_LABELS[] = {StrId::STR_JUSTIFY, StrId::STR_ALIGN_LEFT, StrId::STR_CENTER,
                                       StrId::STR_ALIGN_RIGHT, StrId::STR_BOOK_S_STYLE};
 constexpr StrId BIONIC_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE};
-constexpr StrId THEME_LABELS[] = {StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_CUSTOM,
-                                  StrId::STR_THEME_LYRA_VCODEX2};
 constexpr StrId DARK_MODE_LABELS[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON};
 constexpr StrId TEXT_DARKNESS_LABELS[] = {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK,
                                           StrId::STR_EXTRA_DARK};
@@ -94,17 +91,15 @@ std::string valueForIndex(const int tab, const int index) {
 
   switch (index) {
     case 0:
-      return enumValue(SETTINGS.uiTheme, THEME_LABELS, CrossPointSettings::UI_THEME_COUNT);
-    case 1:
       return I18N.get(DARK_MODE_LABELS[SETTINGS.darkMode ? 1 : 0]);
-    case 2:
+    case 1:
       return enumValue(SETTINGS.textDarkness, TEXT_DARKNESS_LABELS, CrossPointSettings::TEXT_DARKNESS_COUNT);
-    case 3:
+    case 2:
       return enumValue(SETTINGS.readerRefreshMode, REFRESH_MODE_LABELS,
                        CrossPointSettings::READER_REFRESH_MODE_COUNT);
-    case 4:
+    case 3:
       return enumValue(SETTINGS.imageRendering, IMAGE_LABELS, CrossPointSettings::IMAGE_RENDERING_COUNT);
-    case 5:
+    case 4:
       return enumValue(SETTINGS.statusBarPlacement, STATUS_BAR_PLACEMENT_LABELS,
                        CrossPointSettings::STATUS_BAR_PLACEMENT_COUNT);
     default:
@@ -166,25 +161,21 @@ void ReaderQuickSettingsActivity::adjustSelected(const int direction) {
   } else {
     switch (selectedIndex) {
       case 0:
-        SETTINGS.uiTheme = wrapEnum(SETTINGS.uiTheme, direction, CrossPointSettings::UI_THEME_COUNT);
-        UITheme::getInstance().reload();
-        break;
-      case 1:
         SETTINGS.darkMode = SETTINGS.darkMode ? 0 : 1;
         renderer.setDarkMode(SETTINGS.darkMode);
         break;
-      case 2:
+      case 1:
         SETTINGS.textDarkness = wrapEnum(SETTINGS.textDarkness, direction, CrossPointSettings::TEXT_DARKNESS_COUNT);
         renderer.setTextDarkness(SETTINGS.textDarkness);
         break;
-      case 3:
+      case 2:
         SETTINGS.readerRefreshMode =
             wrapEnum(SETTINGS.readerRefreshMode, direction, CrossPointSettings::READER_REFRESH_MODE_COUNT);
         break;
-      case 4:
+      case 3:
         SETTINGS.imageRendering = wrapEnum(SETTINGS.imageRendering, direction, CrossPointSettings::IMAGE_RENDERING_COUNT);
         break;
-      case 5:
+      case 4:
         SETTINGS.statusBarPlacement =
             wrapEnum(SETTINGS.statusBarPlacement, direction, CrossPointSettings::STATUS_BAR_PLACEMENT_COUNT);
         break;

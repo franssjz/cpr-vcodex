@@ -34,24 +34,27 @@ inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
 struct PageTurnResult {
   bool prev;
   bool next;
+  bool fromSideBtn;
   bool fromTilt;
 };
 
 inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
-  const bool usePress = !SETTINGS.longPressChapterSkip;
+  const bool sideUsePress = SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_OFF;
   const bool tiltNext = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedForward();
   const bool tiltPrev = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedBack();
-  const bool prev = usePress ? (input.wasPressed(MappedInputManager::Button::PageBack) ||
-                                input.wasPressed(MappedInputManager::Button::Left))
-                             : (input.wasReleased(MappedInputManager::Button::PageBack) ||
-                                input.wasReleased(MappedInputManager::Button::Left));
-  const bool powerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
-                         input.wasReleased(MappedInputManager::Button::Power);
-  const bool next = usePress ? (input.wasPressed(MappedInputManager::Button::PageForward) || powerTurn ||
-                                input.wasPressed(MappedInputManager::Button::Right))
-                             : (input.wasReleased(MappedInputManager::Button::PageForward) || powerTurn ||
-                                input.wasReleased(MappedInputManager::Button::Right));
-  return {tiltPrev || prev, tiltNext || next, tiltPrev || tiltNext};
+  const bool sidePrev = sideUsePress ? input.wasPressed(MappedInputManager::Button::PageBack)
+                                     : input.wasReleased(MappedInputManager::Button::PageBack);
+  const bool sideNext = sideUsePress ? input.wasPressed(MappedInputManager::Button::PageForward)
+                                     : input.wasReleased(MappedInputManager::Button::PageForward);
+  const bool frontPrev = input.wasReleased(MappedInputManager::Button::Left);
+  const bool powerReleased = input.wasReleased(MappedInputManager::Button::Power);
+  const bool shortPowerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && powerReleased &&
+                              input.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
+  const bool longPowerTurn = SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && powerReleased &&
+                             input.getHeldTime() >= SETTINGS.getPowerButtonLongPressDuration();
+  const bool frontNext = input.wasReleased(MappedInputManager::Button::Right) || shortPowerTurn || longPowerTurn;
+  const bool fromSide = (sidePrev || sideNext) && !(frontPrev || frontNext);
+  return {tiltPrev || sidePrev || frontPrev, tiltNext || sideNext || frontNext, fromSide, tiltPrev || tiltNext};
 }
 
 inline bool hasNonConfirmNavigationInput(const MappedInputManager& input) {

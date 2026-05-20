@@ -17,7 +17,6 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "EpubReaderPercentSelectionActivity.h"
-#include "ReaderBookInfoActivity.h"
 #include "ReaderJumpMenuActivity.h"
 #include "ReaderNavigationMenuActivity.h"
 #include "ReaderRecentBooksActivity.h"
@@ -296,6 +295,7 @@ TxtReaderActivity::TextLine sliceTextLine(const TxtReaderActivity::TextLine& sou
 
 void TxtReaderActivity::onEnter() {
   Activity::onEnter();
+  mappedInput.setReaderMode(true);
 
   if (!txt) {
     return;
@@ -320,6 +320,7 @@ void TxtReaderActivity::onEnter() {
 
 void TxtReaderActivity::onExit() {
   Activity::onExit();
+  mappedInput.setReaderMode(false);
 
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
@@ -365,6 +366,7 @@ void TxtReaderActivity::openRecentBooksSwitcher() {
   READING_STATS.noteActivity();
   startActivityForResult(std::make_unique<ReaderRecentBooksActivity>(renderer, mappedInput, txt ? txt->getPath() : ""),
                          [this](const ActivityResult& result) {
+                           backLongPressHandled = false;
                            if (!result.isCancelled) {
                              const std::string path = std::get<KeyboardResult>(result.data).text;
                              if (!path.empty()) {
@@ -373,18 +375,7 @@ void TxtReaderActivity::openRecentBooksSwitcher() {
                              }
                            }
                            READING_STATS.resumeSession();
-                           openReaderNavigationMenu();
-                         });
-}
-
-void TxtReaderActivity::openBookInfoPlaceholder() {
-  READING_STATS.noteActivity();
-  const std::string title = txt ? txt->getTitle() : std::string(tr(STR_BOOK_INFO));
-  startActivityForResult(std::make_unique<ReaderBookInfoActivity>(renderer, mappedInput, txt ? txt->getPath() : "",
-                                                                  title),
-                         [this](const ActivityResult&) {
-                           READING_STATS.resumeSession();
-                           openReaderNavigationMenu();
+                           requestUpdate();
                          });
 }
 
@@ -392,9 +383,6 @@ void TxtReaderActivity::handleReaderNavigationAction(const int action) {
   switch (static_cast<ReaderNavigationMenuActivity::Action>(action)) {
     case ReaderNavigationMenuActivity::Action::OPEN_RECENT_BOOKS:
       openRecentBooksSwitcher();
-      break;
-    case ReaderNavigationMenuActivity::Action::BOOK_INFO:
-      openBookInfoPlaceholder();
       break;
   }
 }
@@ -440,13 +428,13 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  // Long press BACK opens the reader navigation menu.
+  // Long press BACK opens Recent Books directly.
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
       mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     backLongPressHandled = true;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
-    openReaderNavigationMenu();
+    openRecentBooksSwitcher();
     return;
   }
 
@@ -462,7 +450,8 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
+  auto [prevTriggered, nextTriggered, fromSideBtn, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
+  (void)fromSideBtn;
   if (!prevTriggered && !nextTriggered) {
     return;
   }
@@ -825,7 +814,7 @@ void TxtReaderActivity::renderPage() {
   pendingForceFullRefresh = false;
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh, forceFullRefresh);
 
-  if (SETTINGS.textAntiAliasing) {
+  if (SETTINGS.textAntiAliasing && SETTINGS.textDarkness != CrossPointSettings::TEXT_DARKNESS_LEGACY_BW) {
     ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); });
   }
   // scope destructor clears font cache via FontCacheManager

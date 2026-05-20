@@ -16,6 +16,7 @@ enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING, SECTION };
 enum class SettingAction {
   None,
   RemapFrontButtons,
+  RemapReaderFrontButtons,
   CustomiseStatusBar,
   KOReaderSync,
   OPDSBrowser,
@@ -50,7 +51,10 @@ struct SettingInfo {
   SettingType type;
   uint8_t CrossPointSettings::* valuePtr = nullptr;
   std::vector<StrId> enumValues;
+  std::vector<uint8_t> enumRawValues;
   SettingAction action = SettingAction::None;
+  enum class Visibility { Always, FrontOrientationTarget, SideOrientationTarget };
+  Visibility visibility = Visibility::Always;
 
   struct ValueRange {
     uint8_t min;
@@ -99,6 +103,19 @@ struct SettingInfo {
     s.key = key;
     s.category = category;
     return s;
+  }
+
+  static SettingInfo EnumMapped(StrId nameId, uint8_t CrossPointSettings::* ptr, std::vector<StrId> values,
+                                std::vector<uint8_t> rawValues, const char* key = nullptr,
+                                StrId category = StrId::STR_NONE_OPT) {
+    SettingInfo s = Enum(nameId, ptr, std::move(values), key, category);
+    s.enumRawValues = std::move(rawValues);
+    return s;
+  }
+
+  SettingInfo& visibleWhen(Visibility value) {
+    visibility = value;
+    return *this;
   }
 
   static SettingInfo Action(StrId nameId, SettingAction action) {
@@ -186,6 +203,8 @@ class SettingsActivity final : public Activity {
   const std::vector<SettingRef>* currentSettings = nullptr;
   bool settingsListsBuilt = false;
   int initialCategoryIndex = 0;
+  const SettingInfo* pickerSetting = nullptr;
+  int pickerSelectedIndex = 0;
 
   static constexpr int categoryCount = 5;
   static const StrId categoryNames[categoryCount];
@@ -195,8 +214,11 @@ class SettingsActivity final : public Activity {
   int firstSelectableSettingIndex() const;
   int stepSettingSelection(int direction) const;
   void renderAppSettingsList(const Rect& rect) const;
+  void renderEnumPicker() const;
   void showTransientPopup(const char* message, int progress = -1, unsigned long delayMs = 0);
   void toggleCurrentSetting();
+  void openEnumPicker(const SettingInfo& setting);
+  void closeEnumPicker(bool apply);
   void buildSettingsLists();
 
  public:

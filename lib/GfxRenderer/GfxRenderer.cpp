@@ -195,7 +195,7 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             // Keep the first BW pass of Normal slightly less aggressive so it
             // looks closer to the later AA/grayscale result. Darker modes keep
             // the stronger fill to preserve their bolder appearance.
-            const uint8_t bwThreshold = (darkness == 0) ? 2 : 3;
+            const uint8_t bwThreshold = (darkness == 1) ? 1 : ((darkness == 0) ? 2 : 3);
             if (bmpVal < bwThreshold) {
               renderer.drawPixel(screenX, screenY, pixelState);
             }

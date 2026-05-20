@@ -20,6 +20,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FavoritesStore.h"
+#include "GlobalActions.h"
 #include "KOReaderCredentialStore.h"
 #include "LibraryMetadataStore.h"
 #include "MappedInputManager.h"
@@ -254,6 +255,62 @@ void enterDeepSleep() {
   LOG_DBG("MAIN", "Entering deep sleep");
 
   powerManager.startDeepSleep(gpio);
+}
+
+bool isGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  return isPowerButtonActionAvailableOutsideReader(action);
+}
+
+CrossPointSettings::SHORT_PWRBTN getPowerButtonAction() {
+  static bool longPowerActionHandled = false;
+
+  if (mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
+    if (longPowerActionHandled) {
+      longPowerActionHandled = false;
+      return CrossPointSettings::SHORT_PWRBTN::IGNORE;
+    }
+
+    return mappedInputManager.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration()
+               ? static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.shortPwrBtn)
+               : static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.longPwrBtn);
+  }
+
+  if (longPowerActionHandled || !mappedInputManager.isPressed(MappedInputManager::Button::Power) ||
+      mappedInputManager.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration()) {
+    return CrossPointSettings::SHORT_PWRBTN::IGNORE;
+  }
+
+  const auto action = static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.longPwrBtn);
+  if (!isGlobalPowerButtonAction(action)) {
+    return CrossPointSettings::SHORT_PWRBTN::IGNORE;
+  }
+
+  longPowerActionHandled = true;
+  return action;
+}
+
+bool handleGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::SLEEP:
+      enterDeepSleep();
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH: {
+      LOG_DBG("MAIN", "Manual screen refresh triggered");
+      RenderLock lock;
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      return true;
+    }
+    case CrossPointSettings::SHORT_PWRBTN::SCREENSHOT: {
+      RenderLock lock;
+      ScreenshotUtil::takeScreenshot(renderer);
+      return true;
+    }
+    case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
+      activityManager.goToFileTransfer();
+      return true;
+    default:
+      return false;
+  }
 }
 
 void setupDisplayAndFonts() {
@@ -551,22 +608,10 @@ void loop() {
     return;
   }
 
-  if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    // If the screenshot combination is potentially being pressed, don't sleep
-    if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
-      return;
-    }
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+  // Handle global power-button actions; reader-only page turns fall through to the active reader.
+  if (handleGlobalPowerButtonAction(getPowerButtonAction())) {
+    lastActivityTime = millis();
     return;
-  }
-
-  // Refresh screen when power button is short-pressed with FORCE_REFRESH setting.
-  if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH &&
-      mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
-    LOG_DBG("MAIN", "Manual screen refresh triggered");
-    RenderLock lock;
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   }
 
   // Refresh the battery icon when USB is plugged or unplugged.
