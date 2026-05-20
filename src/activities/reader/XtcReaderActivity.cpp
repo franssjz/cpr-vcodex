@@ -34,7 +34,6 @@
 
 namespace {
 constexpr unsigned long skipPageMs = 700;
-constexpr unsigned long goHomeMs = 1000;
 
 std::string getStableProgressPath(const std::string& bookId) {
   return BookIdentity::getStableDataFilePath(bookId, "xtc_progress.bin");
@@ -111,6 +110,7 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
 void XtcReaderActivity::onEnter() {
   Activity::onEnter();
   mappedInput.setReaderMode(true);
+  mappedInput.setReaderOrientation(SETTINGS.orientation);
 
   if (!xtc) {
     return;
@@ -151,7 +151,10 @@ void XtcReaderActivity::openReaderNavigationMenu() {
   startActivityForResult(std::make_unique<ReaderNavigationMenuActivity>(renderer, mappedInput, title),
                          [this](const ActivityResult& result) {
                            READING_STATS.resumeSession();
-                           backLongPressHandled = false;
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              handleReaderNavigationAction(std::get<MenuResult>(result.data).action);
                            } else {
@@ -179,7 +182,10 @@ void XtcReaderActivity::openRecentBooksSwitcher() {
   READING_STATS.noteActivity();
   startActivityForResult(std::make_unique<ReaderRecentBooksActivity>(renderer, mappedInput, xtc ? xtc->getPath() : ""),
                          [this](const ActivityResult& result) {
-                           backLongPressHandled = false;
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              const std::string path = std::get<KeyboardResult>(result.data).text;
                              if (!path.empty()) {
@@ -278,9 +284,21 @@ void XtcReaderActivity::loop() {
   }
 
   // Long press BACK opens Recent Books directly.
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+    backHoldPreviewVisible = false;
+  }
+
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
-      mappedInput.getHeldTime() >= goHomeMs) {
+      mappedInput.getHeldTime() >= ReaderUtils::HOLD_PREVIEW_MS &&
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS && !backHoldPreviewVisible) {
+    backHoldPreviewVisible = true;
+    ReaderUtils::drawHoldPreview(renderer, tr(STR_RECENT_BOOKS));
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
+      mappedInput.getHeldTime() >= ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
     backLongPressHandled = true;
+    backHoldPreviewVisible = false;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
     openRecentBooksSwitcher();
@@ -293,7 +311,9 @@ void XtcReaderActivity::loop() {
   }
 
   // Short press BACK goes directly to home
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && mappedInput.getHeldTime() < goHomeMs) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
+    backHoldPreviewVisible = false;
     exitReaderToHomeOrStats(renderer, mappedInput, xtc->getPath());
     return;
   }

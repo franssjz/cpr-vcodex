@@ -20,6 +20,7 @@ class XtcReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   bool backLongPressHandled = false;
+  bool backHoldPreviewVisible = false;
   unsigned long firstConfirmClickMs = 0UL;
 
   void renderPage();

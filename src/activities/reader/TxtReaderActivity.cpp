@@ -296,6 +296,7 @@ TxtReaderActivity::TextLine sliceTextLine(const TxtReaderActivity::TextLine& sou
 void TxtReaderActivity::onEnter() {
   Activity::onEnter();
   mappedInput.setReaderMode(true);
+  mappedInput.setReaderOrientation(SETTINGS.orientation);
 
   if (!txt) {
     return;
@@ -340,7 +341,10 @@ void TxtReaderActivity::openReaderNavigationMenu() {
   startActivityForResult(std::make_unique<ReaderNavigationMenuActivity>(renderer, mappedInput, title),
                          [this](const ActivityResult& result) {
                            READING_STATS.resumeSession();
-                           backLongPressHandled = false;
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              handleReaderNavigationAction(std::get<MenuResult>(result.data).action);
                            } else {
@@ -366,7 +370,10 @@ void TxtReaderActivity::openRecentBooksSwitcher() {
   READING_STATS.noteActivity();
   startActivityForResult(std::make_unique<ReaderRecentBooksActivity>(renderer, mappedInput, txt ? txt->getPath() : ""),
                          [this](const ActivityResult& result) {
-                           backLongPressHandled = false;
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              const std::string path = std::get<KeyboardResult>(result.data).text;
                              if (!path.empty()) {
@@ -429,9 +436,21 @@ void TxtReaderActivity::loop() {
   }
 
   // Long press BACK opens Recent Books directly.
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+    backHoldPreviewVisible = false;
+  }
+
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
-      mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+      mappedInput.getHeldTime() >= ReaderUtils::HOLD_PREVIEW_MS &&
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS && !backHoldPreviewVisible) {
+    backHoldPreviewVisible = true;
+    ReaderUtils::drawHoldPreview(renderer, tr(STR_RECENT_BOOKS));
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
+      mappedInput.getHeldTime() >= ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
     backLongPressHandled = true;
+    backHoldPreviewVisible = false;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
     openRecentBooksSwitcher();
@@ -445,7 +464,8 @@ void TxtReaderActivity::loop() {
 
   // Short press BACK goes directly to home
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
-      mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
+    backHoldPreviewVisible = false;
     exitReaderToHomeOrStats(renderer, mappedInput, txt ? txt->getPath() : "");
     return;
   }

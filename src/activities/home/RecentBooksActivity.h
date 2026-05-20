@@ -20,10 +20,13 @@ class RecentBooksActivity final : public Activity {
   std::vector<RecentBooksGrid::BookState> recentBooks;
   std::vector<uint8_t> recentBookCompletedStates;
   int loadedPageStart = -1;
+  bool confirmLongPressHandled = false;
+  bool holdPreviewVisible = false;
 
   // Data loading
   void loadRecentBooks();
   void loadVisiblePageMetadata(int pageItems);
+  void requestRemoveRecentBook(size_t selectedIndex);
 
  public:
   explicit RecentBooksActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

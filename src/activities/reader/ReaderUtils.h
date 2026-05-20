@@ -3,14 +3,23 @@
 #include <CrossPointSettings.h>
 #include <GfxRenderer.h>
 #include <HalTiltSensor.h>
+#include <I18n.h>
 #include <Logging.h>
 
 #include "MappedInputManager.h"
+#include "components/UITheme.h"
+#include "fontIds.h"
+
+#include <algorithm>
+#include <string>
 
 namespace ReaderUtils {
 
 constexpr unsigned long GO_HOME_MS = 1000;
 constexpr unsigned long CONFIRM_DOUBLE_CLICK_MS = 300;
+constexpr unsigned long HOLD_PREVIEW_MS = 250;
+constexpr unsigned long READER_BACK_HOLD_ACTION_MS = 1400;
+constexpr unsigned long READER_STATS_HOLD_ACTION_MS = 1100;
 
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   switch (orientation) {
@@ -89,6 +98,35 @@ inline bool hasPendingConfirmSingleClickExpired(const bool waitingForSecondClick
 
 inline bool getConfiguredReaderRefreshMode(HalDisplay::RefreshMode& mode) {
   return SETTINGS.getForcedReaderRefreshMode(mode);
+}
+
+inline void drawHoldPreview(GfxRenderer& renderer, const char* text) {
+  if (text == nullptr || text[0] == '\0') {
+    return;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int lineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int horizontalPadding = 12;
+  constexpr int verticalPadding = 6;
+  constexpr int radius = 6;
+  const int maxTextWidth = std::max(24, pageWidth - metrics.contentSidePadding * 2 - horizontalPadding * 2);
+  const std::string safeText = renderer.truncatedText(SMALL_FONT_ID, text, maxTextWidth,
+                                                      EpdFontFamily::BOLD);
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, safeText.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = std::min(std::max(48, pageWidth - metrics.contentSidePadding * 2),
+                                 textWidth + horizontalPadding * 2);
+  const int pillHeight = lineHeight + verticalPadding * 2;
+  const int x = (pageWidth - pillWidth) / 2;
+  const int y = std::max(metrics.topPadding,
+                         renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing -
+                             pillHeight - 10);
+  renderer.fillRoundedRect(x, y, pillWidth, pillHeight, radius, Color::Black);
+  renderer.drawRoundedRect(x, y, pillWidth, pillHeight, 1, radius, true);
+  renderer.drawText(SMALL_FONT_ID, x + (pillWidth - textWidth) / 2, y + verticalPadding, safeText.c_str(), false,
+                    EpdFontFamily::BOLD);
+  renderer.displayBuffer();
 }
 
 inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh,

@@ -31,6 +31,8 @@ std::string getFileName(std::string filename);
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
+constexpr unsigned long HOLD_PREVIEW_MS = 250;
+constexpr unsigned long BOOK_ACTION_HOLD_MS = 1400;
 constexpr int BOOKSHELF_CARD_GAP = 8;
 constexpr int BOOKSHELF_FOLDER_ICON_SIZE = 28;
 constexpr int CARD_PAD = 12;
@@ -51,6 +53,34 @@ enum BookAction : int {
   BOOK_ACTION_REMOVE_STATE = 3,
   BOOK_ACTION_DELETE = 4,
 };
+
+void drawHoldPreview(GfxRenderer& renderer, const char* text) {
+  if (text == nullptr || text[0] == '\0') {
+    return;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int lineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int horizontalPadding = 12;
+  constexpr int verticalPadding = 6;
+  constexpr int radius = 6;
+  const int maxTextWidth = std::max(24, pageWidth - metrics.contentSidePadding * 2 - horizontalPadding * 2);
+  const std::string safeText = renderer.truncatedText(SMALL_FONT_ID, text, maxTextWidth,
+                                                      EpdFontFamily::BOLD);
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, safeText.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = std::min(std::max(48, pageWidth - metrics.contentSidePadding * 2),
+                                 textWidth + horizontalPadding * 2);
+  const int pillHeight = lineHeight + verticalPadding * 2;
+  const int x = (pageWidth - pillWidth) / 2;
+  const int y = std::max(metrics.topPadding,
+                         renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing -
+                             pillHeight - 10);
+  renderer.fillRoundedRect(x, y, pillWidth, pillHeight, radius, Color::Black);
+  renderer.drawRoundedRect(x, y, pillWidth, pillHeight, 1, radius, true);
+  renderer.drawText(SMALL_FONT_ID, x + (pillWidth - textWidth) / 2, y + verticalPadding, safeText.c_str(), false,
+                    EpdFontFamily::BOLD);
+}
 
 enum LibraryCardState : uint8_t {
   LIBRARY_STATE_UNREAD = 0,
@@ -581,6 +611,8 @@ void FileBrowserActivity::onEnter() {
   Activity::onEnter();
 
   selectorIndex = 0;
+  confirmLongPressHandled = false;
+  holdPreviewVisible = false;
 
   auto root = Storage.open(basepath.c_str());
   if (!root) {
@@ -655,7 +687,41 @@ void FileBrowserActivity::loop() {
       renderer.getScreenHeight() - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
   const int pageItems = getPageItems(contentHeight);
 
+  const bool hasSelection = !files.empty() && selectorIndex < files.size();
+  const std::string selectedEntry = hasSelection ? files[selectorIndex] : "";
+  const bool selectedIsDirectory = !selectedEntry.empty() && selectedEntry.back() == '/';
+  const bool selectedSupportsBookActions =
+      hasSelection && isBookshelfMode() && !isLibraryDashboard() && !selectedIsDirectory;
+
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    confirmLongPressHandled = false;
+    holdPreviewVisible = false;
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && selectedSupportsBookActions &&
+      !confirmLongPressHandled && mappedInput.getHeldTime() >= HOLD_PREVIEW_MS &&
+      mappedInput.getHeldTime() < BOOK_ACTION_HOLD_MS && !holdPreviewVisible) {
+    holdPreviewVisible = true;
+    requestUpdate();
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && selectedSupportsBookActions &&
+      !confirmLongPressHandled && mappedInput.getHeldTime() >= BOOK_ACTION_HOLD_MS) {
+    confirmLongPressHandled = true;
+    holdPreviewVisible = false;
+    openBookActions(selectorIndex);
+    return;
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (holdPreviewVisible) {
+      holdPreviewVisible = false;
+      requestUpdate();
+    }
+    if (confirmLongPressHandled) {
+      confirmLongPressHandled = false;
+      return;
+    }
     if (files.empty()) return;
     clampSelector();
 
@@ -691,23 +757,16 @@ void FileBrowserActivity::loop() {
 
     if (isBookshelfMode() && isLibraryShelf()) {
       if (selectorIndex >= entryPaths.size() || entryPaths[selectorIndex].empty()) return;
-      if (mappedInput.getHeldTime() >= GO_HOME_MS) {
-        openBookActions(selectorIndex);
-      } else {
-        onSelectBook(entryPaths[selectorIndex]);
-      }
+      onSelectBook(entryPaths[selectorIndex]);
       return;
     }
 
     if (mappedInput.getHeldTime() >= GO_HOME_MS && !isDirectory) {
-      if (isBookshelfMode()) {
-        openBookActions(selectorIndex);
-        return;
-      }
-
       // --- LONG PRESS ACTION: DELETE FILE ---
-      const std::string fullPath = getFullPathForEntry(entry);
-      confirmDeleteFile(fullPath, entry);
+      if (!isBookshelfMode()) {
+        const std::string fullPath = getFullPathForEntry(entry);
+        confirmDeleteFile(fullPath, entry);
+      }
       return;
     }
 
@@ -820,6 +879,8 @@ void FileBrowserActivity::openBookActions(const size_t index) {
   const bool isFinished = LIBRARY_METADATA.isFinished(fullPath) || (statsBook != nullptr && statsBook->completed);
   startActivityForResult(std::make_unique<BookActionsActivity>(renderer, mappedInput, title, isToRead, isFinished),
                          [this, fullPath, title, entry](const ActivityResult& result) {
+                           confirmLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+                           holdPreviewVisible = false;
                            if (result.isCancelled || !std::holds_alternative<MenuResult>(result.data)) {
                              requestUpdate();
                              return;
@@ -1362,11 +1423,13 @@ void FileBrowserActivity::render(RenderLock&&) {
     renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY, pathDisplay);
   }
 
-  // Help text
   const auto labels =
       mappedInput.mapLabels((basepath == "/" && !isLibraryShelf() && libraryView != LIBRARY_VIEW_FILES) ? tr(STR_HOME) : tr(STR_BACK), files.empty() ? "" : tr(STR_OPEN),
                             files.empty() ? "" : tr(STR_DIR_UP), files.empty() ? "" : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (holdPreviewVisible) {
+    drawHoldPreview(renderer, tr(STR_BOOK_ACTIONS));
+  }
 
   renderer.displayBuffer();
 }

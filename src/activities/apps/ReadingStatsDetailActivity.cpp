@@ -39,7 +39,8 @@ constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 110;
 constexpr uint32_t SCROLL_REPEAT_START_MS = 260;
 constexpr uint32_t SCROLL_REPEAT_INTERVAL_MS = 130;
-constexpr uint32_t ADJUST_READING_TIME_LONG_PRESS_MS = 700;
+constexpr uint32_t HOLD_PREVIEW_MS = 250;
+constexpr uint32_t ADJUST_READING_TIME_LONG_PRESS_MS = 1100;
 constexpr size_t MAX_RESOLVED_COVERS = 16;
 constexpr int COVER_ANALYSIS_MAX_SAMPLES = 1200;
 
@@ -460,6 +461,34 @@ void drawCover(GfxRenderer& renderer, const Rect& rect, const std::string& cover
   }
   file.close();
 }
+
+void drawHoldPreview(GfxRenderer& renderer, const std::string& text) {
+  if (text.empty()) {
+    return;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int lineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int horizontalPadding = 12;
+  constexpr int verticalPadding = 6;
+  constexpr int radius = 6;
+  const int maxTextWidth = std::max(24, pageWidth - metrics.contentSidePadding * 2 - horizontalPadding * 2);
+  const std::string safeText = renderer.truncatedText(SMALL_FONT_ID, text.c_str(), maxTextWidth,
+                                                      EpdFontFamily::BOLD);
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, safeText.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = std::min(std::max(48, pageWidth - metrics.contentSidePadding * 2),
+                                 textWidth + horizontalPadding * 2);
+  const int pillHeight = lineHeight + verticalPadding * 2;
+  const int x = (pageWidth - pillWidth) / 2;
+  const int y = std::max(metrics.topPadding,
+                         renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing -
+                             pillHeight - 10);
+  renderer.fillRoundedRect(x, y, pillWidth, pillHeight, radius, Color::Black);
+  renderer.drawRoundedRect(x, y, pillWidth, pillHeight, 1, radius, true);
+  renderer.drawText(SMALL_FONT_ID, x + (pillWidth - textWidth) / 2, y + verticalPadding, safeText.c_str(), false,
+                    EpdFontFamily::BOLD);
+}
 }  // namespace
 
 void ReadingStatsDetailActivity::onEnter() {
@@ -472,6 +501,7 @@ void ReadingStatsDetailActivity::onEnter() {
   lastScrollActionMs = 0;
   scrollDirection = 0;
   confirmLongPressHandled = false;
+  holdPreviewVisible = false;
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   waitForBackRelease = false;
   if (const auto* book = findBook(bookPath)) {
@@ -584,11 +614,20 @@ void ReadingStatsDetailActivity::loop() {
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     confirmLongPressHandled = false;
+    holdPreviewVisible = false;
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      mappedInput.getHeldTime() >= HOLD_PREVIEW_MS && mappedInput.getHeldTime() < ADJUST_READING_TIME_LONG_PRESS_MS &&
+      !holdPreviewVisible) {
+    holdPreviewVisible = true;
+    requestUpdate();
   }
 
   if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
       mappedInput.getHeldTime() >= ADJUST_READING_TIME_LONG_PRESS_MS) {
     confirmLongPressHandled = true;
+    holdPreviewVisible = false;
     openAdjustment();
     return;
   }
@@ -642,6 +681,10 @@ void ReadingStatsDetailActivity::loop() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (holdPreviewVisible) {
+      holdPreviewVisible = false;
+      requestUpdate();
+    }
     if (confirmLongPressHandled) {
       confirmLongPressHandled = false;
       return;
@@ -815,6 +858,9 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const char* confirmLabel = Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "";
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (holdPreviewVisible) {
+    drawHoldPreview(renderer, tr(STR_ADJUST_READING_TIME));
+  }
 
   renderer.displayBuffer();
 }

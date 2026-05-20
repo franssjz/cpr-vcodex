@@ -20,6 +20,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
+#include "BookMetadataStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "activities/apps/AchievementsActivity.h"
@@ -39,7 +40,8 @@
 #include "util/ShortcutUiMetadata.h"
 
 namespace {
-constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
+constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1400;
+constexpr unsigned long HOLD_PREVIEW_MS = 250;
 constexpr int HOME_SHORTCUT_PAGE_SIZE = 4;
 constexpr int LYRA_VCODEX2_COMPACT_DASHBOARD_HEIGHT = 286;
 
@@ -50,6 +52,20 @@ struct HomeShortcutEntry {
 
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
+}
+
+std::string fallbackTitleFromPath(const std::string& path) {
+  std::string filename = path;
+  const size_t slash = filename.find_last_of('/');
+  if (slash != std::string::npos) {
+    filename = filename.substr(slash + 1);
+  }
+
+  const size_t dot = filename.find_last_of('.');
+  if (dot != std::string::npos) {
+    filename = filename.substr(0, dot);
+  }
+  return filename;
 }
 
 std::vector<HomeShortcutEntry> getHomeShortcutEntries(const bool hasOpdsServers) {
@@ -100,6 +116,34 @@ bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
   return entry.definition && ShortcutUiMetadata::showAccessory(*entry.definition);
 }
 
+void drawHoldPreview(GfxRenderer& renderer, const std::string& text) {
+  if (text.empty()) {
+    return;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int lineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int horizontalPadding = 12;
+  constexpr int verticalPadding = 6;
+  constexpr int radius = 6;
+  const int maxTextWidth = std::max(24, pageWidth - metrics.contentSidePadding * 2 - horizontalPadding * 2);
+  const std::string safeText = renderer.truncatedText(SMALL_FONT_ID, text.c_str(), maxTextWidth,
+                                                      EpdFontFamily::BOLD);
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, safeText.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = std::min(std::max(48, pageWidth - metrics.contentSidePadding * 2),
+                                 textWidth + horizontalPadding * 2);
+  const int pillHeight = lineHeight + verticalPadding * 2;
+  const int x = (pageWidth - pillWidth) / 2;
+  const int y = std::max(metrics.topPadding,
+                         renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing -
+                             pillHeight - 10);
+  renderer.fillRoundedRect(x, y, pillWidth, pillHeight, radius, Color::Black);
+  renderer.drawRoundedRect(x, y, pillWidth, pillHeight, 1, radius, true);
+  renderer.drawText(SMALL_FONT_ID, x + (pillWidth - textWidth) / 2, y + verticalPadding, safeText.c_str(), false,
+                    EpdFontFamily::BOLD);
+}
+
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
@@ -127,18 +171,43 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
   recentBooks.clear();
   const auto& books = RECENT_BOOKS.getBooks();
   recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
+  bool repairedDisplayMetadata = false;
   const bool prioritizeCurrentBook =
       SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 && SETTINGS.showCurrentBookCard != 0 &&
       !APP_STATE.openEpubPath.empty();
 
-  auto appendResolvedBook = [this, maxBooks](const RecentBook& book) {
+  auto appendResolvedBook = [this, maxBooks, &repairedDisplayMetadata](const RecentBook& book) {
     if (static_cast<int>(recentBooks.size()) >= maxBooks || !Storage.exists(book.path.c_str())) {
       return;
     }
     RecentBook resolvedBook = book;
     const auto* statsBook = READING_STATS.findMatchingBookForPath(book.path, book.title, book.author);
+    if (resolvedBook.title.empty() && statsBook != nullptr && !statsBook->title.empty()) {
+      resolvedBook.title = statsBook->title;
+      repairedDisplayMetadata = true;
+    }
+    if (resolvedBook.author.empty() && statsBook != nullptr && !statsBook->author.empty()) {
+      resolvedBook.author = statsBook->author;
+      repairedDisplayMetadata = true;
+    }
     if (resolvedBook.coverBmpPath.empty() && statsBook != nullptr && !statsBook->coverBmpPath.empty()) {
       resolvedBook.coverBmpPath = statsBook->coverBmpPath;
+    }
+    if (resolvedBook.title.empty() || resolvedBook.author.empty()) {
+      if (const auto* metadata = BOOK_METADATA.findBook(resolvedBook.path, resolvedBook.bookId)) {
+        if (resolvedBook.title.empty() && !metadata->title.empty()) {
+          resolvedBook.title = metadata->title;
+          repairedDisplayMetadata = true;
+        }
+        if (resolvedBook.author.empty() && !metadata->author.empty()) {
+          resolvedBook.author = metadata->author;
+          repairedDisplayMetadata = true;
+        }
+      }
+    }
+    if (resolvedBook.title.empty()) {
+      resolvedBook.title = fallbackTitleFromPath(resolvedBook.path);
+      repairedDisplayMetadata = true;
     }
     recentBooks.push_back(resolvedBook);
   };
@@ -160,6 +229,10 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
       continue;
     }
     appendResolvedBook(book);
+  }
+
+  if (repairedDisplayMetadata) {
+    freeCoverBuffer();
   }
 }
 
@@ -183,6 +256,8 @@ void HomeActivity::onEnter() {
   firstRenderDone = false;
   recentsLoading = false;
   recentsLoaded = false;
+  confirmLongPressHandled = false;
+  holdPreviewVisible = false;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(getRecentBookLoadCount());
@@ -287,45 +362,48 @@ void HomeActivity::loop() {
     requestUpdate();
   });
 
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    confirmLongPressHandled = false;
+    holdPreviewVisible = false;
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      selectorIndex < recentCount && mappedInput.getHeldTime() >= HOLD_PREVIEW_MS && !holdPreviewVisible) {
+    holdPreviewVisible = true;
+    requestUpdate();
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      selectorIndex < recentCount && mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
+    confirmLongPressHandled = true;
+    holdPreviewVisible = false;
+    const bool recentBooksAccessSelected = SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
+                                           SETTINGS.showCurrentBookCard != 0 && selectorIndex == 1;
+    if (recentBooksAccessSelected) {
+      if (recentBooks.size() > 1 && Storage.exists(recentBooks[1].path.c_str())) {
+        onSelectBook(recentBooks[1].path);
+      }
+      return;
+    }
+
+    requestRemoveRecentBook(selectorIndex);
+    return;
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (holdPreviewVisible) {
+      holdPreviewVisible = false;
+      requestUpdate();
+    }
+    if (confirmLongPressHandled) {
+      confirmLongPressHandled = false;
+      return;
+    }
     if (selectorIndex < recentBooks.size()) {
       const bool recentBooksAccessSelected = SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
                                              SETTINGS.showCurrentBookCard != 0 && selectorIndex == 1;
       if (recentBooksAccessSelected) {
-        if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS && recentBooks.size() > 1 &&
-            Storage.exists(recentBooks[1].path.c_str())) {
-          onSelectBook(recentBooks[1].path);
-          return;
-        }
         activityManager.goToRecentBooks();
-        return;
-      }
-      if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
-        const RecentBook selectedBook = recentBooks[selectorIndex];
-        const int currentSelection = selectorIndex;
-        startActivityForResult(
-            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
-                                                   getRecentBookConfirmationLabel(selectedBook)),
-            [this, selectedBook, currentSelection](const ActivityResult& result) {
-              if (result.isCancelled) {
-                requestUpdate();
-                return;
-              }
-
-              if (RECENT_BOOKS.removeBook(selectedBook.path)) {
-                loadRecentBooks(getRecentBookLoadCount());
-                if (recentBooks.empty()) {
-                  selectorIndex = 0;
-                } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
-                  selectorIndex = static_cast<int>(recentBooks.size()) - 1;
-                } else {
-                  selectorIndex = currentSelection;
-                }
-                coverRendered = false;
-                freeCoverBuffer();
-              }
-              requestUpdate(true);
-            });
         return;
       }
 
@@ -398,6 +476,38 @@ void HomeActivity::loop() {
   }
 }
 
+void HomeActivity::requestRemoveRecentBook(const int recentIndex) {
+  if (recentIndex < 0 || recentIndex >= static_cast<int>(recentBooks.size())) {
+    return;
+  }
+
+  const RecentBook selectedBook = recentBooks[recentIndex];
+  const int currentSelection = recentIndex;
+  startActivityForResult(
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
+                                             getRecentBookConfirmationLabel(selectedBook)),
+      [this, selectedBook, currentSelection](const ActivityResult& result) {
+        if (result.isCancelled) {
+          requestUpdate();
+          return;
+        }
+
+        if (RECENT_BOOKS.removeBook(selectedBook.path)) {
+          loadRecentBooks(getRecentBookLoadCount());
+          if (recentBooks.empty()) {
+            selectorIndex = 0;
+          } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
+            selectorIndex = static_cast<int>(recentBooks.size()) - 1;
+          } else {
+            selectorIndex = currentSelection;
+          }
+          coverRendered = false;
+          freeCoverBuffer();
+        }
+        requestUpdate(true);
+      });
+}
+
 void HomeActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
@@ -460,8 +570,16 @@ void HomeActivity::render(RenderLock&&) {
         });
   }
 
-  const auto labels = mappedInput.mapLabels("", tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const bool selectedRecent = selectorIndex >= 0 && selectorIndex < static_cast<int>(recentBooks.size());
+  const bool selectedUpNext = selectedRecent && SETTINGS.uiTheme == CrossPointSettings::LYRA_VCODEX2 &&
+                              SETTINGS.showCurrentBookCard != 0 && selectorIndex == 1;
+  const auto labels = mappedInput.mapLabels("", selectedRecent ? tr(STR_OPEN) : tr(STR_SELECT), tr(STR_DIR_UP),
+                                            tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (holdPreviewVisible && selectedRecent) {
+    drawHoldPreview(renderer, selectedUpNext ? std::string(tr(STR_OPEN)) + ": " + tr(STR_UP_NEXT)
+                                             : tr(STR_DELETE_FROM_RECENTS));
+  }
 
   renderer.displayBuffer();
 

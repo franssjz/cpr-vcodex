@@ -235,6 +235,8 @@ bool writeReaderProgressFile(const std::string& progressPath, const int spineInd
 void EpubReaderActivity::onEnter() {
   Activity::onEnter();
   mappedInput.setReaderMode(true);
+  activeReaderOrientation = SETTINGS.orientation;
+  mappedInput.setReaderOrientation(activeReaderOrientation);
 
   if (!epub) {
     return;
@@ -242,7 +244,7 @@ void EpubReaderActivity::onEnter() {
 
   // Configure screen orientation based on settings
   // NOTE: This affects layout math and must be applied before any render calls.
-  ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
+  ReaderUtils::applyOrientation(renderer, activeReaderOrientation);
   sdFontSystem.ensureLoaded(renderer);
 
   epub->setupCacheDir();
@@ -335,6 +337,8 @@ void EpubReaderActivity::loop() {
   }
 
   READING_STATS.tickActiveSession();
+  mappedInput.setReaderMode(true);
+  mappedInput.setReaderOrientation(activeReaderOrientation);
   const unsigned long nowMs = millis();
 
   if (quickSettingsOpen) {
@@ -390,12 +394,18 @@ void EpubReaderActivity::loop() {
     return;
   }
 
+  const auto configuredLongMenuAction =
+      static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
+  const unsigned long confirmReleaseLongPressMs =
+      configuredLongMenuAction == CrossPointSettings::LONG_MENU_READING_STATS ? ReaderUtils::READER_STATS_HOLD_ACTION_MS
+                                                                              : bookmarkToggleMs;
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) &&
-      mappedInput.getHeldTime() >= bookmarkToggleMs) {
+      mappedInput.getHeldTime() >= confirmReleaseLongPressMs) {
+    confirmHoldPreviewVisible = false;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
     if (SETTINGS.longPressMenuAction != CrossPointSettings::LONG_MENU_OFF) {
-      executeReaderQuickAction(static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction));
+      executeReaderQuickAction(configuredLongMenuAction);
       return;
     }
     if (section && section->currentPage >= 0 && section->currentPage < section->pageCount) {
@@ -420,6 +430,10 @@ void EpubReaderActivity::loop() {
     return;
   }
 
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && confirmHoldPreviewVisible) {
+    confirmHoldPreviewVisible = false;
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     if (ReaderUtils::registerConfirmDoubleClick(waitingForConfirmSecondClick, firstConfirmClickMs, nowMs)) {
       requestCurrentPageFullRefresh();
@@ -442,9 +456,11 @@ void EpubReaderActivity::loop() {
     const int bookProgressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
     startActivityForResult(std::make_unique<EpubReaderMenuActivity>(
                                renderer, mappedInput, epub->getTitle(), currentPage, totalPages, bookProgressPercent,
-                               SETTINGS.orientation, !currentPageFootnotes.empty(), !bookmarkStore.isEmpty()),
+                               activeReaderOrientation, !currentPageFootnotes.empty(), !bookmarkStore.isEmpty()),
                            [this](const ActivityResult& result) {
                              READING_STATS.resumeSession();
+                             mappedInput.setReaderMode(true);
+                             mappedInput.setReaderOrientation(activeReaderOrientation);
                              // Always apply orientation change even if the menu was cancelled
                              const auto& menu = std::get<MenuResult>(result.data);
                              applyOrientation(menu.orientation);
@@ -456,9 +472,21 @@ void EpubReaderActivity::loop() {
   }
 
   // Long press BACK opens Recent Books directly.
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+    backHoldPreviewVisible = false;
+  }
+
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
-      mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+      mappedInput.getHeldTime() >= ReaderUtils::HOLD_PREVIEW_MS &&
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS && !backHoldPreviewVisible) {
+    backHoldPreviewVisible = true;
+    ReaderUtils::drawHoldPreview(renderer, tr(STR_RECENT_BOOKS));
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Back) && !backLongPressHandled &&
+      mappedInput.getHeldTime() >= ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
     backLongPressHandled = true;
+    backHoldPreviewVisible = false;
     waitingForConfirmSecondClick = false;
     firstConfirmClickMs = 0UL;
     openRecentBooksSwitcher();
@@ -472,7 +500,8 @@ void EpubReaderActivity::loop() {
 
   // Short press BACK goes directly to home (or restores position if viewing footnote)
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
-      mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
+      mappedInput.getHeldTime() < ReaderUtils::READER_BACK_HOLD_ACTION_MS) {
+    backHoldPreviewVisible = false;
     if (footnoteDepth > 0) {
       restoreSavedPosition();
       return;
@@ -626,6 +655,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           std::make_unique<EpubReaderChapterSelectionActivity>(renderer, mappedInput, epub, path, spineIdx),
           [this](const ActivityResult& result) {
             READING_STATS.resumeSession();
+            mappedInput.setReaderMode(true);
+            mappedInput.setReaderOrientation(activeReaderOrientation);
             if (!result.isCancelled && currentSpineIndex != std::get<ChapterResult>(result.data).spineIndex) {
               RenderLock lock(*this);
               currentSpineIndex = std::get<ChapterResult>(result.data).spineIndex;
@@ -640,6 +671,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(std::make_unique<EpubReaderFootnotesActivity>(renderer, mappedInput, currentPageFootnotes),
                              [this](const ActivityResult& result) {
                                READING_STATS.resumeSession();
+                               mappedInput.setReaderMode(true);
+                               mappedInput.setReaderOrientation(activeReaderOrientation);
                                if (!result.isCancelled) {
                                  const auto& footnoteResult = std::get<FootnoteResult>(result.data);
                                  navigateToHref(footnoteResult.href, true);
@@ -662,6 +695,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
               }),
           [this](const ActivityResult& result) {
             READING_STATS.resumeSession();
+            mappedInput.setReaderMode(true);
+            mappedInput.setReaderOrientation(activeReaderOrientation);
             if (!result.isCancelled) {
               const auto& bookmark = std::get<BookmarkResult>(result.data);
               if (currentSpineIndex != bookmark.spineIndex || !section ||
@@ -687,6 +722,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
           std::make_unique<EpubReaderPercentSelectionActivity>(renderer, mappedInput, initialPercent),
           [this](const ActivityResult& result) {
             READING_STATS.resumeSession();
+            mappedInput.setReaderMode(true);
+            mappedInput.setReaderOrientation(activeReaderOrientation);
             if (!result.isCancelled) {
               jumpToPercent(std::get<PercentResult>(result.data).percent);
             }
@@ -706,6 +743,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
                                READING_STATS.resumeSession();
+                               mappedInput.setReaderMode(true);
+                               mappedInput.setReaderOrientation(activeReaderOrientation);
                                section.reset();
                                requestUpdate();
                              });
@@ -716,6 +755,8 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       startActivityForResult(std::make_unique<ReaderQuickSettingsActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
                                READING_STATS.resumeSession();
+                               mappedInput.setReaderMode(true);
+                               mappedInput.setReaderOrientation(activeReaderOrientation);
                                sdFontSystem.ensureLoaded(renderer);
                                if (section) {
                                  cachedSpineIndex = currentSpineIndex;
@@ -803,7 +844,14 @@ void EpubReaderActivity::openReaderNavigationMenu() {
   startActivityForResult(std::make_unique<ReaderNavigationMenuActivity>(renderer, mappedInput, epub->getTitle()),
                          [this](const ActivityResult& result) {
                            READING_STATS.resumeSession();
-                           backLongPressHandled = false;
+                           mappedInput.setReaderMode(true);
+                           mappedInput.setReaderOrientation(activeReaderOrientation);
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           confirmLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+                           confirmHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              handleReaderNavigationAction(std::get<MenuResult>(result.data).action);
                            } else {
@@ -819,6 +867,8 @@ void EpubReaderActivity::openJumpMenu() {
                              !bookmarkStore.isEmpty()),
                          [this](const ActivityResult& result) {
                            READING_STATS.resumeSession();
+                           mappedInput.setReaderMode(true);
+                           mappedInput.setReaderOrientation(activeReaderOrientation);
                            if (!result.isCancelled) {
                              handleJumpMenuAction(std::get<MenuResult>(result.data).action);
                            } else {
@@ -831,7 +881,14 @@ void EpubReaderActivity::openRecentBooksSwitcher() {
   READING_STATS.noteActivity();
   startActivityForResult(std::make_unique<ReaderRecentBooksActivity>(renderer, mappedInput, epub->getPath()),
                          [this](const ActivityResult& result) {
-                           backLongPressHandled = false;
+                           mappedInput.setReaderMode(true);
+                           mappedInput.setReaderOrientation(activeReaderOrientation);
+                           backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+                           backHoldPreviewVisible = false;
+                           confirmLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+                           confirmHoldPreviewVisible = false;
+                           waitingForConfirmSecondClick = false;
+                           firstConfirmClickMs = 0UL;
                            if (!result.isCancelled) {
                              const std::string path = std::get<KeyboardResult>(result.data).text;
                              if (!path.empty()) {
@@ -1145,15 +1202,32 @@ void EpubReaderActivity::markCurrentBookFinished() {
 }
 
 bool EpubReaderActivity::handleImmediateConfirmLongPress() {
+  const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    confirmHoldPreviewVisible = false;
+  }
+
+  if (action == CrossPointSettings::LONG_MENU_READING_STATS && !confirmLongPressHandled &&
+      mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+      mappedInput.getHeldTime() >= ReaderUtils::HOLD_PREVIEW_MS &&
+      mappedInput.getHeldTime() < ReaderUtils::READER_STATS_HOLD_ACTION_MS && !confirmHoldPreviewVisible) {
+    confirmHoldPreviewVisible = true;
+    ReaderUtils::drawHoldPreview(renderer, tr(STR_READING_STATS));
+  }
+
   if (confirmLongPressHandled || SETTINGS.longPressMenuAction == CrossPointSettings::LONG_MENU_OFF ||
-      !mappedInput.isPressed(MappedInputManager::Button::Confirm) || mappedInput.getHeldTime() < bookmarkToggleMs) {
+      !mappedInput.isPressed(MappedInputManager::Button::Confirm) ||
+      mappedInput.getHeldTime() < (action == CrossPointSettings::LONG_MENU_READING_STATS
+                                       ? ReaderUtils::READER_STATS_HOLD_ACTION_MS
+                                       : bookmarkToggleMs)) {
     return false;
   }
 
   confirmLongPressHandled = true;
+  confirmHoldPreviewVisible = false;
   waitingForConfirmSecondClick = false;
   firstConfirmClickMs = 0UL;
-  executeReaderQuickAction(static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction));
+  executeReaderQuickAction(action);
   return true;
 }
 
@@ -1194,6 +1268,14 @@ void EpubReaderActivity::executeReaderQuickAction(CrossPointSettings::LONG_PRESS
             std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, epub->getPath(),
                                                          ReadingStatsDetailContext{true}),
             [this](const ActivityResult&) {
+              mappedInput.setReaderMode(true);
+              mappedInput.setReaderOrientation(activeReaderOrientation);
+              backLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Back);
+              backHoldPreviewVisible = false;
+              confirmLongPressHandled = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+              confirmHoldPreviewVisible = false;
+              waitingForConfirmSecondClick = false;
+              firstConfirmClickMs = 0UL;
               READING_STATS.resumeSession();
               requestUpdate();
             });
@@ -1370,11 +1452,11 @@ void EpubReaderActivity::skipToChapter(const bool forward) {
 
 uint8_t EpubReaderActivity::resolveLongPressOrientationTarget() const {
   if (SETTINGS.longPressOrientation == CrossPointSettings::CYCLE_ORIENTATIONS) {
-    return static_cast<uint8_t>((SETTINGS.orientation + 1) % CrossPointSettings::ORIENTATION_COUNT);
+    return static_cast<uint8_t>((activeReaderOrientation + 1) % CrossPointSettings::ORIENTATION_COUNT);
   }
 
   const uint8_t target = std::min<uint8_t>(SETTINGS.longPressOrientation, CrossPointSettings::ORIENTATION_COUNT - 1);
-  if (SETTINGS.orientation != target) {
+  if (activeReaderOrientation != target) {
     return target;
   }
 
@@ -1387,10 +1469,10 @@ void EpubReaderActivity::handleTurnButtonLongPress(const bool fromSideBtn) {
       case CrossPointSettings::SIDE_LONG_ORIENTATION_CHANGE: {
         const bool sideRevertingFixedOrientation =
             SETTINGS.longPressOrientation != CrossPointSettings::CYCLE_ORIENTATIONS && fixedOrientationToggleActive &&
-            SETTINGS.orientation == SETTINGS.longPressOrientation;
+            activeReaderOrientation == SETTINGS.longPressOrientation;
         if (SETTINGS.longPressOrientation != CrossPointSettings::CYCLE_ORIENTATIONS &&
-            SETTINGS.orientation != SETTINGS.longPressOrientation) {
-          fixedOrientationPrevious = SETTINGS.orientation;
+            activeReaderOrientation != SETTINGS.longPressOrientation) {
+          fixedOrientationPrevious = activeReaderOrientation;
           fixedOrientationToggleActive = true;
         }
         applyOrientation(resolveLongPressOrientationTarget());
@@ -1412,10 +1494,10 @@ void EpubReaderActivity::handleTurnButtonLongPress(const bool fromSideBtn) {
   if (SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_ORIENTATION_CHANGE) {
     const bool frontRevertingFixedOrientation =
         SETTINGS.longPressOrientation != CrossPointSettings::CYCLE_ORIENTATIONS && fixedOrientationToggleActive &&
-        SETTINGS.orientation == SETTINGS.longPressOrientation;
+        activeReaderOrientation == SETTINGS.longPressOrientation;
     if (SETTINGS.longPressOrientation != CrossPointSettings::CYCLE_ORIENTATIONS &&
-        SETTINGS.orientation != SETTINGS.longPressOrientation) {
-      fixedOrientationPrevious = SETTINGS.orientation;
+        activeReaderOrientation != SETTINGS.longPressOrientation) {
+      fixedOrientationPrevious = activeReaderOrientation;
       fixedOrientationToggleActive = true;
     }
     applyOrientation(resolveLongPressOrientationTarget());
@@ -1427,8 +1509,11 @@ void EpubReaderActivity::handleTurnButtonLongPress(const bool fromSideBtn) {
 }
 
 void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
+  activeReaderOrientation = std::min<uint8_t>(orientation, CrossPointSettings::ORIENTATION_COUNT - 1);
+  mappedInput.setReaderOrientation(activeReaderOrientation);
   // No-op if the selected orientation matches current settings.
-  if (SETTINGS.orientation == orientation) {
+  if (SETTINGS.orientation == activeReaderOrientation) {
+    ReaderUtils::applyOrientation(renderer, activeReaderOrientation);
     return;
   }
 
@@ -1442,7 +1527,7 @@ void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
     }
 
     // Persist the selection so the reader keeps the new orientation on next launch.
-    SETTINGS.orientation = orientation;
+    SETTINGS.orientation = activeReaderOrientation;
     SETTINGS.saveToFile();
 
     // Update renderer orientation to match the new logical coordinate system.

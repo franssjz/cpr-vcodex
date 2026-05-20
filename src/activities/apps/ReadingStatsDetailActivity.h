@@ -19,6 +19,7 @@ class ReadingStatsDetailActivity final : public Activity {
   bool waitForConfirmRelease = false;
   bool waitForBackRelease = false;
   bool confirmLongPressHandled = false;
+  bool holdPreviewVisible = false;
   bool baseScreenBufferStored = false;
   uint8_t* baseScreenBuffer = nullptr;
   std::string baseScreenBookPath;

@@ -48,15 +48,14 @@ void ReaderRecentBooksActivity::loadBooks() {
 void ReaderRecentBooksActivity::onEnter() {
   Activity::onEnter();
   loadBooks();
-  waitForBackRelease = mappedInput.isPressed(MappedInputManager::Button::Back);
+  waitForInputRelease = mappedInput.isAnyMappedButtonPressed();
   requestUpdate();
 }
 
 void ReaderRecentBooksActivity::loop() {
-  if (waitForBackRelease) {
-    if (!mappedInput.isPressed(MappedInputManager::Button::Back) &&
-        !mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-      waitForBackRelease = false;
+  if (waitForInputRelease) {
+    if (!mappedInput.isAnyMappedButtonPressed()) {
+      waitForInputRelease = false;
     }
     return;
   }
@@ -159,7 +158,7 @@ void ReaderRecentBooksActivity::render(RenderLock&&) {
     }
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   renderer.displayBuffer();
 

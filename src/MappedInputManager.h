@@ -2,6 +2,8 @@
 
 #include <HalGPIO.h>
 
+#include <cstdint>
+
 class MappedInputManager {
  public:
   enum class Button { Back, Confirm, Left, Right, Up, Down, Power, PageBack, PageForward };
@@ -16,6 +18,7 @@ class MappedInputManager {
   explicit MappedInputManager(HalGPIO& gpio) : gpio(gpio) {}
 
   void setReaderMode(bool enabled) { readerMode = enabled; }
+  void setReaderOrientation(uint8_t orientation) { readerOrientation = orientation; }
   void update() const { gpio.update(); }
   void armConfirmReleaseGuard() const;
   bool wasPressed(Button button) const;
@@ -23,6 +26,7 @@ class MappedInputManager {
   bool isPressed(Button button) const;
   bool wasAnyPressed() const;
   bool wasAnyReleased() const;
+  bool isAnyMappedButtonPressed() const;
   unsigned long getHeldTime() const;
   Labels mapLabels(const char* back, const char* confirm, const char* previous, const char* next) const;
   // Returns the raw front button index that was pressed this frame (or -1 if none).
@@ -31,6 +35,7 @@ class MappedInputManager {
  private:
   HalGPIO& gpio;
   bool readerMode = false;
+  uint8_t readerOrientation = 0;
   mutable bool suppressConfirmReleaseUntilButtonUp = false;
 
   bool mapButton(Button button, bool (HalGPIO::*fn)(uint8_t) const) const;

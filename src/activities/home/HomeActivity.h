@@ -18,6 +18,8 @@ class HomeActivity final : public Activity {
   bool recentsLoaded = false;
   bool firstRenderDone = false;
   bool hasOpdsServers = false;
+  bool confirmLongPressHandled = false;
+  bool holdPreviewVisible = false;
   bool coverRendered = false;      // Track if cover has been rendered once
   bool coverBufferStored = false;  // Track if cover buffer is stored
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
@@ -36,6 +38,7 @@ class HomeActivity final : public Activity {
   void loadRecentBooks(int maxBooks);
   void loadRecentCovers(int coverHeight);
   bool needsRecentCoverLoad(int coverHeight) const;
+  void requestRemoveRecentBook(int recentIndex);
   int getRecentBookLoadCount() const;
   int getDashboardHeight() const;
 

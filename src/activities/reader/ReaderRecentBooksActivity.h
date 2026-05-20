@@ -23,7 +23,7 @@ class ReaderRecentBooksActivity final : public Activity {
   std::vector<RecentBooksGrid::BookState> books;
   int selectedIndex = 0;
   int loadedPageStart = -1;
-  bool waitForBackRelease = false;
+  bool waitForInputRelease = false;
   ButtonNavigator buttonNavigator;
 
   void loadBooks();

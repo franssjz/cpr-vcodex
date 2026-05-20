@@ -41,9 +41,12 @@ class EpubReaderActivity final : public Activity {
   bool waitingForConfirmSecondClick = false;
   bool backLongPressHandled = false;
   bool confirmLongPressHandled = false;
+  bool backHoldPreviewVisible = false;
+  bool confirmHoldPreviewVisible = false;
   bool turnButtonLongPressHandled = false;
   bool fixedOrientationToggleActive = false;
   uint8_t fixedOrientationPrevious = CrossPointSettings::PORTRAIT;
+  uint8_t activeReaderOrientation = CrossPointSettings::PORTRAIT;
   unsigned long firstConfirmClickMs = 0UL;
   bool quickSettingsOpen = false;
   bool quickSettingsTabFocused = true;

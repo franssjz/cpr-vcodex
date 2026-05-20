@@ -19,9 +19,8 @@ constexpr SideLayoutMap kSideLayouts[] = {
     {HalGPIO::BTN_DOWN, HalGPIO::BTN_UP},
 };
 
-bool isReaderLandscapeOrientation() {
-  return SETTINGS.orientation == CrossPointSettings::LANDSCAPE_CW ||
-         SETTINGS.orientation == CrossPointSettings::LANDSCAPE_CCW;
+bool isReaderLandscapeOrientation(const uint8_t orientation) {
+  return orientation == CrossPointSettings::LANDSCAPE_CW || orientation == CrossPointSettings::LANDSCAPE_CCW;
 }
 
 ButtonIndex invertFrontButtonPosition(const ButtonIndex button) {
@@ -40,7 +39,8 @@ ButtonIndex invertFrontButtonPosition(const ButtonIndex button) {
 }
 
 ButtonIndex mapFrontButtonForReaderOrientation(const ButtonIndex button, const ButtonIndex leftButton,
-                                               const ButtonIndex rightButton, const bool readerMode) {
+                                               const ButtonIndex rightButton, const bool readerMode,
+                                               const uint8_t orientation) {
   if (!readerMode) {
     return button;
   }
@@ -49,15 +49,15 @@ ButtonIndex mapFrontButtonForReaderOrientation(const ButtonIndex button, const B
       static_cast<CrossPointSettings::FRONT_BUTTON_ORIENTATION_AWARE>(SETTINGS.frontButtonOrientationAware);
 
   if (orientationMode == CrossPointSettings::FRONT_ORIENTATION_AWARE_ALL_BUTTONS &&
-      SETTINGS.orientation == CrossPointSettings::INVERTED) {
+      orientation == CrossPointSettings::INVERTED) {
     return invertFrontButtonPosition(button);
   }
 
   return button;
 }
 
-SideLayoutMap mapSideLayoutForReaderOrientation(SideLayoutMap side, const bool readerMode) {
-  if (readerMode && SETTINGS.sideButtonOrientationAware && isReaderLandscapeOrientation()) {
+SideLayoutMap mapSideLayoutForReaderOrientation(SideLayoutMap side, const bool readerMode, const uint8_t orientation) {
+  if (readerMode && SETTINGS.sideButtonOrientationAware && isReaderLandscapeOrientation(orientation)) {
     std::swap(side.pageBack, side.pageForward);
   }
   return side;
@@ -117,18 +117,19 @@ std::string sanitizeBackLabel(const char* label) {
 
 bool MappedInputManager::mapButton(const Button button, bool (HalGPIO::*fn)(uint8_t) const) const {
   const auto sideLayout = static_cast<CrossPointSettings::SIDE_BUTTON_LAYOUT>(SETTINGS.sideButtonLayout);
-  const auto side = mapSideLayoutForReaderOrientation(kSideLayouts[sideLayout], readerMode);
+  const auto side = mapSideLayoutForReaderOrientation(kSideLayouts[sideLayout], readerMode, readerOrientation);
   const bool useReaderMapping = readerMode && SETTINGS.readerFrontButtonsEnabled;
   const ButtonIndex btnBack = useReaderMapping ? SETTINGS.readerFrontButtonBack : SETTINGS.frontButtonBack;
   const ButtonIndex btnConfirm = useReaderMapping ? SETTINGS.readerFrontButtonConfirm : SETTINGS.frontButtonConfirm;
   const ButtonIndex btnLeft = useReaderMapping ? SETTINGS.readerFrontButtonLeft : SETTINGS.frontButtonLeft;
   const ButtonIndex btnRight = useReaderMapping ? SETTINGS.readerFrontButtonRight : SETTINGS.frontButtonRight;
   const ButtonIndex mappedBack =
-      mapFrontButtonForReaderOrientation(btnBack, btnLeft, btnRight, readerMode);
-  const ButtonIndex mappedConfirm = mapFrontButtonForReaderOrientation(btnConfirm, btnLeft, btnRight, readerMode);
-  const ButtonIndex mappedLeft = mapFrontButtonForReaderOrientation(btnLeft, btnLeft, btnRight, readerMode);
+      mapFrontButtonForReaderOrientation(btnBack, btnLeft, btnRight, readerMode, readerOrientation);
+  const ButtonIndex mappedConfirm =
+      mapFrontButtonForReaderOrientation(btnConfirm, btnLeft, btnRight, readerMode, readerOrientation);
+  const ButtonIndex mappedLeft = mapFrontButtonForReaderOrientation(btnLeft, btnLeft, btnRight, readerMode, readerOrientation);
   const ButtonIndex mappedRight =
-      mapFrontButtonForReaderOrientation(btnRight, btnLeft, btnRight, readerMode);
+      mapFrontButtonForReaderOrientation(btnRight, btnLeft, btnRight, readerMode, readerOrientation);
 
   switch (button) {
     case Button::Back:
@@ -179,6 +180,12 @@ bool MappedInputManager::wasAnyPressed() const { return gpio.wasAnyPressed(); }
 
 bool MappedInputManager::wasAnyReleased() const { return gpio.wasAnyReleased(); }
 
+bool MappedInputManager::isAnyMappedButtonPressed() const {
+  return isPressed(Button::Back) || isPressed(Button::Confirm) || isPressed(Button::Left) ||
+         isPressed(Button::Right) || isPressed(Button::Up) || isPressed(Button::Down) ||
+         isPressed(Button::Power) || isPressed(Button::PageBack) || isPressed(Button::PageForward);
+}
+
 unsigned long MappedInputManager::getHeldTime() const { return gpio.getHeldTime(); }
 
 MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const char* confirm, const char* previous,
@@ -195,10 +202,11 @@ MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const
   const ButtonIndex btnConfirm = useReaderMapping ? SETTINGS.readerFrontButtonConfirm : SETTINGS.frontButtonConfirm;
   const ButtonIndex btnLeft = useReaderMapping ? SETTINGS.readerFrontButtonLeft : SETTINGS.frontButtonLeft;
   const ButtonIndex btnRight = useReaderMapping ? SETTINGS.readerFrontButtonRight : SETTINGS.frontButtonRight;
-  const ButtonIndex mappedBack = mapFrontButtonForReaderOrientation(btnBack, btnLeft, btnRight, readerMode);
-  const ButtonIndex mappedConfirm = mapFrontButtonForReaderOrientation(btnConfirm, btnLeft, btnRight, readerMode);
-  const ButtonIndex mappedLeft = mapFrontButtonForReaderOrientation(btnLeft, btnLeft, btnRight, readerMode);
-  const ButtonIndex mappedRight = mapFrontButtonForReaderOrientation(btnRight, btnLeft, btnRight, readerMode);
+  const ButtonIndex mappedBack = mapFrontButtonForReaderOrientation(btnBack, btnLeft, btnRight, readerMode, readerOrientation);
+  const ButtonIndex mappedConfirm =
+      mapFrontButtonForReaderOrientation(btnConfirm, btnLeft, btnRight, readerMode, readerOrientation);
+  const ButtonIndex mappedLeft = mapFrontButtonForReaderOrientation(btnLeft, btnLeft, btnRight, readerMode, readerOrientation);
+  const ButtonIndex mappedRight = mapFrontButtonForReaderOrientation(btnRight, btnLeft, btnRight, readerMode, readerOrientation);
 
   auto labelForHardware = [&](uint8_t hw) -> const char* {
     if (hw == mappedBack) {

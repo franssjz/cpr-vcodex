@@ -21,6 +21,8 @@ class FileBrowserActivity final : public Activity {
   size_t selectorIndex = 0;
 
   bool lockLongPressBack = false;
+  bool confirmLongPressHandled = false;
+  bool holdPreviewVisible = false;
   uint8_t libraryView = 0;
 
   // Files state

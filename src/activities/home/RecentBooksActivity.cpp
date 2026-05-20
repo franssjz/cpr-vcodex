@@ -18,9 +18,38 @@
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
-constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
+constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1400;
+constexpr unsigned long HOLD_PREVIEW_MS = 250;
 std::string getRecentBookConfirmationLabel(const RecentBook& book) {
   return !book.title.empty() ? book.title : book.path;
+}
+
+void drawHoldPreview(GfxRenderer& renderer, const std::string& text) {
+  if (text.empty()) {
+    return;
+  }
+
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int pageWidth = renderer.getScreenWidth();
+  const int lineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  constexpr int horizontalPadding = 12;
+  constexpr int verticalPadding = 6;
+  constexpr int radius = 6;
+  const int maxTextWidth = std::max(24, pageWidth - metrics.contentSidePadding * 2 - horizontalPadding * 2);
+  const std::string safeText = renderer.truncatedText(SMALL_FONT_ID, text.c_str(), maxTextWidth,
+                                                      EpdFontFamily::BOLD);
+  const int textWidth = renderer.getTextWidth(SMALL_FONT_ID, safeText.c_str(), EpdFontFamily::BOLD);
+  const int pillWidth = std::min(std::max(48, pageWidth - metrics.contentSidePadding * 2),
+                                 textWidth + horizontalPadding * 2);
+  const int pillHeight = lineHeight + verticalPadding * 2;
+  const int x = (pageWidth - pillWidth) / 2;
+  const int y = std::max(metrics.topPadding,
+                         renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing -
+                             pillHeight - 10);
+  renderer.fillRoundedRect(x, y, pillWidth, pillHeight, radius, Color::Black);
+  renderer.drawRoundedRect(x, y, pillWidth, pillHeight, 1, radius, true);
+  renderer.drawText(SMALL_FONT_ID, x + (pillWidth - textWidth) / 2, y + verticalPadding, safeText.c_str(), false,
+                    EpdFontFamily::BOLD);
 }
 
 }  // namespace
@@ -55,6 +84,8 @@ void RecentBooksActivity::onEnter() {
   loadRecentBooks();
 
   selectorIndex = 0;
+  confirmLongPressHandled = false;
+  holdPreviewVisible = false;
   requestUpdate();
 }
 
@@ -70,41 +101,73 @@ void RecentBooksActivity::loadVisiblePageMetadata(const int pageItems) {
   RecentBooksGrid::ensurePageProgress(recentBooks, pageStart, pageItems);
 }
 
+void RecentBooksActivity::requestRemoveRecentBook(const size_t selectedIndex) {
+  if (recentBooks.empty() || selectedIndex >= recentBooks.size()) {
+    return;
+  }
+
+  const RecentBook selectedBook = recentBooks[selectedIndex].book;
+  const size_t currentSelection = selectedIndex;
+  startActivityForResult(
+      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
+                                             getRecentBookConfirmationLabel(selectedBook)),
+      [this, selectedBook, currentSelection](const ActivityResult& result) {
+        if (result.isCancelled) {
+          requestUpdate();
+          return;
+        }
+
+        if (RECENT_BOOKS.removeBook(selectedBook.path)) {
+          loadRecentBooks();
+          if (recentBooks.empty()) {
+            selectorIndex = 0;
+          } else if (currentSelection >= recentBooks.size()) {
+            selectorIndex = recentBooks.size() - 1;
+          } else {
+            selectorIndex = currentSelection;
+          }
+        }
+        requestUpdate(true);
+      });
+}
+
 void RecentBooksActivity::loop() {
   const bool gridView = SETTINGS.recentBooksView == CrossPointSettings::RECENT_BOOKS_GRID;
   const int pageItems =
       gridView ? RecentBooksGrid::kItemsPerPage
                : UITheme::getInstance().getNumberOfItemsPerPage(renderer, true, false, true, true);
 
+  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+    confirmLongPressHandled = false;
+    holdPreviewVisible = false;
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      !recentBooks.empty() && selectorIndex < recentBooks.size() && mappedInput.getHeldTime() >= HOLD_PREVIEW_MS &&
+      !holdPreviewVisible) {
+    holdPreviewVisible = true;
+    requestUpdate();
+  }
+
+  if (mappedInput.isPressed(MappedInputManager::Button::Confirm) && !confirmLongPressHandled &&
+      !recentBooks.empty() && selectorIndex < recentBooks.size() &&
+      mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
+    confirmLongPressHandled = true;
+    holdPreviewVisible = false;
+    requestRemoveRecentBook(selectorIndex);
+    return;
+  }
+
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (holdPreviewVisible) {
+      holdPreviewVisible = false;
+      requestUpdate();
+    }
+    if (confirmLongPressHandled) {
+      confirmLongPressHandled = false;
+      return;
+    }
     if (!recentBooks.empty() && selectorIndex < static_cast<int>(recentBooks.size())) {
-      if (mappedInput.getHeldTime() >= RECENT_BOOK_LONG_PRESS_MS) {
-        const RecentBook selectedBook = recentBooks[selectorIndex].book;
-        const size_t currentSelection = selectorIndex;
-        startActivityForResult(
-            std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_FROM_RECENTS),
-                                                   getRecentBookConfirmationLabel(selectedBook)),
-            [this, selectedBook, currentSelection](const ActivityResult& result) {
-              if (result.isCancelled) {
-                requestUpdate();
-                return;
-              }
-
-              if (RECENT_BOOKS.removeBook(selectedBook.path)) {
-                loadRecentBooks();
-                if (recentBooks.empty()) {
-                  selectorIndex = 0;
-                } else if (currentSelection >= recentBooks.size()) {
-                  selectorIndex = recentBooks.size() - 1;
-                } else {
-                  selectorIndex = currentSelection;
-                }
-              }
-              requestUpdate(true);
-            });
-        return;
-      }
-
       LOG_DBG("RBA", "Selected recent book: %s", recentBooks[selectorIndex].book.path.c_str());
       onSelectBook(recentBooks[selectorIndex].book.path);
       return;
@@ -224,6 +287,9 @@ void RecentBooksActivity::render(RenderLock&&) {
   // Help text
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_OPEN), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  if (holdPreviewVisible && !recentBooks.empty()) {
+    drawHoldPreview(renderer, tr(STR_DELETE_FROM_RECENTS));
+  }
 
   renderer.displayBuffer();
 

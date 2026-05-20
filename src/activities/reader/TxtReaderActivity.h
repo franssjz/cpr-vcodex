@@ -40,6 +40,7 @@ class TxtReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   bool backLongPressHandled = false;
+  bool backHoldPreviewVisible = false;
   unsigned long firstConfirmClickMs = 0UL;
 
   // Cached settings for cache validation (different fonts/margins require re-indexing)
