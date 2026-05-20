@@ -12,8 +12,6 @@ Use custom firmware at your own risk. Back up your SD card and reading data befo
 
 ## Project Overview
 
-CPR-vCodex Stats 2.0.0 is the stabilized release line built from the restored 1.9.19 baseline. It consolidates the major work from the 1.7.5, 1.8.x, and 1.9.x development cycles into a single reader-focused firmware build.
-
 The 2.0.0 release centers on:
 
 - clearer Reading Stats and book-specific reading history
@@ -24,7 +22,6 @@ The 2.0.0 release centers on:
 - LyraVcodex2 as the stable CPR-vCodex visual direction
 - careful preservation of EPUB, TXT, and XTC reading stability
 
-The 1.9.20 and 1.9.21 experimental input/orientation changes are not part of this stabilized 2.0.0 baseline.
 
 ---
 
@@ -54,7 +51,7 @@ Guiding principles:
 | Covers | Shared cached cover lookup across Recent Books, Home, Reading Stats, To Read, and Library where practical |
 | Controls | CrossInk-style compact Controls UI with remappable power, front, side, and menu actions |
 | Reader | Text darkness modes, safer anti-aliased rendering, margin wiring, orientation target/cycle controls, and stable EPUB/TXT/XTC behavior |
-| Theme | LyraVcodex2 is the canonical CPR-vCodex UI path for 2.0.0 |
+| Theme | LyraVcodex2 |
 
 ---
 
@@ -74,13 +71,6 @@ Supported control areas include:
 - Home long-press shortcuts for current book and up-next behavior
 
 The Controls screen is designed to show concise labels and real choices. Unsupported or unsafe actions are hidden instead of being presented as no-op settings.
-
-Known intentionally hidden or limited actions:
-
-- screenshot appears only where the firmware has a real safe action path
-- file transfer is not shown in unsafe reader/menu contexts
-- unrelated reader/book actions are not shown in simplified power-button pickers
-- orientation actions are only shown where the reader orientation state is available
 
 ---
 
@@ -179,21 +169,6 @@ Reader Screen Margin is applied through reader viewport layout. EPUB and TXT pat
 5. Flash the firmware.
 6. Restart the device if needed.
 
-### Local Build
-
-For local development from the repository root:
-
-```bash
-pio run -e default
-```
-
-Simulator builds use:
-
-```bash
-pio run -e simulator
-```
-
-Release builds and published auto-flash assets should come from the project release workflow, not from arbitrary local files.
 
 ### Release Files
 
@@ -201,96 +176,6 @@ Release builds and published auto-flash assets should come from the project rele
 |---|---|
 | `.bin` | Flashable firmware image |
 | `.json` | Firmware metadata used by release tooling |
-
----
-
-## Version History
-
-This history summarizes the user-facing milestones from CPR-vCodex 1.7.5 through the 2.0.0 stabilization release. It is not a raw git log.
-
-### 2.0.0 - Stable CPR-vCodex Baseline
-
-2.0.0 is a stabilization release built from the restored 1.9.19 behavior.
-
-Highlights:
-
-- keeps LyraVcodex2 as the canonical CPR-vCodex UI path
-- preserves compact hold-preview interactions
-- preserves CrossInk-style Controls layout and mapped controls
-- preserves Reading Stats manual add/remove time
-- preserves Home metadata repair and Recent Books behavior
-- preserves unified cover and placeholder behavior
-- keeps EPUB, TXT, and XTC reader behavior stable
-- does not include the 1.9.20 or 1.9.21 experimental input/orientation consume-state changes
-
-### 1.9.x - Controls, Reader, and Stabilization
-
-The 1.9 series focused on controls, reader polish, Reading Stats detail behavior, and stabilization.
-
-Major changes:
-
-- LyraVcodex2 became the canonical CPR-vCodex theme path
-- theme switching was removed from the normal user flow to reduce maintenance complexity
-- CrossInk-style controls were adapted into CPR-vCodex
-- power, front, side, and menu controls became remappable where real firmware actions exist
-- compact Controls UI replaced cramped inline controls
-- orientation-aware reader controls were added
-- fixed orientation target and Cycle Orientations behavior were added
-- long-press menu actions were simplified to safe reader actions
-- hold-Back in the reader opens Recent Books
-- hold-preview interactions made hidden long-press actions discoverable
-- compact hold-preview rectangles replaced always-visible bottom hints
-- Reading Stats detail pages gained manual add/remove reading time
-- Reading Stats opened from the reader can return to the reader context
-- reader text darkness settings were wired into the actual render path
-- Extra Dark and Crisp / Nitido reader styles remained available
-- anti-aliased rendering was hardened to avoid mixed opacity artifacts
-- bundled reader font behavior was improved, including darker Bookerly assets where available
-- Reader Screen Margin wiring was checked and preserved
-- chapter skip direction was corrected so forward/back long presses move in the expected direction
-- Home metadata repair was added for missing titles and authors
-- Browse Files and Library hold actions gained temporary hold previews
-
-### 1.8.x - Library, Recent Books, Covers, and Home Flow
-
-The 1.8 series focused on the reading surfaces people use most often: Home, Library, Browse Files, Recent Books, and Reading Stats covers.
-
-Major changes:
-
-- Library root was reorganized into To Read, Finished, and compact author/folder rows
-- large author/folder cards were replaced with a compact folder list
-- Browse Files Back behavior was cleaned up so folder navigation returns to the new Library root
-- Bookshelf Columns and old file-browser view options were removed where they no longer applied
-- Finished Books was changed to use lightweight placeholders instead of expensive cover resolution
-- To Read, regular Library, Recent Books, Home, and Reading Stats moved toward shared cached cover lookup
-- Reading Stats book detail pages gained cover consistency with Recent Books
-- Recent Books was upstreamed/adapted from CrossInk-style grid behavior
-- Recent Books excludes the current book where practical
-- Recent Books uses a selected-book metadata band above the cover grid
-- Recent Books cover lookup was cached per visible page/session to avoid focus-move slowdown
-- hold-Back Recent Books and main Recent Books moved toward shared behavior
-- Home was simplified around the current-book hero and Recent Books access
-- Home Recent Books preview opens Recent Books on short select
-- holding the Home Recent Books preview opens the up-next book
-- Home and Apps shortcut visibility were separated
-- duplicate Stats / Reading Stats shortcuts were cleaned up
-- Recent Books was hidden from Apps by default when Home exposes it directly
-- cover rendering became more consistent across Sleep Screen, Home, Recent Books, Reading Stats, and Library where cached covers exist
-
-### 1.7.5 - Starting Point for the Stabilization Line
-
-1.7.5 is the baseline this README treats as the beginning of the documented 2.0.0 evolution.
-
-The later work built on that baseline by improving:
-
-- Reading Stats clarity and book-specific detail
-- Home active-reading navigation
-- Library and Browse Files structure
-- Recent Books as the primary active-book switcher
-- cached cover consistency
-- controls discoverability and remapping
-- LyraVcodex2 UI stability
-- EPUB/TXT/XTC reader behavior preservation
 
 ---
 
