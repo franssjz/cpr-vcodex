@@ -3,7 +3,7 @@
 #include <array>
 
 namespace {
-constexpr std::array<TimeZonePreset, 29> TIME_ZONE_PRESETS = {{
+constexpr std::array<TimeZonePreset, 30> TIME_ZONE_PRESETS = {{
     {"Europe/Madrid (Madrid)", "CET-1CEST,M3.5.0/2,M10.5.0/3"},
     {"UTC (UTC)", "UTC0"},
     {"Europe/London (London)", "GMT0BST,M3.5.0/1,M10.5.0/2"},
@@ -12,6 +12,7 @@ constexpr std::array<TimeZonePreset, 29> TIME_ZONE_PRESETS = {{
     {"Europe/Rome (Rome)", "CET-1CEST,M3.5.0/2,M10.5.0/3"},
     {"Europe/Athens (Athens)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
     {"Europe/Helsinki (Helsinki)", "EET-2EEST,M3.5.0/3,M10.5.0/4"},
+    {"Europe/Istanbul (Istanbul)", "TRT-3"},
     {"Europe/Moscow (Moscow)", "MSK-3"},
     {"America/New_York (New York)", "EST5EDT,M3.2.0/2,M11.1.0/2"},
     {"America/Chicago (Chicago)", "CST6CDT,M3.2.0/2,M11.1.0/2"},
