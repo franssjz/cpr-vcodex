@@ -14,6 +14,7 @@
 #include <limits>
 
 #include "AchievementsStore.h"
+#include "DictionaryStore.h"
 #include "BookmarksActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -307,6 +308,96 @@ void EpubReaderActivity::loop() {
 
   READING_STATS.tickActiveSession();
   const unsigned long nowMs = millis();
+
+  // Dictionary mode: power button toggles mode, navigation moves cursor
+  if (SETTINGS.shortPwrBtn == CrossPointSettings::DICT_MODE &&
+      mappedInput.wasReleased(MappedInputManager::Button::Power)) {
+    dictModeActive = !dictModeActive;
+    if (dictModeActive) {
+      dictCursorLineIdx = 0;
+      dictCursorWordIdx = 0;
+      dictDefinition[0] = '\0';
+      dictPopupVisible = false;
+      // Lazy-initialise: scan and load config the first time dict mode is
+      // entered so that dictionaries are available without requiring the user
+      // to open the Dictionary Settings screen first.
+      if (DICT_STORE.getEntries().empty()) {
+        DICT_STORE.scan();
+        DICT_STORE.loadConfig();
+      }
+    }
+    requestUpdate();
+    return;
+  }
+
+  if (dictModeActive) {
+    // Back: first press closes popup, second press exits dict mode
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      if (dictPopupVisible) {
+        dictPopupVisible = false;
+        dictDefinition[0] = '\0';
+      } else {
+        dictModeActive = false;
+      }
+      requestUpdate();
+      return;
+    }
+
+    // Confirm: look up the word under the cursor and show popup
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+      dictPopupVisible = true;  // lookup happens in render from page data
+      requestUpdate();
+      return;
+    }
+
+    // Navigation — uses ButtonNavigator so each axis has its own repeat timer.
+    // This prevents cross-axis timer interference (right-hold firing up, etc.).
+    bool cursorMoved = false;
+
+    dictLineNav.onPressAndContinuous(
+        {MappedInputManager::Button::Up, MappedInputManager::Button::PageBack}, [&] {
+          if (dictCursorLineIdx > 0) {
+            dictCursorLineIdx--;
+            dictCursorWordIdx = 0;
+            dictPopupVisible = false;
+            dictDefinition[0] = '\0';
+            cursorMoved = true;
+          }
+        });
+
+    dictLineNav.onPressAndContinuous(
+        {MappedInputManager::Button::Down, MappedInputManager::Button::PageForward}, [&] {
+          dictCursorLineIdx++;
+          dictCursorWordIdx = 0;
+          dictPopupVisible = false;
+          dictDefinition[0] = '\0';
+          cursorMoved = true;
+        });
+
+    dictWordNav.onPressAndContinuous({MappedInputManager::Button::Left}, [&] {
+      if (dictCursorWordIdx > 0) {
+        dictCursorWordIdx--;
+      } else if (dictCursorLineIdx > 0) {
+        dictCursorLineIdx--;
+        dictCursorWordIdx = 999;  // will be clamped on render
+      }
+      dictPopupVisible = false;
+      dictDefinition[0] = '\0';
+      cursorMoved = true;
+    });
+
+    dictWordNav.onPressAndContinuous({MappedInputManager::Button::Right}, [&] {
+      dictCursorWordIdx++;
+      dictPopupVisible = false;
+      dictDefinition[0] = '\0';
+      cursorMoved = true;
+    });
+
+    if (cursorMoved) {
+      requestUpdate();
+    }
+    return;
+  }
 
   if (waitingForConfirmSecondClick && ReaderUtils::hasNonConfirmNavigationInput(mappedInput)) {
     waitingForConfirmSecondClick = false;
@@ -1219,9 +1310,152 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     // Collect footnotes from the loaded page
     currentPageFootnotes = std::move(p->footnotes);
 
+    // Dict mode: extract cursor word position before page is consumed
+    struct DictCursorInfo {
+      bool valid = false;
+      int16_t x = 0;
+      int16_t y = 0;
+      int16_t lineH = 0;
+      int16_t wordW = 0;        // pixel width of displayWord (for highlight rect)
+      std::string word;         // alpha-stripped / hyphen-stitched word for lookup
+      std::string displayWord;  // raw token as rendered on screen (for white re-draw)
+    } dictCursor;
+
+    if (dictModeActive) {
+      // First pass: count all PageLine elements to get total for clamping.
+      int totalLines = 0;
+      for (const auto& el : p->elements) {
+        if (el->getTag() == TAG_PageLine) totalLines++;
+      }
+      // Clamp BEFORE searching so we always find a valid entry.
+      if (totalLines > 0 && dictCursorLineIdx >= totalLines) {
+        dictCursorLineIdx = totalLines - 1;
+      }
+
+      // Second pass: find the target line.
+      // Also collect context words from adjacent lines for hyphenation detection:
+      //   prevLineLastRaw – last stored word of line (dictCursorLineIdx-1)
+      //   nextLineFirstRaw – first stored word of line (dictCursorLineIdx+1)
+      // When the hyphenator split a word at a line break it appends a literal '-'
+      // to the prefix entry and places the remainder as the first word of the next
+      // line.  We detect both halves so that a lookup on either half finds the
+      // full word.
+      int lineIdx = 0;
+      std::string rawWord;
+      std::string prevLineLastRaw;
+      std::string nextLineFirstRaw;
+      bool foundCursorLine = false;
+
+      for (const auto& el : p->elements) {
+        if (el->getTag() != TAG_PageLine) continue;
+        const auto* pl = static_cast<const PageLine*>(el.get());
+        const auto& elWords = pl->getBlock()->getWords();
+
+        if (lineIdx == dictCursorLineIdx - 1) {
+          if (!elWords.empty()) prevLineLastRaw = elWords.back();
+        }
+
+        if (lineIdx == dictCursorLineIdx) {
+          foundCursorLine = true;
+          if (!elWords.empty()) {
+            const auto& xpos = pl->getBlock()->getWordXpos();
+            if (dictCursorWordIdx >= static_cast<int>(elWords.size())) {
+              dictCursorWordIdx = static_cast<int>(elWords.size()) - 1;
+            }
+            dictCursor.valid = true;
+            dictCursor.x = pl->xPos + orientedMarginLeft + xpos[dictCursorWordIdx];
+            dictCursor.y = pl->yPos + orientedMarginTop;
+            rawWord = elWords[dictCursorWordIdx];
+            dictCursor.displayWord = rawWord;
+            const int readerFontId = SETTINGS.getReaderFontId();
+            dictCursor.lineH = static_cast<int16_t>(renderer.getLineHeight(readerFontId));
+            dictCursor.wordW  = static_cast<int16_t>(renderer.getTextWidth(readerFontId, rawWord.c_str()));
+            // Strip leading/trailing punctuation so the lookup word is clean.
+            size_t ws = 0;
+            while (ws < rawWord.size() && !isalpha(static_cast<unsigned char>(rawWord[ws]))) ws++;
+            size_t we = rawWord.size();
+            while (we > ws && !isalpha(static_cast<unsigned char>(rawWord[we - 1]))) we--;
+            dictCursor.word = rawWord.substr(ws, we - ws);
+          }
+        }
+
+        if (foundCursorLine && lineIdx == dictCursorLineIdx + 1) {
+          if (!elWords.empty()) nextLineFirstRaw = elWords.front();
+          break;
+        }
+
+        lineIdx++;
+      }
+
+      // Hyphenation detection: the hyphenator stores "ridic-" on line N and
+      // "ulous" on line N+1.  We stitch both halves so the full word is looked up.
+      if (!dictCursor.word.empty()) {
+        // Helper: extract the alpha-only core of a raw word token.
+        auto alphaCore = [](const std::string& w) -> std::string {
+          size_t s = 0;
+          while (s < w.size() && !isalpha(static_cast<unsigned char>(w[s]))) s++;
+          size_t e = w.size();
+          while (e > s && !isalpha(static_cast<unsigned char>(w[e - 1]))) e--;
+          return w.substr(s, e - s);
+        };
+
+        // Case 1: selected word's raw form ends with '-' → cursor is on the
+        //         first half; append the alpha core of the next line's first word.
+        if (!rawWord.empty() && rawWord.back() == '-' && !nextLineFirstRaw.empty()) {
+          dictCursor.word += alphaCore(nextLineFirstRaw);
+        }
+        // Case 2: cursor is on the first word of the line AND the previous
+        //         line's last word ends with '-' → cursor is on the second half;
+        //         prepend the alpha core (without the trailing '-') of that word.
+        else if (dictCursorWordIdx == 0 && !prevLineLastRaw.empty() &&
+                 prevLineLastRaw.back() == '-') {
+          dictCursor.word = alphaCore(prevLineLastRaw) + dictCursor.word;
+        }
+      }
+
+      // Perform dictionary lookup only when Confirm was pressed (dictPopupVisible set in loop)
+      if (dictCursor.valid && dictPopupVisible && dictDefinition[0] == '\0') {
+        DICT_STORE.lookup(dictCursor.word.c_str(), dictDefinition, sizeof(dictDefinition),
+                          epub->getLanguage().c_str());
+        if (dictDefinition[0] == '\0') {
+          strncpy(dictDefinition, tr(STR_NO_DEFINITION), sizeof(dictDefinition) - 1);
+          dictDefinition[sizeof(dictDefinition) - 1] = '\0';
+        }
+      }
+    }
+
     const auto start = millis();
     renderContents(std::move(p), orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
+
+    // Dict mode overlay: always draw cursor underline; draw popup only when visible
+    if (dictModeActive && dictCursor.valid) {
+      const int screenW = renderer.getScreenWidth();
+      const int screenH = renderer.getScreenHeight();
+      // Invert the selected word: black background + white text
+      renderer.fillRect(dictCursor.x, dictCursor.y, dictCursor.wordW, dictCursor.lineH, true);
+      renderer.drawText(SETTINGS.getReaderFontId(), dictCursor.x, dictCursor.y,
+                        dictCursor.displayWord.c_str(), false);
+      // Draw definition popup only after Confirm was pressed
+      if (dictPopupVisible) {
+        constexpr int POPUP_PAD = 8;
+        constexpr int POPUP_MAX_LINES = 3;
+        const int lineH = renderer.getLineHeight(UI_12_FONT_ID) + 2;
+        const int popupH = POPUP_PAD * 2 + lineH * POPUP_MAX_LINES;
+        const int popupY = (dictCursor.y < screenH / 2) ? (screenH - popupH - 4) : 4;
+        renderer.fillRect(0, popupY, screenW, popupH, false);
+        renderer.drawRect(2, popupY + 2, screenW - 4, popupH - 4, true);
+        const char* defText = (dictDefinition[0] != '\0') ? dictDefinition : tr(STR_NO_DEFINITION);
+        const auto defLines = renderer.wrappedText(UI_12_FONT_ID, defText,
+                                                   screenW - POPUP_PAD * 2, POPUP_MAX_LINES);
+        int lineY = popupY + POPUP_PAD;
+        for (const auto& line : defLines) {
+          renderer.drawText(UI_12_FONT_ID, POPUP_PAD, lineY, line.c_str(), true);
+          lineY += lineH;
+        }
+      }
+      renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    }
   }
   silentIndexNextChapterIfNeeded(viewportWidth, viewportHeight);
   saveProgress(currentSpineIndex, section->currentPage, section->pageCount);

@@ -17,6 +17,7 @@
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
+#include "DictionarySettingsActivity.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
 #include "KOReaderSettingsActivity.h"
@@ -133,7 +134,8 @@ const std::vector<SettingInfo>& getDeviceControlsSettings() {
                           {StrId::STR_LONG_PRESS_BEHAVIOR_OFF, StrId::STR_LONG_PRESS_BEHAVIOR_SKIP,
                            StrId::STR_LONG_PRESS_BEHAVIOR_ORIENTATION}),
         SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                          {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH}),
+                          {StrId::STR_IGNORE, StrId::STR_SLEEP, StrId::STR_PAGE_TURN, StrId::STR_FORCE_REFRESH, StrId::STR_DICT_MODE}),
+        SettingInfo::Action(StrId::STR_MANAGE_DICTS, SettingAction::ManageDictionaries),
     };
     if (halTiltSensor.isAvailable()) {
       result.push_back(SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
@@ -772,6 +774,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::IfFound:
         startActivityForResult(std::make_unique<IfFoundActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::ManageDictionaries:
+        startActivityForResult(std::make_unique<DictionarySettingsActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::None:
         // Do nothing

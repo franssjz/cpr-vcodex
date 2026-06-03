@@ -8,6 +8,7 @@
 #include "BookmarkStore.h"
 #include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
+#include "util/ButtonNavigator.h"
 
 class EpubReaderActivity final : public Activity {
   std::shared_ptr<Epub> epub;
@@ -79,6 +80,15 @@ class EpubReaderActivity final : public Activity {
   void renderStatusBar() const;
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
   void saveProgress(int spineIndex, int currentPage, int pageCount);
+  // Dictionary cursor mode
+  bool dictModeActive = false;
+  bool dictPopupVisible = false;  // definition popup is showing
+  int dictCursorLineIdx = 0;
+  int dictCursorWordIdx = 0;
+  char dictDefinition[512] = {};
+  ButtonNavigator dictLineNav;  // Up/Down/PageBack/PageForward – line navigation
+  ButtonNavigator dictWordNav;  // Left/Right – word navigation
+
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);

@@ -44,6 +44,7 @@ class TextBlock final : public Block {
   void setBlockStyle(const BlockStyle& blockStyle) { this->blockStyle = blockStyle; }
   const BlockStyle& getBlockStyle() const { return blockStyle; }
   const std::vector<std::string>& getWords() const { return words; }
+  const std::vector<int16_t>& getWordXpos() const { return wordXpos; }
   bool isEmpty() override { return words.empty(); }
   size_t wordCount() const { return words.size(); }
   void recordFontUsage(FontCacheManager& fontCacheManager, int fontId, uint8_t bionicReadingMode = 0) const;
