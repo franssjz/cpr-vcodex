@@ -86,6 +86,11 @@ class EpubReaderActivity final : public Activity {
   int dictCursorLineIdx = 0;
   int dictCursorWordIdx = 0;
   char dictDefinition[512] = {};
+  char dictLookedUpWord[256] = {};  // word that produced the current definition (set by render)
+  int dictPopupScrollOffset = 0;    // first visible line within the wrapped definition (page multiple)
+  int dictActiveDictIdx = 0;        // index within enabled-only dict list shown in popup
+  int dictPopupTotalLines = 0;      // total wrapped lines of current definition (set by render)
+  int dictCurrentLineWordCount = 999; // word count of cursor line (set each render, used by Right)
   ButtonNavigator dictLineNav;  // Up/Down/PageBack/PageForward – line navigation
   ButtonNavigator dictWordNav;  // Left/Right – word navigation
 

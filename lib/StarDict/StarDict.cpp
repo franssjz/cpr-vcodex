@@ -204,8 +204,11 @@ void StarDict::close() {
 // buildCheckpoints
 // ---------------------------------------------------------------------------
 
-bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) const {
-  out.clear();
+bool StarDict::buildCheckpoints(std::vector<uint32_t>& byteOffsets,
+                                 std::vector<uint32_t>& ordinals,
+                                 uint32_t chunkSize) const {
+  byteOffsets.clear();
+  ordinals.clear();
   if (!opened) {
     return false;
   }
@@ -216,19 +219,17 @@ bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) 
     return false;
   }
 
-  // First entry always starts at byte 0.
-  out.push_back(0);
+  // First entry always starts at byte 0, ordinal 0.
+  byteOffsets.push_back(0);
+  ordinals.push_back(0);
   uint32_t nextCheckpoint = chunkSize;
 
-  // Read in blocks for efficiency; parse the structure byte-by-byte.
-  // Because we start from position 0 (a known-good boundary), every null
-  // byte we encounter in `inWord=true` state is guaranteed to be a real
-  // word terminator, not a false positive from binary header data.
   static constexpr uint32_t BLOCK_SIZE = 512;
   uint8_t block[BLOCK_SIZE];
   uint32_t filePos = 0;
-  bool inWord = true;     // true: reading word chars; false: consuming 8-byte binary header
-  uint8_t binaryLeft = 0; // header bytes remaining
+  bool inWord = true;
+  uint8_t binaryLeft = 0;
+  uint32_t ordinalCount = 0;  // number of completed entries so far
 
   while (true) {
     const int n = idxFile.read(block, BLOCK_SIZE);
@@ -243,10 +244,11 @@ bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) 
         }
       } else {
         if (--binaryLeft == 0) {
-          // byte at filePos+i was the last header byte; next byte is entry start.
+          ordinalCount++;  // one entry completed
           const uint32_t entryStart = filePos + static_cast<uint32_t>(i) + 1;
           if (entryStart >= nextCheckpoint) {
-            out.push_back(entryStart);
+            byteOffsets.push_back(entryStart);
+            ordinals.push_back(ordinalCount);
             nextCheckpoint = entryStart + chunkSize;
           }
           inWord = true;
@@ -258,7 +260,7 @@ bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) 
 
   idxFile.close();
   LOG_DBG("SD", "StarDict: built %u checkpoints for '%s'",
-          static_cast<unsigned>(out.size()), bookName.c_str());
+          static_cast<unsigned>(byteOffsets.size()), bookName.c_str());
   return true;
 }
 
@@ -266,12 +268,13 @@ bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) 
 // saveCheckpoints / loadCheckpoints
 // ---------------------------------------------------------------------------
 // Cache file format (all integers big-endian uint32):
-//   [0..3]  magic  = 0x44 0x43 0x48 0x4B  ("DCHK")
+//   [0..3]  magic  = 0x44 0x43 0x48 0x4F  ("DCHO")  — v2, includes ordinals
 //   [4..7]  idxFileSize
 //   [8..11] checkpoint count N
-//   [12..]  N × checkpoint values
+//   [12 .. 12+N*4-1]  N byte offsets
+//   [12+N*4 .. 12+N*8-1]  N ordinal counts
 
-static constexpr uint8_t CACHE_MAGIC[4] = {0x44, 0x43, 0x48, 0x4B};
+static constexpr uint8_t CACHE_MAGIC[4] = {0x44, 0x43, 0x48, 0x4F};
 
 static void writeBE32(uint8_t* buf, uint32_t v) {
   buf[0] = static_cast<uint8_t>(v >> 24);
@@ -281,12 +284,12 @@ static void writeBE32(uint8_t* buf, uint32_t v) {
 }
 
 bool StarDict::saveCheckpoints(const std::string& cachePath,
-                                const std::vector<uint32_t>& checkpoints) const {
-  if (!opened || checkpoints.empty()) {
+                                const std::vector<uint32_t>& byteOffsets,
+                                const std::vector<uint32_t>& ordinals) const {
+  if (!opened || byteOffsets.empty() || byteOffsets.size() != ordinals.size()) {
     return false;
   }
 
-  // Write to a temp file then rename for atomicity.
   const std::string tmpPath = cachePath + ".tmp";
   Storage.remove(tmpPath.c_str());
 
@@ -303,17 +306,27 @@ bool StarDict::saveCheckpoints(const std::string& cachePath,
   hdr[2] = CACHE_MAGIC[2];
   hdr[3] = CACHE_MAGIC[3];
   writeBE32(hdr + 4, static_cast<uint32_t>(idxFileSize));
-  writeBE32(hdr + 8, static_cast<uint32_t>(checkpoints.size()));
+  writeBE32(hdr + 8, static_cast<uint32_t>(byteOffsets.size()));
   if (f.write(hdr, sizeof(hdr)) != sizeof(hdr)) {
     f.close();
     Storage.remove(tmpPath.c_str());
     return false;
   }
 
-  // Checkpoint values
+  // Byte offsets
   uint8_t buf[4];
-  for (const uint32_t cp : checkpoints) {
-    writeBE32(buf, cp);
+  for (const uint32_t v : byteOffsets) {
+    writeBE32(buf, v);
+    if (f.write(buf, 4) != 4) {
+      f.close();
+      Storage.remove(tmpPath.c_str());
+      return false;
+    }
+  }
+
+  // Ordinals
+  for (const uint32_t v : ordinals) {
+    writeBE32(buf, v);
     if (f.write(buf, 4) != 4) {
       f.close();
       Storage.remove(tmpPath.c_str());
@@ -331,13 +344,15 @@ bool StarDict::saveCheckpoints(const std::string& cachePath,
   }
 
   LOG_DBG("SD", "StarDict: saved %u checkpoints to '%s'",
-          static_cast<unsigned>(checkpoints.size()), cachePath.c_str());
+          static_cast<unsigned>(byteOffsets.size()), cachePath.c_str());
   return true;
 }
 
 bool StarDict::loadCheckpoints(const std::string& cachePath,
-                                std::vector<uint32_t>& out) const {
-  out.clear();
+                                std::vector<uint32_t>& byteOffsets,
+                                std::vector<uint32_t>& ordinals) const {
+  byteOffsets.clear();
+  ordinals.clear();
   if (!opened) {
     return false;
   }
@@ -356,7 +371,7 @@ bool StarDict::loadCheckpoints(const std::string& cachePath,
     return false;
   }
 
-  // Validate magic
+  // Validate magic (must be DCHO — v2 format with ordinals)
   if (hdr[0] != CACHE_MAGIC[0] || hdr[1] != CACHE_MAGIC[1] ||
       hdr[2] != CACHE_MAGIC[2] || hdr[3] != CACHE_MAGIC[3]) {
     f.close();
@@ -378,20 +393,32 @@ bool StarDict::loadCheckpoints(const std::string& cachePath,
     return false;
   }
 
-  out.reserve(count);
+  byteOffsets.reserve(count);
+  ordinals.reserve(count);
   uint8_t buf[4];
+
   for (uint32_t i = 0; i < count; ++i) {
     if (f.read(buf, 4) != 4) {
-      out.clear();
+      byteOffsets.clear();
+      ordinals.clear();
       f.close();
       return false;
     }
-    out.push_back(readBE32(buf));
+    byteOffsets.push_back(readBE32(buf));
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    if (f.read(buf, 4) != 4) {
+      byteOffsets.clear();
+      ordinals.clear();
+      f.close();
+      return false;
+    }
+    ordinals.push_back(readBE32(buf));
   }
 
   f.close();
   LOG_DBG("SD", "StarDict: loaded %u checkpoints from cache '%s'",
-          static_cast<unsigned>(out.size()), cachePath.c_str());
+          static_cast<unsigned>(byteOffsets.size()), cachePath.c_str());
   return true;
 }
 
@@ -617,4 +644,151 @@ bool StarDict::linearSearchIdx(HalFile& idxFile, size_t lo, size_t hi, const cha
     // full [lo, hi] window rather than stopping prematurely).
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// .syn binary/linear search  (entry layout: word\0 + 4-byte BE ordinal)
+// ---------------------------------------------------------------------------
+
+bool StarDict::linearSearchSyn(HalFile& synFile, size_t lo, size_t hi,
+                                const char* word, uint32_t& outOrdinal) {
+  if (lo >= hi) return false;
+  if (!synFile.seek(lo)) return false;
+
+  char wordBuf[MAX_WORD_LEN];
+  while (synFile.position() < hi) {
+    const int wlen = readWordFromFile(synFile, wordBuf, static_cast<int>(MAX_WORD_LEN));
+    if (wlen == 0 && static_cast<size_t>(synFile.position()) >= hi) break;
+
+    uint8_t raw[4];
+    if (synFile.read(raw, 4) != 4) break;
+
+    const int cmp = wordcmp(word, wordBuf);
+    if (cmp == 0) {
+      outOrdinal = readBE32(raw);
+      return true;
+    }
+  }
+  return false;
+}
+
+bool StarDict::binarySearchSyn(HalFile& synFile, size_t fileSize,
+                                const char* word, uint32_t& outOrdinal) {
+  size_t lo = 0;
+  size_t hi = fileSize;
+  char wordBuf[MAX_WORD_LEN];
+
+  // .syn entries are: word\0 + 4 bytes (ordinal).
+  // Same scan-back trick as binarySearchIdx, but skip only 4 bytes not 8.
+  static constexpr size_t SUFFIX = 4;
+  static constexpr size_t SCAN_BACK = MAX_WORD_LEN + SUFFIX;  // 260 bytes
+
+  while (hi > lo && (hi - lo) > LINEAR_SCAN_THRESHOLD) {
+    const size_t mid = lo + (hi - lo) / 2;
+    const size_t safeScanFrom = (mid > SCAN_BACK) ? (mid - SCAN_BACK) : 0;
+    if (!synFile.seek(safeScanFrom)) break;
+
+    // Skip to end of current (partial) word
+    {
+      int limit = static_cast<int>(MAX_WORD_LEN) + 1;
+      while (limit-- > 0) {
+        int c = synFile.read();
+        if (c < 0) goto doLinearSyn;
+        if (c == '\0') break;
+      }
+      if (limit < 0) goto doLinearSyn;
+    }
+
+    // Skip the 4-byte ordinal of the entry whose word we just skipped
+    if (!synFile.seekCur(SUFFIX)) break;
+
+    {
+      const size_t entryStart = synFile.position();
+      if (entryStart >= hi) { hi = mid; continue; }
+
+      const int wlen = readWordFromFile(synFile, wordBuf, static_cast<int>(MAX_WORD_LEN));
+      if (wlen == 0) goto doLinearSyn;
+
+      const int cmp = wordcmp(word, wordBuf);
+      if (cmp == 0) {
+        uint8_t raw[4];
+        if (synFile.read(raw, 4) != 4) return false;
+        outOrdinal = readBE32(raw);
+        return true;
+      } else if (cmp < 0) {
+        hi = entryStart;
+      } else {
+        lo = entryStart + static_cast<size_t>(wlen) + 1 + SUFFIX;
+      }
+    }
+  }
+
+doLinearSyn:
+  return linearSearchSyn(synFile, lo, hi, word, outOrdinal);
+}
+
+// ---------------------------------------------------------------------------
+// headwordAtOrdinal — read canonical headword from .idx at a given ordinal
+// ---------------------------------------------------------------------------
+
+std::string StarDict::headwordAtOrdinal(uint32_t ordinal,
+                                         const std::vector<uint32_t>& cpBytes,
+                                         const std::vector<uint32_t>& cpOrdinals) const {
+  if (!opened || cpBytes.empty() || cpBytes.size() != cpOrdinals.size()) return "";
+
+  // Binary search cpOrdinals: find largest i where cpOrdinals[i] <= ordinal.
+  size_t lo = 0;
+  size_t hi = cpOrdinals.size();
+  while (lo + 1 < hi) {
+    const size_t mid = lo + (hi - lo) / 2;
+    if (cpOrdinals[mid] <= ordinal) lo = mid;
+    else hi = mid;
+  }
+
+  HalFile idxFile;
+  if (!Storage.openFileForRead("SD", idxPath, idxFile)) return "";
+  if (!idxFile.seek(cpBytes[lo])) { idxFile.close(); return ""; }
+
+  // Skip (ordinal - cpOrdinals[lo]) entries linearly
+  const uint32_t skip = ordinal - cpOrdinals[lo];
+  char buf[MAX_WORD_LEN];
+  for (uint32_t i = 0; i < skip; i++) {
+    if (readWordFromFile(idxFile, buf, static_cast<int>(MAX_WORD_LEN)) < 0) {
+      idxFile.close();
+      return "";
+    }
+    uint8_t junk[8];
+    if (idxFile.read(junk, 8) != 8) { idxFile.close(); return ""; }
+  }
+
+  const int len = readWordFromFile(idxFile, buf, static_cast<int>(MAX_WORD_LEN));
+  idxFile.close();
+  if (len <= 0) return "";
+  return std::string(buf, static_cast<size_t>(len));
+}
+
+// ---------------------------------------------------------------------------
+// lookupSyn — alternate-form lookup via .syn
+// ---------------------------------------------------------------------------
+
+bool StarDict::lookupSyn(const char* word, std::string& outHeadword,
+                          const std::vector<uint32_t>& cpBytes,
+                          const std::vector<uint32_t>& cpOrdinals) const {
+  if (!opened || !word) return false;
+
+  const std::string synPath = idxPath.substr(0, idxPath.size() - 4) + ".syn";
+  if (!Storage.exists(synPath.c_str())) return false;
+
+  HalFile synFile;
+  if (!Storage.openFileForRead("SD", synPath, synFile)) return false;
+
+  const size_t synFileSize = static_cast<size_t>(synFile.fileSize());
+  uint32_t ordinal = 0;
+  const bool found = binarySearchSyn(synFile, synFileSize, word, ordinal);
+  synFile.close();
+
+  if (!found) return false;
+
+  outHeadword = headwordAtOrdinal(ordinal, cpBytes, cpOrdinals);
+  return !outHeadword.empty();
 }

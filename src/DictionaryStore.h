@@ -23,7 +23,8 @@ struct DictEntry {
   std::string basePath;  // Absolute path of the .ifo file (identifies the dict)
   std::string lang;      // Language tag from .ifo (e.g. "tr", "en-tr", may be empty)
   bool enabled = true;
-  mutable std::vector<uint32_t> idxCheckpoints;  // built by scan() for reliable lookup
+  mutable std::vector<uint32_t> idxCheckpoints;  // byte offsets, built by scan()
+  mutable std::vector<uint32_t> idxOrdinals;     // ordinal counts at each checkpoint
 };
 
 class DictionaryStore {
@@ -54,6 +55,19 @@ class DictionaryStore {
   // dict has no lang info it is always tried.
   bool lookup(const char* word, char* definition, size_t maxLen,
               const char* bookLang = nullptr) const;
+
+  // Look up in a specific dict identified by its index within the enabled-only
+  // list (0 = first enabled dict). No language filtering is applied.
+  // Returns true if a definition was found.
+  bool lookupInEnabledEntry(int enabledIndex, const char* word, char* definition,
+                             size_t maxLen) const;
+
+  // Human-readable name of the enabled dictionary at enabledIndex, or "" if
+  // out of range.
+  std::string getEnabledEntryName(int enabledIndex) const;
+
+  // Count of currently enabled dictionaries.
+  int enabledCount() const;
 
   // All known dictionaries in their current display/search order.
   const std::vector<DictEntry>& getEntries() const { return entries; }

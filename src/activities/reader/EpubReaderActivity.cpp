@@ -318,6 +318,8 @@ void EpubReaderActivity::loop() {
       dictCursorWordIdx = 0;
       dictDefinition[0] = '\0';
       dictPopupVisible = false;
+      dictActiveDictIdx = 0;
+      dictPopupScrollOffset = 0;
       // Lazy-initialise: scan and load config the first time dict mode is
       // entered so that dictionaries are available without requiring the user
       // to open the Dictionary Settings screen first.
@@ -348,7 +350,71 @@ void EpubReaderActivity::loop() {
     // Confirm: look up the word under the cursor and show popup
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       dictPopupVisible = true;  // lookup happens in render from page data
+      dictActiveDictIdx = 0;
+      dictPopupScrollOffset = 0;
       requestUpdate();
+      return;
+    }
+
+    // When popup is open: Up/Down (= PageBack/PageForward, same physical side buttons)
+    // scroll the definition. At the top boundary Up switches to the previous dictionary;
+    // at the bottom boundary Down switches to the next dictionary.
+    // dictLineNav is used so the proven repeat-timer mechanism is shared with cursor nav.
+    if (dictPopupVisible) {
+      constexpr int POPUP_VISIBLE_LINES = 4;
+      bool popupChanged = false;
+      dictLineNav.onPressAndContinuous(
+          {MappedInputManager::Button::Up, MappedInputManager::Button::PageBack}, [&] {
+            if (dictPopupScrollOffset > 0) {
+              // Go back one full page (scrollOffset is always a POPUP_VISIBLE_LINES multiple).
+              dictPopupScrollOffset -= POPUP_VISIBLE_LINES;
+              popupChanged = true;
+            } else if (dictActiveDictIdx > 0 && dictLookedUpWord[0] != '\0') {
+              // Backward search: find the nearest previous dict that has a definition.
+              int prevIdx = dictActiveDictIdx - 1;
+              char testDef[32];
+              while (prevIdx >= 0 &&
+                     !DICT_STORE.lookupInEnabledEntry(prevIdx, dictLookedUpWord, testDef, sizeof(testDef))) {
+                prevIdx--;
+              }
+              if (prevIdx >= 0) {
+                dictActiveDictIdx = prevIdx;
+                dictDefinition[0] = '\0';
+                dictPopupScrollOffset = 0;
+                dictPopupTotalLines = 0;
+                popupChanged = true;
+              }
+            }
+          });
+      dictLineNav.onPressAndContinuous(
+          {MappedInputManager::Button::Down, MappedInputManager::Button::PageForward}, [&] {
+            // totalPages = ceil(totalLines / POPUP_VISIBLE_LINES)
+            const int totalPages = (dictPopupTotalLines + POPUP_VISIBLE_LINES - 1) / POPUP_VISIBLE_LINES;
+            const int currentPage = (POPUP_VISIBLE_LINES > 0)
+                                        ? dictPopupScrollOffset / POPUP_VISIBLE_LINES
+                                        : 0;
+            if (currentPage < totalPages - 1) {
+              // Advance one page; scrollOffset stays a POPUP_VISIBLE_LINES multiple.
+              dictPopupScrollOffset += POPUP_VISIBLE_LINES;
+              popupChanged = true;
+            } else if (dictLookedUpWord[0] != '\0') {
+              // Forward search: find the nearest next dict that has a definition.
+              int nextIdx = dictActiveDictIdx + 1;
+              char testDef[32];
+              while (nextIdx < DICT_STORE.enabledCount() &&
+                     !DICT_STORE.lookupInEnabledEntry(nextIdx, dictLookedUpWord, testDef, sizeof(testDef))) {
+                nextIdx++;
+              }
+              if (nextIdx < DICT_STORE.enabledCount()) {
+                dictActiveDictIdx = nextIdx;
+                dictDefinition[0] = '\0';
+                dictPopupScrollOffset = 0;
+                dictPopupTotalLines = 0;
+                popupChanged = true;
+              }
+            }
+          });
+      if (popupChanged) requestUpdate();
       return;
     }
 
@@ -389,7 +455,13 @@ void EpubReaderActivity::loop() {
     });
 
     dictWordNav.onPressAndContinuous({MappedInputManager::Button::Right}, [&] {
-      dictCursorWordIdx++;
+      if (dictCursorWordIdx + 1 < dictCurrentLineWordCount) {
+        dictCursorWordIdx++;
+      } else {
+        // end of line: wrap to first word of next line
+        dictCursorLineIdx++;
+        dictCursorWordIdx = 0;
+      }
       dictPopupVisible = false;
       dictDefinition[0] = '\0';
       cursorMoved = true;
@@ -1361,8 +1433,9 @@ void EpubReaderActivity::render(RenderLock&& lock) {
           foundCursorLine = true;
           if (!elWords.empty()) {
             const auto& xpos = pl->getBlock()->getWordXpos();
-            if (dictCursorWordIdx >= static_cast<int>(elWords.size())) {
-              dictCursorWordIdx = static_cast<int>(elWords.size()) - 1;
+            dictCurrentLineWordCount = static_cast<int>(elWords.size());
+            if (dictCursorWordIdx >= dictCurrentLineWordCount) {
+              dictCursorWordIdx = dictCurrentLineWordCount - 1;
             }
             dictCursor.valid = true;
             dictCursor.x = pl->xPos + orientedMarginLeft + xpos[dictCursorWordIdx];
@@ -1415,11 +1488,24 @@ void EpubReaderActivity::render(RenderLock&& lock) {
         }
       }
 
-      // Perform dictionary lookup only when Confirm was pressed (dictPopupVisible set in loop)
+      // Perform dictionary lookup only when Confirm was pressed (dictPopupVisible set in loop).
+      // Try dicts starting from dictActiveDictIdx; auto-advance to the first dict that has a hit
+      // (restores the original fallback behaviour while still allowing manual dict switching).
       if (dictCursor.valid && dictPopupVisible && dictDefinition[0] == '\0') {
-        DICT_STORE.lookup(dictCursor.word.c_str(), dictDefinition, sizeof(dictDefinition),
-                          epub->getLanguage().c_str());
-        if (dictDefinition[0] == '\0') {
+        const int numDicts = DICT_STORE.enabledCount();
+        bool found = false;
+        for (int di = dictActiveDictIdx; di < numDicts; di++) {
+          if (DICT_STORE.lookupInEnabledEntry(di, dictCursor.word.c_str(),
+                                              dictDefinition, sizeof(dictDefinition))) {
+            dictActiveDictIdx = di;
+            // Save the word so loop() can search backward across dicts.
+            strncpy(dictLookedUpWord, dictCursor.word.c_str(), sizeof(dictLookedUpWord) - 1);
+            dictLookedUpWord[sizeof(dictLookedUpWord) - 1] = '\0';
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
           strncpy(dictDefinition, tr(STR_NO_DEFINITION), sizeof(dictDefinition) - 1);
           dictDefinition[sizeof(dictDefinition) - 1] = '\0';
         }
@@ -1441,18 +1527,35 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       // Draw definition popup only after Confirm was pressed
       if (dictPopupVisible) {
         constexpr int POPUP_PAD = 8;
-        constexpr int POPUP_MAX_LINES = 3;
+        constexpr int POPUP_MAX_LINES = 4;
         const int lineH = renderer.getLineHeight(UI_12_FONT_ID) + 2;
         const int popupH = POPUP_PAD * 2 + lineH * POPUP_MAX_LINES;
         const int popupY = (dictCursor.y < screenH / 2) ? (screenH - popupH - 4) : 4;
         renderer.fillRect(0, popupY, screenW, popupH, false);
         renderer.drawRect(2, popupY + 2, screenW - 4, popupH - 4, true);
         const char* defText = (dictDefinition[0] != '\0') ? dictDefinition : tr(STR_NO_DEFINITION);
-        const auto defLines = renderer.wrappedText(UI_12_FONT_ID, defText,
-                                                   screenW - POPUP_PAD * 2, POPUP_MAX_LINES);
+        // Wrap to a generous limit, then show a scrollable window of POPUP_MAX_LINES.
+        constexpr int POPUP_WRAP_MAX = 20;
+        const auto allLines = renderer.wrappedText(UI_12_FONT_ID, defText,
+                                                   screenW - POPUP_PAD * 2, POPUP_WRAP_MAX);
+        const int totalDefLines = static_cast<int>(allLines.size());
+        dictPopupTotalLines = totalDefLines;  // expose to loop() for boundary dict-switching
+        // Clamp scroll offset to a valid page boundary (always a multiple of POPUP_MAX_LINES).
+        // This handles the case where the definition changed (e.g. different dict) and the
+        // previous offset is past the last page.
+        if (totalDefLines > 0) {
+          const int lastPageStart = ((totalDefLines - 1) / POPUP_MAX_LINES) * POPUP_MAX_LINES;
+          if (dictPopupScrollOffset > lastPageStart) {
+            dictPopupScrollOffset = lastPageStart;
+          }
+        } else {
+          dictPopupScrollOffset = 0;
+        }
         int lineY = popupY + POPUP_PAD;
-        for (const auto& line : defLines) {
-          renderer.drawText(UI_12_FONT_ID, POPUP_PAD, lineY, line.c_str(), true);
+        const int startLine = dictPopupScrollOffset;
+        const int endLine = std::min(startLine + POPUP_MAX_LINES, totalDefLines);
+        for (int i = startLine; i < endLine; i++) {
+          renderer.drawText(UI_12_FONT_ID, POPUP_PAD, lineY, allLines[i].c_str(), true);
           lineY += lineH;
         }
       }

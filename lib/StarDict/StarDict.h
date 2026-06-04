@@ -47,29 +47,38 @@ class StarDict {
   // Total number of words (informational only).
   uint32_t getWordCount() const { return wordCount; }
 
-  // Build a compact checkpoint array for the .idx file.  Each checkpoint is
-  // the byte offset of an entry boundary, recorded every ~chunkSize bytes.
-  // This must be called once after open() (e.g. in DictionaryStore::scan())
-  // and the resulting vector passed to every lookup() call.
-  bool buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize = 4096) const;
+  // Build compact checkpoint arrays for the .idx file.  Each checkpoint records
+  // the byte offset of an entry boundary and the cumulative entry ordinal at
+  // that boundary, sampled every ~chunkSize bytes.  Call once after open() and
+  // pass both vectors to every lookup / lookupSyn call.
+  bool buildCheckpoints(std::vector<uint32_t>& byteOffsets,
+                        std::vector<uint32_t>& ordinals,
+                        uint32_t chunkSize = 4096) const;
 
-  // Persist checkpoints to a cache file so they can be restored quickly on the
-  // next boot.  The cache embeds the .idx file size as a validity key.
-  // Returns true on success.
+  // Persist both checkpoint arrays to a cache file.
   bool saveCheckpoints(const std::string& cachePath,
-                       const std::vector<uint32_t>& checkpoints) const;
+                       const std::vector<uint32_t>& byteOffsets,
+                       const std::vector<uint32_t>& ordinals) const;
 
-  // Load checkpoints from a cache file produced by saveCheckpoints().
-  // Returns true only if the cache exists, its magic and version are valid,
-  // and the stored .idx size matches the current idxFileSize.
-  bool loadCheckpoints(const std::string& cachePath, std::vector<uint32_t>& out) const;
+  // Load both checkpoint arrays from a cache file produced by saveCheckpoints().
+  // Returns true only if the cache is valid and the stored .idx size matches.
+  bool loadCheckpoints(const std::string& cachePath,
+                       std::vector<uint32_t>& byteOffsets,
+                       std::vector<uint32_t>& ordinals) const;
 
   // Look up a word (case-insensitive).  Fills `definition` (up to maxLen-1
   // bytes, always null-terminated) and returns true when found.
-  // Pass the checkpoint array built by buildCheckpoints() for reliable results.
-  // Pass a stack buffer of at least 512 bytes for `definition`.
+  // Pass the byteOffsets checkpoint array built by buildCheckpoints().
   bool lookup(const char* word, char* definition, size_t maxLen,
               const std::vector<uint32_t>* checkpoints = nullptr);
+
+  // Look up `word` in the .syn alternate-forms file.  If found, fills
+  // `outHeadword` with the canonical headword from .idx and returns true.
+  // byteOffsets / ordinals are the checkpoint arrays from buildCheckpoints().
+  // Returns false immediately if no .syn file exists.
+  bool lookupSyn(const char* word, std::string& outHeadword,
+                 const std::vector<uint32_t>& byteOffsets,
+                 const std::vector<uint32_t>& ordinals) const;
 
  private:
   static constexpr size_t MAX_WORD_LEN = 256;
@@ -101,7 +110,6 @@ class StarDict {
 
   // Checkpoint-based lookup: binary search the in-memory checkpoint array,
   // then linear scan within the resulting ~chunkSize-byte interval.
-  // This is the primary, reliable lookup path.
   bool checkpointSearchIdx(HalFile& idxFile, const std::vector<uint32_t>& checkpoints,
                            const char* word, uint32_t& outOffset, uint32_t& outSize);
 
@@ -112,4 +120,16 @@ class StarDict {
   // Linear scan in [lo, hi) byte range of idxFile.
   bool linearSearchIdx(HalFile& idxFile, size_t lo, size_t hi, const char* word,
                        uint32_t& outOffset, uint32_t& outSize);
+
+  // Binary search .syn for `word`; fills `outOrdinal` (BE uint32 .idx ordinal).
+  // suffixBytes is the number of bytes after the null terminator per entry (4 for .syn).
+  static bool binarySearchSyn(HalFile& synFile, size_t fileSize, const char* word,
+                               uint32_t& outOrdinal);
+  static bool linearSearchSyn(HalFile& synFile, size_t lo, size_t hi, const char* word,
+                               uint32_t& outOrdinal);
+
+  // Return the headword at 0-based `ordinal` in .idx using the checkpoint arrays.
+  std::string headwordAtOrdinal(uint32_t ordinal,
+                                const std::vector<uint32_t>& cpBytes,
+                                const std::vector<uint32_t>& cpOrdinals) const;
 };

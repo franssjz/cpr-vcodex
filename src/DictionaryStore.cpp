@@ -282,67 +282,125 @@ static void stripHtml(char* buf) {
   *wr = '\0';
 }
 
-// Simple English suffix-stripping fallback.
-// Adds candidate stems to `out` (exact word is NOT included — caller handles it).
+// Returns true when lang is English (starts with "en") or unknown.
+// Used to gate English-specific suffix stripping.
+static bool isEnglishOrUnknownLang(const char* lang) {
+  if (!lang || lang[0] == '\0' || lang[1] == '\0') return true;
+  return tolower(static_cast<unsigned char>(lang[0])) == 'e' &&
+         tolower(static_cast<unsigned char>(lang[1])) == 'n';
+}
+
+// English suffix-stripping — produces candidate stems from an inflected word.
+// Adds to `out` (exact word is NOT included — caller handles it).
 // Only called when exact lookup fails, so allocations are acceptable.
+// Rules ported from crosspoint-reader Dictionary::getStemVariants().
 static void addFallbackForms(const char* word, std::vector<std::string>& out) {
   const size_t len = strlen(word);
   if (len < 3) return;
 
-  std::string lc(word);
-  for (auto& c : lc) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-  if (lc != word) out.push_back(lc);
+  std::string w(word);
+  for (auto& c : w) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
 
-  const size_t n = lc.size();
+  const size_t n = w.size();
 
-  auto push = [&](std::string s) { if (s.size() >= 2) out.push_back(std::move(s)); };
+  auto endsWith = [&w, n](const char* suffix) {
+    const size_t slen = strlen(suffix);
+    return n >= slen && w.compare(n - slen, slen, suffix) == 0;
+  };
 
-  static const char* const consonants = "bcdfghjklmnpqrstvwxyz";
+  std::vector<std::string> variants;
+  variants.reserve(16);
+  auto add = [&variants](std::string s) { if (s.size() >= 2) variants.push_back(std::move(s)); };
 
-  // -ing: spieling→spiel, making→make, running→run
-  if (n > 4 && lc.compare(n - 3, 3, "ing") == 0) {
-    const std::string stem = lc.substr(0, n - 3);
-    push(stem);
-    push(stem + "e");
-    if (stem.size() >= 2 && stem.back() == stem[stem.size() - 2] &&
-        strchr(consonants, stem.back())) {
-      push(stem.substr(0, stem.size() - 1));
+  // Lowercase form itself (catches CamelCase / ALLCAPS lookups)
+  if (w != word) add(w);
+
+  // Plurals
+  if (endsWith("sses"))  add(w.substr(0, n - 2));
+  if (endsWith("ses"))   add(w.substr(0, n - 2) + "is");
+  if (endsWith("ies"))  { add(w.substr(0, n - 3) + "y"); add(w.substr(0, n - 2)); }
+  if (endsWith("ves"))  { add(w.substr(0, n - 3) + "f"); add(w.substr(0, n - 3) + "fe"); add(w.substr(0, n - 1)); }
+  if (endsWith("men"))   add(w.substr(0, n - 3) + "man");
+  if (endsWith("es") && !endsWith("sses") && !endsWith("ies") && !endsWith("ves")) {
+    add(w.substr(0, n - 2));
+    add(w.substr(0, n - 1));
+  }
+  if (endsWith("s") && !endsWith("ss") && !endsWith("us") && !endsWith("es"))
+    add(w.substr(0, n - 1));
+
+  // Past tense
+  if (endsWith("ied")) {
+    add(w.substr(0, n - 3) + "y");
+    add(w.substr(0, n - 1));
+  }
+  if (endsWith("ed") && !endsWith("ied")) {
+    add(w.substr(0, n - 2));
+    add(w.substr(0, n - 1));
+    if (n > 4 && w[n - 3] == w[n - 4]) add(w.substr(0, n - 3));
+  }
+
+  // Progressive
+  if (endsWith("ying"))  add(w.substr(0, n - 4) + "ie");
+  if (endsWith("ing") && !endsWith("ying")) {
+    add(w.substr(0, n - 3));
+    add(w.substr(0, n - 3) + "e");
+    if (n > 5 && w[n - 4] == w[n - 5]) add(w.substr(0, n - 4));
+  }
+
+  // Adverb
+  if (endsWith("ically"))               { add(w.substr(0, n - 6) + "ic"); add(w.substr(0, n - 4)); }
+  if (endsWith("ally") && !endsWith("ically")) { add(w.substr(0, n - 4) + "al"); add(w.substr(0, n - 2)); }
+  if (endsWith("ily") && !endsWith("ally"))    add(w.substr(0, n - 3) + "y");
+  if (endsWith("ly") && !endsWith("ily") && !endsWith("ally"))  add(w.substr(0, n - 2));
+
+  // Comparative / superlative
+  if (endsWith("ier"))  add(w.substr(0, n - 3) + "y");
+  if (endsWith("er") && !endsWith("ier")) {
+    add(w.substr(0, n - 2));
+    add(w.substr(0, n - 1));
+    if (n > 4 && w[n - 3] == w[n - 4]) add(w.substr(0, n - 3));
+  }
+  if (endsWith("iest"))  add(w.substr(0, n - 4) + "y");
+  if (endsWith("est") && !endsWith("iest")) {
+    add(w.substr(0, n - 3));
+    add(w.substr(0, n - 2));
+    if (n > 5 && w[n - 4] == w[n - 5]) add(w.substr(0, n - 4));
+  }
+
+  // Derivational suffixes
+  if (endsWith("ness"))  add(w.substr(0, n - 4));
+  if (endsWith("ment"))  add(w.substr(0, n - 4));
+  if (endsWith("ful"))   add(w.substr(0, n - 3));
+  if (endsWith("less"))  add(w.substr(0, n - 4));
+  if (endsWith("able"))  { add(w.substr(0, n - 4)); add(w.substr(0, n - 4) + "e"); }
+  if (endsWith("ible"))  { add(w.substr(0, n - 4)); add(w.substr(0, n - 4) + "e"); }
+  if (endsWith("ation")) { add(w.substr(0, n - 5)); add(w.substr(0, n - 5) + "e"); add(w.substr(0, n - 5) + "ate"); }
+  if (endsWith("tion") && !endsWith("ation")) { add(w.substr(0, n - 4) + "te"); add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("ion") && !endsWith("tion"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("ial"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("al") && !endsWith("ial"))     { add(w.substr(0, n - 2)); add(w.substr(0, n - 2) + "e"); }
+  if (endsWith("ous"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("ive"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("ize"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("ise"))   { add(w.substr(0, n - 3)); add(w.substr(0, n - 3) + "e"); }
+  if (endsWith("en"))    { add(w.substr(0, n - 2)); add(w.substr(0, n - 2) + "e"); }
+
+  // Common prefixes
+  if (n > 5 && w.compare(0, 2, "un") == 0)   add(w.substr(2));
+  if (n > 6 && w.compare(0, 3, "dis") == 0)  add(w.substr(3));
+  if (n > 6 && w.compare(0, 3, "mis") == 0)  add(w.substr(3));
+  if (n > 6 && w.compare(0, 3, "pre") == 0)  add(w.substr(3));
+  if (n > 7 && w.compare(0, 4, "over") == 0) add(w.substr(4));
+  if (n > 5 && w.compare(0, 2, "re") == 0)   add(w.substr(2));
+
+  // Deduplicate preserving insertion order, then append to out
+  for (const auto& v : variants) {
+    bool dup = false;
+    for (const auto& existing : out) {
+      if (existing == v) { dup = true; break; }
     }
+    if (!dup) out.push_back(v);
   }
-
-  // -ed: played→play, loved→love, stopped→stop
-  if (n > 3 && lc.compare(n - 2, 2, "ed") == 0) {
-    const std::string stem = lc.substr(0, n - 2);
-    push(stem);
-    push(stem + "e");
-    if (stem.size() >= 2 && stem.back() == stem[stem.size() - 2] &&
-        strchr(consonants, stem.back())) {
-      push(stem.substr(0, stem.size() - 1));
-    }
-  }
-
-  // -s / -es / -ies: books→book, foxes→fox, flies→fly
-  if (n > 2 && lc.back() == 's') {
-    push(lc.substr(0, n - 1));
-    if (n > 3 && lc.compare(n - 2, 2, "es") == 0) push(lc.substr(0, n - 2));
-    if (n > 4 && lc.compare(n - 3, 3, "ies") == 0) push(lc.substr(0, n - 3) + "y");
-  }
-
-  // -er / -est: nicer→nice, fastest→fast
-  if (n > 3 && lc.compare(n - 2, 2, "er") == 0) {
-    push(lc.substr(0, n - 2));
-    push(lc.substr(0, n - 2) + "e");
-  }
-  if (n > 4 && lc.compare(n - 3, 3, "est") == 0) {
-    push(lc.substr(0, n - 3));
-    push(lc.substr(0, n - 3) + "e");
-  }
-
-  // -ly: quickly→quick
-  if (n > 3 && lc.compare(n - 2, 2, "ly") == 0) push(lc.substr(0, n - 2));
-
-  // -ness: kindness→kind
-  if (n > 5 && lc.compare(n - 4, 4, "ness") == 0) push(lc.substr(0, n - 4));
 }
 // Matching rules (case-insensitive, ISO 639-1 prefix):
 //  - Either lang unknown (empty / <2 chars) → include (conservative)
@@ -388,12 +446,6 @@ bool DictionaryStore::lookup(const char* word, char* definition, size_t maxLen,
   }
   definition[0] = '\0';
 
-  // Build candidate list: exact word first, then suffix-stripped fallbacks.
-  std::vector<std::string> candidates;
-  candidates.reserve(12);
-  candidates.push_back(word);
-  addFallbackForms(word, candidates);
-
   for (const auto& entry : entries) {
     if (!entry.enabled) {
       continue;
@@ -412,9 +464,9 @@ bool DictionaryStore::lookup(const char* word, char* definition, size_t maxLen,
       const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
       StarDict sdCp;
       if (sdCp.open(entry.basePath)) {
-        if (!sdCp.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
-          if (sdCp.buildCheckpoints(entry.idxCheckpoints)) {
-            sdCp.saveCheckpoints(cachePath, entry.idxCheckpoints);
+        if (!sdCp.loadCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals)) {
+          if (sdCp.buildCheckpoints(entry.idxCheckpoints, entry.idxOrdinals)) {
+            sdCp.saveCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals);
           }
         }
       }
@@ -428,16 +480,126 @@ bool DictionaryStore::lookup(const char* word, char* definition, size_t maxLen,
     const std::vector<uint32_t>* cp =
         entry.idxCheckpoints.empty() ? nullptr : &entry.idxCheckpoints;
 
-    for (const auto& candidate : candidates) {
-      if (sd.lookup(candidate.c_str(), definition, maxLen, cp)) {
-        stripHtml(definition);
-        LOG_DBG("DICT", "lookup '%s' (via '%s') found in '%s'",
-                word, candidate.c_str(), entry.name.c_str());
-        return true;
+    // 1. Direct match
+    if (sd.lookup(word, definition, maxLen, cp)) {
+      stripHtml(definition);
+      LOG_DBG("DICT", "lookup '%s' found in '%s'", word, entry.name.c_str());
+      return true;
+    }
+
+    // 2. .syn alternate forms (language-independent)
+    if (!entry.idxOrdinals.empty()) {
+      std::string canonical;
+      if (sd.lookupSyn(word, canonical, entry.idxCheckpoints, entry.idxOrdinals)) {
+        if (sd.lookup(canonical.c_str(), definition, maxLen, cp)) {
+          stripHtml(definition);
+          LOG_DBG("DICT", "lookup '%s' (via .syn '%s') found in '%s'",
+                  word, canonical.c_str(), entry.name.c_str());
+          return true;
+        }
+      }
+    }
+
+    // 3. Stemming — only when book language is English or unknown
+    if (isEnglishOrUnknownLang(bookLang)) {
+      std::vector<std::string> stems;
+      stems.reserve(20);
+      addFallbackForms(word, stems);
+      for (const auto& stem : stems) {
+        if (sd.lookup(stem.c_str(), definition, maxLen, cp)) {
+          stripHtml(definition);
+          LOG_DBG("DICT", "lookup '%s' (via stem '%s') found in '%s'",
+                  word, stem.c_str(), entry.name.c_str());
+          return true;
+        }
       }
     }
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// lookupInEnabledEntry / getEnabledEntryName / enabledCount
+// ---------------------------------------------------------------------------
+
+bool DictionaryStore::lookupInEnabledEntry(const int enabledIndex, const char* word,
+                                            char* definition, const size_t maxLen) const {
+  if (!word || !definition || maxLen == 0) {
+    return false;
+  }
+  definition[0] = '\0';
+
+  int ci = 0;
+  for (const auto& entry : entries) {
+    if (!entry.enabled) continue;
+    if (ci != enabledIndex) {
+      ci++;
+      continue;
+    }
+
+    // Build candidate list: exact word first, then per-dict lookup order.
+    StarDict sd;
+    if (!sd.open(entry.basePath)) return false;
+
+    const std::vector<uint32_t>* cp =
+        entry.idxCheckpoints.empty() ? nullptr : &entry.idxCheckpoints;
+
+    // 1. Direct match
+    if (sd.lookup(word, definition, maxLen, cp)) {
+      stripHtml(definition);
+      LOG_DBG("DICT", "lookupInEnabledEntry[%d] '%s' found in '%s'",
+              enabledIndex, word, entry.name.c_str());
+      return true;
+    }
+
+    // 2. .syn alternate forms (language-independent)
+    if (!entry.idxOrdinals.empty()) {
+      std::string canonical;
+      if (sd.lookupSyn(word, canonical, entry.idxCheckpoints, entry.idxOrdinals)) {
+        if (sd.lookup(canonical.c_str(), definition, maxLen, cp)) {
+          stripHtml(definition);
+          LOG_DBG("DICT", "lookupInEnabledEntry[%d] '%s' (via .syn '%s') found in '%s'",
+                  enabledIndex, word, canonical.c_str(), entry.name.c_str());
+          return true;
+        }
+      }
+    }
+
+    // 3. Stemming — only when dict's source language is English or unknown
+    if (isEnglishOrUnknownLang(entry.lang.c_str())) {
+      std::vector<std::string> stems;
+      stems.reserve(20);
+      addFallbackForms(word, stems);
+      for (const auto& stem : stems) {
+        if (sd.lookup(stem.c_str(), definition, maxLen, cp)) {
+          stripHtml(definition);
+          LOG_DBG("DICT", "lookupInEnabledEntry[%d] '%s' (via stem '%s') found in '%s'",
+                  enabledIndex, word, stem.c_str(), entry.name.c_str());
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  return false;
+}
+
+std::string DictionaryStore::getEnabledEntryName(const int enabledIndex) const {
+  int ci = 0;
+  for (const auto& entry : entries) {
+    if (!entry.enabled) continue;
+    if (ci == enabledIndex) return entry.name;
+    ci++;
+  }
+  return {};
+}
+
+int DictionaryStore::enabledCount() const {
+  int c = 0;
+  for (const auto& entry : entries) {
+    if (entry.enabled) c++;
+  }
+  return c;
 }
 
 // ---------------------------------------------------------------------------
@@ -450,15 +612,17 @@ void DictionaryStore::syncCheckpointsToEnabled() {
       // Free RAM for disabled dicts.
       entry.idxCheckpoints.clear();
       entry.idxCheckpoints.shrink_to_fit();
+      entry.idxOrdinals.clear();
+      entry.idxOrdinals.shrink_to_fit();
     } else if (entry.idxCheckpoints.empty()) {
       // Load checkpoints for enabled dicts that don't have them yet.
       const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
       StarDict sd;
       if (sd.open(entry.basePath)) {
-        if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
+        if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals)) {
           LOG_DBG("DICT", "syncCheckpoints: building for '%s'", entry.name.c_str());
-          if (sd.buildCheckpoints(entry.idxCheckpoints)) {
-            sd.saveCheckpoints(cachePath, entry.idxCheckpoints);
+          if (sd.buildCheckpoints(entry.idxCheckpoints, entry.idxOrdinals)) {
+            sd.saveCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals);
           }
         }
       }
@@ -493,9 +657,9 @@ void DictionaryStore::setEnabled(size_t index, bool enabled) {
     const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
     StarDict sd;
     if (sd.open(entry.basePath)) {
-      if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
-        if (sd.buildCheckpoints(entry.idxCheckpoints)) {
-          sd.saveCheckpoints(cachePath, entry.idxCheckpoints);
+      if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals)) {
+        if (sd.buildCheckpoints(entry.idxCheckpoints, entry.idxOrdinals)) {
+          sd.saveCheckpoints(cachePath, entry.idxCheckpoints, entry.idxOrdinals);
         }
       }
     }
@@ -505,5 +669,7 @@ void DictionaryStore::setEnabled(size_t index, bool enabled) {
   if (!enabled) {
     entry.idxCheckpoints.clear();
     entry.idxCheckpoints.shrink_to_fit();
+    entry.idxOrdinals.clear();
+    entry.idxOrdinals.shrink_to_fit();
   }
 }
