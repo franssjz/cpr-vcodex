@@ -468,7 +468,7 @@ void EpubReaderActivity::loop() {
     });
 
     if (cursorMoved) {
-      requestUpdate();
+      requestUpdate(true);  // immediate: wake render task without waiting for loop end
     }
     return;
   }

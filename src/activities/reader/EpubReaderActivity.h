@@ -133,5 +133,7 @@ class EpubReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&& lock) override;
   bool isReaderActivity() const override { return true; }
+  // Skip the 10ms loop delay while navigating dict cursor so input feels snappy.
+  bool skipLoopDelay() override { return dictModeActive && !dictPopupVisible; }
   ScreenshotInfo getScreenshotInfo() const override;
 };
