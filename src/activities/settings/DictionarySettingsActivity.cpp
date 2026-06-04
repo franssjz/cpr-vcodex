@@ -13,6 +13,8 @@
 void DictionarySettingsActivity::onEnter() {
   Activity::onEnter();
   DICT_STORE.scan();
+  DICT_STORE.loadConfig();
+  DICT_STORE.syncCheckpointsToEnabled();
   totalItems = static_cast<int>(DICT_STORE.getEntries().size());
   selectedIndex = 0;
   requestUpdate();

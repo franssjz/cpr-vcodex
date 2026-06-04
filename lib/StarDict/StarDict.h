@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // Reads uncompressed StarDict dictionaries from SD card.
 //
@@ -15,9 +16,10 @@
 //
 // Only the ".dict" variant (uncompressed) is supported; ".dict.dz" is not.
 //
-// Memory model: no index is loaded into RAM. Every lookup performs a binary
-// search by seeking directly in the .idx file. Keep this in mind – each call
-// to lookup() issues multiple SD reads.
+// Memory model: no full index is loaded into RAM.  A compact checkpoint array
+// (one uint32_t per ~4 KB of .idx) is built once (see buildCheckpoints()) and
+// used to narrow each lookup to a bounded linear scan.  Build checkpoints in
+// DictionaryStore::scan() and pass them to every lookup() call.
 
 class StarDict {
  public:
@@ -45,10 +47,29 @@ class StarDict {
   // Total number of words (informational only).
   uint32_t getWordCount() const { return wordCount; }
 
+  // Build a compact checkpoint array for the .idx file.  Each checkpoint is
+  // the byte offset of an entry boundary, recorded every ~chunkSize bytes.
+  // This must be called once after open() (e.g. in DictionaryStore::scan())
+  // and the resulting vector passed to every lookup() call.
+  bool buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize = 4096) const;
+
+  // Persist checkpoints to a cache file so they can be restored quickly on the
+  // next boot.  The cache embeds the .idx file size as a validity key.
+  // Returns true on success.
+  bool saveCheckpoints(const std::string& cachePath,
+                       const std::vector<uint32_t>& checkpoints) const;
+
+  // Load checkpoints from a cache file produced by saveCheckpoints().
+  // Returns true only if the cache exists, its magic and version are valid,
+  // and the stored .idx size matches the current idxFileSize.
+  bool loadCheckpoints(const std::string& cachePath, std::vector<uint32_t>& out) const;
+
   // Look up a word (case-insensitive).  Fills `definition` (up to maxLen-1
   // bytes, always null-terminated) and returns true when found.
+  // Pass the checkpoint array built by buildCheckpoints() for reliable results.
   // Pass a stack buffer of at least 512 bytes for `definition`.
-  bool lookup(const char* word, char* definition, size_t maxLen);
+  bool lookup(const char* word, char* definition, size_t maxLen,
+              const std::vector<uint32_t>* checkpoints = nullptr);
 
  private:
   static constexpr size_t MAX_WORD_LEN = 256;
@@ -78,8 +99,13 @@ class StarDict {
   // After return the file position is right after the null terminator.
   static int readWordFromFile(HalFile& file, char* buf, int maxLen);
 
-  // Perform the binary-search lookup. Returns true on match; fills *outOffset
-  // and *outSize.
+  // Checkpoint-based lookup: binary search the in-memory checkpoint array,
+  // then linear scan within the resulting ~chunkSize-byte interval.
+  // This is the primary, reliable lookup path.
+  bool checkpointSearchIdx(HalFile& idxFile, const std::vector<uint32_t>& checkpoints,
+                           const char* word, uint32_t& outOffset, uint32_t& outSize);
+
+  // Fallback binary-search lookup (may misidentify boundaries in binary data).
   bool binarySearchIdx(HalFile& idxFile, size_t fileSize, const char* word,
                        uint32_t& outOffset, uint32_t& outSize);
 

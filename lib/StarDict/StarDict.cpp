@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -200,10 +201,206 @@ void StarDict::close() {
 }
 
 // ---------------------------------------------------------------------------
+// buildCheckpoints
+// ---------------------------------------------------------------------------
+
+bool StarDict::buildCheckpoints(std::vector<uint32_t>& out, uint32_t chunkSize) const {
+  out.clear();
+  if (!opened) {
+    return false;
+  }
+
+  HalFile idxFile;
+  if (!Storage.openFileForRead("SD", idxPath, idxFile)) {
+    LOG_ERR("SD", "StarDict::buildCheckpoints: cannot open idx: %s", idxPath.c_str());
+    return false;
+  }
+
+  // First entry always starts at byte 0.
+  out.push_back(0);
+  uint32_t nextCheckpoint = chunkSize;
+
+  // Read in blocks for efficiency; parse the structure byte-by-byte.
+  // Because we start from position 0 (a known-good boundary), every null
+  // byte we encounter in `inWord=true` state is guaranteed to be a real
+  // word terminator, not a false positive from binary header data.
+  static constexpr uint32_t BLOCK_SIZE = 512;
+  uint8_t block[BLOCK_SIZE];
+  uint32_t filePos = 0;
+  bool inWord = true;     // true: reading word chars; false: consuming 8-byte binary header
+  uint8_t binaryLeft = 0; // header bytes remaining
+
+  while (true) {
+    const int n = idxFile.read(block, BLOCK_SIZE);
+    if (n <= 0) {
+      break;
+    }
+    for (int i = 0; i < n; ++i) {
+      if (inWord) {
+        if (block[i] == '\0') {
+          inWord = false;
+          binaryLeft = 8;
+        }
+      } else {
+        if (--binaryLeft == 0) {
+          // byte at filePos+i was the last header byte; next byte is entry start.
+          const uint32_t entryStart = filePos + static_cast<uint32_t>(i) + 1;
+          if (entryStart >= nextCheckpoint) {
+            out.push_back(entryStart);
+            nextCheckpoint = entryStart + chunkSize;
+          }
+          inWord = true;
+        }
+      }
+    }
+    filePos += static_cast<uint32_t>(n);
+  }
+
+  idxFile.close();
+  LOG_DBG("SD", "StarDict: built %u checkpoints for '%s'",
+          static_cast<unsigned>(out.size()), bookName.c_str());
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// saveCheckpoints / loadCheckpoints
+// ---------------------------------------------------------------------------
+// Cache file format (all integers big-endian uint32):
+//   [0..3]  magic  = 0x44 0x43 0x48 0x4B  ("DCHK")
+//   [4..7]  idxFileSize
+//   [8..11] checkpoint count N
+//   [12..]  N × checkpoint values
+
+static constexpr uint8_t CACHE_MAGIC[4] = {0x44, 0x43, 0x48, 0x4B};
+
+static void writeBE32(uint8_t* buf, uint32_t v) {
+  buf[0] = static_cast<uint8_t>(v >> 24);
+  buf[1] = static_cast<uint8_t>(v >> 16);
+  buf[2] = static_cast<uint8_t>(v >> 8);
+  buf[3] = static_cast<uint8_t>(v);
+}
+
+bool StarDict::saveCheckpoints(const std::string& cachePath,
+                                const std::vector<uint32_t>& checkpoints) const {
+  if (!opened || checkpoints.empty()) {
+    return false;
+  }
+
+  // Write to a temp file then rename for atomicity.
+  const std::string tmpPath = cachePath + ".tmp";
+  Storage.remove(tmpPath.c_str());
+
+  HalFile f;
+  if (!Storage.openFileForWrite("SD", tmpPath, f)) {
+    LOG_ERR("SD", "StarDict: cannot write checkpoint cache: %s", tmpPath.c_str());
+    return false;
+  }
+
+  // Header: magic + idxFileSize + count
+  uint8_t hdr[12];
+  hdr[0] = CACHE_MAGIC[0];
+  hdr[1] = CACHE_MAGIC[1];
+  hdr[2] = CACHE_MAGIC[2];
+  hdr[3] = CACHE_MAGIC[3];
+  writeBE32(hdr + 4, static_cast<uint32_t>(idxFileSize));
+  writeBE32(hdr + 8, static_cast<uint32_t>(checkpoints.size()));
+  if (f.write(hdr, sizeof(hdr)) != sizeof(hdr)) {
+    f.close();
+    Storage.remove(tmpPath.c_str());
+    return false;
+  }
+
+  // Checkpoint values
+  uint8_t buf[4];
+  for (const uint32_t cp : checkpoints) {
+    writeBE32(buf, cp);
+    if (f.write(buf, 4) != 4) {
+      f.close();
+      Storage.remove(tmpPath.c_str());
+      return false;
+    }
+  }
+
+  f.flush();
+  f.close();
+
+  Storage.remove(cachePath.c_str());
+  if (!Storage.rename(tmpPath.c_str(), cachePath.c_str())) {
+    LOG_ERR("SD", "StarDict: checkpoint cache rename failed: %s", cachePath.c_str());
+    return false;
+  }
+
+  LOG_DBG("SD", "StarDict: saved %u checkpoints to '%s'",
+          static_cast<unsigned>(checkpoints.size()), cachePath.c_str());
+  return true;
+}
+
+bool StarDict::loadCheckpoints(const std::string& cachePath,
+                                std::vector<uint32_t>& out) const {
+  out.clear();
+  if (!opened) {
+    return false;
+  }
+  if (!Storage.exists(cachePath.c_str())) {
+    return false;
+  }
+
+  HalFile f;
+  if (!Storage.openFileForRead("SD", cachePath, f)) {
+    return false;
+  }
+
+  uint8_t hdr[12];
+  if (f.read(hdr, sizeof(hdr)) != static_cast<int>(sizeof(hdr))) {
+    f.close();
+    return false;
+  }
+
+  // Validate magic
+  if (hdr[0] != CACHE_MAGIC[0] || hdr[1] != CACHE_MAGIC[1] ||
+      hdr[2] != CACHE_MAGIC[2] || hdr[3] != CACHE_MAGIC[3]) {
+    f.close();
+    return false;
+  }
+
+  // Validate idx size matches current file
+  const uint32_t cachedSize = readBE32(hdr + 4);
+  if (cachedSize != static_cast<uint32_t>(idxFileSize)) {
+    f.close();
+    LOG_DBG("SD", "StarDict: checkpoint cache stale (idx size %u vs %u), rebuilding",
+            cachedSize, static_cast<uint32_t>(idxFileSize));
+    return false;
+  }
+
+  const uint32_t count = readBE32(hdr + 8);
+  if (count == 0 || count > 65536) {  // sanity cap
+    f.close();
+    return false;
+  }
+
+  out.reserve(count);
+  uint8_t buf[4];
+  for (uint32_t i = 0; i < count; ++i) {
+    if (f.read(buf, 4) != 4) {
+      out.clear();
+      f.close();
+      return false;
+    }
+    out.push_back(readBE32(buf));
+  }
+
+  f.close();
+  LOG_DBG("SD", "StarDict: loaded %u checkpoints from cache '%s'",
+          static_cast<unsigned>(out.size()), cachePath.c_str());
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // lookup
 // ---------------------------------------------------------------------------
 
-bool StarDict::lookup(const char* word, char* definition, size_t maxLen) {
+bool StarDict::lookup(const char* word, char* definition, size_t maxLen,
+                      const std::vector<uint32_t>* checkpoints) {
   if (!opened || !word || !definition || maxLen == 0) {
     return false;
   }
@@ -217,7 +414,12 @@ bool StarDict::lookup(const char* word, char* definition, size_t maxLen) {
 
   uint32_t offset = 0;
   uint32_t size = 0;
-  const bool found = binarySearchIdx(idxFile, idxFileSize, word, offset, size);
+  bool found;
+  if (checkpoints != nullptr && !checkpoints->empty()) {
+    found = checkpointSearchIdx(idxFile, *checkpoints, word, offset, size);
+  } else {
+    found = binarySearchIdx(idxFile, idxFileSize, word, offset, size);
+  }
   idxFile.close();
 
   if (!found || size == 0) {
@@ -245,6 +447,43 @@ bool StarDict::lookup(const char* word, char* definition, size_t maxLen) {
   }
   definition[bytesRead] = '\0';
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// checkpointSearchIdx
+// ---------------------------------------------------------------------------
+
+bool StarDict::checkpointSearchIdx(HalFile& idxFile, const std::vector<uint32_t>& checkpoints,
+                                   const char* word, uint32_t& outOffset, uint32_t& outSize) {
+  // Binary search the in-memory checkpoint array to find the largest
+  // checkpoint index whose entry word is <= the target word.
+  size_t lo = 0;
+  size_t hi = checkpoints.size();  // exclusive
+  char buf[MAX_WORD_LEN];
+
+  while (lo + 1 < hi) {
+    const size_t mid = lo + (hi - lo) / 2;
+    if (!idxFile.seek(checkpoints[mid])) {
+      break;  // seek failure: fall back to scanning from lo
+    }
+    const int wlen = readWordFromFile(idxFile, buf, static_cast<int>(MAX_WORD_LEN));
+    if (wlen == 0) {
+      break;
+    }
+    if (wordcmp(word, buf) < 0) {
+      hi = mid;  // target is before this checkpoint
+    } else {
+      lo = mid;  // target is at or after this checkpoint
+    }
+  }
+
+  // Linear scan within [checkpoints[lo], checkpoints[lo+1]) or end of file.
+  const uint32_t scanLo = checkpoints[lo];
+  const uint32_t scanHi = (lo + 1 < checkpoints.size())
+                              ? checkpoints[lo + 1]
+                              : static_cast<uint32_t>(idxFileSize);
+
+  return linearSearchIdx(idxFile, scanLo, scanHi, word, outOffset, outSize);
 }
 
 // ---------------------------------------------------------------------------

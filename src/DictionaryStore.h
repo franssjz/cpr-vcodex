@@ -23,6 +23,7 @@ struct DictEntry {
   std::string basePath;  // Absolute path of the .ifo file (identifies the dict)
   std::string lang;      // Language tag from .ifo (e.g. "tr", "en-tr", may be empty)
   bool enabled = true;
+  mutable std::vector<uint32_t> idxCheckpoints;  // built by scan() for reliable lookup
 };
 
 class DictionaryStore {
@@ -39,6 +40,12 @@ class DictionaryStore {
 
   // Load enabled/order state from /.crosspoint/dict_config.json.
   bool loadConfig();
+
+  // After scan()+loadConfig(), call this to ensure RAM is used only for
+  // enabled dictionaries: loads checkpoints for enabled entries (from .chk
+  // cache if valid, otherwise builds and saves), and frees checkpoints for
+  // disabled entries.
+  void syncCheckpointsToEnabled();
 
   // Look up a word across all enabled dictionaries (in order).
   // Writes at most maxLen-1 bytes into `definition` (always null-terminated).

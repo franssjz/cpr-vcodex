@@ -99,6 +99,9 @@ void DictionaryStore::scan() {
     entry.basePath = ifoPath;
     entry.name = sd.getName();
     entry.lang = sd.getLanguage();
+    // Do NOT load checkpoints here — enabled state is not yet known
+    // (loadConfig() hasn't been called). Call syncCheckpointsToEnabled()
+    // after loadConfig() to load checkpoints only for enabled dicts.
 
     const DictEntry* prev = findPrev(ifoPath);
     entry.enabled = prev ? prev->enabled : true;
@@ -403,13 +406,30 @@ bool DictionaryStore::lookup(const char* word, char* definition, size_t maxLen,
       continue;
     }
 
+    // Build checkpoints lazily if this entry was added via loadConfig() without
+    // a preceding scan() (e.g. first boot before dict settings are visited).
+    if (entry.idxCheckpoints.empty()) {
+      const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
+      StarDict sdCp;
+      if (sdCp.open(entry.basePath)) {
+        if (!sdCp.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
+          if (sdCp.buildCheckpoints(entry.idxCheckpoints)) {
+            sdCp.saveCheckpoints(cachePath, entry.idxCheckpoints);
+          }
+        }
+      }
+    }
+
     StarDict sd;
     if (!sd.open(entry.basePath)) {
       continue;
     }
 
+    const std::vector<uint32_t>* cp =
+        entry.idxCheckpoints.empty() ? nullptr : &entry.idxCheckpoints;
+
     for (const auto& candidate : candidates) {
-      if (sd.lookup(candidate.c_str(), definition, maxLen)) {
+      if (sd.lookup(candidate.c_str(), definition, maxLen, cp)) {
         stripHtml(definition);
         LOG_DBG("DICT", "lookup '%s' (via '%s') found in '%s'",
                 word, candidate.c_str(), entry.name.c_str());
@@ -421,8 +441,30 @@ bool DictionaryStore::lookup(const char* word, char* definition, size_t maxLen,
 }
 
 // ---------------------------------------------------------------------------
-// moveUp / moveDown / setEnabled
+// syncCheckpointsToEnabled / moveUp / moveDown / setEnabled
 // ---------------------------------------------------------------------------
+
+void DictionaryStore::syncCheckpointsToEnabled() {
+  for (auto& entry : entries) {
+    if (!entry.enabled) {
+      // Free RAM for disabled dicts.
+      entry.idxCheckpoints.clear();
+      entry.idxCheckpoints.shrink_to_fit();
+    } else if (entry.idxCheckpoints.empty()) {
+      // Load checkpoints for enabled dicts that don't have them yet.
+      const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
+      StarDict sd;
+      if (sd.open(entry.basePath)) {
+        if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
+          LOG_DBG("DICT", "syncCheckpoints: building for '%s'", entry.name.c_str());
+          if (sd.buildCheckpoints(entry.idxCheckpoints)) {
+            sd.saveCheckpoints(cachePath, entry.idxCheckpoints);
+          }
+        }
+      }
+    }
+  }
+}
 
 void DictionaryStore::moveUp(size_t index) {
   if (index == 0 || index >= entries.size()) {
@@ -439,7 +481,29 @@ void DictionaryStore::moveDown(size_t index) {
 }
 
 void DictionaryStore::setEnabled(size_t index, bool enabled) {
-  if (index < entries.size()) {
-    entries[index].enabled = enabled;
+  if (index >= entries.size()) {
+    return;
+  }
+  DictEntry& entry = entries[index];
+  entry.enabled = enabled;
+
+  // When enabling a dict, ensure its checkpoints are in RAM so the first
+  // lookup is fast.  If not already loaded, try cache then build.
+  if (enabled && entry.idxCheckpoints.empty()) {
+    const std::string cachePath = entry.basePath.substr(0, entry.basePath.size() - 4) + ".chk";
+    StarDict sd;
+    if (sd.open(entry.basePath)) {
+      if (!sd.loadCheckpoints(cachePath, entry.idxCheckpoints)) {
+        if (sd.buildCheckpoints(entry.idxCheckpoints)) {
+          sd.saveCheckpoints(cachePath, entry.idxCheckpoints);
+        }
+      }
+    }
+  }
+
+  // When disabling a dict, free its checkpoint memory immediately.
+  if (!enabled) {
+    entry.idxCheckpoints.clear();
+    entry.idxCheckpoints.shrink_to_fit();
   }
 }

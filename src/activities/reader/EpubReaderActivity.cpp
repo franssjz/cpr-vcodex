@@ -324,6 +324,8 @@ void EpubReaderActivity::loop() {
       if (DICT_STORE.getEntries().empty()) {
         DICT_STORE.scan();
         DICT_STORE.loadConfig();
+        // Load checkpoints only for enabled dicts — conserves RAM.
+        DICT_STORE.syncCheckpointsToEnabled();
       }
     }
     requestUpdate();
