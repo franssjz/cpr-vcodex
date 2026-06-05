@@ -94,6 +94,11 @@ class EpubReaderActivity final : public Activity {
   ButtonNavigator dictLineNav;  // Up/Down/PageBack/PageForward – line navigation
   ButtonNavigator dictWordNav;  // Left/Right – word navigation
 
+  // Highlight / text-selection mode (activated by long-pressing Confirm while in dict mode)
+  bool highlightModeActive = false;
+  int highlightAnchorLineIdx = 0;
+  int highlightAnchorWordIdx = 0;
+
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
@@ -106,6 +111,8 @@ class EpubReaderActivity final : public Activity {
   void markCurrentBookAsFinished();
   void pageTurn(bool isForwardTurn);
   void requestCurrentPageFullRefresh();
+
+  void saveHighlightToMyCLippings();
 
   // Footnote navigation
   void navigateToHref(const std::string& href, bool savePosition = false);
@@ -133,7 +140,7 @@ class EpubReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&& lock) override;
   bool isReaderActivity() const override { return true; }
-  // Skip the 10ms loop delay while navigating dict cursor so input feels snappy.
+  // Skip the 10ms loop delay while navigating dict/highlight cursor so input feels snappy.
   bool skipLoopDelay() override { return dictModeActive && !dictPopupVisible; }
   ScreenshotInfo getScreenshotInfo() const override;
 };

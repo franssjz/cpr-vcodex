@@ -329,14 +329,22 @@ void EpubReaderActivity::loop() {
         // Load checkpoints only for enabled dicts — conserves RAM.
         DICT_STORE.syncCheckpointsToEnabled();
       }
+    } else {
+      // Exiting dict mode: also cancel any active highlight selection.
+      highlightModeActive = false;
     }
     requestUpdate();
     return;
   }
 
   if (dictModeActive) {
-    // Back: first press closes popup, second press exits dict mode
+    // Back: cancel highlight mode (if active), else close popup, else exit dict mode
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      if (highlightModeActive) {
+        highlightModeActive = false;
+        requestUpdate();
+        return;
+      }
       if (dictPopupVisible) {
         dictPopupVisible = false;
         dictDefinition[0] = '\0';
@@ -347,8 +355,27 @@ void EpubReaderActivity::loop() {
       return;
     }
 
-    // Confirm: look up the word under the cursor and show popup
-    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    // Long-press Confirm: enter highlight/text-selection mode anchored at current cursor
+    if (!highlightModeActive && !dictPopupVisible &&
+        mappedInput.wasReleased(MappedInputManager::Button::Confirm) &&
+        mappedInput.getHeldTime() >= bookmarkToggleMs) {
+      highlightModeActive = true;
+      highlightAnchorLineIdx = dictCursorLineIdx;
+      highlightAnchorWordIdx = dictCursorWordIdx;
+      requestUpdate();
+      return;
+    }
+
+    // Short-press Confirm in highlight mode: save selection to MyCLippings and exit highlight mode
+    if (highlightModeActive && mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+      saveHighlightToMyCLippings();
+      highlightModeActive = false;
+      requestUpdate();
+      return;
+    }
+
+    // Short-press Confirm (normal dict mode): look up the word under the cursor and show popup
+    if (!highlightModeActive && mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       dictPopupVisible = true;  // lookup happens in render from page data
       dictActiveDictIdx = 0;
       dictPopupScrollOffset = 0;
@@ -1337,6 +1364,16 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       std::string displayWord;  // raw token as rendered on screen (for white re-draw)
     } dictCursor;
 
+    // Highlight mode: word positions for the selected range, collected before page is consumed.
+    // Stack-allocated — only populated when highlightModeActive, zero cost otherwise.
+    struct HlWord {
+      int16_t x, y, w;
+      char text[20];  // raw display token, null-terminated, truncated to 19 chars
+    };
+    constexpr int MAX_HL_WORDS = 96;
+    HlWord hlWords[MAX_HL_WORDS];
+    int hlWordCount = 0;
+
     if (dictModeActive) {
       // First pass: count all PageLine elements to get total for clamping.
       int totalLines = 0;
@@ -1452,22 +1489,85 @@ void EpubReaderActivity::render(RenderLock&& lock) {
           dictDefinition[sizeof(dictDefinition) - 1] = '\0';
         }
       }
+
+      // Highlight mode: collect word positions for the selection range.
+      if (highlightModeActive) {
+        // Clamp anchor in case the page was re-rendered with fewer lines.
+        if (totalLines > 0 && highlightAnchorLineIdx >= totalLines) {
+          highlightAnchorLineIdx = totalLines - 1;
+        }
+
+        int selStartLine = highlightAnchorLineIdx;
+        int selStartWord = highlightAnchorWordIdx;
+        int selEndLine = dictCursorLineIdx;
+        int selEndWord = dictCursorWordIdx;
+
+        // Normalise: ensure start <= end positionally.
+        if (selEndLine < selStartLine ||
+            (selEndLine == selStartLine && selEndWord < selStartWord)) {
+          std::swap(selStartLine, selEndLine);
+          std::swap(selStartWord, selEndWord);
+        }
+
+        const int hlFontId = SETTINGS.getReaderFontId();
+        int li = 0;
+        for (const auto& el : p->elements) {
+          if (el->getTag() != TAG_PageLine) continue;
+          if (li > selEndLine) break;
+          if (li >= selStartLine) {
+            const auto* pl = static_cast<const PageLine*>(el.get());
+            if (!pl->getBlock()) { li++; continue; }
+            const auto& hlElWords = pl->getBlock()->getWords();
+            const auto& hlXpos   = pl->getBlock()->getWordXpos();
+            const int numWords = static_cast<int>(hlElWords.size());
+            if (numWords == 0) { li++; continue; }
+
+            const int wFirst = (li == selStartLine) ? std::min(selStartWord, numWords - 1) : 0;
+            const int wLast  = (li == selEndLine)   ? std::min(selEndWord,   numWords - 1) : numWords - 1;
+
+            for (int wi = wFirst; wi <= wLast && hlWordCount < MAX_HL_WORDS; wi++) {
+              HlWord& hw = hlWords[hlWordCount++];
+              hw.x = static_cast<int16_t>(pl->xPos + orientedMarginLeft + hlXpos[wi]);
+              hw.y = static_cast<int16_t>(pl->yPos + orientedMarginTop);
+              const auto& rawW = hlElWords[wi];
+              const int len = std::min(static_cast<int>(rawW.size()),
+                                       static_cast<int>(sizeof(hw.text)) - 1);
+              memcpy(hw.text, rawW.c_str(), len);
+              hw.text[len] = '\0';
+              hw.w = static_cast<int16_t>(renderer.getTextWidth(hlFontId, hw.text));
+            }
+          }
+          li++;
+        }
+      }
     }
 
     const auto start = millis();
     renderContents(std::move(p), orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
 
-    // Dict mode overlay: always draw cursor underline; draw popup only when visible
+    // Dict mode overlay: draw cursor or highlight range; draw popup only when visible
     if (dictModeActive && dictCursor.valid) {
       const int screenW = renderer.getScreenWidth();
       const int screenH = renderer.getScreenHeight();
-      // Invert the selected word: black background + white text
-      renderer.fillRect(dictCursor.x, dictCursor.y, dictCursor.wordW, dictCursor.lineH, true);
-      renderer.drawText(SETTINGS.getReaderFontId(), dictCursor.x, dictCursor.y,
-                        dictCursor.displayWord.c_str(), false);
-      // Draw definition popup only after Confirm was pressed
-      if (dictPopupVisible) {
+      const int readerFontId = SETTINGS.getReaderFontId();
+
+      if (highlightModeActive && hlWordCount > 0) {
+        // Highlight range: invert every selected word (black bg, white text).
+        const int lineH = static_cast<int>(renderer.getLineHeight(readerFontId));
+        for (int i = 0; i < hlWordCount; i++) {
+          renderer.fillRect(hlWords[i].x, hlWords[i].y, hlWords[i].w, lineH, true);
+          renderer.drawText(readerFontId, hlWords[i].x, hlWords[i].y, hlWords[i].text, false);
+        }
+      } else if (!highlightModeActive) {
+        // Single cursor word inversion (normal dict mode).
+        renderer.fillRect(dictCursor.x, dictCursor.y, dictCursor.wordW, dictCursor.lineH, true);
+        renderer.drawText(readerFontId, dictCursor.x, dictCursor.y,
+                          dictCursor.displayWord.c_str(), false);
+      }
+
+      // Draw definition popup only after Confirm was pressed (not available in highlight mode)
+      if (!highlightModeActive && dictPopupVisible) {
         constexpr int POPUP_PAD = 8;
         constexpr int POPUP_MAX_LINES = 4;
         const int lineH = renderer.getLineHeight(UI_12_FONT_ID) + 2;
@@ -1511,6 +1611,89 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     pendingScreenshot = false;
     ScreenshotUtil::takeScreenshot(renderer);
   }
+}
+
+void EpubReaderActivity::saveHighlightToMyCLippings() {
+  if (!section || !epub) return;
+
+  auto p = section->loadPageFromSectionFile();
+  if (!p) return;
+
+  // Normalise selection bounds.
+  int selStartLine = highlightAnchorLineIdx;
+  int selStartWord = highlightAnchorWordIdx;
+  int selEndLine   = dictCursorLineIdx;
+  int selEndWord   = dictCursorWordIdx;
+  if (selEndLine < selStartLine ||
+      (selEndLine == selStartLine && selEndWord < selStartWord)) {
+    std::swap(selStartLine, selEndLine);
+    std::swap(selStartWord, selEndWord);
+  }
+
+  // Walk the page and concatenate selected words into a plain-text string.
+  std::string selectedText;
+  selectedText.reserve(256);
+  int li = 0;
+  bool prevHyphenated = false;
+  for (const auto& el : p->elements) {
+    if (el->getTag() != TAG_PageLine) continue;
+    if (li > selEndLine) break;
+    if (li >= selStartLine) {
+      const auto* pl = static_cast<const PageLine*>(el.get());
+      if (!pl->getBlock()) { li++; continue; }
+      const auto& words = pl->getBlock()->getWords();
+      const int numWords = static_cast<int>(words.size());
+      if (numWords == 0) { li++; continue; }
+
+      const int wFirst = (li == selStartLine) ? std::min(selStartWord, numWords - 1) : 0;
+      const int wLast  = (li == selEndLine)   ? std::min(selEndWord,   numWords - 1) : numWords - 1;
+
+      for (int wi = wFirst; wi <= wLast; wi++) {
+        const std::string& w = words[wi];
+        if (!selectedText.empty() && !prevHyphenated) selectedText += ' ';
+        prevHyphenated = false;
+        // Stitch hyphenated line breaks: last word on a non-final line ending with '-'.
+        if (wi == numWords - 1 && li < selEndLine && !w.empty() && w.back() == '-') {
+          selectedText += w.substr(0, w.size() - 1);
+          prevHyphenated = true;
+        } else {
+          selectedText += w;
+        }
+      }
+    }
+    li++;
+  }
+
+  if (selectedText.empty()) return;
+
+  // Compute book progress percentage.
+  float bookProgress = 0.0f;
+  if (epub->getBookSize() > 0 && section->pageCount > 0) {
+    const float chapterProgress =
+        static_cast<float>(section->currentPage) / static_cast<float>(section->pageCount);
+    bookProgress = epub->calculateProgress(currentSpineIndex, chapterProgress) * 100.0f;
+  }
+  const int progressPercent = clampPercent(static_cast<int>(bookProgress + 0.5f));
+
+  // Append a Kindle-style clipping entry to /MyClippings.txt.
+  FsFile file = Storage.open("/MyClippings.txt", O_WRITE | O_CREAT | O_APPEND);
+  if (!file) {
+    LOG_ERR("ERS", "saveHighlight: failed to open /MyClippings.txt");
+    return;
+  }
+  const std::string entry = std::string("==========\n") +
+                            epub->getTitle() + " (" + epub->getAuthor() + ")\n" +
+                            "- Your Highlight | Location: " + std::to_string(progressPercent) + "%\n\n" +
+                            selectedText + "\n\n";
+  file.write(entry.c_str(), entry.size());
+  file.close();
+
+  LOG_DBG("ERS", "Highlight saved: %d chars at %d%%", static_cast<int>(selectedText.size()), progressPercent);
+
+  // Brief confirmation popup.
+  GUI.drawPopup(renderer, tr(STR_HIGHLIGHT_SAVED));
+  renderer.displayBuffer();
+  delay(500);
 }
 
 void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportWidth, const uint16_t viewportHeight) {
