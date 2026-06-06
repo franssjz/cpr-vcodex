@@ -69,6 +69,15 @@ void DictionarySettingsActivity::loop() {
     return;
   }
 
+  // Left/Right are reorder controls on this screen. They are also part of the
+  // navigator's previous/next button sets ({Up, Left} and {Down, Right}), so
+  // their *release* would otherwise drive list navigation a second time after
+  // the reorder already moved the cursor on press. Swallow those releases here.
+  if (mappedInput.wasReleased(MappedInputManager::Button::Left) ||
+      mappedInput.wasReleased(MappedInputManager::Button::Right)) {
+    return;
+  }
+
   const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false);
 
   buttonNavigator.onNextRelease([this] {
