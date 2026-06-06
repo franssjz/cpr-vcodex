@@ -321,6 +321,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
              StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_SLEEP_COVER_FILTER, sleepScreenCoverFilter, OPT_SLEEP_FILTER, "sleepScreenCoverFilter",
              StrId::STR_CAT_DISPLAY),
+    WEB_TOGGLE(StrId::STR_CLEAN_SLEEP_REFRESH, cleanSleepRefresh, "cleanSleepRefresh", StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_HIDE_BATTERY, hideBatteryPercentage, OPT_HIDE_BATTERY, "hideBatteryPercentage",
              StrId::STR_CAT_DISPLAY),
     WEB_ENUM(StrId::STR_REFRESH_FREQ, refreshFrequency, OPT_REFRESH_FREQ, "refreshFrequency", StrId::STR_CAT_DISPLAY),
