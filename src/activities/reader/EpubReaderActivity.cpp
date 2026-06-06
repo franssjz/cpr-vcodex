@@ -1455,6 +1455,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       // to the prefix entry and places the remainder as the first word of the next
       // line.  We detect both halves so that a lookup on either half finds the
       // full word.
+      //
       int lineIdx = 0;
       std::string rawWord;
       std::string prevLineLastRaw;
@@ -1501,6 +1502,41 @@ void EpubReaderActivity::render(RenderLock&& lock) {
         }
 
         lineIdx++;
+      }
+
+      // Page-boundary: cursor is on the first word of the first line → previous line is on
+      // the previous page. Load it only if we still need it (prevLineLastRaw still empty).
+      if (prevLineLastRaw.empty() && dictCursorLineIdx == 0 && dictCursorWordIdx == 0 &&
+          section->currentPage > 0) {
+        section->currentPage--;
+        auto prevPage = section->loadPageFromSectionFile();
+        section->currentPage++;
+        if (prevPage) {
+          for (const auto& el : prevPage->elements) {
+            if (el->getTag() != TAG_PageLine) continue;
+            const auto* pl = static_cast<const PageLine*>(el.get());
+            if (pl->getBlock() && !pl->getBlock()->getWords().empty())
+              prevLineLastRaw = pl->getBlock()->getWords().back();
+          }
+        }
+      }
+
+      // Post-load next page's first word if cursor was on the last line and word ends with '-'.
+      if (nextLineFirstRaw.empty() && !rawWord.empty() && rawWord.back() == '-' &&
+          section->currentPage + 1 < section->pageCount) {
+        section->currentPage++;
+        auto nextPage = section->loadPageFromSectionFile();
+        section->currentPage--;
+        if (nextPage) {
+          for (const auto& el : nextPage->elements) {
+            if (el->getTag() != TAG_PageLine) continue;
+            const auto* pl = static_cast<const PageLine*>(el.get());
+            if (pl->getBlock() && !pl->getBlock()->getWords().empty()) {
+              nextLineFirstRaw = pl->getBlock()->getWords().front();
+              break;
+            }
+          }
+        }
       }
 
       // Hyphenation detection: the hyphenator stores "ridic-" on line N and
