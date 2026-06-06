@@ -15,6 +15,9 @@ struct WifiNetworkInfo {
   int32_t rssi;
   bool isEncrypted;
   bool hasSavedPassword;  // Whether we have saved credentials for this network
+  int32_t channel = 0;
+  uint8_t bssid[6] = {};
+  bool hasBssid = false;
   std::string ipAddress;  // Populated after connection for display
 };
 
@@ -52,6 +55,9 @@ class WifiSelectionActivity final : public Activity {
   // Selected network for connection
   std::string selectedSSID;
   bool selectedRequiresPassword = false;
+  int32_t selectedChannel = 0;
+  uint8_t selectedBssid[6] = {};
+  bool selectedHasBssid = false;
 
   // Connection result
   std::string connectedIP;
@@ -91,6 +97,7 @@ class WifiSelectionActivity final : public Activity {
   void startWifiScan();
   void processWifiScanResults();
   void selectNetwork(int index);
+  void setSelectedNetwork(const WifiNetworkInfo& network);
   bool connectUsingSavedCredential(const WifiNetworkInfo& network, bool isAutoConnectAttempt);
   void attemptConnection();
   void checkConnectionStatus();
