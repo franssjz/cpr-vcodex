@@ -459,14 +459,29 @@ void EpubReaderActivity::loop() {
   if (longPress && SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP) {
     READING_STATS.noteActivity();
     lastPageTurnTime = millis();
+
+    if (!nextTriggered && section && section->currentPage > 0) {
+      section->currentPage = 0;
+      nextPageNumber = 0;
+      sessionProgressTouched = true;
+      requestUpdate();
+      return;
+    }
+
+    if (!nextTriggered && currentSpineIndex <= 0) {
+      return;
+    }
+
     // We don't want to delete the section mid-render, so grab the semaphore
     {
       RenderLock lock(*this);
       nextPageNumber = 0;
-      if (!nextTriggered) {
+      if (nextTriggered) {
+        currentSpineIndex++;
+      } else if (currentSpineIndex > 0) {
         pendingPageJump = std::numeric_limits<uint16_t>::max();
+        currentSpineIndex--;
       }
-      currentSpineIndex = nextTriggered ? currentSpineIndex + 1 : currentSpineIndex - 1;
       sessionProgressTouched = true;
       section.reset();
     }
@@ -1285,7 +1300,13 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     } else {
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     }
-    // Double FAST_REFRESH handles ghosting for image pages; don't count toward full refresh cadence
+    // The image's own page is handled above and doesn't count toward the full
+    // refresh cadence. But the grayscale pass below leaves gray charge in the
+    // image region that a plain fast diff on the *next* page can't clear, so
+    // text there ghosts gray (#2190). Force the next ordinary page onto the
+    // HALF ghost-cleanup path, which drives every pixel to its target
+    // regardless of residue.
+    pagesUntilFullRefresh = 1;
   } else {
     ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
   }

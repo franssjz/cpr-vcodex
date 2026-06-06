@@ -43,6 +43,72 @@ bool resolveFromPercentage(const std::shared_ptr<Epub>& epub, const float percen
 
   return true;
 }
+
+bool isChapterStartXPath(const std::string& xpath) {
+  if (xpath.find("/p[") != std::string::npos || xpath.find("/li[") != std::string::npos) {
+    return false;
+  }
+
+  const std::string docFragment = "/body/DocFragment[";
+  const size_t docFragPos = xpath.find(docFragment);
+  if (docFragPos == std::string::npos) {
+    return false;
+  }
+
+  const size_t docFragEnd = xpath.find(']', docFragPos + docFragment.size());
+  if (docFragEnd == std::string::npos) {
+    return false;
+  }
+
+  if (docFragEnd + 1 == xpath.size()) {
+    return true;
+  }
+
+  if (xpath[docFragEnd + 1] == '.') {
+    if (docFragEnd + 2 >= xpath.size()) {
+      return false;
+    }
+    for (size_t i = docFragEnd + 2; i < xpath.size(); i++) {
+      if (xpath[i] != '0') {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const std::string docBody = "]/body";
+  const size_t docBodyPos = xpath.find(docBody);
+  if (docBodyPos == std::string::npos) {
+    return false;
+  }
+
+  size_t bodyContentStart = docBodyPos + docBody.size();
+  if (bodyContentStart == xpath.size()) {
+    return true;
+  }
+  if (xpath[bodyContentStart] != '/') {
+    return false;
+  }
+  bodyContentStart++;
+  if (bodyContentStart == xpath.size()) {
+    return true;
+  }
+
+  const size_t dotPos = xpath.rfind('.');
+  if (dotPos == std::string::npos || dotPos <= bodyContentStart || dotPos + 1 >= xpath.size()) {
+    return false;
+  }
+  if (xpath.find('/', bodyContentStart) != std::string::npos) {
+    return false;
+  }
+
+  for (size_t i = dotPos + 1; i < xpath.size(); i++) {
+    if (xpath[i] != '0') {
+      return false;
+    }
+  }
+  return true;
+}
 }  // namespace
 
 KOReaderPosition ProgressMapper::toKOReader(const std::shared_ptr<Epub>& epub, const CrossPointPosition& pos) {
@@ -106,8 +172,15 @@ CrossPointPosition ProgressMapper::toCrossPoint(const std::shared_ptr<Epub>& epu
       xpathSpineIndex < spineCount) {
     float intraFromXPath = 0.0f;
     uint16_t liIndexFromXPath = 0;
-    if (ChapterXPathIndexer::findProgressForXPath(epub, xpathSpineIndex, koPos.xpath, intraFromXPath, xpathExactMatch,
-                                                  &liIndexFromXPath)) {
+    if (isChapterStartXPath(koPos.xpath)) {
+      result.spineIndex = xpathSpineIndex;
+      resolvedIntraSpineProgress = 0.0f;
+      xpathExactMatch = true;
+      usedXPathMapping = true;
+      LOG_DBG("ProgressMapper", "KOReader chapter-start XPath %s -> spine=%d page start", koPos.xpath.c_str(),
+              result.spineIndex);
+    } else if (ChapterXPathIndexer::findProgressForXPath(epub, xpathSpineIndex, koPos.xpath, intraFromXPath,
+                                                          xpathExactMatch, &liIndexFromXPath)) {
       result.spineIndex = xpathSpineIndex;
       resolvedIntraSpineProgress = intraFromXPath;
       usedXPathMapping = true;

@@ -85,6 +85,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     return;
   }
 
+  const bool scanning = renderer.isFontCacheScanning();
   const int ascender = renderer.getFontAscenderSize(fontId);
   for (size_t i = 0; i < words.size(); i++) {
     const int wordX = wordXpos[i] + x;
@@ -180,7 +181,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
 
     const bool hasUnderline = (currentStyle & EpdFontFamily::UNDERLINE) != 0;
     const bool hasStrikethrough = (currentStyle & EpdFontFamily::STRIKETHROUGH) != 0;
-    if (hasUnderline || hasStrikethrough) {
+    if (!scanning && (hasUnderline || hasStrikethrough)) {
       const auto decoration = getDecorationMetrics(renderer, fontId, wordX, w, currentStyle);
       if (decoration.width <= 0) {
         continue;
