@@ -384,6 +384,11 @@ struct BitmapPlacement {
   float cropY = 0.0f;
 };
 
+struct CustomSleepImage {
+  std::string path;
+  bool isPng = false;
+};
+
 BitmapPlacement getBitmapPlacement(const Bitmap& bitmap, const Rect& target, const bool crop) {
   BitmapPlacement placement;
   placement.x = target.x;
@@ -466,6 +471,145 @@ void drawFullScreenCoverBitmap(const GfxRenderer& renderer, const Bitmap& bitmap
   const BitmapPlacement placement = getFullScreenBitmapPlacement(bitmap, pageWidth, pageHeight);
   renderer.drawBitmap(bitmap, placement.x, placement.y, pageWidth, pageHeight, placement.cropX, placement.cropY);
 }
+
+bool selectConfiguredCustomSleepImage(CustomSleepImage& selected) {
+  const std::string sleepDir = SleepImageUtils::resolveConfiguredSleepDirectory();
+  auto dir = sleepDir.empty() ? FsFile{} : Storage.open(sleepDir.c_str());
+
+  if (!dir || !dir.isDirectory()) {
+    if (dir) {
+      dir.close();
+    }
+    return false;
+  }
+
+  std::vector<std::string> files;
+  char name[500];
+  for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
+    if (file.isDirectory()) {
+      file.close();
+      continue;
+    }
+    file.getName(name, sizeof(name));
+    auto filename = std::string(name);
+    if (filename.empty() || filename[0] == '.') {
+      file.close();
+      continue;
+    }
+
+    const bool isBmp = FsHelpers::hasBmpExtension(filename);
+    const bool isPng = FsHelpers::hasPngExtension(filename);
+    if (!isBmp && !isPng) {
+      LOG_DBG("SLP", "Skipping unsupported sleep image: %s", name);
+      file.close();
+      continue;
+    }
+
+    if (isBmp) {
+      Bitmap bitmap(file);
+      if (bitmap.parseHeaders() != BmpReaderError::Ok) {
+        LOG_DBG("SLP", "Skipping invalid BMP file: %s", name);
+        file.close();
+        continue;
+      }
+    }
+
+    files.emplace_back(filename);
+    file.close();
+  }
+  dir.close();
+
+  const auto numFiles = files.size();
+  if (numFiles == 0) {
+    return false;
+  }
+
+  uint16_t fileIndex = 0;
+  const uint16_t recentIndex = APP_STATE.getMostRecentSleepIndex();
+  if (SETTINGS.sleepImageOrder == CrossPointSettings::SLEEP_IMAGE_SEQUENTIAL) {
+    if (recentIndex == UINT16_MAX || recentIndex >= numFiles - 1) {
+      fileIndex = 0;
+    } else {
+      fileIndex = static_cast<uint16_t>(recentIndex + 1);
+    }
+  } else {
+    const uint16_t fileCount = static_cast<uint16_t>(std::min(numFiles, static_cast<size_t>(UINT16_MAX)));
+    const uint8_t window =
+        static_cast<uint8_t>(std::min(static_cast<size_t>(APP_STATE.recentSleepFill), numFiles - 1));
+    fileIndex = static_cast<uint16_t>(random(fileCount));
+    for (uint8_t attempt = 0; attempt < 20 && APP_STATE.isRecentSleep(fileIndex, window); attempt++) {
+      fileIndex = static_cast<uint16_t>(random(fileCount));
+    }
+  }
+
+  APP_STATE.pushRecentSleep(fileIndex);
+  APP_STATE.saveToFile();
+  selected.path = sleepDir + "/" + files[static_cast<size_t>(fileIndex)];
+  selected.isPng = FsHelpers::hasPngExtension(files[static_cast<size_t>(fileIndex)]);
+  return !selected.path.empty();
+}
+
+bool drawPngSleepBackground(const GfxRenderer& renderer, const std::string& sourcePath) {
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+  return PngSleepRenderer::drawTransparentPng(sourcePath, renderer, 0, 0, pageWidth, pageHeight);
+}
+
+bool renderBitmapStatsSleepScreen(GfxRenderer& renderer, const std::string& sourcePath, const Rect& statsPanel,
+                                  const ReadingBookStats* book, const bool footerOnly) {
+  if (SleepScreenCache::load(renderer, sourcePath)) {
+    drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+    displaySleepBuffer(renderer);
+    return true;
+  }
+
+  FsFile file;
+  if (!Storage.openFileForRead("SLP", sourcePath, file)) {
+    return false;
+  }
+
+  Bitmap bitmap(file, true);
+  if (bitmap.parseHeaders() != BmpReaderError::Ok) {
+    file.close();
+    return false;
+  }
+
+  renderer.clearScreen();
+  drawFullScreenCoverBitmap(renderer, bitmap);
+  if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
+    renderer.invertScreen();
+  }
+  if (canUseSleepCache(bitmap)) {
+    SleepScreenCache::save(renderer, sourcePath);
+  }
+  drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+
+  displaySleepBuffer(renderer);
+
+  const bool hasGreyscale = bitmap.hasGreyscale() &&
+                            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+  if (hasGreyscale) {
+    bitmap.rewindToData();
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+    drawFullScreenCoverBitmap(renderer, bitmap);
+    drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+    renderer.copyGrayscaleLsbBuffers();
+
+    bitmap.rewindToData();
+    renderer.clearScreen(0x00);
+    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+    drawFullScreenCoverBitmap(renderer, bitmap);
+    drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+    renderer.copyGrayscaleMsbBuffers();
+
+    renderer.displayGrayBuffer();
+    renderer.setRenderMode(GfxRenderer::BW);
+  }
+
+  file.close();
+  return true;
+}
 }  // namespace
 
 void SleepActivity::onEnter() {
@@ -514,6 +658,12 @@ void SleepActivity::onEnter() {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_STATS_V2):
       renderCoverStatsSleepScreen(true);
       break;
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM_STATS):
+      renderCustomStatsSleepScreen();
+      break;
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM_STATS_V2):
+      renderCustomStatsSleepScreen(true);
+      break;
     default:
       renderDefaultSleepScreen();
       break;
@@ -525,95 +675,25 @@ void SleepActivity::onEnter() {
 }
 
 void SleepActivity::renderCustomSleepScreen() const {
-  const std::string sleepDir = SleepImageUtils::resolveConfiguredSleepDirectory();
-  auto dir = sleepDir.empty() ? FsFile{} : Storage.open(sleepDir.c_str());
-
-  std::string selectedPath;
-  bool selectedIsPng = false;
-
-  if (dir && dir.isDirectory()) {
-    std::vector<std::string> files;
-    char name[500];
-    for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-      if (file.isDirectory()) {
-        file.close();
-        continue;
-      }
-      file.getName(name, sizeof(name));
-      auto filename = std::string(name);
-      if (filename[0] == '.') {
-        file.close();
-        continue;
-      }
-
-      const bool isBmp = FsHelpers::hasBmpExtension(filename);
-      const bool isPng = FsHelpers::hasPngExtension(filename);
-      if (!isBmp && !isPng) {
-        LOG_DBG("SLP", "Skipping unsupported sleep image: %s", name);
-        file.close();
-        continue;
-      }
-
-      if (isBmp) {
-        Bitmap bitmap(file);
-        if (bitmap.parseHeaders() != BmpReaderError::Ok) {
-          LOG_DBG("SLP", "Skipping invalid BMP file: %s", name);
-          file.close();
-          continue;
-        }
-      }
-
-      files.emplace_back(filename);
-      file.close();
-    }
-    const auto numFiles = files.size();
-    if (numFiles > 0) {
-      uint16_t fileIndex = 0;
-      const uint16_t recentIndex = APP_STATE.getMostRecentSleepIndex();
-      if (SETTINGS.sleepImageOrder == CrossPointSettings::SLEEP_IMAGE_SEQUENTIAL) {
-        if (recentIndex == UINT16_MAX || recentIndex >= numFiles - 1) {
-          fileIndex = 0;
-        } else {
-          fileIndex = static_cast<uint16_t>(recentIndex + 1);
-        }
-      } else {
-        const uint16_t fileCount = static_cast<uint16_t>(std::min(numFiles, static_cast<size_t>(UINT16_MAX)));
-        const uint8_t window =
-            static_cast<uint8_t>(std::min(static_cast<size_t>(APP_STATE.recentSleepFill), numFiles - 1));
-        fileIndex = static_cast<uint16_t>(random(fileCount));
-        for (uint8_t attempt = 0; attempt < 20 && APP_STATE.isRecentSleep(fileIndex, window); attempt++) {
-          fileIndex = static_cast<uint16_t>(random(fileCount));
-        }
-      }
-
-      APP_STATE.pushRecentSleep(fileIndex);
-      APP_STATE.saveToFile();
-      selectedPath = sleepDir + "/" + files[static_cast<size_t>(fileIndex)];
-      selectedIsPng = FsHelpers::hasPngExtension(files[static_cast<size_t>(fileIndex)]);
-    }
-  }
-  if (dir) {
-    dir.close();
-  }
-
-  if (!selectedPath.empty()) {
-    if (selectedIsPng) {
-      if (renderPngSleepScreen(selectedPath)) {
+  CustomSleepImage selected;
+  if (selectConfiguredCustomSleepImage(selected)) {
+    if (selected.isPng) {
+      if (renderPngSleepScreen(selected.path)) {
         return;
       }
     } else {
       GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
       FsFile file;
-      if (SleepScreenCache::load(renderer, selectedPath)) {
+      if (SleepScreenCache::load(renderer, selected.path)) {
         displaySleepBuffer(renderer);
         return;
       }
-      if (Storage.openFileForRead("SLP", selectedPath, file)) {
-        LOG_DBG("SLP", "Loading sleep image: %s", selectedPath.c_str());
+      if (Storage.openFileForRead("SLP", selected.path, file)) {
+        LOG_DBG("SLP", "Loading sleep image: %s", selected.path.c_str());
         delay(100);
         Bitmap bitmap(file, true);
         if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-          renderBitmapSleepScreen(bitmap, selectedPath);
+          renderBitmapSleepScreen(bitmap, selected.path);
           file.close();
           return;
         }
@@ -948,6 +1028,41 @@ void SleepActivity::renderCoverStatsSleepScreen(bool footerOnly) const {
   }
 
   file.close();
+}
+
+void SleepActivity::renderCustomStatsSleepScreen(bool footerOnly) const {
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+  const int overlayWidth = std::min(pageWidth - 156, 430);
+  const int overlayHeight = footerOnly ? 84 : 318;
+  const Rect statsPanel{(pageWidth - overlayWidth) / 2, pageHeight - overlayHeight - 42, overlayWidth, overlayHeight};
+  const ReadingBookStats* book = footerOnly ? nullptr : getCurrentSleepBook();
+
+  CustomSleepImage selected;
+  if (selectConfiguredCustomSleepImage(selected)) {
+    if (selected.isPng) {
+      renderer.clearScreen();
+      if (drawPngSleepBackground(renderer, selected.path)) {
+        drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+        displaySleepBuffer(renderer);
+        return;
+      }
+    } else if (renderBitmapStatsSleepScreen(renderer, selected.path, statsPanel, book, footerOnly)) {
+      return;
+    }
+  }
+
+  if (renderBitmapStatsSleepScreen(renderer, "/sleep.bmp", statsPanel, book, footerOnly)) {
+    return;
+  }
+  renderer.clearScreen();
+  if (drawPngSleepBackground(renderer, "/sleep.png")) {
+    drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+    displaySleepBuffer(renderer);
+    return;
+  }
+
+  renderReadingDashboardSleepScreen();
 }
 
 void SleepActivity::renderBlankSleepScreen() const {

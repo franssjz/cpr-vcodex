@@ -126,6 +126,11 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "Cover" - The book cover image (Note: this is experimental and may not work as expected)
   - "None" - A blank screen
   - "Cover + Custom" - The book cover image, falls back to "Custom" behavior
+  - "Reading Dashboard" - Reading goal, streak, totals, achievement progress, and recent-book context
+  - "Cover + Stats v1" - The book cover plus compact book/global reading stats
+  - "Cover + Stats v2" - The book cover plus a compact global stats footer
+  - "Custom + Stats v1" - Custom sleep image plus the same compact book/global reading stats
+  - "Custom + Stats v2" - Custom sleep image plus the compact global stats footer
 - **Sleep Screen Cover Mode**: How to display the book cover when "Cover" sleep screen is selected:
   - "Fit" (default) - Scale the image down to fit centered on the screen, padding with white borders as necessary
   - "Crop" - Scale the image down and crop as necessary to try to fill the screen (Note: this is experimental and may not work as expected)
@@ -342,6 +347,11 @@ The **Sleep Screen** setting controls what is displayed when the device goes to 
 | **Custom** | A custom image from the SD card (see below). Falls back to **Dark** if no custom image is found. |
 | **Cover** | The cover of the currently open book. Falls back to **Dark** if no book is open. |
 | **Cover + Custom** | The cover of the currently open book. Falls back to **Custom** behavior if no book is open. |
+| **Reading Dashboard** | A reading summary with daily goal, streak, totals, achievements, and recent-book progress. |
+| **Cover + Stats v1** | The current book cover with compact book/global reading stats. Falls back to **Reading Dashboard** if no cover can be rendered. |
+| **Cover + Stats v2** | The current book cover with a compact global stats footer. Falls back to **Reading Dashboard** if no cover can be rendered. |
+| **Custom + Stats v1** | A custom sleep image with the same compact book/global stats overlay as **Cover + Stats v1**. Falls back to **Reading Dashboard** if no custom image is found. |
+| **Custom + Stats v2** | A custom sleep image with the same compact stats footer as **Cover + Stats v2**. Falls back to **Reading Dashboard** if no custom image is found. |
 | **None** | A blank screen. |
 
 #### Cover settings
@@ -353,7 +363,7 @@ When using **Cover** or **Cover + Custom**, two additional settings apply:
 
 #### Custom images
 
-To use custom sleep images, set the sleep screen mode to **Custom** or **Cover + Custom**, then place images on the SD card:
+To use custom sleep images, set the sleep screen mode to **Custom**, **Cover + Custom**, **Custom + Stats v1**, or **Custom + Stats v2**, then place images on the SD card:
 
 - **Multiple Images (recommended):** Create a `.sleep` directory in the root of the SD card and place any number of `.bmp` images inside. One will be randomly selected each time the device sleeps. (A directory named `sleep` is also accepted as a fallback.)
 - **Single Image:** Place a file named `sleep.bmp` in the root directory. This is used as a fallback if no valid images are found in the `.sleep`/`sleep` directory.
