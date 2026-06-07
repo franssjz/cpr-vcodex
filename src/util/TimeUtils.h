@@ -13,6 +13,7 @@ bool isClockValid(uint32_t epochSeconds);
 uint32_t getAuthoritativeTimestamp();
 uint32_t getCurrentValidTimestamp();
 bool setCurrentDate(int year, unsigned month, unsigned day, uint32_t* epochSeconds = nullptr);
+bool getTimestampForLocalDate(int year, unsigned month, unsigned day, uint32_t* epochSeconds);
 uint32_t getLocalDayOrdinal(uint32_t epochSeconds);
 uint32_t getDayOrdinalForDate(int year, unsigned month, unsigned day);
 bool getDateFromDayOrdinal(uint32_t dayOrdinal, int& year, unsigned& month, unsigned& day);

@@ -44,12 +44,12 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4`; `Xteink X3` compatibility reported by users, not personally tested |
-| Current release (CPR-vCodex) build | [`1.3.0.15-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.3.0.15-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.3.0.16-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.3.0.16-cpr-vcodex) |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | Selected CrossPoint Reader fixes after [`3392b3e3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3392b3e3) through [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078), including EPUB image/cache/CSS/parser performance, KOReader chapter-start mapping, font-upload hardening, long-press chapter-start navigation, progress-bar placement, and `open-x4-sdk` [`26648d6`](https://github.com/crosspoint-reader/community-sdk/commit/26648d643a1c883ab2f71e1869d05fe2a0c9d498). Hebrew/RTL, translation-only churn, OpenDyslexic storage migration, docs-only guide updates, and t5s3 README-only changes remain deferred. |
-| Current release fixes | Adds `Custom + Stats v1` and `Custom + Stats v2` sleep screens, combining configured custom sleep images with the compact overlays from `Cover + Stats`. The sleep shortcut/button path now still shows `Entering sleep` for those modes, and PNG-backed custom stats screens clear the transient popup buffer before composing the final transparent-image sleep screen. |
-| Latest release notes | - Added `Custom + Stats v1` and `Custom + Stats v2` sleep-screen modes.<br>- Reused the existing custom sleep-image directory, shuffle/sequential order, recent-image tracking, and `/sleep.bmp` / `/sleep.png` fallbacks.<br>- Matched the `Cover + Stats` overlays: v1 uses book/global stats, v2 uses the compact footer.<br>- Restored the `Entering sleep` popup for these new modes when sleep is triggered from the shortcut/button path.<br>- Kept PNG and BMP behavior safe by clearing PNG buffers before final composition and caching clean BMP backgrounds before drawing stats. |
+| Current release fixes | Fixes Bionic Reading Normal prefix spacing, SD-card font fallback/download handling, and expands per-book `Reading Stats` actions with reading-time adjustment, start-date editing, and confirmed per-book stats reset. |
+| Latest release notes | - Fixed Bionic Reading Normal overlap by caching layout-aware bold prefix/suffix positions for EPUB pages.<br>- Fixed SD-card font fallback measurement when compact advance caches are incomplete, plus browser File Transfer downloads with expected response sizes.<br>- Replaced the per-book `Reading Stats` settings shortcut with an action list for `Adjust reading time`, `Modify start date`, and `Reset this book's stats`.<br>- Kept start-date edits metadata-only, while reset removes attributed book stats/session entries and rebuilds aggregate stats plus achievement progress.<br>- Synchronized current UI keys across all 23 bundled languages so recent settings and stats strings no longer fall back to English. |
 | Base firmware line | `CrossPoint Reader 1.3.0` |
 | Latest official commit reviewed | [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078) |
 | Latest official commit incorporated | Selected EPUB/rendering, cache, filesystem, image, KOReader Sync, font-upload, SDK, and navigation fixes from [`7accc607`](https://github.com/crosspoint-reader/crosspoint-reader/commit/7accc607) through [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078); larger upstream bookmark, RTL, OTA/downloader, translation-bulk, and settings rewrites remain intentionally deferred. |
@@ -134,7 +134,7 @@ This project is **not affiliated with Xteink**.
 
 - stable upstream-based reader baseline kept fast on large EPUBs
 - richer on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
-- manual per-book reading-time corrections for missed or accidental sessions
+- manual per-book reading-time/date corrections for missed or accidental stats
 - `Achievements` built on top of the same reading data model
 - `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
 - `Lyra Carousel` Home theme, originally created by [zgredex](https://github.com/zgredex), adapted to this fork by [erickosanchezj](https://github.com/erickosanchezj), limited to 3 books for smoother X4 navigation, with a sliding bottom shortcut row so every configured Home action remains reachable
@@ -181,7 +181,7 @@ This project is **not affiliated with Xteink**.
 - Slovenian
 - Vietnamese
 
-The translation set is maintained from `english.yaml` as the source of truth, with safe English fallback when a key is not translated yet.
+The translation set is maintained from `english.yaml` as the source of truth. Current shipped UI keys are synchronized across all 23 languages; safe English fallback remains available for future keys that have not been translated yet.
 
 ## Easy installation
 
@@ -318,7 +318,13 @@ That means these views stay coherent with each other:
 | `Reading Profile` | summary of recent reading behavior |
 | `Per-book stats detail` | cover, progress, sessions, time and last-read info for one book |
 
-Per-book detail also includes a small settings button under the cover. It opens a correction screen for missed or accidental reading time:
+Per-book detail also includes a small settings button under the cover. It opens book-specific stats actions:
+
+- `Adjust reading time` opens the correction screen for missed or accidental reading time
+- `Modify start date` changes only the book's displayed start date metadata
+- `Reset this book's stats` asks for confirmation, then removes that book's stats entry, attributed session history, and rebuilds aggregate reading totals
+
+The correction screen can:
 
 - choose `Add` or `Subtract`
 - choose the exact date with the same numeric picker style used by `Sync Day`

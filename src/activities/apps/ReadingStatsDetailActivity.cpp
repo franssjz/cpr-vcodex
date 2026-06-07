@@ -13,10 +13,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "AppMetricCard.h"
-#include "BookReadingAdjustmentActivity.h"
+#include "BookStatsActionsActivity.h"
 #include "ReadingStatsStore.h"
 #include "components/UITheme.h"
 #include "components/icons/settings2.h"
@@ -34,8 +35,8 @@ constexpr int METRIC_CARD_GAP = 8;
 constexpr int METRIC_CARD_VALUE_Y = 14;
 constexpr int METRIC_CARD_LABEL_Y = 50;
 constexpr int DETAIL_FOCUS_ITEM_COUNT = 2;
-constexpr int DETAIL_ADJUST_FOCUS_INDEX = 1;
-constexpr int ADJUST_BUTTON_SIZE = 54;
+constexpr int DETAIL_ACTIONS_FOCUS_INDEX = 1;
+constexpr int ACTIONS_BUTTON_SIZE = 54;
 constexpr int SUMMARY_BANNER_HEIGHT = 46;
 constexpr int SUMMARY_BANNER_GAP = 8;
 constexpr int DETAIL_SCROLL_STEP = 128;
@@ -307,7 +308,7 @@ void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, 
   AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
-void drawAdjustTimeButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
+void drawStatsActionsButton(GfxRenderer& renderer, const Rect& rect, const bool selected) {
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   }
@@ -464,7 +465,7 @@ void ReadingStatsDetailActivity::freeBaseScreenBuffer() {
   invalidateBaseScreenBuffer();
 }
 
-void ReadingStatsDetailActivity::openAdjustment() {
+void ReadingStatsDetailActivity::openStatsActions() {
   const auto* book = findBook(bookPath);
   if (book == nullptr) {
     requestUpdate();
@@ -472,9 +473,14 @@ void ReadingStatsDetailActivity::openAdjustment() {
   }
 
   startActivityForResult(
-      std::make_unique<BookReadingAdjustmentActivity>(renderer, mappedInput, book->path, getDisplayTitle(*book)),
-      [this](const ActivityResult&) {
+      std::make_unique<BookStatsActionsActivity>(renderer, mappedInput, book->path, getDisplayTitle(*book)),
+      [this](const ActivityResult& result) {
         guardChildReturn();
+        if (const auto* menu = std::get_if<MenuResult>(&result.data);
+            menu != nullptr && menu->action == BookStatsActionsActivity::RESULT_RESET_BOOK_STATS) {
+          finish();
+          return;
+        }
         requestUpdate();
       });
 }
@@ -522,7 +528,7 @@ void ReadingStatsDetailActivity::loop() {
   buttonNavigator.onNextPress([&]() {
     if (maxScrollOffset > 0) {
       if (scrollOffset == 0 && selectedStatsItem == 0) {
-        selectedStatsItem = DETAIL_ADJUST_FOCUS_INDEX;
+        selectedStatsItem = DETAIL_ACTIONS_FOCUS_INDEX;
         requestUpdate();
         return;
       }
@@ -562,8 +568,8 @@ void ReadingStatsDetailActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && selectedStatsItem == DETAIL_ADJUST_FOCUS_INDEX) {
-    openAdjustment();
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && selectedStatsItem == DETAIL_ACTIONS_FOCUS_INDEX) {
+    openStatsActions();
     return;
   }
 
@@ -596,9 +602,9 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int viewportBottom = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing;
   const Rect coverBaseRect{metrics.contentSidePadding, contentTop, COVER_WIDTH, COVER_HEIGHT};
-  const Rect adjustButtonBaseRect{coverBaseRect.x + (coverBaseRect.width - ADJUST_BUTTON_SIZE) / 2,
-                                  coverBaseRect.y + coverBaseRect.height + metrics.verticalSpacing,
-                                  ADJUST_BUTTON_SIZE, ADJUST_BUTTON_SIZE};
+  const Rect actionsButtonBaseRect{coverBaseRect.x + (coverBaseRect.width - ACTIONS_BUTTON_SIZE) / 2,
+                                   coverBaseRect.y + coverBaseRect.height + metrics.verticalSpacing,
+                                   ACTIONS_BUTTON_SIZE, ACTIONS_BUTTON_SIZE};
   const int textX = coverBaseRect.x + coverBaseRect.width + 16;
   const int textWidth = pageWidth - textX - metrics.contentSidePadding;
 
@@ -628,7 +634,7 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
       renderer.wrappedText(UI_10_FONT_ID, currentChapter.c_str(), textWidth, 2, EpdFontFamily::BOLD);
   currentY += static_cast<int>(chapterLines.size()) * renderer.getLineHeight(UI_10_FONT_ID);
 
-  int cardsTop = std::max(adjustButtonBaseRect.y + adjustButtonBaseRect.height, currentY) + metrics.verticalSpacing + 10;
+  int cardsTop = std::max(actionsButtonBaseRect.y + actionsButtonBaseRect.height, currentY) + metrics.verticalSpacing + 10;
   const int summaryBannerTop = cardsTop;
   if (showCompletionBanner) {
     cardsTop += SUMMARY_BANNER_HEIGHT + SUMMARY_BANNER_GAP;
@@ -640,14 +646,14 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
   scrollOffset = std::clamp(scrollOffset, 0, maxScrollOffset);
   const int scrollDy = -scrollOffset;
   const Rect coverRect = offsetRect(coverBaseRect, scrollDy);
-  const Rect adjustButtonRect = offsetRect(adjustButtonBaseRect, scrollDy);
-  const bool adjustSelected = scrollOffset == 0 && selectedStatsItem == DETAIL_ADJUST_FOCUS_INDEX;
+  const Rect actionsButtonRect = offsetRect(actionsButtonBaseRect, scrollDy);
+  const bool actionsSelected = scrollOffset == 0 && selectedStatsItem == DETAIL_ACTIONS_FOCUS_INDEX;
 
   const bool baseScreenRestored = restoreBaseScreenBuffer();
   if (!baseScreenRestored) {
     renderer.clearScreen();
     drawCover(renderer, coverRect, resolvedCoverBmpPath);
-    drawAdjustTimeButton(renderer, adjustButtonRect, false);
+    drawStatsActionsButton(renderer, actionsButtonRect, false);
 
     currentY = titleTop + scrollDy;
     for (const auto& line : wrappedTitle) {
@@ -719,11 +725,11 @@ void ReadingStatsDetailActivity::render(RenderLock&&) {
     storeBaseScreenBuffer();
   }
 
-  if (adjustSelected) {
-    drawAdjustTimeButton(renderer, adjustButtonRect, true);
+  if (actionsSelected) {
+    drawStatsActionsButton(renderer, actionsButtonRect, true);
   }
 
-  const char* confirmLabel = adjustSelected ? tr(STR_ADJUST) : (Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "");
+  const char* confirmLabel = actionsSelected ? tr(STR_SELECT) : (Storage.exists(bookPath.c_str()) ? tr(STR_OPEN) : "");
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

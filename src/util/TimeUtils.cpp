@@ -168,6 +168,35 @@ bool TimeUtils::setCurrentDate(const int year, const unsigned month, const unsig
   return true;
 }
 
+bool TimeUtils::getTimestampForLocalDate(const int year, const unsigned month, const unsigned day,
+                                         uint32_t* epochSeconds) {
+  configureTimezone();
+
+  const unsigned daysInMonth = getDaysInMonth(year, month);
+  if (day < 1 || daysInMonth == 0 || day > daysInMonth) {
+    return false;
+  }
+
+  tm localTime = {};
+  localTime.tm_year = year - 1900;
+  localTime.tm_mon = static_cast<int>(month) - 1;
+  localTime.tm_mday = static_cast<int>(day);
+  localTime.tm_hour = 12;
+  localTime.tm_min = 0;
+  localTime.tm_sec = 0;
+  localTime.tm_isdst = -1;
+
+  const time_t epoch = mktime(&localTime);
+  if (epoch < 0 || !isClockValid(static_cast<uint32_t>(epoch))) {
+    return false;
+  }
+
+  if (epochSeconds) {
+    *epochSeconds = static_cast<uint32_t>(epoch);
+  }
+  return true;
+}
+
 uint32_t TimeUtils::getLocalDayOrdinal(const uint32_t epochSeconds) {
   configureTimezone();
 

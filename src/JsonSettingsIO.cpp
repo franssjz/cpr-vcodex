@@ -1299,6 +1299,12 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     JsonObject sessionObj = sessionLog.add<JsonObject>();
     sessionObj["dayOrdinal"] = session.dayOrdinal;
     sessionObj["sessionMs"] = session.sessionMs;
+    if (!session.bookId.empty()) {
+      sessionObj["bookId"] = session.bookId;
+    }
+    if (!session.path.empty()) {
+      sessionObj["path"] = session.path;
+    }
   }
 
   JsonArray books = doc["books"].to<JsonArray>();
@@ -1384,6 +1390,8 @@ bool JsonSettingsIO::loadReadingStats(ReadingStatsStore& store, const char* json
       ReadingSessionLogEntry session;
       session.dayOrdinal = sessionObj["dayOrdinal"] | static_cast<uint32_t>(0);
       session.sessionMs = sessionObj["sessionMs"] | static_cast<uint32_t>(0);
+      session.bookId = sessionObj["bookId"] | std::string("");
+      session.path = BookIdentity::normalizePath(sessionObj["path"] | std::string(""));
       if (session.dayOrdinal != 0 && session.sessionMs != 0) {
         store.sessionLog.push_back(session);
       }

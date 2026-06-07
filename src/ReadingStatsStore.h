@@ -48,6 +48,8 @@ struct ReadingSessionSnapshot {
 struct ReadingSessionLogEntry {
   uint32_t dayOrdinal = 0;
   uint32_t sessionMs = 0;
+  std::string bookId;
+  std::string path;
 };
 
 class ReadingStatsStore;
@@ -116,7 +118,7 @@ class ReadingStatsStore {
   uint32_t getReferenceDayOrdinal() const;
   void updateBookReadTimestamp(ReadingBookStats& book, uint32_t preferredTimestamp);
   void recordReadingTime(ReadingBookStats& book, uint32_t epochSeconds, uint64_t readingMs);
-  void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs);
+  void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs, const ReadingBookStats& book);
   bool convertLegacyReadingDaysToUnassigned();
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
@@ -142,6 +144,7 @@ class ReadingStatsStore {
                       uint8_t chapterProgressPercent = 0);
   void endSession();
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
+  bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,
                           const std::string& coverBmpPath);
   bool updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title = "",

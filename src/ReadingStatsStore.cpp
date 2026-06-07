@@ -101,6 +101,26 @@ bool containsString(const std::vector<std::string>& values, const std::string& v
   return !value.empty() && std::find(values.begin(), values.end(), value) != values.end();
 }
 
+bool containsReadingDay(const std::vector<ReadingDayStats>& days, const uint32_t dayOrdinal) {
+  return dayOrdinal != 0 &&
+         std::any_of(days.begin(), days.end(),
+                     [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+}
+
+bool sessionHasBookIdentity(const ReadingSessionLogEntry& session) {
+  return !session.bookId.empty() || !session.path.empty();
+}
+
+bool sessionMatchesBook(const ReadingSessionLogEntry& session, const ReadingBookStats& book) {
+  if (!session.bookId.empty() && !book.bookId.empty() && session.bookId == book.bookId) {
+    return true;
+  }
+
+  const std::string normalizedSessionPath = BookIdentity::normalizePath(session.path);
+  return !normalizedSessionPath.empty() &&
+         (normalizedSessionPath == book.path || containsString(book.knownPaths, normalizedSessionPath));
+}
+
 void dedupeStrings(std::vector<std::string>& values) {
   values.erase(std::remove_if(values.begin(), values.end(), [](const std::string& value) { return value.empty(); }),
                values.end());
@@ -467,12 +487,13 @@ void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t
   getOrCreateReadingDay(epochSeconds).readingMs += readingMs;
 }
 
-void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const uint32_t sessionMs) {
+void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const uint32_t sessionMs,
+                                              const ReadingBookStats& book) {
   if (dayOrdinal == 0 || sessionMs == 0) {
     return;
   }
 
-  sessionLog.push_back(ReadingSessionLogEntry{dayOrdinal, sessionMs});
+  sessionLog.push_back(ReadingSessionLogEntry{dayOrdinal, sessionMs, book.bookId, book.path});
   if (sessionLog.size() > MAX_SESSION_LOG_ENTRIES) {
     sessionLog.erase(sessionLog.begin(),
                      sessionLog.begin() + static_cast<std::ptrdiff_t>(sessionLog.size() - MAX_SESSION_LOG_ENTRIES));
@@ -842,7 +863,9 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
   }
 
   auto it = books.begin() + static_cast<std::ptrdiff_t>(index);
-  const bool hadBookReadingDays = !it->readingDays.empty();
+  const ReadingBookStats removedBook = *it;
+  const std::vector<ReadingDayStats> removedReadingDays = removedBook.readingDays;
+  const bool hadBookReadingDays = !removedReadingDays.empty();
   const size_t removedIndex = index;
   books.erase(it);
 
@@ -856,6 +879,27 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
 
   if (hadBookReadingDays) {
     rebuildAggregatedReadingDays();
+  }
+
+  const auto oldSessionLogSize = sessionLog.size();
+  sessionLog.erase(
+      std::remove_if(sessionLog.begin(), sessionLog.end(),
+                     [&](const ReadingSessionLogEntry& session) {
+                       if (sessionMatchesBook(session, removedBook)) {
+                         return true;
+                       }
+                       return !sessionHasBookIdentity(session) && containsReadingDay(removedReadingDays, session.dayOrdinal) &&
+                              !containsReadingDay(readingDays, session.dayOrdinal);
+                     }),
+      sessionLog.end());
+
+  if ((!removedBook.bookId.empty() && lastSessionSnapshot.bookId == removedBook.bookId) ||
+      lastSessionSnapshot.path == removedBook.path || containsString(removedBook.knownPaths, lastSessionSnapshot.path)) {
+    lastSessionSnapshot = {};
+  }
+
+  if (oldSessionLogSize != sessionLog.size()) {
+    invalidateSummaryCache();
   }
   markDirty();
   saveToFile();
@@ -881,7 +925,7 @@ void ReadingStatsStore::endSession() {
     book.lastSessionMs = sessionMs;
     const uint32_t sessionTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     if (isClockValid(sessionTimestamp)) {
-      appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs);
+      appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs, book);
     }
     markDirty();
   }
@@ -933,6 +977,52 @@ bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uin
   }
 
   rebuildAggregatedReadingDays();
+  markDirty();
+  return saveToFile();
+}
+
+bool ReadingStatsStore::setBookFirstReadDate(const std::string& path, const uint32_t dayOrdinal) {
+  if (dayOrdinal == 0) {
+    return false;
+  }
+
+  const size_t index = findBookIndexByPath(path);
+  if (index >= books.size()) {
+    return false;
+  }
+
+  auto& book = books[index];
+  const uint32_t referenceDayOrdinal = getReferenceDayOrdinal();
+  if (referenceDayOrdinal != 0 && dayOrdinal > referenceDayOrdinal) {
+    return false;
+  }
+  if (!book.readingDays.empty() && dayOrdinal > book.readingDays.front().dayOrdinal) {
+    return false;
+  }
+  if (isClockValid(book.lastReadAt) && dayOrdinal > TimeUtils::getLocalDayOrdinal(book.lastReadAt)) {
+    return false;
+  }
+  if (isClockValid(book.completedAt) && dayOrdinal > TimeUtils::getLocalDayOrdinal(book.completedAt)) {
+    return false;
+  }
+
+  int year = 0;
+  unsigned month = 0;
+  unsigned day = 0;
+  if (!TimeUtils::getDateFromDayOrdinal(dayOrdinal, year, month, day)) {
+    return false;
+  }
+
+  uint32_t timestamp = 0;
+  if (!TimeUtils::getTimestampForLocalDate(year, month, day, &timestamp)) {
+    return false;
+  }
+
+  if (book.firstReadAt == timestamp) {
+    return true;
+  }
+
+  book.firstReadAt = timestamp;
   markDirty();
   return saveToFile();
 }
