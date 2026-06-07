@@ -10,11 +10,11 @@
 #include "parsers/ChapterHtmlSlimParser.h"
 
 namespace {
-constexpr uint8_t SECTION_FILE_VERSION = 27;
+constexpr uint8_t SECTION_FILE_VERSION = 28;
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(bool) +
                                  sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
-                                 sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) +
-                                 sizeof(uint32_t);
+                                 sizeof(bool) + sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint32_t) +
+                                 sizeof(uint32_t) + sizeof(uint32_t);
 
 struct PageLutEntry {
   uint32_t fileOffset;
@@ -46,7 +46,8 @@ uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
 void Section::writeSectionFileHeader(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                                      const bool forceParagraphIndents, const uint8_t paragraphAlignment,
                                      const uint16_t viewportWidth, const uint16_t viewportHeight,
-                                     const bool hyphenationEnabled, const bool embeddedStyle,
+                                     const bool hyphenationEnabled, const bool focusReadingEnabled,
+                                     const bool embeddedStyle,
                                      const uint8_t imageRendering) {
   if (!file) {
     LOG_DBG("SCT", "File not open for writing header");
@@ -56,7 +57,8 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
                                    sizeof(extraParagraphSpacing) + sizeof(forceParagraphIndents) +
                                    sizeof(paragraphAlignment) + sizeof(viewportWidth) + sizeof(viewportHeight) +
                                    sizeof(pageCount) + sizeof(hyphenationEnabled) + sizeof(embeddedStyle) +
-                                   sizeof(imageRendering) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
+                                   sizeof(focusReadingEnabled) + sizeof(imageRendering) + sizeof(uint32_t) +
+                                   sizeof(uint32_t) + sizeof(uint32_t),
                 "Header size mismatch");
   serialization::writePod(file, SECTION_FILE_VERSION);
   serialization::writePod(file, fontId);
@@ -67,6 +69,7 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
   serialization::writePod(file, viewportWidth);
   serialization::writePod(file, viewportHeight);
   serialization::writePod(file, hyphenationEnabled);
+  serialization::writePod(file, focusReadingEnabled);
   serialization::writePod(file, embeddedStyle);
   serialization::writePod(file, imageRendering);
   serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0, patched later)
@@ -78,7 +81,8 @@ void Section::writeSectionFileHeader(const int fontId, const float lineCompressi
 bool Section::loadSectionFile(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                               const bool forceParagraphIndents, const uint8_t paragraphAlignment,
                               const uint16_t viewportWidth, const uint16_t viewportHeight,
-                              const bool hyphenationEnabled, const bool embeddedStyle, const uint8_t imageRendering) {
+                              const bool hyphenationEnabled, const bool focusReadingEnabled,
+                              const bool embeddedStyle, const uint8_t imageRendering) {
   if (!Storage.openFileForRead("SCT", filePath, file)) {
     return false;
   }
@@ -102,6 +106,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     bool fileForceParagraphIndents;
     uint8_t fileParagraphAlignment;
     bool fileHyphenationEnabled;
+    bool fileFocusReadingEnabled;
     bool fileEmbeddedStyle;
     uint8_t fileImageRendering;
     serialization::readPod(file, fileFontId);
@@ -112,6 +117,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     serialization::readPod(file, fileViewportWidth);
     serialization::readPod(file, fileViewportHeight);
     serialization::readPod(file, fileHyphenationEnabled);
+    serialization::readPod(file, fileFocusReadingEnabled);
     serialization::readPod(file, fileEmbeddedStyle);
     serialization::readPod(file, fileImageRendering);
 
@@ -119,7 +125,8 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
         extraParagraphSpacing != fileExtraParagraphSpacing || forceParagraphIndents != fileForceParagraphIndents ||
         paragraphAlignment != fileParagraphAlignment || viewportWidth != fileViewportWidth ||
         viewportHeight != fileViewportHeight || hyphenationEnabled != fileHyphenationEnabled ||
-        embeddedStyle != fileEmbeddedStyle || imageRendering != fileImageRendering) {
+        focusReadingEnabled != fileFocusReadingEnabled || embeddedStyle != fileEmbeddedStyle ||
+        imageRendering != fileImageRendering) {
       // Explicit close() required: member variable persists beyond function scope
       file.close();
       LOG_ERR("SCT", "Deserialization failed: Parameters do not match");
@@ -154,7 +161,8 @@ bool Section::clearCache() const {
 bool Section::createSectionFile(const int fontId, const float lineCompression, const bool extraParagraphSpacing,
                                 const bool forceParagraphIndents, const uint8_t paragraphAlignment,
                                 const uint16_t viewportWidth, const uint16_t viewportHeight,
-                                const bool hyphenationEnabled, const bool embeddedStyle, const uint8_t imageRendering,
+                                const bool hyphenationEnabled, const bool focusReadingEnabled,
+                                const bool embeddedStyle, const uint8_t imageRendering,
                                 const std::function<void()>& popupFn) {
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";
@@ -206,7 +214,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
     return false;
   }
   writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents, paragraphAlignment,
-                         viewportWidth, viewportHeight, hyphenationEnabled, embeddedStyle, imageRendering);
+                         viewportWidth, viewportHeight, hyphenationEnabled, focusReadingEnabled, embeddedStyle,
+                         imageRendering);
   std::vector<PageLutEntry> lut = {};
 
   // Derive the content base directory and image cache path prefix for the parser
@@ -239,7 +248,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents,
-      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled,
+      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled, focusReadingEnabled,
       [this, &lut](std::unique_ptr<Page> page, const ChapterHtmlSlimParser::ParagraphLutEntry syncEntry) {
         lut.push_back({this->onPageComplete(std::move(page)), syncEntry.xhtmlByteOffset, syncEntry.paragraphIndex,
                        syncEntry.listItemIndex});

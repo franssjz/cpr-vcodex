@@ -608,12 +608,15 @@ EpubReaderActivity::ReaderSettingsSnapshot EpubReaderActivity::captureReaderSett
 void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot& before) {
   const bool fontChanged = before.fontFamily != SETTINGS.fontFamily || before.fontSize != SETTINGS.fontSize ||
                            before.sdFontFamilyName != SETTINGS.sdFontFamilyName;
+  const bool bionicNormalLayoutChanged =
+      (before.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL) !=
+      (SETTINGS.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL);
   const bool paginationChanged =
       fontChanged || before.lineSpacing != SETTINGS.lineSpacing || before.screenMargin != SETTINGS.screenMargin ||
       before.paragraphAlignment != SETTINGS.paragraphAlignment || before.embeddedStyle != SETTINGS.embeddedStyle ||
       before.hyphenationEnabled != SETTINGS.hyphenationEnabled ||
       before.extraParagraphSpacing != SETTINGS.extraParagraphSpacing ||
-      before.forceParagraphIndents != SETTINGS.forceParagraphIndents ||
+      before.forceParagraphIndents != SETTINGS.forceParagraphIndents || bionicNormalLayoutChanged ||
       before.imageRendering != SETTINGS.imageRendering;
   const bool orientationChanged = before.orientation != SETTINGS.orientation;
   const bool refreshPolicyChanged =
@@ -1049,11 +1052,13 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     const auto filepath = epub->getSpineItem(currentSpineIndex).href;
     LOG_DBG("ERS", "Loading file: %s, index: %d", filepath.c_str(), currentSpineIndex);
     section = std::unique_ptr<Section>(new Section(epub, currentSpineIndex, renderer));
+    const bool bionicNormalLayout = SETTINGS.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL;
 
     if (!section->loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                   SETTINGS.extraParagraphSpacing, SETTINGS.forceParagraphIndents,
                                   SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
-                                  SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle, SETTINGS.imageRendering)) {
+                                  SETTINGS.hyphenationEnabled, bionicNormalLayout, SETTINGS.embeddedStyle,
+                                  SETTINGS.imageRendering)) {
       LOG_DBG("ERS", "Cache not found, building...");
 
       const auto popupFn = [this]() { GUI.drawPopup(renderer, tr(STR_INDEXING)); };
@@ -1061,7 +1066,8 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       if (!section->createSectionFile(
               SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(), SETTINGS.extraParagraphSpacing,
               SETTINGS.forceParagraphIndents, SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
-              SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle, SETTINGS.imageRendering, popupFn)) {
+              SETTINGS.hyphenationEnabled, bionicNormalLayout, SETTINGS.embeddedStyle, SETTINGS.imageRendering,
+              popupFn)) {
         LOG_ERR("ERS", "Failed to persist page data to SD");
         section.reset();
         return;
@@ -1205,10 +1211,12 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
   }
 
   Section nextSection(epub, nextSpineIndex, renderer);
+  const bool bionicNormalLayout = SETTINGS.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL;
   if (nextSection.loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                   SETTINGS.extraParagraphSpacing, SETTINGS.forceParagraphIndents,
                                   SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
-                                  SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle, SETTINGS.imageRendering)) {
+                                  SETTINGS.hyphenationEnabled, bionicNormalLayout, SETTINGS.embeddedStyle,
+                                  SETTINGS.imageRendering)) {
     return;
   }
 
@@ -1216,7 +1224,8 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
   if (!nextSection.createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                                      SETTINGS.extraParagraphSpacing, SETTINGS.forceParagraphIndents,
                                      SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
-                                     SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle, SETTINGS.imageRendering)) {
+                                     SETTINGS.hyphenationEnabled, bionicNormalLayout, SETTINGS.embeddedStyle,
+                                     SETTINGS.imageRendering)) {
     LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
   }
 }

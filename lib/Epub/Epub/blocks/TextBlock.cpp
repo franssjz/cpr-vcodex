@@ -5,6 +5,8 @@
 #include <Logging.h>
 #include <Serialization.h>
 
+#include <algorithm>
+
 namespace {
 constexpr uint8_t BIONIC_READING_OFF = 0;
 constexpr uint8_t BIONIC_READING_NORMAL = 1;
@@ -84,9 +86,12 @@ void TextBlock::recordFontUsage(FontCacheManager& fontCacheManager, const int fo
 void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y,
                        const uint8_t bionicReadingMode) const {
   // Validate iterator bounds before rendering
-  if (words.size() != wordXpos.size() || words.size() != wordStyles.size()) {
-    LOG_ERR("TXB", "Render skipped: size mismatch (words=%u, xpos=%u, styles=%u)\n", (uint32_t)words.size(),
-            (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size());
+  const bool hasFocusAnnotations = !wordFocusBoundary.empty() || !wordFocusSuffixX.empty();
+  if (words.size() != wordXpos.size() || words.size() != wordStyles.size() ||
+      (hasFocusAnnotations && (words.size() != wordFocusBoundary.size() || words.size() != wordFocusSuffixX.size()))) {
+    LOG_ERR("TXB", "Render skipped: size mismatch (words=%u, xpos=%u, styles=%u, boundary=%u, suffixX=%u)\n",
+            (uint32_t)words.size(), (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size(),
+            (uint32_t)wordFocusBoundary.size(), (uint32_t)wordFocusSuffixX.size());
     return;
   }
 
@@ -105,10 +110,32 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
       wordY += ascender / 4;
     }
 
-    // Fast paths: bionic off, already-bold, or word too long for stack slice buffer.
+    // Normal uses layout-time focus annotations; Subtle remains render-only.
     const bool alreadyBold = (currentStyle & EpdFontFamily::BOLD) != 0;
     const bool bionicEnabled = bionicReadingMode == BIONIC_READING_NORMAL || bionicReadingMode == BIONIC_READING_SUBTLE;
-    if (bionicReadingMode == BIONIC_READING_OFF || !bionicEnabled || alreadyBold || w.size() >= 128) {
+    const bool bionicNormal = bionicReadingMode == BIONIC_READING_NORMAL;
+    const uint8_t focusBoundary =
+        hasFocusAnnotations && bionicNormal && !alreadyBold ? wordFocusBoundary[i] : 0;
+    if (bionicNormal) {
+      if (focusBoundary > 0) {
+        char buf[40];
+        size_t splitByte = std::min<size_t>({static_cast<size_t>(focusBoundary), w.size(), sizeof(buf) - 1});
+        while (splitByte > 0 && splitByte < w.size() && (static_cast<uint8_t>(w[splitByte]) & 0xC0) == 0x80) {
+          --splitByte;
+        }
+        if (splitByte > 0 && splitByte < w.size()) {
+          memcpy(buf, w.data(), splitByte);
+          buf[splitByte] = '\0';
+          const EpdFontFamily::Style boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
+          renderer.drawText(fontId, wordX, wordY, buf, true, boldStyle);
+          renderer.drawText(fontId, wordX + wordFocusSuffixX[i], wordY, w.c_str() + splitByte, true, currentStyle);
+        } else {
+          renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
+        }
+      } else {
+        renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
+      }
+    } else if (bionicReadingMode == BIONIC_READING_OFF || !bionicEnabled || alreadyBold || w.size() >= 128) {
       renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
     } else {
       // Stack slice buffer (<128 bytes, well within CLAUDE.md <256 byte rule).
@@ -201,9 +228,12 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
 }
 
 bool TextBlock::serialize(FsFile& file) const {
-  if (words.size() != wordXpos.size() || words.size() != wordStyles.size()) {
-    LOG_ERR("TXB", "Serialization failed: size mismatch (words=%u, xpos=%u, styles=%u)\n", words.size(),
-            wordXpos.size(), wordStyles.size());
+  const bool hasFocusAnnotations = !wordFocusBoundary.empty() || !wordFocusSuffixX.empty();
+  if (words.size() != wordXpos.size() || words.size() != wordStyles.size() ||
+      (hasFocusAnnotations && (words.size() != wordFocusBoundary.size() || words.size() != wordFocusSuffixX.size()))) {
+    LOG_ERR("TXB", "Serialization failed: size mismatch (words=%u, xpos=%u, styles=%u, boundary=%u, suffixX=%u)\n",
+            (uint32_t)words.size(), (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size(),
+            (uint32_t)wordFocusBoundary.size(), (uint32_t)wordFocusSuffixX.size());
     return false;
   }
 
@@ -212,6 +242,11 @@ bool TextBlock::serialize(FsFile& file) const {
   for (const auto& w : words) serialization::writeString(file, w);
   for (auto x : wordXpos) serialization::writePod(file, x);
   for (auto s : wordStyles) serialization::writePod(file, s);
+  serialization::writePod(file, static_cast<uint8_t>(hasFocusAnnotations ? 1 : 0));
+  if (hasFocusAnnotations) {
+    for (auto b : wordFocusBoundary) serialization::writePod(file, b);
+    for (auto sx : wordFocusSuffixX) serialization::writePod(file, sx);
+  }
 
   // Style (alignment + margins/padding/indent)
   serialization::writePod(file, blockStyle.alignment);
@@ -235,6 +270,8 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   std::vector<std::string> words;
   std::vector<int16_t> wordXpos;
   std::vector<EpdFontFamily::Style> wordStyles;
+  std::vector<uint8_t> wordFocusBoundary;
+  std::vector<uint16_t> wordFocusSuffixX;
   BlockStyle blockStyle;
 
   // Word count
@@ -253,6 +290,14 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   for (auto& w : words) serialization::readString(file, w);
   for (auto& x : wordXpos) serialization::readPod(file, x);
   for (auto& s : wordStyles) serialization::readPod(file, s);
+  uint8_t hasFocusAnnotations = 0;
+  serialization::readPod(file, hasFocusAnnotations);
+  if (hasFocusAnnotations != 0) {
+    wordFocusBoundary.resize(wc);
+    wordFocusSuffixX.resize(wc);
+    for (auto& b : wordFocusBoundary) serialization::readPod(file, b);
+    for (auto& sx : wordFocusSuffixX) serialization::readPod(file, sx);
+  }
 
   // Style (alignment + margins/padding/indent)
   serialization::readPod(file, blockStyle.alignment);
@@ -269,5 +314,6 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   serialization::readPod(file, blockStyle.textIndentDefined);
 
   return std::unique_ptr<TextBlock>(new TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles),
-                                                  std::vector<uint8_t>{}, std::vector<uint16_t>{}, blockStyle));
+                                                  std::move(wordFocusBoundary), std::move(wordFocusSuffixX),
+                                                  blockStyle));
 }
