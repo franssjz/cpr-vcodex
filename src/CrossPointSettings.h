@@ -349,6 +349,10 @@ class CrossPointSettings {
   uint8_t sleepShortcutOrder = 17;
   uint8_t opdsBrowserShortcut = SHORTCUT_HOME;
   uint8_t opdsBrowserShortcutOrder = 18;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  uint8_t sokobanShortcut = SHORTCUT_APPS;
+  uint8_t sokobanShortcutOrder = 19;
+#endif
   uint8_t browseFilesShortcutVisible = 1;
   // Legacy Stats shortcut visibility retained for settings.json migration to readingStatsShortcut.
   uint8_t statsShortcutVisible = 1;
@@ -368,6 +372,9 @@ class CrossPointSettings {
   uint8_t screenCleanShortcutVisible = 1;
   uint8_t sleepShortcutVisible = 1;
   uint8_t opdsBrowserShortcutVisible = 1;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  uint8_t sokobanShortcutVisible = 1;
+#endif
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)

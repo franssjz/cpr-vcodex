@@ -15,6 +15,9 @@
 #include "ReadingStatsActivity.h"
 #include "ScreenCleanActivity.h"
 #include "SleepAppActivity.h"
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+#include "activities/extras/SokobanActivity.h"
+#endif
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -198,6 +201,11 @@ void AppsActivity::openSelectedApp() {
     case ShortcutId::OpdsBrowser:
       activityManager.goToBrowser();
       return;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+    case ShortcutId::Sokoban:
+      activity = std::make_unique<SokobanActivity>(renderer, mappedInput);
+      break;
+#endif
   }
 
   startActivityForResult(std::move(activity), [this](const ActivityResult&) {

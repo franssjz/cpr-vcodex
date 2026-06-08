@@ -36,6 +36,9 @@
 #include "activities/apps/ReadingStatsActivity.h"
 #include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+#include "activities/extras/SokobanActivity.h"
+#endif
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
@@ -1035,6 +1038,12 @@ void HomeActivity::loop() {
         case ShortcutId::OpdsBrowser:
           onOpdsBrowserOpen();
           break;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+        case ShortcutId::Sokoban:
+          startActivityForResult(std::make_unique<SokobanActivity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestFreshHomeRender(true); });
+          break;
+#endif
       }
     }
   }

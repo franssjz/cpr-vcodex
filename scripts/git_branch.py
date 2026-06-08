@@ -172,14 +172,17 @@ def preview_next_release_number(project_dir, base_version):
     return next_release, counter_path
 
 
-def release_number_from_tag(base_version):
+def release_number_from_tag(base_version, suffix=""):
     tag = os.environ.get("VCODEX_RELEASE_TAG") or os.environ.get("GITHUB_REF_NAME")
     if not tag:
         return None
 
-    match = re.fullmatch(rf"{re.escape(base_version)}\.(\d+)-cpr-vcodex", tag)
+    pattern = rf"{re.escape(base_version)}\.(\d+){re.escape(suffix)}-cpr-vcodex"
+    match = re.fullmatch(pattern, tag)
     if not match:
-        raise ValueError(f"Release tag {tag!r} does not match expected pattern {base_version}.<release>-cpr-vcodex")
+        raise ValueError(
+            f"Release tag {tag!r} does not match expected pattern {base_version}.<release>{suffix}-cpr-vcodex"
+        )
 
     return int(match.group(1)), tag
 
@@ -197,7 +200,7 @@ def next_dev_counter(project_dir, base_version, release_number):
 
 def inject_version(env):
     env_name = env["PIOENV"]
-    if env_name not in ("default", "gh_release"):
+    if env_name not in ("default", "gh_release", "extras"):
         return
 
     project_dir = env["PROJECT_DIR"]
@@ -210,7 +213,7 @@ def inject_version(env):
         version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
         build_kind = "dev"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
-    else:
+    elif env_name == "gh_release":
         tagged_release = release_number_from_tag(base_version)
         if tagged_release:
             release_number, tag = tagged_release
@@ -220,6 +223,22 @@ def inject_version(env):
         build_counter = release_number
         version_string = f"{base_version}.{release_number}"
         build_kind = "release"
+    else:
+        # extras: opt-in build (e.g. Sokoban). Numbered only when
+        # VCODEX_RELEASE_TAG matches "<base>.<release>-extras-cpr-vcodex";
+        # otherwise keep the plain "<base>-extras" version string so local
+        # builds without a tag behave exactly as before.
+        tagged_release = release_number_from_tag(base_version, suffix="-extras")
+        if tagged_release:
+            release_number, tag = tagged_release
+            version_string = f"{base_version}.{release_number}-extras"
+            counter_path = f"release tag {tag}"
+        else:
+            release_number = 0
+            version_string = f"{base_version}-extras"
+            counter_path = "no VCODEX_RELEASE_TAG set"
+        build_counter = release_number
+        build_kind = "extras"
 
     env.Append(
         CPPDEFINES=[

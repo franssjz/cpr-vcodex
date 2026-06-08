@@ -26,6 +26,9 @@ enum class ShortcutId {
   ScreenClean,
   Sleep,
   OpdsBrowser,
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  Sokoban,
+#endif
 };
 
 struct ShortcutDefinition {
@@ -38,8 +41,14 @@ struct ShortcutDefinition {
   uint8_t CrossPointSettings::* visiblePtr;
 };
 
-inline const std::array<ShortcutDefinition, 16>& getShortcutDefinitions() {
-  static const std::array<ShortcutDefinition, 16> definitions = {
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+constexpr size_t kShortcutDefinitionCount = 17;
+#else
+constexpr size_t kShortcutDefinitionCount = 16;
+#endif
+
+inline const std::array<ShortcutDefinition, kShortcutDefinitionCount>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, kShortcutDefinitionCount> definitions = {
       ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
                          &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder,
                          &CrossPointSettings::browseFilesShortcutVisible},
@@ -91,6 +100,11 @@ inline const std::array<ShortcutDefinition, 16>& getShortcutDefinitions() {
       ShortcutDefinition{ShortcutId::OpdsBrowser, StrId::STR_OPDS_BROWSER, StrId::STR_NONE_OPT, UIIcon::Library,
                          &CrossPointSettings::opdsBrowserShortcut, &CrossPointSettings::opdsBrowserShortcutOrder,
                          &CrossPointSettings::opdsBrowserShortcutVisible},
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+      ShortcutDefinition{ShortcutId::Sokoban, StrId::STR_SOKOBAN, StrId::STR_SOKOBAN_APP_DESC, UIIcon::Image,
+                         &CrossPointSettings::sokobanShortcut, &CrossPointSettings::sokobanShortcutOrder,
+                         &CrossPointSettings::sokobanShortcutVisible},
+#endif
   };
 
   return definitions;

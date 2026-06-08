@@ -525,6 +525,12 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["opdsBrowserShortcut"] | s.opdsBrowserShortcut, shortcutLocationCount, s.opdsBrowserShortcut);
   s.opdsBrowserShortcutOrder = clamp(doc["opdsBrowserShortcutOrder"] | s.opdsBrowserShortcutOrder,
                                      shortcutOrderCount, s.opdsBrowserShortcutOrder);
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  s.sokobanShortcut =
+      clamp(doc["sokobanShortcut"] | s.sokobanShortcut, shortcutLocationCount, s.sokobanShortcut);
+  s.sokobanShortcutOrder =
+      clamp(doc["sokobanShortcutOrder"] | s.sokobanShortcutOrder, shortcutOrderCount, s.sokobanShortcutOrder);
+#endif
 
   s.browseFilesShortcutVisible =
       clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible, static_cast<uint8_t>(2),
@@ -575,6 +581,10 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["sleepShortcutVisible"] | s.sleepShortcutVisible, static_cast<uint8_t>(2), s.sleepShortcutVisible);
   s.opdsBrowserShortcutVisible = clamp(doc["opdsBrowserShortcutVisible"] | s.opdsBrowserShortcutVisible,
                                        static_cast<uint8_t>(2), s.opdsBrowserShortcutVisible);
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  s.sokobanShortcutVisible = clamp(doc["sokobanShortcutVisible"] | s.sokobanShortcutVisible, static_cast<uint8_t>(2),
+                                   s.sokobanShortcutVisible);
+#endif
 
   migrateLegacyStatsShortcut(s, doc, needsResave);
   normalizeShortcutOrderSettings(s);
@@ -816,6 +826,10 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepShortcutOrder"] = s.sleepShortcutOrder;
   doc["opdsBrowserShortcut"] = s.opdsBrowserShortcut;
   doc["opdsBrowserShortcutOrder"] = s.opdsBrowserShortcutOrder;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  doc["sokobanShortcut"] = s.sokobanShortcut;
+  doc["sokobanShortcutOrder"] = s.sokobanShortcutOrder;
+#endif
   doc["browseFilesShortcutVisible"] = s.browseFilesShortcutVisible;
   doc["syncDayShortcutVisible"] = s.syncDayShortcutVisible;
   doc["settingsShortcutVisible"] = s.settingsShortcutVisible;
@@ -833,6 +847,9 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["screenCleanShortcutVisible"] = s.screenCleanShortcutVisible;
   doc["sleepShortcutVisible"] = s.sleepShortcutVisible;
   doc["opdsBrowserShortcutVisible"] = s.opdsBrowserShortcutVisible;
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  doc["sokobanShortcutVisible"] = s.sokobanShortcutVisible;
+#endif
 
   return saveJsonDocumentToFile("CPS", path, doc);
 }
@@ -1039,6 +1056,12 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clamp(doc["opdsBrowserShortcut"] | s.opdsBrowserShortcut, shortcutLocationCount, s.opdsBrowserShortcut);
   s.opdsBrowserShortcutOrder = clamp(doc["opdsBrowserShortcutOrder"] | s.opdsBrowserShortcutOrder,
                                      shortcutOrderCount, s.opdsBrowserShortcutOrder);
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  s.sokobanShortcut =
+      clamp(doc["sokobanShortcut"] | s.sokobanShortcut, shortcutLocationCount, s.sokobanShortcut);
+  s.sokobanShortcutOrder =
+      clamp(doc["sokobanShortcutOrder"] | s.sokobanShortcutOrder, shortcutOrderCount, s.sokobanShortcutOrder);
+#endif
 
   s.browseFilesShortcutVisible =
       clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible, static_cast<uint8_t>(2),
@@ -1089,6 +1112,10 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       clamp(doc["sleepShortcutVisible"] | s.sleepShortcutVisible, static_cast<uint8_t>(2), s.sleepShortcutVisible);
   s.opdsBrowserShortcutVisible = clamp(doc["opdsBrowserShortcutVisible"] | s.opdsBrowserShortcutVisible,
                                        static_cast<uint8_t>(2), s.opdsBrowserShortcutVisible);
+#if CPR_ENABLE_EXTRA_ACTIVITIES
+  s.sokobanShortcutVisible = clamp(doc["sokobanShortcutVisible"] | s.sokobanShortcutVisible, static_cast<uint8_t>(2),
+                                   s.sokobanShortcutVisible);
+#endif
 
   normalizeShortcutOrderSettings(s);
   CrossPointSettings::validateFrontButtonMapping(s);
