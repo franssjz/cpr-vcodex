@@ -40,6 +40,7 @@
 #if CPR_ENABLE_EXTRA_ACTIVITIES
 #include "activities/extras/Game2048Activity.h"
 #include "activities/extras/SokobanActivity.h"
+#include "activities/extras/SudokuActivity.h"
 #endif
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
@@ -1051,6 +1052,10 @@ void HomeActivity::loop() {
           break;
         case ShortcutId::Game2048:
           startActivityForResult(std::make_unique<Game2048Activity>(renderer, mappedInput),
+                                 [this](const ActivityResult&) { requestFreshHomeRender(true); });
+          break;
+        case ShortcutId::Sudoku:
+          startActivityForResult(std::make_unique<SudokuActivity>(renderer, mappedInput),
                                  [this](const ActivityResult&) { requestFreshHomeRender(true); });
           break;
 #endif

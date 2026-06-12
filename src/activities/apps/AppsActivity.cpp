@@ -19,6 +19,7 @@
 #if CPR_ENABLE_EXTRA_ACTIVITIES
 #include "activities/extras/Game2048Activity.h"
 #include "activities/extras/SokobanActivity.h"
+#include "activities/extras/SudokuActivity.h"
 #endif
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
@@ -212,6 +213,9 @@ void AppsActivity::openSelectedApp() {
       break;
     case ShortcutId::Game2048:
       activity = std::make_unique<Game2048Activity>(renderer, mappedInput);
+      break;
+    case ShortcutId::Sudoku:
+      activity = std::make_unique<SudokuActivity>(renderer, mappedInput);
       break;
 #endif
   }

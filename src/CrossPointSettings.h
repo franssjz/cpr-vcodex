@@ -356,6 +356,8 @@ class CrossPointSettings {
   uint8_t sokobanShortcutOrder = 20;
   uint8_t game2048Shortcut = SHORTCUT_APPS;
   uint8_t game2048ShortcutOrder = 21;
+  uint8_t sudokuShortcut = SHORTCUT_APPS;
+  uint8_t sudokuShortcutOrder = 22;
 #endif
   uint8_t browseFilesShortcutVisible = 1;
   // Legacy Stats shortcut visibility retained for settings.json migration to readingStatsShortcut.
@@ -380,6 +382,7 @@ class CrossPointSettings {
 #if CPR_ENABLE_EXTRA_ACTIVITIES
   uint8_t sokobanShortcutVisible = 1;
   uint8_t game2048ShortcutVisible = 1;
+  uint8_t sudokuShortcutVisible = 1;
 #endif
   // Sunlight fading compensation
   uint8_t fadingFix = 0;

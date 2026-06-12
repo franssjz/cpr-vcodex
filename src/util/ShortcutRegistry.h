@@ -30,6 +30,7 @@ enum class ShortcutId {
 #if CPR_ENABLE_EXTRA_ACTIVITIES
   Sokoban,
   Game2048,
+  Sudoku,
 #endif
 };
 
@@ -44,7 +45,7 @@ struct ShortcutDefinition {
 };
 
 #if CPR_ENABLE_EXTRA_ACTIVITIES
-constexpr size_t kShortcutDefinitionCount = 19;
+constexpr size_t kShortcutDefinitionCount = 20;
 #else
 constexpr size_t kShortcutDefinitionCount = 17;
 #endif
@@ -112,6 +113,9 @@ inline const std::array<ShortcutDefinition, kShortcutDefinitionCount>& getShortc
       ShortcutDefinition{ShortcutId::Game2048, StrId::STR_2048, StrId::STR_2048_APP_DESC, UIIcon::Image,
                          &CrossPointSettings::game2048Shortcut, &CrossPointSettings::game2048ShortcutOrder,
                          &CrossPointSettings::game2048ShortcutVisible},
+      ShortcutDefinition{ShortcutId::Sudoku, StrId::STR_SUDOKU, StrId::STR_SUDOKU_APP_DESC, UIIcon::Image,
+                         &CrossPointSettings::sudokuShortcut, &CrossPointSettings::sudokuShortcutOrder,
+                         &CrossPointSettings::sudokuShortcutVisible},
 #endif
   };
 
