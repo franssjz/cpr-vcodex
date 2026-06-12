@@ -84,17 +84,25 @@ class DictionaryStore {
   static constexpr const char* DICTIONARY_ROOT = "/dictionaries";
   static constexpr const char* CONFIG_PATH = "/.crosspoint/dictionary_config.json";
   static constexpr const char* HISTORY_PATH = "/.crosspoint/dictionary_history.txt";
-  static constexpr int CHECKPOINT_INTERVAL = 512;
-  static constexpr size_t MAX_DEFINITION_BYTES = 16384;
+  static constexpr int CHECKPOINT_INTERVAL = 1024;
+  static constexpr size_t MAX_CHECKPOINT_COUNT = 4096;
+  static constexpr size_t MAX_SCAN_ENTRIES = 64;
+  static constexpr size_t MAX_DEFINITION_BYTES = 8192;
+  static constexpr size_t MIN_DEFINITION_BYTES = 1024;
   static constexpr size_t MAX_HISTORY_ITEMS = 15;
 
   std::vector<DictionaryEntry> entries;
+  DictionaryEntry activeOnlyEntry;
   std::string activeIfoPath;
   int activeIndex = -1;
   bool configLoaded = false;
   bool scanned = false;
+  bool activeOnlyLoaded = false;
   uint8_t definitionTextSize = DEF_TEXT_MEDIUM;
 
+  bool loadEntryFromIfoPath(const std::string& ifoPath, DictionaryEntry& entry) const;
+  bool ensureActiveEntryLoaded();
+  void clearActiveOnlyEntry();
   DictionaryEntry* activeEntry();
   const DictionaryEntry* activeEntry() const;
   bool ensurePrepared(DictionaryEntry& entry, const std::function<void(int percent)>& onProgress = nullptr);

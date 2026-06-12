@@ -2,10 +2,12 @@
 
 #include <ArduinoJson.h>
 #include <Epub/htmlEntities.h>
+#include <Esp.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <cctype>
@@ -20,6 +22,32 @@ namespace {
 constexpr uint32_t CACHE_MAGIC = 0x44435458;  // DCTX
 constexpr uint8_t NULL_TERMINATED_TYPES[] = {'m', 'l', 'g', 't', 'x', 'y', 'k', 'w', 'h', 'n', 'r'};
 constexpr uint8_t DEFINITION_TEXT_SIZE_CONFIG_VERSION = 2;
+constexpr size_t MAX_METADATA_TEXT_BYTES = 96;
+constexpr size_t SAFE_MAX_DEFINITION_BYTES = 8192;
+constexpr size_t SAFE_MIN_DEFINITION_BYTES = 1024;
+constexpr size_t MAX_SUGGESTION_CANDIDATES = 24;
+constexpr size_t MAX_EDIT_DISTANCE_BYTES = 64;
+constexpr uint32_t HEAP_SCAN_GUARD_BYTES = 32 * 1024;
+constexpr uint32_t HEAP_SMALL_GUARD_BYTES = 16 * 1024;
+
+uint32_t largestFreeBlock() {
+  return heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
+}
+
+bool hasHeapHeadroom(const size_t bytes, const uint32_t guardBytes = HEAP_SMALL_GUARD_BYTES) {
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  const uint32_t largest = largestFreeBlock();
+  return freeHeap > bytes + guardBytes && largest > bytes + 1024;
+}
+
+size_t safeDefinitionReadBytes(const size_t requestedBytes) {
+  size_t bytes = std::min<size_t>(requestedBytes, SAFE_MAX_DEFINITION_BYTES);
+  while (bytes > SAFE_MIN_DEFINITION_BYTES && !hasHeapHeadroom(bytes * 4 + 8192, HEAP_SMALL_GUARD_BYTES)) {
+    bytes /= 2;
+  }
+  if (!hasHeapHeadroom(bytes * 2 + 4096, HEAP_SMALL_GUARD_BYTES)) return 0;
+  return bytes;
+}
 
 bool hasExtension(const std::string& name, const char* ext) {
   if (name.size() < strlen(ext)) return false;
@@ -40,6 +68,30 @@ std::string fileStem(const std::string& path) {
   const size_t dot = path.find_last_of('.');
   if (dot == std::string::npos || dot < start) return path.substr(start);
   return path.substr(start, dot - start);
+}
+
+std::string parentDirectory(const std::string& path) {
+  const size_t slash = path.find_last_of('/');
+  if (slash == std::string::npos || slash == 0) return "/";
+  return path.substr(0, slash);
+}
+
+std::string pathBaseName(const std::string& path) {
+  if (path.empty() || path == "/") return "";
+  size_t end = path.size();
+  while (end > 1 && path[end - 1] == '/') --end;
+  const size_t slash = path.find_last_of('/', end - 1);
+  const size_t start = slash == std::string::npos ? 0 : slash + 1;
+  return path.substr(start, end - start);
+}
+
+std::string limitMetadataText(std::string value, const size_t maxBytes = MAX_METADATA_TEXT_BYTES) {
+  if (value.size() <= maxBytes) return value;
+  value.resize(maxBytes);
+  while (!value.empty() && (static_cast<unsigned char>(value.back()) & 0xC0) == 0x80) {
+    value.pop_back();
+  }
+  return value;
 }
 
 uint32_t readBE32(const uint8_t* buf) {
@@ -933,8 +985,11 @@ int editDistanceLimited(const std::string& a, const std::string& b, int maxDist)
   const int m = static_cast<int>(a.size());
   const int n = static_cast<int>(b.size());
   if (std::abs(m - n) > maxDist) return maxDist + 1;
+  if (n > static_cast<int>(MAX_EDIT_DISTANCE_BYTES) || m > static_cast<int>(MAX_EDIT_DISTANCE_BYTES)) {
+    return maxDist + 1;
+  }
 
-  std::vector<int> dp(n + 1);
+  int dp[MAX_EDIT_DISTANCE_BYTES + 1];
   for (int j = 0; j <= n; ++j) dp[j] = j;
   for (int i = 1; i <= m; ++i) {
     int prev = dp[0];
@@ -1026,15 +1081,118 @@ bool DictionaryStore::saveConfig() const {
   return true;
 }
 
+void DictionaryStore::clearActiveOnlyEntry() {
+  activeOnlyEntry = DictionaryEntry{};
+  activeOnlyLoaded = false;
+}
+
+bool DictionaryStore::loadEntryFromIfoPath(const std::string& ifoPath, DictionaryEntry& entry) const {
+  if (!hasExtension(ifoPath, ".ifo")) return false;
+
+  entry = DictionaryEntry{};
+  entry.ifoPath = ifoPath;
+  entry.directoryPath = parentDirectory(ifoPath);
+  entry.languageId = limitMetadataText(pathBaseName(entry.directoryPath), 48);
+  entry.name = limitMetadataText(fileStem(entry.ifoPath));
+
+  const std::string base = entry.ifoPath.substr(0, entry.ifoPath.size() - 4);
+  entry.idxPath = base + ".idx";
+  entry.dictPath = base + ".dict";
+  entry.synPath = base + ".syn";
+  entry.cachePath = base + ".cpridx";
+
+  HalFile ifo;
+  if (Storage.openFileForRead("DICT", entry.ifoPath, ifo)) {
+    char line[256];
+    while (readLine(ifo, line, sizeof(line))) {
+      std::string value;
+      if (parseIfoField(line, "bookname", value)) {
+        entry.name = limitMetadataText(std::move(value));
+      } else if (parseIfoField(line, "lang", value)) {
+        entry.lang = limitMetadataText(std::move(value), 32);
+      } else if (parseIfoField(line, "wordcount", value)) {
+        entry.wordCount = static_cast<uint32_t>(strtoul(value.c_str(), nullptr, 10));
+      } else if (parseIfoField(line, "idxfilesize", value)) {
+        entry.idxFileSize = static_cast<uint32_t>(strtoul(value.c_str(), nullptr, 10));
+      } else if (parseIfoField(line, "sametypesequence", value)) {
+        entry.sameTypeSequence = limitMetadataText(std::move(value), 16);
+      }
+    }
+    ifo.close();
+  }
+
+  entry.missingFiles = !Storage.exists(entry.idxPath.c_str()) || !Storage.exists(entry.dictPath.c_str());
+  if (!Storage.exists(entry.dictPath.c_str()) && Storage.exists((entry.dictPath + ".dz").c_str())) {
+    entry.compressed = true;
+  }
+  if (!Storage.exists(entry.synPath.c_str())) {
+    entry.synPath.clear();
+  }
+
+  if (entry.idxFileSize == 0 && Storage.exists(entry.idxPath.c_str())) {
+    HalFile idx;
+    if (Storage.openFileForRead("DICT", entry.idxPath, idx)) {
+      entry.idxFileSize = static_cast<uint32_t>(idx.fileSize());
+      idx.close();
+    }
+  }
+
+  return !entry.ifoPath.empty();
+}
+
 void DictionaryStore::scan() {
   if (!configLoaded) loadConfig();
-  entries.clear();
+  clearActiveOnlyEntry();
+  std::vector<DictionaryEntry>().swap(entries);
   activeIndex = -1;
   scanned = true;
+
+  bool scanLimitReached = false;
+  auto containsIfo = [this](const std::string& ifoPath) {
+    return std::find_if(entries.begin(), entries.end(), [&ifoPath](const DictionaryEntry& entry) {
+             return entry.ifoPath == ifoPath;
+           }) != entries.end();
+  };
+
+  auto ensureEntryCapacity = [this](const size_t desiredSize) {
+    if (desiredSize <= entries.capacity()) return true;
+    size_t nextCapacity = entries.capacity() == 0 ? 8 : entries.capacity() * 2;
+    nextCapacity = std::min<size_t>(nextCapacity, MAX_SCAN_ENTRIES);
+    nextCapacity = std::max(nextCapacity, desiredSize);
+    const size_t bytes = nextCapacity * sizeof(DictionaryEntry);
+    if (!hasHeapHeadroom(bytes, HEAP_SCAN_GUARD_BYTES)) {
+      LOG_INF("DICT", "Skipping remaining dictionaries: heap too low for list growth free=%u largest=%u need=%u",
+              ESP.getFreeHeap(), largestFreeBlock(), static_cast<unsigned>(bytes));
+      return false;
+    }
+    entries.reserve(nextCapacity);
+    return true;
+  };
+
+  auto appendEntry = [&](DictionaryEntry&& entry) {
+    if (entries.size() >= MAX_SCAN_ENTRIES) {
+      scanLimitReached = true;
+      return false;
+    }
+    if (!ensureEntryCapacity(entries.size() + 1)) {
+      scanLimitReached = true;
+      return false;
+    }
+    entries.push_back(std::move(entry));
+    return true;
+  };
+
+  if (!activeIfoPath.empty()) {
+    DictionaryEntry activeEntry;
+    if (loadEntryFromIfoPath(activeIfoPath, activeEntry)) {
+      appendEntry(std::move(activeEntry));
+    }
+  }
 
   auto root = Storage.open(DICTIONARY_ROOT);
   if (!root || !root.isDirectory()) {
     if (root) root.close();
+    if (!entries.empty() && entries[0].ifoPath == activeIfoPath) activeIndex = 0;
     return;
   }
 
@@ -1066,55 +1224,13 @@ void DictionaryStore::scan() {
       if (!hasExtension(ifoName, ".ifo")) continue;
 
       DictionaryEntry entry;
-      entry.languageId = languageId;
-      entry.directoryPath = dirPath;
-      entry.ifoPath = joinPath(dirPath, ifoName);
-      const std::string base = entry.ifoPath.substr(0, entry.ifoPath.size() - 4);
-      entry.idxPath = base + ".idx";
-      entry.dictPath = base + ".dict";
-      entry.synPath = base + ".syn";
-      entry.cachePath = base + ".cpridx";
-      entry.name = fileStem(entry.ifoPath);
-
-      HalFile ifo;
-      if (Storage.openFileForRead("DICT", entry.ifoPath, ifo)) {
-        char line[256];
-        while (readLine(ifo, line, sizeof(line))) {
-          std::string value;
-          if (parseIfoField(line, "bookname", value)) {
-            entry.name = value;
-          } else if (parseIfoField(line, "lang", value)) {
-            entry.lang = value;
-          } else if (parseIfoField(line, "wordcount", value)) {
-            entry.wordCount = static_cast<uint32_t>(strtoul(value.c_str(), nullptr, 10));
-          } else if (parseIfoField(line, "idxfilesize", value)) {
-            entry.idxFileSize = static_cast<uint32_t>(strtoul(value.c_str(), nullptr, 10));
-          } else if (parseIfoField(line, "sametypesequence", value)) {
-            entry.sameTypeSequence = value;
-          }
-        }
-        ifo.close();
-      }
-
-      entry.missingFiles = !Storage.exists(entry.idxPath.c_str()) || !Storage.exists(entry.dictPath.c_str());
-      if (!Storage.exists(entry.dictPath.c_str()) && Storage.exists((entry.dictPath + ".dz").c_str())) {
-        entry.compressed = true;
-      }
-      if (!Storage.exists(entry.synPath.c_str())) {
-        entry.synPath.clear();
-      }
-
-      if (entry.idxFileSize == 0 && Storage.exists(entry.idxPath.c_str())) {
-        HalFile idx;
-        if (Storage.openFileForRead("DICT", entry.idxPath, idx)) {
-          entry.idxFileSize = static_cast<uint32_t>(idx.fileSize());
-          idx.close();
-        }
-      }
-
-      entries.push_back(std::move(entry));
+      const std::string ifoPath = joinPath(dirPath, ifoName);
+      if (containsIfo(ifoPath) || !loadEntryFromIfoPath(ifoPath, entry)) continue;
+      entry.languageId = limitMetadataText(languageId, 48);
+      if (!appendEntry(std::move(entry))) break;
     }
     dir.close();
+    if (scanLimitReached) break;
   }
   root.close();
 
@@ -1143,6 +1259,7 @@ bool DictionaryStore::setActiveIndex(const int index) {
   if (entries[index].compressed || entries[index].missingFiles) return false;
   activeIndex = index;
   activeIfoPath = entries[index].ifoPath;
+  clearActiveOnlyEntry();
   return saveConfig();
 }
 
@@ -1238,7 +1355,7 @@ int DictionaryStore::getDefinitionFontId(const int readerFontId) const {
 }
 
 bool DictionaryStore::hasActiveDictionary() const {
-  const_cast<DictionaryStore*>(this)->ensureScanned();
+  const_cast<DictionaryStore*>(this)->ensureActiveEntryLoaded();
   return activeEntry() != nullptr;
 }
 
@@ -1246,18 +1363,37 @@ void DictionaryStore::ensureScanned() {
   if (!scanned) scan();
 }
 
+bool DictionaryStore::ensureActiveEntryLoaded() {
+  if (!configLoaded) loadConfig();
+  if (activeEntry()) return true;
+
+  if (activeIfoPath.empty()) {
+    if (!scanned) scan();
+    return activeEntry() != nullptr;
+  }
+
+  if (!activeOnlyLoaded || activeOnlyEntry.ifoPath != activeIfoPath) {
+    clearActiveOnlyEntry();
+    if (!loadEntryFromIfoPath(activeIfoPath, activeOnlyEntry)) return false;
+    activeOnlyLoaded = true;
+  }
+  return activeEntry() != nullptr;
+}
+
 DictionaryEntry* DictionaryStore::activeEntry() {
-  if (activeIndex < 0 || activeIndex >= static_cast<int>(entries.size())) return nullptr;
-  return &entries[activeIndex];
+  if (activeIndex >= 0 && activeIndex < static_cast<int>(entries.size())) return &entries[activeIndex];
+  if (activeOnlyLoaded) return &activeOnlyEntry;
+  return nullptr;
 }
 
 const DictionaryEntry* DictionaryStore::activeEntry() const {
-  if (activeIndex < 0 || activeIndex >= static_cast<int>(entries.size())) return nullptr;
-  return &entries[activeIndex];
+  if (activeIndex >= 0 && activeIndex < static_cast<int>(entries.size())) return &entries[activeIndex];
+  if (activeOnlyLoaded) return &activeOnlyEntry;
+  return nullptr;
 }
 
 bool DictionaryStore::prepareActive(const std::function<void(int percent)>& onProgress) {
-  ensureScanned();
+  ensureActiveEntryLoaded();
   DictionaryEntry* entry = activeEntry();
   if (!entry) return false;
   return ensurePrepared(*entry, onProgress);
@@ -1283,7 +1419,8 @@ bool DictionaryStore::loadCheckpointCache(DictionaryEntry& entry) {
 
   const uint32_t count = readU32(header + 8);
   entry.totalWords = readU32(header + 12);
-  if (count == 0 || count > 100000) {
+  if (count == 0 || count > MAX_CHECKPOINT_COUNT ||
+      !hasHeapHeadroom(static_cast<size_t>(count) * sizeof(uint32_t) * 2, HEAP_SMALL_GUARD_BYTES)) {
     file.close();
     return false;
   }
@@ -1374,10 +1511,39 @@ bool DictionaryStore::ensurePrepared(DictionaryEntry& entry, const std::function
 
   uint32_t pos = 0;
   int lastProgress = -1;
+  bool checkpointLimitReached = false;
+  auto addCheckpoint = [&](const uint32_t checkpointPos, const uint32_t ordinal) {
+    if (checkpointLimitReached) return true;
+    if (entry.checkpoints.size() >= MAX_CHECKPOINT_COUNT) {
+      checkpointLimitReached = true;
+      return true;
+    }
+    if (entry.checkpoints.size() == entry.checkpoints.capacity()) {
+      const size_t nextCapacity =
+          std::min<size_t>(MAX_CHECKPOINT_COUNT, entry.checkpoints.empty() ? 128 : entry.checkpoints.capacity() * 2);
+      const size_t bytes = nextCapacity * sizeof(uint32_t) * 2;
+      if (!hasHeapHeadroom(bytes, HEAP_SMALL_GUARD_BYTES)) {
+        if (entry.checkpoints.empty()) return false;
+        checkpointLimitReached = true;
+        return true;
+      }
+      entry.checkpoints.reserve(nextCapacity);
+      entry.ordinals.reserve(nextCapacity);
+    }
+    entry.checkpoints.push_back(checkpointPos);
+    entry.ordinals.push_back(ordinal);
+    return true;
+  };
+
   while (pos < entry.idxFileSize) {
     if (entry.totalWords % CHECKPOINT_INTERVAL == 0) {
-      entry.checkpoints.push_back(pos);
-      entry.ordinals.push_back(entry.totalWords);
+      if (!addCheckpoint(pos, entry.totalWords)) {
+        idx.close();
+        entry.checkpoints.clear();
+        entry.ordinals.clear();
+        entry.totalWords = 0;
+        return false;
+      }
     }
 
     int c = 0;
@@ -1571,8 +1737,9 @@ linearSyn:
 }
 
 std::string DictionaryStore::readDefinition(const DictionaryEntry& entry, const IndexHit& hit, bool& truncated) const {
-  truncated = hit.dictSize > MAX_DEFINITION_BYTES;
-  const size_t readBytes = std::min<size_t>(hit.dictSize, MAX_DEFINITION_BYTES);
+  const size_t readBytes = safeDefinitionReadBytes(hit.dictSize);
+  truncated = readBytes == 0 || hit.dictSize > readBytes;
+  if (readBytes == 0) return "";
 
   HalFile dict;
   if (!Storage.openFileForRead("DICT", entry.dictPath, dict)) return "";
@@ -1587,7 +1754,15 @@ std::string DictionaryStore::readDefinition(const DictionaryEntry& entry, const 
   if (bytesRead <= 0) return "";
   raw.resize(static_cast<size_t>(bytesRead));
 
-  return stripHtmlAndEntities(decodeStarDictData(raw, entry.sameTypeSequence));
+  std::string decoded = decodeStarDictData(raw, entry.sameTypeSequence);
+  raw.clear();
+  std::string().swap(raw);
+  if (decoded.size() > MAX_DEFINITION_BYTES) {
+    decoded.resize(MAX_DEFINITION_BYTES);
+    while (!decoded.empty() && (static_cast<unsigned char>(decoded.back()) & 0xC0) == 0x80) decoded.pop_back();
+    truncated = true;
+  }
+  return stripHtmlAndEntities(decoded);
 }
 
 std::vector<std::string> DictionaryStore::getFallbackForms(const DictionaryEntry& entry, const std::string& word) const {
@@ -1658,7 +1833,7 @@ std::vector<std::string> DictionaryStore::getFallbackForms(const DictionaryEntry
 
 DictionaryLookupResult DictionaryStore::lookup(const std::string& rawWord, const bool includeSuggestions) {
   DictionaryLookupResult result;
-  ensureScanned();
+  ensureActiveEntryLoaded();
   result.query = cleanWord(rawWord);
   if (result.query.empty()) {
     result.status = DictionaryLookupResult::Status::NotFound;
@@ -1753,9 +1928,25 @@ std::vector<std::string> DictionaryStore::findSuggestions(const DictionaryEntry&
     int lengthDelta;
   };
   std::vector<Candidate> candidates;
+  if (!hasHeapHeadroom(MAX_SUGGESTION_CANDIDATES * sizeof(Candidate), HEAP_SMALL_GUARD_BYTES)) return results;
+  candidates.reserve(MAX_SUGGESTION_CANDIDATES);
+  auto candidateBetter = [](const Candidate& a, const Candidate& b) {
+    if (a.score != b.score) return a.score < b.score;
+    if (a.commonPrefix != b.commonPrefix) return a.commonPrefix > b.commonPrefix;
+    if (a.lengthDelta != b.lengthDelta) return a.lengthDelta < b.lengthDelta;
+    return a.word.size() < b.word.size();
+  };
   auto addCandidate = [&](const std::string& key, const int score, const int commonPrefix, const int lengthDelta) {
     if (key.empty() || compareWords(key, word) == 0) return;
-    candidates.push_back({key, score, commonPrefix, lengthDelta});
+    Candidate candidate{key, score, commonPrefix, lengthDelta};
+    if (candidates.size() < MAX_SUGGESTION_CANDIDATES) {
+      candidates.push_back(std::move(candidate));
+      return;
+    }
+    auto worst = std::max_element(candidates.begin(), candidates.end(), candidateBetter);
+    if (worst != candidates.end() && candidateBetter(candidate, *worst)) {
+      *worst = std::move(candidate);
+    }
   };
 
   for (const std::string& fallback : getFallbackForms(entry, word)) {
@@ -1788,12 +1979,7 @@ std::vector<std::string> DictionaryStore::findSuggestions(const DictionaryEntry&
   }
   idx.close();
 
-  std::sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
-    if (a.score != b.score) return a.score < b.score;
-    if (a.commonPrefix != b.commonPrefix) return a.commonPrefix > b.commonPrefix;
-    if (a.lengthDelta != b.lengthDelta) return a.lengthDelta < b.lengthDelta;
-    return a.word.size() < b.word.size();
-  });
+  std::sort(candidates.begin(), candidates.end(), candidateBetter);
 
   for (const Candidate& candidate : candidates) {
     if (std::find(results.begin(), results.end(), candidate.word) == results.end()) {

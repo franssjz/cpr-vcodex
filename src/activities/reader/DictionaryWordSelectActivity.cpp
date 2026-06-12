@@ -1,8 +1,10 @@
 #include "DictionaryWordSelectActivity.h"
 
+#include <Esp.h>
 #include <GfxRenderer.h>
 #include <HalGPIO.h>
 #include <I18n.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <climits>
@@ -16,6 +18,18 @@
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+
+namespace {
+constexpr uint32_t SELECTION_CACHE_HEAP_GUARD_BYTES = 48 * 1024;
+constexpr uint32_t SELECTION_CACHE_BLOCK_GUARD_BYTES = 8 * 1024;
+
+bool hasSelectionCacheHeadroom(const size_t bufferSize) {
+  const uint32_t freeHeap = ESP.getFreeHeap();
+  const uint32_t largestBlock = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
+  return freeHeap > bufferSize + SELECTION_CACHE_HEAP_GUARD_BYTES &&
+         largestBlock > bufferSize + SELECTION_CACHE_BLOCK_GUARD_BYTES;
+}
+}  // namespace
 
 void DictionaryWordSelectActivity::onEnter() {
   Activity::onEnter();
@@ -172,6 +186,10 @@ bool DictionaryWordSelectActivity::storeBaseScreenBuffer() {
     invalidateBaseScreenBuffer();
     return false;
   }
+  if (!hasSelectionCacheHeadroom(bufferSize)) {
+    freeBaseScreenBuffer();
+    return false;
+  }
 
   if (!baseScreenBuffer || baseScreenBufferSize != bufferSize) {
     freeBaseScreenBuffer();
@@ -245,6 +263,7 @@ void DictionaryWordSelectActivity::lookupSelectedWord() {
   const int wordIndex = rows[currentRow].wordIndices[currentWordInRow];
   const std::string query = words[wordIndex].lookupText.empty() ? DictionaryStore::cleanWord(words[wordIndex].text)
                                                                 : words[wordIndex].lookupText;
+  freeBaseScreenBuffer();
   if (query.empty()) {
     GUI.drawPopup(renderer, tr(STR_LOOKUP_EMPTY_PAGE));
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);

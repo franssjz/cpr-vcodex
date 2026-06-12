@@ -5,11 +5,16 @@
 
 #include <algorithm>
 #include <cctype>
+#include <utility>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+
+namespace {
+constexpr size_t MAX_WRAPPED_DEFINITION_LINES = 180;
+}
 
 void DictionaryDefinitionActivity::onEnter() {
   Activity::onEnter();
@@ -28,6 +33,7 @@ Rect DictionaryDefinitionActivity::overlayRect() const {
 
 void DictionaryDefinitionActivity::wrapText() {
   wrappedLines.clear();
+  bool wrapLimitReached = false;
   const Rect rect = overlayRect();
   const int padding = 10;
   const int maxWidth = std::max(80, rect.width - padding * 2);
@@ -46,6 +52,15 @@ void DictionaryDefinitionActivity::wrapText() {
 
   auto trimTrailingSpaces = [](std::string& line) {
     while (!line.empty() && line.back() == ' ') line.pop_back();
+  };
+
+  auto appendWrappedLine = [&](std::string line) {
+    if (wrappedLines.size() >= MAX_WRAPPED_DEFINITION_LINES) {
+      wrapLimitReached = true;
+      return false;
+    }
+    wrappedLines.push_back(std::move(line));
+    return true;
   };
 
   auto expandTabs = [](const std::string& line) {
@@ -85,7 +100,7 @@ void DictionaryDefinitionActivity::wrapText() {
       const std::string test = currentLine + unit;
       if (currentLine.size() > activePrefix.size() && renderer.getTextWidth(definitionFontId, test.c_str()) > maxWidth) {
         trimTrailingSpaces(currentLine);
-        wrappedLines.push_back(currentLine);
+        if (!appendWrappedLine(currentLine)) return;
         activePrefix = continuationPrefix;
         currentLine = activePrefix;
         hasContent = false;
@@ -98,10 +113,11 @@ void DictionaryDefinitionActivity::wrapText() {
   };
 
   auto wrapSourceLine = [&](std::string sourceLine) {
+    if (wrapLimitReached) return;
     sourceLine = expandTabs(sourceLine);
     trimTrailingSpaces(sourceLine);
     if (sourceLine.empty()) {
-      wrappedLines.emplace_back();
+      appendWrappedLine(std::string());
       return;
     }
 
@@ -134,7 +150,7 @@ void DictionaryDefinitionActivity::wrapText() {
 
       if (hasContent) {
         trimTrailingSpaces(currentLine);
-        wrappedLines.push_back(currentLine);
+        if (!appendWrappedLine(currentLine)) return;
         currentLine = continuationPrefix;
         hasContent = false;
       }
@@ -150,9 +166,9 @@ void DictionaryDefinitionActivity::wrapText() {
 
     trimTrailingSpaces(currentLine);
     if (hasContent || currentLine.size() > firstPrefix.size()) {
-      wrappedLines.push_back(currentLine);
+      appendWrappedLine(currentLine);
     } else {
-      wrappedLines.emplace_back();
+      appendWrappedLine(std::string());
     }
   };
 
@@ -160,12 +176,18 @@ void DictionaryDefinitionActivity::wrapText() {
   for (size_t i = 0; i <= definition.size(); ++i) {
     if (i == definition.size() || definition[i] == '\n') {
       wrapSourceLine(definition.substr(lineStart, i - lineStart));
+      if (wrapLimitReached) break;
       lineStart = i + 1;
     }
   }
 
-  if (truncated) {
-    wrappedLines.push_back(std::string("[") + tr(STR_DEFINITION_TRUNCATED) + "]");
+  if (truncated || wrapLimitReached) {
+    const std::string marker = std::string("[") + tr(STR_DEFINITION_TRUNCATED) + "]";
+    if (wrappedLines.size() < MAX_WRAPPED_DEFINITION_LINES) {
+      wrappedLines.push_back(marker);
+    } else if (!wrappedLines.empty()) {
+      wrappedLines.back() = marker;
+    }
   }
   totalPages = std::max(1, (static_cast<int>(wrappedLines.size()) + linesPerPage - 1) / linesPerPage);
   currentPage = std::clamp(currentPage, 0, totalPages - 1);
