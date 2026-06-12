@@ -638,6 +638,16 @@ void loop() {
     renderer.displayBuffer(HalDisplay::HALF_REFRESH);
   }
 
+  if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::DARK_MODE &&
+      mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
+    SETTINGS.darkMode = SETTINGS.darkMode ? 0 : 1;
+    SETTINGS.saveToFile();
+    renderer.setDarkMode(SETTINGS.darkMode);
+    renderer.requestNextFullRefresh();
+    activityManager.requestUpdate();
+    LOG_DBG("MAIN", "Dark mode toggled: %u", SETTINGS.darkMode);
+  }
+
   // Refresh the battery icon when USB is plugged or unplugged.
   // Placed after sleep guards so we never queue a render that won't be processed.
   if (gpio.wasUsbStateChanged()) {
