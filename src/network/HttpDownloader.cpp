@@ -87,9 +87,14 @@ bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent, const 
     return false;
   }
 
-  http.writeToStream(&outContent);
+  const int writeResult = http.writeToStream(&outContent);
 
   http.end();
+
+  if (writeResult < 0) {
+    LOG_ERR("HTTP", "writeToStream error: %d", writeResult);
+    return false;
+  }
 
   LOG_DBG("HTTP", "Fetch success");
   return true;

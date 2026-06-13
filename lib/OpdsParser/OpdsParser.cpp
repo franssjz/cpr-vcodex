@@ -18,7 +18,7 @@ OpdsParser::~OpdsParser() { destroyXmlParser(parser); }
 size_t OpdsParser::write(uint8_t c) { return write(&c, 1); }
 
 size_t OpdsParser::write(const uint8_t* xmlData, const size_t length) {
-  if (errorOccured) return length;
+  if (errorOccured || !parser || !xmlData || length == 0) return length;
 
   XML_SetUserData(parser, this);
   XML_SetElementHandler(parser, startElement, endElement);
@@ -54,7 +54,8 @@ size_t OpdsParser::write(const uint8_t* xmlData, const size_t length) {
 }
 
 void OpdsParser::flush() {
-  if (XML_Parse(parser, nullptr, 0, XML_TRUE) != XML_STATUS_OK) {
+  if (errorOccured || !parser) return;
+  if (XML_Parse(parser, "", 0, XML_TRUE) != XML_STATUS_OK) {
     errorOccured = true;
     destroyXmlParser(parser);
   }

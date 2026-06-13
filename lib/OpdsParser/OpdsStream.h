@@ -8,7 +8,7 @@ class OpdsParserStream : public Stream {
  public:
   explicit OpdsParserStream(OpdsParser& parser);
 
-  // That functions are not implemented for that stream
+  // The OPDS parser stream is write-only; read probes should behave like an empty stream.
   int available() override;
   int peek() override;
   int read() override;
