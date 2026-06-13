@@ -1,10 +1,12 @@
 #include "DictionaryDefinitionActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <utility>
 
 #include "CrossPointSettings.h"
@@ -18,8 +20,16 @@ constexpr size_t MAX_WRAPPED_DEFINITION_LINES = 180;
 
 void DictionaryDefinitionActivity::onEnter() {
   Activity::onEnter();
+  prepareDefinitionFontMetrics();
   wrapText();
   requestUpdate();
+}
+
+void DictionaryDefinitionActivity::onExit() {
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
+  }
+  Activity::onExit();
 }
 
 Rect DictionaryDefinitionActivity::overlayRect() const {
@@ -29,6 +39,40 @@ Rect DictionaryDefinitionActivity::overlayRect() const {
   const int screenHeight = renderer.getScreenHeight();
   const int height = std::max((screenHeight * 3) / 4, 160);
   return Rect{margin, screenHeight - height - margin, screenWidth - margin * 2, height};
+}
+
+void DictionaryDefinitionActivity::prepareDefinitionFontMetrics() {
+  if (!renderer.isSdCardFont(definitionFontId)) return;
+
+  if (!definition.empty()) {
+    renderer.ensureSdCardFontReady(definitionFontId, definition.c_str(), 0x01);
+  }
+
+  if (truncated) {
+    const std::string marker = std::string("[") + tr(STR_DEFINITION_TRUNCATED) + "]";
+    renderer.ensureSdCardFontReady(definitionFontId, marker.c_str(), 0x01);
+  }
+}
+
+int DictionaryDefinitionActivity::measureDefinitionText(const char* text) const {
+  return renderer.getTextAdvanceX(definitionFontId, text, EpdFontFamily::REGULAR);
+}
+
+void DictionaryDefinitionActivity::prewarmVisibleDefinitionText() const {
+  auto* fcm = renderer.getFontCacheManager();
+  if (!fcm) return;
+
+  const int startLine = currentPage * linesPerPage;
+  std::string visibleText;
+  visibleText.reserve(512);
+  for (int i = 0; i < linesPerPage && startLine + i < static_cast<int>(wrappedLines.size()); ++i) {
+    if (!visibleText.empty()) visibleText.push_back('\n');
+    visibleText += wrappedLines[startLine + i];
+  }
+
+  if (!visibleText.empty()) {
+    fcm->prewarmCache(definitionFontId, visibleText.c_str(), 0x01);
+  }
 }
 
 void DictionaryDefinitionActivity::wrapText() {
@@ -98,7 +142,7 @@ void DictionaryDefinitionActivity::wrapText() {
       const size_t unitLen = std::min(utf8UnitLength(static_cast<unsigned char>(token[pos])), token.size() - pos);
       const std::string unit = token.substr(pos, unitLen);
       const std::string test = currentLine + unit;
-      if (currentLine.size() > activePrefix.size() && renderer.getTextWidth(definitionFontId, test.c_str()) > maxWidth) {
+      if (currentLine.size() > activePrefix.size() && measureDefinitionText(test.c_str()) > maxWidth) {
         trimTrailingSpaces(currentLine);
         if (!appendWrappedLine(currentLine)) return;
         activePrefix = continuationPrefix;
@@ -142,7 +186,7 @@ void DictionaryDefinitionActivity::wrapText() {
       const std::string token = sourceLine.substr(tokenStart, pos - tokenStart);
       const std::string separator = hasContent ? (spaces > 1 ? "  " : " ") : "";
       const std::string test = currentLine + separator + token;
-      if (renderer.getTextWidth(definitionFontId, test.c_str()) <= maxWidth) {
+      if (measureDefinitionText(test.c_str()) <= maxWidth) {
         currentLine = test;
         hasContent = true;
         continue;
@@ -156,7 +200,7 @@ void DictionaryDefinitionActivity::wrapText() {
       }
 
       const std::string prefixedToken = currentLine + token;
-      if (renderer.getTextWidth(definitionFontId, prefixedToken.c_str()) <= maxWidth) {
+      if (measureDefinitionText(prefixedToken.c_str()) <= maxWidth) {
         currentLine = prefixedToken;
         hasContent = true;
       } else {
@@ -224,7 +268,13 @@ void DictionaryDefinitionActivity::loop() {
 
 void DictionaryDefinitionActivity::render(RenderLock&&) {
   renderer.clearScreen();
+  std::optional<FontCacheManager::PrewarmScope> pageFontPrewarm;
   if (page) {
+    if (auto* fcm = renderer.getFontCacheManager()) {
+      pageFontPrewarm.emplace(*fcm);
+      page->recordFontUsage(*fcm, readerFontId, SETTINGS.bionicReading);
+      pageFontPrewarm->endScanAndPrewarm();
+    }
     page->render(renderer, readerFontId, marginLeft, marginTop, SETTINGS.bionicReading);
   }
 
@@ -250,6 +300,7 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
 
   const int bodyY = separatorY + 10;
   const int startLine = currentPage * linesPerPage;
+  prewarmVisibleDefinitionText();
   for (int i = 0; i < linesPerPage && startLine + i < static_cast<int>(wrappedLines.size()); ++i) {
     renderer.drawText(definitionFontId, rect.x + padding, bodyY + i * lineHeight,
                       wrappedLines[startLine + i].c_str());

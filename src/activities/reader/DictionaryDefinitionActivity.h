@@ -26,6 +26,7 @@ class DictionaryDefinitionActivity final : public Activity {
         marginTop(marginTop) {}
 
   void onEnter() override;
+  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }
@@ -46,4 +47,7 @@ class DictionaryDefinitionActivity final : public Activity {
 
   Rect overlayRect() const;
   void wrapText();
+  void prepareDefinitionFontMetrics();
+  int measureDefinitionText(const char* text) const;
+  void prewarmVisibleDefinitionText() const;
 };

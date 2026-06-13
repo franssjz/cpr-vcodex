@@ -43,6 +43,11 @@ class EpubReaderActivity final : public Activity {
   int sessionStartSpineIndex = 0;
   int sessionStartPage = 0;
   bool sessionProgressTouched = false;
+  std::shared_ptr<Page> currentOverlayPageCache;
+  int currentOverlayPageSpineIndex = -1;
+  int currentOverlayPageNumber = -1;
+  int currentOverlayPageMarginLeft = 0;
+  int currentOverlayPageMarginTop = 0;
 
   struct ReaderSettingsSnapshot {
     uint8_t darkMode = 0;
@@ -76,7 +81,7 @@ class EpubReaderActivity final : public Activity {
   SavedPosition savedPositions[MAX_FOOTNOTE_DEPTH] = {};
   int footnoteDepth = 0;
 
-  void renderContents(std::unique_ptr<Page> page, int orientedMarginTop, int orientedMarginRight,
+  void renderContents(std::shared_ptr<Page> page, int orientedMarginTop, int orientedMarginRight,
                       int orientedMarginBottom, int orientedMarginLeft);
   void renderStatusBar() const;
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
@@ -94,6 +99,8 @@ class EpubReaderActivity final : public Activity {
   void markCurrentBookAsFinished();
   void pageTurn(bool isForwardTurn);
   void requestCurrentPageFullRefresh();
+  void cacheCurrentPageForOverlay(const std::shared_ptr<Page>& page, int marginLeft, int marginTop);
+  void invalidateCurrentOverlayPageCache();
   std::shared_ptr<Page> loadCurrentPageForOverlay(int& outMarginLeft, int& outMarginTop);
 
   // Footnote navigation
