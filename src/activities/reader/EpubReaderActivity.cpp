@@ -1545,7 +1545,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     if (dictModeActive) {
       // First pass: count all PageLine elements to get total for clamping.
       int totalLines = 0;
-      for (const auto& el : p->elements) {
+      for (const auto& el : page->elements) {
         if (el->getTag() == TAG_PageLine) totalLines++;
       }
       // Clamp BEFORE searching so we always find a valid entry.
@@ -1568,7 +1568,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       std::string nextLineFirstRaw;
       bool foundCursorLine = false;
 
-      for (const auto& el : p->elements) {
+      for (const auto& el : page->elements) {
         if (el->getTag() != TAG_PageLine) continue;
         const auto* pl = static_cast<const PageLine*>(el.get());
         const auto& elWords = pl->getBlock()->getWords();
@@ -1736,7 +1736,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
 
         const int hlFontId = SETTINGS.getReaderFontId();
         int li = 0;
-        for (const auto& el : p->elements) {
+        for (const auto& el : page->elements) {
           if (el->getTag() != TAG_PageLine) continue;
           if (li > selEndLine) break;
           if (li >= selStartLine) {
