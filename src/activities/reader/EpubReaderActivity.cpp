@@ -298,6 +298,7 @@ void EpubReaderActivity::onExit() {
   READING_STATS.endSession();
   ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
   bookmarkStore.save();
+  invalidateCurrentOverlayPageCache();
   section.reset();
   epub.reset();
 }
@@ -716,6 +717,28 @@ void EpubReaderActivity::requestCurrentPageFullRefresh() {
   requestUpdate();
 }
 
+void EpubReaderActivity::cacheCurrentPageForOverlay(const std::shared_ptr<Page>& page, const int marginLeft,
+                                                    const int marginTop) {
+  if (!page || !section || page->hasImages()) {
+    invalidateCurrentOverlayPageCache();
+    return;
+  }
+
+  currentOverlayPageCache = page;
+  currentOverlayPageSpineIndex = currentSpineIndex;
+  currentOverlayPageNumber = section->currentPage;
+  currentOverlayPageMarginLeft = marginLeft;
+  currentOverlayPageMarginTop = marginTop;
+}
+
+void EpubReaderActivity::invalidateCurrentOverlayPageCache() {
+  currentOverlayPageCache.reset();
+  currentOverlayPageSpineIndex = -1;
+  currentOverlayPageNumber = -1;
+  currentOverlayPageMarginLeft = 0;
+  currentOverlayPageMarginTop = 0;
+}
+
 std::shared_ptr<Page> EpubReaderActivity::loadCurrentPageForOverlay(int& outMarginLeft, int& outMarginTop) {
   outMarginLeft = 0;
   outMarginTop = 0;
@@ -731,11 +754,19 @@ std::shared_ptr<Page> EpubReaderActivity::loadCurrentPageForOverlay(int& outMarg
   outMarginLeft = orientedMarginLeft;
   outMarginTop = orientedMarginTop;
 
+  if (currentOverlayPageCache && currentOverlayPageSpineIndex == currentSpineIndex &&
+      currentOverlayPageNumber == section->currentPage && currentOverlayPageMarginLeft == orientedMarginLeft &&
+      currentOverlayPageMarginTop == orientedMarginTop) {
+    return currentOverlayPageCache;
+  }
+
   auto page = section->loadPageFromSectionFile();
   if (!page) {
     return nullptr;
   }
-  return std::shared_ptr<Page>(std::move(page));
+  auto sharedPage = std::shared_ptr<Page>(std::move(page));
+  cacheCurrentPageForOverlay(sharedPage, orientedMarginLeft, orientedMarginTop);
+  return sharedPage;
 }
 
 void EpubReaderActivity::saveCurrentPageBookmark() {
@@ -884,6 +915,8 @@ void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot
   if (!(paginationChanged || orientationChanged || renderOnlyChanged)) {
     return;
   }
+
+  invalidateCurrentOverlayPageCache();
 
   if (fontChanged) {
     ensureSdFontLoaded();
@@ -1267,6 +1300,7 @@ void EpubReaderActivity::markCurrentBookAsFinished() {
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   READING_STATS.noteActivity();
+  invalidateCurrentOverlayPageCache();
   const int oldSpineIndex = currentSpineIndex;
   const int oldPage = section ? section->currentPage : nextPageNumber;
 
@@ -1471,8 +1505,8 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   }
 
   {
-    auto p = section->loadPageFromSectionFile();
-    if (!p) {
+    auto loadedPage = section->loadPageFromSectionFile();
+    if (!loadedPage) {
       LOG_ERR("ERS", "Failed to load page from SD - clearing section cache");
       section->clearCache();
       section.reset();
@@ -1481,9 +1515,11 @@ void EpubReaderActivity::render(RenderLock&& lock) {
       automaticPageTurnActive = false;
       return;
     }
+    auto page = std::shared_ptr<Page>(std::move(loadedPage));
 
     // Collect footnotes from the loaded page
-    currentPageFootnotes = std::move(p->footnotes);
+    currentPageFootnotes = std::move(page->footnotes);
+    cacheCurrentPageForOverlay(page, orientedMarginLeft, orientedMarginTop);
 
     // Dict mode: extract cursor word position before page is consumed
     struct DictCursorInfo {
@@ -1732,7 +1768,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     }
 
     const auto start = millis();
-    renderContents(std::move(p), orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
+    renderContents(page, orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
 
     // Dict mode overlay: draw cursor or highlight range; draw popup only when visible
@@ -1943,7 +1979,7 @@ void EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
     LOG_ERR("ERS", "Could not save progress!");
   }
 }
-void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int orientedMarginTop,
+void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int orientedMarginTop,
                                         const int orientedMarginRight, const int orientedMarginBottom,
                                         const int orientedMarginLeft) {
   const auto t0 = millis();

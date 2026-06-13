@@ -1,9 +1,11 @@
 #include "DictionaryHistoryActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 
 #include <algorithm>
+#include <optional>
 
 #include "CrossPointSettings.h"
 #include "DictionaryDefinitionActivity.h"
@@ -69,7 +71,13 @@ void DictionaryHistoryActivity::loop() {
 
 void DictionaryHistoryActivity::render(RenderLock&&) {
   renderer.clearScreen();
+  std::optional<FontCacheManager::PrewarmScope> pageFontPrewarm;
   if (page) {
+    if (auto* fcm = renderer.getFontCacheManager()) {
+      pageFontPrewarm.emplace(*fcm);
+      page->recordFontUsage(*fcm, readerFontId, SETTINGS.bionicReading);
+      pageFontPrewarm->endScanAndPrewarm();
+    }
     page->render(renderer, readerFontId, marginLeft, marginTop, SETTINGS.bionicReading);
   }
 

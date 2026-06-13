@@ -43,6 +43,23 @@ class DictionaryWordSelectActivity final : public Activity {
     std::vector<int> wordIndices;
   };
 
+  struct SelectionRect {
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+  };
+
+  struct SelectionRegionCache {
+    SelectionRect rect;
+    uint8_t* buffer = nullptr;
+    size_t capacity = 0;
+    size_t size = 0;
+    bool stored = false;
+  };
+
+  static constexpr size_t MAX_SELECTION_REGIONS = 2;
+
   std::shared_ptr<Page> page;
   int readerFontId = 0;
   int marginLeft = 0;
@@ -51,20 +68,23 @@ class DictionaryWordSelectActivity final : public Activity {
   std::vector<Row> rows;
   int currentRow = 0;
   int currentWordInRow = 0;
-  bool baseScreenBufferStored = false;
-  uint8_t* baseScreenBuffer = nullptr;
-  size_t baseScreenBufferSize = 0;
+  SelectionRegionCache selectionRegions[MAX_SELECTION_REGIONS];
+  size_t selectionRegionCount = 0;
 
   void extractWords();
+  void prepareReaderFontMetrics();
+  int measureWordWidth(const char* text) const;
   void mergeHyphenatedWords();
   void moveRow(int delta);
   void moveWord(int delta);
   void lookupSelectedWord();
   void updateSelectionHighlight();
   bool redrawSelectionFast();
-  bool storeBaseScreenBuffer();
-  bool restoreBaseScreenBuffer();
-  void invalidateBaseScreenBuffer();
-  void freeBaseScreenBuffer();
+  void prewarmCurrentSelectionText() const;
+  size_t collectSelectionRects(SelectionRect* rects, size_t maxRects) const;
+  bool storeSelectionBaseRegions();
+  bool restoreSelectionBaseRegions() const;
+  void invalidateSelectionRegionCache();
+  void freeSelectionRegionCache();
   void drawSelectionHighlight();
 };
