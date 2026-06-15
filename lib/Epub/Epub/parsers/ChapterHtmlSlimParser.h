@@ -67,6 +67,9 @@ class ChapterHtmlSlimParser {
   std::string contentBase;
   std::string imageBasePath;
   int imageCounter = 0;
+  bool lowMemoryImageFallback = false;
+  bool lowMemoryAbort = false;
+  bool attemptedTextLayoutFontCacheRelease = false;
 
   // Style tracking (replaces depth-based approach)
   struct StyleStackEntry {
@@ -96,6 +99,7 @@ class ChapterHtmlSlimParser {
   std::vector<std::pair<std::string, uint16_t>> anchorData;
   std::string pendingAnchorId;          // deferred until after previous text block is flushed
   std::vector<std::string> tocAnchors;  // the list of anchors that are TOC chapter boundaries
+  std::vector<std::string> referencedAnchors;
   int xpathBodyDepth = -1;
   uint32_t lastBodyChildByteOffset = 0;
   uint16_t xpathParagraphIndex = 0;
@@ -110,6 +114,12 @@ class ChapterHtmlSlimParser {
   int wordsExtractedInBlock = 0;
 
   void updateEffectiveInlineStyle();
+  bool shouldAbortForLowMemory(const char* stage);
+  bool startNewPage(const char* reason);
+  void collectReferencedAnchors();
+  void collectReferencedAnchor(const char* href);
+  bool isReferencedAnchor(const std::string& anchor) const;
+  bool shouldRecordAnchor(const char* elementName, const std::string& anchor) const;
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPendingAnchor();
   void flushPartWordBuffer();
@@ -159,4 +169,6 @@ class ChapterHtmlSlimParser {
   bool parseAndBuildPages();
   void addLineToPage(std::shared_ptr<TextBlock> line);
   const std::vector<std::pair<std::string, uint16_t>>& getAnchors() const { return anchorData; }
+  bool wasLowMemoryFallbackTriggered() const { return lowMemoryImageFallback; }
+  bool wasLowMemoryAbortTriggered() const { return lowMemoryAbort; }
 };

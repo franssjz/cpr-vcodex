@@ -2,6 +2,7 @@
 
 #include <HalStorage.h>
 #include <Logging.h>
+#include <MemoryBudget.h>
 #include <Serialization.h>
 
 #include "Epub/css/CssParser.h"
@@ -259,7 +260,10 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   Storage.remove(tmpHtmlPath.c_str());
   if (!success) {
-    LOG_ERR("SCT", "Failed to parse XML and build pages");
+    const auto heap = MemoryBudget::snapshot();
+    LOG_ERR("SCT", "Failed to parse XML and build pages (lowMemoryAbort=%u imageFallback=%u free=%u maxAlloc=%u)",
+            visitor.wasLowMemoryAbortTriggered() ? 1U : 0U, visitor.wasLowMemoryFallbackTriggered() ? 1U : 0U,
+            heap.freeHeap, heap.maxAllocHeap);
     // Explicitly close() file before calling Storage.remove()
     file.close();
     Storage.remove(filePath.c_str());
@@ -267,6 +271,11 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
       cssParser->clear();
     }
     return false;
+  }
+  if (visitor.wasLowMemoryFallbackTriggered()) {
+    const auto heap = MemoryBudget::snapshot();
+    LOG_DBG("SCT", "Section built with low-memory image fallback (free=%u maxAlloc=%u)", heap.freeHeap,
+            heap.maxAllocHeap);
   }
 
   const uint32_t lutOffset = file.position();

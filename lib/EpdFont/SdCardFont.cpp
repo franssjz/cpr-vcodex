@@ -955,6 +955,18 @@ void SdCardFont::clearCache() {
   }
 }
 
+void SdCardFont::releaseForLowMemory() {
+  clearOverflow();
+  clearPersistentCache();
+
+  for (uint8_t i = 0; i < MAX_STYLES; i++) {
+    if (!styles_[i].present) continue;
+    freeStyleMiniData(styles_[i]);
+    freeStyleKernLigatureData(styles_[i]);
+    applyGlyphMissCallback(i);
+  }
+}
+
 // --- Advance table ---
 
 void SdCardFont::clearPersistentCache() {

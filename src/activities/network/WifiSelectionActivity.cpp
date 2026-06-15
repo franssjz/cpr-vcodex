@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <map>
 
 #include "MappedInputManager.h"
 #include "WifiCredentialStore.h"
@@ -130,9 +129,10 @@ void WifiSelectionActivity::processWifiScanResults() {
     return;
   }
 
-  // Scan complete, process results
-  // Use a map to deduplicate networks by SSID, keeping the strongest signal
-  std::map<std::string, WifiNetworkInfo> uniqueNetworks;
+  // Scan complete, process results. Deduplicate in-place by SSID, keeping the
+  // strongest signal without allocating a separate map on the heap.
+  networks.clear();
+  networks.reserve(scanResult);
 
   for (int i = 0; i < scanResult; i++) {
     std::string ssid = WiFi.SSID(i).c_str();
@@ -143,10 +143,11 @@ void WifiSelectionActivity::processWifiScanResults() {
       continue;
     }
 
-    // Check if we've already seen this SSID
-    auto it = uniqueNetworks.find(ssid);
-    if (it == uniqueNetworks.end() || rssi > it->second.rssi) {
-      // New network or stronger signal than existing entry
+    auto existing = std::find_if(networks.begin(), networks.end(), [&ssid](const WifiNetworkInfo& network) {
+      return network.ssid == ssid;
+    });
+
+    if (existing == networks.end()) {
       WifiNetworkInfo network;
       network.ssid = ssid;
       network.rssi = rssi;
@@ -155,15 +156,15 @@ void WifiSelectionActivity::processWifiScanResults() {
       network.channel = WiFi.channel(i);
       WiFi.BSSID(i, network.bssid);
       network.hasBssid = network.channel > 0 && hasBssidBytes(network.bssid);
-      uniqueNetworks[ssid] = network;
+      networks.push_back(network);
+    } else if (rssi > existing->rssi) {
+      existing->rssi = rssi;
+      existing->isEncrypted = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+      existing->hasSavedPassword = WIFI_STORE.hasSavedCredential(existing->ssid);
+      existing->channel = WiFi.channel(i);
+      WiFi.BSSID(i, existing->bssid);
+      existing->hasBssid = existing->channel > 0 && hasBssidBytes(existing->bssid);
     }
-  }
-
-  // Convert map to vector
-  networks.clear();
-  for (const auto& pair : uniqueNetworks) {
-    // cppcheck-suppress useStlAlgorithm
-    networks.push_back(pair.second);
   }
 
   // Sort: saved-password networks first, then by signal strength (strongest first)

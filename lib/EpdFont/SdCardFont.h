@@ -64,6 +64,9 @@ class SdCardFont {
   // preserves the persistent advance cache (reused across passes).
   void clearCache();
 
+  // Free all non-essential SD font caches before operations that need large contiguous heap.
+  void releaseForLowMemory();
+
   // Drop the persistent advance cache. Call when unloading the SD font or
   // when font/size/family/glyph-table state changes.
   void clearPersistentCache();

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <Logging.h>
+#include <MemoryBudget.h>
 
 #include <algorithm>
 #include <array>
@@ -44,6 +45,7 @@ constexpr size_t MAX_RULES = 1500;
 // Minimum free heap required to apply CSS during rendering
 // If below this threshold, we skip CSS to avoid display artifacts.
 constexpr size_t MIN_FREE_HEAP_FOR_CSS = 48 * 1024;
+constexpr size_t MIN_MAX_ALLOC_FOR_CSS = 24 * 1024;
 
 // Maximum length for a single selector string
 // Prevents parsing of extremely long or malformed selectors
@@ -628,11 +630,13 @@ bool CssParser::loadFromStream(FsFile& source) {
 
 CssStyle CssParser::resolveStyle(std::string_view tagName, std::string_view classAttr) const {
   static bool lowHeapWarningLogged = false;
-  if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_CSS) {
+  const auto heap = MemoryBudget::snapshot();
+  if (!MemoryBudget::hasHeap(heap, MIN_FREE_HEAP_FOR_CSS, MIN_MAX_ALLOC_FOR_CSS)) {
     if (!lowHeapWarningLogged) {
       lowHeapWarningLogged = true;
-      LOG_DBG("CSS", "Warning: low heap (%u bytes) below MIN_FREE_HEAP_FOR_CSS (%u), returning empty style",
-              ESP.getFreeHeap(), static_cast<unsigned>(MIN_FREE_HEAP_FOR_CSS));
+      LOG_DBG("CSS", "Warning: low heap for CSS (%u free, %u max alloc, need %u/%u), returning empty style",
+              heap.freeHeap, heap.maxAllocHeap, static_cast<unsigned>(MIN_FREE_HEAP_FOR_CSS),
+              static_cast<unsigned>(MIN_MAX_ALLOC_FOR_CSS));
     }
     return CssStyle{};
   }

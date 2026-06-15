@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <MemoryBudget.h>
 #include <Utf8.h>
 #include <XmlParserUtils.h>
 #include <expat.h>
@@ -23,6 +24,12 @@
 // Minimum file size (in bytes) to show indexing popup - smaller chapters don't benefit from it
 constexpr size_t MIN_SIZE_FOR_POPUP = 10 * 1024;  // 10KB
 constexpr size_t PARSE_BUFFER_SIZE = 1024;
+constexpr size_t MAX_ANCHORS_PER_CHAPTER = 1024;
+constexpr size_t MAX_REFERENCED_ANCHORS_PER_CHAPTER = 1024;
+constexpr uint32_t MIN_FREE_HEAP_FOR_TEXT_LAYOUT = 44 * 1024;
+constexpr uint32_t MIN_MAX_ALLOC_FOR_TEXT_LAYOUT = 32 * 1024;
+constexpr uint8_t INITIAL_PAGE_ELEMENT_RESERVE = 8;
+constexpr uint32_t PAGE_ELEMENT_RESERVE_MIN_MAX_ALLOC = 1024;
 
 constexpr const char* HEADER_TAGS[] = {"h1", "h2", "h3", "h4", "h5", "h6"};
 constexpr const char* BLOCK_TAGS[] = {"p", "li", "div", "br", "blockquote"};
@@ -70,6 +77,75 @@ bool isTableStructuralTag(const char* name) {
   return strcmp(name, "table") == 0 || strcmp(name, "tr") == 0 || strcmp(name, "td") == 0 || strcmp(name, "th") == 0;
 }
 
+bool isNonNavigableInlineElement(const char* name) { return strcmp(name, "span") == 0; }
+
+bool ChapterHtmlSlimParser::shouldAbortForLowMemory(const char* stage) {
+  if (lowMemoryAbort) {
+    return true;
+  }
+
+  auto heap = MemoryBudget::snapshot();
+  if (MemoryBudget::hasHeap(heap, MIN_FREE_HEAP_FOR_TEXT_LAYOUT, MIN_MAX_ALLOC_FOR_TEXT_LAYOUT)) {
+    return false;
+  }
+
+  if (!attemptedTextLayoutFontCacheRelease) {
+    attemptedTextLayoutFontCacheRelease = true;
+    if (renderer.releaseSdCardFontForLowMemory(fontId)) {
+      const auto afterRelease = MemoryBudget::snapshot();
+      LOG_DBG("EHP", "Released SD font caches before %s: free=%u->%u maxAlloc=%u->%u", stage, heap.freeHeap,
+              afterRelease.freeHeap, heap.maxAllocHeap, afterRelease.maxAllocHeap);
+      heap = afterRelease;
+      if (MemoryBudget::hasHeap(heap, MIN_FREE_HEAP_FOR_TEXT_LAYOUT, MIN_MAX_ALLOC_FOR_TEXT_LAYOUT)) {
+        return false;
+      }
+    }
+  }
+
+  LOG_ERR("EHP", "Low heap during %s (%u free, %u max alloc); aborting section build", stage, heap.freeHeap,
+          heap.maxAllocHeap);
+  lowMemoryAbort = true;
+  return true;
+}
+
+bool ChapterHtmlSlimParser::startNewPage(const char* reason) {
+  currentPage.reset(new (std::nothrow) Page());
+  if (!currentPage) {
+    const auto heap = MemoryBudget::snapshot();
+    LOG_ERR("EHP", "Failed to create page during %s (%u free, %u max alloc)", reason, heap.freeHeap,
+            heap.maxAllocHeap);
+    lowMemoryAbort = true;
+    return false;
+  }
+
+  const auto heap = MemoryBudget::snapshot();
+  if (MemoryBudget::hasHeap(heap, MIN_FREE_HEAP_FOR_TEXT_LAYOUT, PAGE_ELEMENT_RESERVE_MIN_MAX_ALLOC)) {
+    currentPage->elements.reserve(INITIAL_PAGE_ELEMENT_RESERVE);
+  }
+  currentPageNextY = 0;
+  return true;
+}
+
+bool isAsciiNameChar(const char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' ||
+         c == ':';
+}
+
+bool isAsciiSpace(const char c) { return c == ' ' || c == '\r' || c == '\n' || c == '\t' || c == '\f'; }
+
+char asciiLower(const char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; }
+
+bool startsHrefAttribute(const std::string& text, const size_t pos) {
+  if (pos + 4 > text.size()) return false;
+  if (pos > 0 && isAsciiNameChar(text[pos - 1])) return false;
+  if (asciiLower(text[pos]) != 'h' || asciiLower(text[pos + 1]) != 'r' || asciiLower(text[pos + 2]) != 'e' ||
+      asciiLower(text[pos + 3]) != 'f') {
+    return false;
+  }
+  if (pos + 4 < text.size() && isAsciiNameChar(text[pos + 4])) return false;
+  return true;
+}
+
 // Update effective bold/italic/underline based on block style and inline style stack
 void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
   // Start with block-level styles
@@ -115,8 +191,9 @@ void ChapterHtmlSlimParser::flushPendingAnchor() {
   if (std::find(tocAnchors.begin(), tocAnchors.end(), pendingAnchorId) != tocAnchors.end()) {
     if (currentPage && !currentPage->elements.empty()) {
       emitPage(lastBodyChildByteOffset);
-      currentPage.reset(new Page());
-      currentPageNextY = 0;
+      if (!startNewPage("TOC anchor page break")) {
+        return;
+      }
     }
   }
 
@@ -125,8 +202,102 @@ void ChapterHtmlSlimParser::flushPendingAnchor() {
   pendingAnchorId.clear();
 }
 
+void ChapterHtmlSlimParser::collectReferencedAnchor(const char* href) {
+  if (!isInternalEpubLink(href)) return;
+
+  const char* hash = std::strchr(href, '#');
+  if (!hash || hash[1] == '\0') return;
+
+  std::string anchor(hash + 1);
+  const auto queryPos = anchor.find('?');
+  if (queryPos != std::string::npos) {
+    anchor.resize(queryPos);
+  }
+  if (anchor.empty()) return;
+
+  if (std::find(referencedAnchors.begin(), referencedAnchors.end(), anchor) != referencedAnchors.end()) return;
+  if (referencedAnchors.size() >= MAX_REFERENCED_ANCHORS_PER_CHAPTER) return;
+
+  referencedAnchors.push_back(std::move(anchor));
+}
+
+bool ChapterHtmlSlimParser::isReferencedAnchor(const std::string& anchor) const {
+  return std::find(referencedAnchors.begin(), referencedAnchors.end(), anchor) != referencedAnchors.end();
+}
+
+bool ChapterHtmlSlimParser::shouldRecordAnchor(const char* elementName, const std::string& anchor) const {
+  if (std::find(tocAnchors.begin(), tocAnchors.end(), anchor) != tocAnchors.end()) return true;
+  if (isReferencedAnchor(anchor)) return true;
+  if (isNonNavigableInlineElement(elementName)) return false;
+  return anchorData.size() < MAX_ANCHORS_PER_CHAPTER;
+}
+
+void ChapterHtmlSlimParser::collectReferencedAnchors() {
+  referencedAnchors.clear();
+
+  FsFile file;
+  if (!Storage.openFileForRead("EHP", filepath, file)) {
+    return;
+  }
+
+  std::string carry;
+  carry.reserve(256);
+  char buffer[PARSE_BUFFER_SIZE + 1] = {};
+
+  while (file.available() > 0 && referencedAnchors.size() < MAX_REFERENCED_ANCHORS_PER_CHAPTER) {
+    const size_t len = file.read(buffer, PARSE_BUFFER_SIZE);
+    if (len == 0) break;
+
+    std::string chunk = carry;
+    chunk.append(buffer, len);
+
+    size_t pos = 0;
+    while (pos < chunk.size() && referencedAnchors.size() < MAX_REFERENCED_ANCHORS_PER_CHAPTER) {
+      if (!startsHrefAttribute(chunk, pos)) {
+        pos++;
+        continue;
+      }
+
+      pos += 4;
+      while (pos < chunk.size() && isAsciiSpace(chunk[pos])) pos++;
+      if (pos >= chunk.size() || chunk[pos] != '=') continue;
+      pos++;
+      while (pos < chunk.size() && isAsciiSpace(chunk[pos])) pos++;
+      if (pos >= chunk.size()) break;
+
+      const char quote = (chunk[pos] == '"' || chunk[pos] == '\'') ? chunk[pos++] : '\0';
+      const size_t valueStart = pos;
+      while (pos < chunk.size() &&
+             ((quote && chunk[pos] != quote) || (!quote && !isAsciiSpace(chunk[pos]) && chunk[pos] != '>'))) {
+        pos++;
+      }
+
+      const bool valueComplete = quote ? (pos < chunk.size() && chunk[pos] == quote) : (pos < chunk.size());
+      if (!valueComplete) break;
+      {
+        const std::string href = chunk.substr(valueStart, pos - valueStart);
+        collectReferencedAnchor(href.c_str());
+      }
+    }
+
+    if (chunk.size() > 256) {
+      carry = chunk.substr(chunk.size() - 256);
+    } else {
+      carry = std::move(chunk);
+    }
+  }
+
+  file.close();
+}
+
 // flush the contents of partWordBuffer to currentTextBlock
 void ChapterHtmlSlimParser::flushPartWordBuffer() {
+  if (lowMemoryAbort || !currentTextBlock) {
+    partWordBufferIndex = 0;
+    nextWordContinues = false;
+    return;
+  }
+
   // Determine font style from depth-based tracking and CSS effective style
   const bool isBold = boldUntilDepth < depth || effectiveBold;
   const bool isItalic = italicUntilDepth < depth || effectiveItalic;
@@ -162,6 +333,10 @@ void ChapterHtmlSlimParser::flushPartWordBuffer() {
 
 // start a new text block if needed
 void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
+  if (shouldAbortForLowMemory("text block start")) {
+    return;
+  }
+
   nextWordContinues = false;  // New block = new paragraph, no continuation
   if (currentTextBlock) {
     // already have a text block running and it is empty - just reuse it
@@ -179,12 +354,24 @@ void ChapterHtmlSlimParser::startNewTextBlock(const BlockStyle& blockStyle) {
     }
 
     makePages();
+    if (lowMemoryAbort) {
+      return;
+    }
   }
   // If the pending anchor is a TOC chapter boundary, force a page break after the previous
   // block is flushed so the chapter starts on a fresh page.
   flushPendingAnchor();
-  currentTextBlock.reset(new ParsedText(extraParagraphSpacing, forceParagraphIndents, hyphenationEnabled,
-                                        focusReadingEnabled, blockStyle));
+  if (lowMemoryAbort) {
+    return;
+  }
+  currentTextBlock.reset(new (std::nothrow) ParsedText(extraParagraphSpacing, forceParagraphIndents, hyphenationEnabled,
+                                                       focusReadingEnabled, blockStyle));
+  if (!currentTextBlock) {
+    const auto heap = MemoryBudget::snapshot();
+    LOG_ERR("EHP", "Failed to create text block (%u free, %u max alloc)", heap.freeHeap, heap.maxAllocHeap);
+    lowMemoryAbort = true;
+    return;
+  }
   wordsExtractedInBlock = 0;
 }
 
@@ -207,12 +394,9 @@ void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
   }
 
   if (!currentPage) {
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_ERR("EHP", "Failed to create page for horizontal rule");
+    if (!startNewPage("horizontal rule")) {
       return;
     }
-    currentPageNextY = 0;
   }
 
   const int16_t lineHeight = static_cast<int16_t>(renderer.getLineHeight(fontId) * lineCompression + 0.5f);
@@ -232,12 +416,9 @@ void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
 
   if (!currentPage->elements.empty() && currentPageNextY + totalHeight > viewportHeight) {
     emitPage(lastBodyChildByteOffset);
-    currentPage.reset(new (std::nothrow) Page());
-    if (!currentPage) {
-      LOG_ERR("EHP", "Failed to create page after horizontal-rule page break");
+    if (!startNewPage("horizontal-rule page break")) {
       return;
     }
-    currentPageNextY = 0;
   }
 
   currentPageNextY += topSpacing;
@@ -261,6 +442,10 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
   if (const char* colon = std::strrchr(name, ':')) {
     name = colon + 1;
+  }
+
+  if (self->shouldAbortForLowMemory("element start")) {
+    return;
   }
 
   // Middle of skip
@@ -299,9 +484,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       } else if (strcmp(atts[i], "style") == 0) {
         styleAttr = atts[i + 1];
       } else if (strcmp(atts[i], "id") == 0) {
-        // Defer both anchor recording and TOC page breaks until startNewTextBlock,
-        // after the previous block is flushed to pages via makePages().
-        self->pendingAnchorId = atts[i + 1];
+        const std::string idValue = atts[i + 1];
+        if (self->shouldRecordAnchor(name, idValue)) {
+          // Defer both anchor recording and TOC page breaks until startNewTextBlock,
+          // after the previous block is flushed to pages via makePages().
+          self->pendingAnchorId = idValue;
+        }
       }
     }
   }
@@ -432,6 +620,24 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         LOG_DBG("EHP", "Found image: src=%s", src.c_str());
 
         {
+          const auto releaseHeapBefore = MemoryBudget::snapshot();
+          if (MemoryBudget::shouldReleaseSdFontCachesForEpubInlineImage(releaseHeapBefore) &&
+              self->renderer.releaseSdCardFontForLowMemory(self->fontId)) {
+            const auto releaseHeapAfter = MemoryBudget::snapshot();
+            LOG_DBG("EHP", "Released SD font caches before image extraction: free=%u->%u maxAlloc=%u->%u src=%s",
+                    releaseHeapBefore.freeHeap, releaseHeapAfter.freeHeap, releaseHeapBefore.maxAllocHeap,
+                    releaseHeapAfter.maxAllocHeap, src.c_str());
+          }
+
+          const auto heapBeforeImage = MemoryBudget::snapshot();
+          LOG_DBG("EHP", "Heap before image extraction: free=%u maxAlloc=%u src=%s", heapBeforeImage.freeHeap,
+                  heapBeforeImage.maxAllocHeap, src.c_str());
+          const bool canProcessImage = MemoryBudget::hasHeapForEpubInlineImage("EHP", src.c_str());
+          if (!canProcessImage) {
+            self->lowMemoryImageFallback = true;
+          }
+
+          if (canProcessImage) {
           // Resolve the image path relative to the HTML file
           std::string resolvedPath = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->contentBase + src));
 
@@ -455,10 +661,20 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
             }
 
             if (extractSuccess) {
+              bool continueProcessingImage = true;
+              const auto heapAfterExtract = MemoryBudget::snapshot();
+              LOG_DBG("EHP", "Heap after image extraction: free=%u maxAlloc=%u path=%s", heapAfterExtract.freeHeap,
+                      heapAfterExtract.maxAllocHeap, cachedImagePath.c_str());
+              if (!MemoryBudget::hasHeapForEpubInlineImage("EHP", cachedImagePath.c_str())) {
+                self->lowMemoryImageFallback = true;
+                Storage.remove(cachedImagePath.c_str());
+                continueProcessingImage = false;
+              }
+
               // Get image dimensions
               ImageDimensions dims = {0, 0};
               ImageToFramebufferDecoder* decoder = ImageDecoderFactory::getDecoder(cachedImagePath);
-              if (decoder && decoder->getDimensions(cachedImagePath, dims)) {
+              if (continueProcessingImage && decoder && decoder->getDimensions(cachedImagePath, dims)) {
                 LOG_DBG("EHP", "Image dimensions: %dx%d", dims.width, dims.height);
 
                 int displayWidth = 0;
@@ -566,6 +782,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 if (self->currentTextBlock && !self->currentTextBlock->isEmpty()) {
                   const BlockStyle parentBlockStyle = self->currentTextBlock->getBlockStyle();
                   self->startNewTextBlock(parentBlockStyle);
+                  if (self->lowMemoryAbort) {
+                    return;
+                  }
                 }
 
                 // Apply vertical margins from the container to the image.
@@ -587,34 +806,37 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                     (self->currentPageNextY + imageMarginTop + displayHeight + imageMarginBottom >
                      self->viewportHeight)) {
                   self->emitPage(self->lastBodyChildByteOffset);
-                  self->currentPage.reset(new Page());
-                  if (!self->currentPage) {
-                    LOG_ERR("EHP", "Failed to create new page");
+                  if (!self->startNewPage("image page break")) {
                     return;
                   }
-                  self->currentPageNextY = 0;
                 } else if (!self->currentPage) {
-                  self->currentPage.reset(new Page());
-                  if (!self->currentPage) {
-                    LOG_ERR("EHP", "Failed to create initial page");
+                  if (!self->startNewPage("image page")) {
                     return;
                   }
-                  self->currentPageNextY = 0;
                 }
 
                 // Apply top margin from container block
                 self->currentPageNextY += imageMarginTop;
 
                 // Create ImageBlock and add to page
-                auto imageBlock = std::make_shared<ImageBlock>(cachedImagePath, displayWidth, displayHeight);
+                auto imageBlock =
+                    std::shared_ptr<ImageBlock>(new (std::nothrow) ImageBlock(cachedImagePath, displayWidth,
+                                                                              displayHeight));
                 if (!imageBlock) {
-                  LOG_ERR("EHP", "Failed to create ImageBlock");
+                  const auto heap = MemoryBudget::snapshot();
+                  LOG_ERR("EHP", "Failed to create ImageBlock (%u free, %u max alloc)", heap.freeHeap,
+                          heap.maxAllocHeap);
+                  self->lowMemoryAbort = true;
                   return;
                 }
                 int xPos = (self->viewportWidth - displayWidth) / 2;
-                auto pageImage = std::make_shared<PageImage>(imageBlock, xPos, self->currentPageNextY);
+                auto pageImage =
+                    std::shared_ptr<PageImage>(new (std::nothrow) PageImage(imageBlock, xPos, self->currentPageNextY));
                 if (!pageImage) {
-                  LOG_ERR("EHP", "Failed to create PageImage");
+                  const auto heap = MemoryBudget::snapshot();
+                  LOG_ERR("EHP", "Failed to create PageImage (%u free, %u max alloc)", heap.freeHeap,
+                          heap.maxAllocHeap);
+                  self->lowMemoryAbort = true;
                   return;
                 }
                 self->currentPage->elements.push_back(pageImage);
@@ -633,7 +855,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
                 self->depth += 1;
                 return;
-              } else {
+              } else if (continueProcessingImage) {
                 LOG_ERR("EHP", "Failed to get image dimensions");
                 Storage.remove(cachedImagePath.c_str());
               }
@@ -641,6 +863,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
               LOG_ERR("EHP", "Failed to extract image");
             }
           }  // isFormatSupported
+          }
         }
       }
 
@@ -689,6 +912,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
   // without special handling. Links pointing to them are collected as footnotes.
   if (strcmp(name, "a") == 0) {
     const char* href = getAttribute(atts, "href");
+    self->collectReferencedAnchor(href);
 
     bool isInternalLink = isInternalEpubLink(href);
 
@@ -952,6 +1176,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
 
 void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char* s, const int len) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  if (self->lowMemoryAbort) {
+    return;
+  }
 
   // Skip content of nested table
   if (self->tableDepth > 1) {
@@ -1076,7 +1303,7 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
     // We must avoid splitting multi-byte UTF-8 sequences across word boundaries,
     // otherwise the trailing bytes become orphaned continuation bytes that the
     // decoder can't interpret.
-    if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
+  if (self->partWordBufferIndex >= MAX_WORD_SIZE) {
       int safeLen = utf8SafeTruncateBuffer(self->partWordBuffer, self->partWordBufferIndex);
 
       if (safeLen < self->partWordBufferIndex && safeLen > 0) {
@@ -1104,7 +1331,7 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   // There should be enough here to build out 1-2 full pages and doing this will free up a lot of
   // memory.
   // Spotted when reading Intermezzo, there are some really long text blocks in there.
-  if (self->currentTextBlock->size() > 750) {
+  if (self->currentTextBlock && self->currentTextBlock->size() > 750) {
     LOG_DBG("EHP", "Text block too long, splitting into multiple pages");
     const int horizontalInset = self->currentTextBlock->getBlockStyle().totalHorizontalInset();
     const uint16_t effectiveWidth = (horizontalInset < self->viewportWidth)
@@ -1117,6 +1344,11 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
 }
 
 void XMLCALL ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const XML_Char* s, const int len) {
+  auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  if (self->lowMemoryAbort) {
+    return;
+  }
+
   // Check if this looks like an entity reference (&...;)
   if (len >= 3 && s[0] == '&' && s[len - 1] == ';') {
     const char* utf8Value = lookupHtmlEntity(s, static_cast<size_t>(len));
@@ -1134,6 +1366,10 @@ void XMLCALL ChapterHtmlSlimParser::defaultHandlerExpand(void* userData, const X
 
 void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* name) {
   auto* self = static_cast<ChapterHtmlSlimParser*>(userData);
+  if (self->lowMemoryAbort) {
+    return;
+  }
+
   if (const char* colon = std::strrchr(name, ':')) {
     name = colon + 1;
   }
@@ -1265,6 +1501,8 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
 }
 
 bool ChapterHtmlSlimParser::parseAndBuildPages() {
+  collectReferencedAnchors();
+
   // Initialize block style stack with a root entry representing "no ancestor block elements".
   // The user's paragraph alignment is set as the default so child elements without explicit
   // text-align inherit it correctly through getCombinedBlockStyle.
@@ -1347,6 +1585,15 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       file.close();
       return false;
     }
+
+    if (lowMemoryAbort) {
+      const auto heap = MemoryBudget::snapshot();
+      LOG_ERR("EHP", "Aborting parse because of low heap (free=%u, maxAlloc=%u)", heap.freeHeap, heap.maxAllocHeap);
+      activeParser = nullptr;
+      destroyXmlParser(parser);
+      file.close();
+      return false;
+    }
   } while (!done);
   LOG_DBG("EHP", "Time to parse and build pages: %lu ms", millis() - chapterStartTime);
 
@@ -1355,8 +1602,13 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
   file.close();
 
   // Process last page if there is still text
-  if (currentTextBlock) {
+  if (!lowMemoryAbort && currentTextBlock) {
     makePages();
+    if (lowMemoryAbort) {
+      currentPage.reset();
+      currentTextBlock.reset();
+      return false;
+    }
     if (!pendingAnchorId.empty()) {
       anchorData.push_back({std::move(pendingAnchorId), static_cast<uint16_t>(completedPageCount)});
       pendingAnchorId.clear();
@@ -1366,21 +1618,27 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
     currentTextBlock.reset();
   }
 
-  return true;
+  return !lowMemoryAbort;
 }
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
+  if (shouldAbortForLowMemory("line layout")) {
+    return;
+  }
+
   const int lineHeight = renderer.getLineHeight(fontId) * lineCompression;
 
   if (!currentPage) {
-    currentPage.reset(new Page());
-    currentPageNextY = 0;
+    if (!startNewPage("line layout")) {
+      return;
+    }
   }
 
   if (currentPageNextY + lineHeight > viewportHeight) {
     emitPage(lastBodyChildByteOffset);
-    currentPage.reset(new Page());
-    currentPageNextY = 0;
+    if (!startNewPage("line page break")) {
+      return;
+    }
   }
 
   // Track cumulative words to assign footnotes to the page containing their anchor
@@ -1394,19 +1652,31 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
 
   // Apply horizontal left inset (margin + padding) as x position offset
   const int16_t xOffset = line->getBlockStyle().leftInset();
-  currentPage->elements.push_back(std::make_shared<PageLine>(line, xOffset, currentPageNextY));
+  auto pageLine = std::shared_ptr<PageLine>(new (std::nothrow) PageLine(line, xOffset, currentPageNextY));
+  if (!pageLine) {
+    const auto heap = MemoryBudget::snapshot();
+    LOG_ERR("EHP", "Failed to create PageLine (%u free, %u max alloc)", heap.freeHeap, heap.maxAllocHeap);
+    lowMemoryAbort = true;
+    return;
+  }
+  currentPage->elements.push_back(pageLine);
   currentPageNextY += lineHeight;
 }
 
 void ChapterHtmlSlimParser::makePages() {
+  if (shouldAbortForLowMemory("text layout")) {
+    return;
+  }
+
   if (!currentTextBlock) {
     LOG_ERR("EHP", "!! No text block to make pages for !!");
     return;
   }
 
   if (!currentPage) {
-    currentPage.reset(new Page());
-    currentPageNextY = 0;
+    if (!startNewPage("text layout")) {
+      return;
+    }
   }
 
   const int lineHeight = renderer.getLineHeight(fontId) * lineCompression;

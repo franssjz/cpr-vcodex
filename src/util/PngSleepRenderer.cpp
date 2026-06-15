@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <MemoryBudget.h>
 #include <PNGdec.h>
 
 #include <new>
@@ -12,7 +13,6 @@
 namespace {
 
 constexpr size_t PNG_DECODER_APPROX_SIZE = 44 * 1024;
-constexpr size_t MIN_FREE_HEAP_FOR_PNG = PNG_DECODER_APPROX_SIZE + 16 * 1024;
 
 struct PngOverlayCtx {
   const GfxRenderer* renderer;
@@ -149,8 +149,7 @@ bool PngSleepRenderer::drawTransparentPng(const std::string& path, const GfxRend
     return false;
   }
 
-  if (ESP.getFreeHeap() < MIN_FREE_HEAP_FOR_PNG) {
-    LOG_ERR("SLP", "Not enough heap for PNG sleep image");
+  if (!MemoryBudget::hasHeapForImageDecoder("SLP", "PNG sleep image", PNG_DECODER_APPROX_SIZE)) {
     return false;
   }
 

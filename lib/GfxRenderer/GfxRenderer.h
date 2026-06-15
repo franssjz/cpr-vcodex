@@ -100,6 +100,7 @@ class GfxRenderer {
   void ensureSdCardFontReady(int fontId, const char* utf8Text, uint8_t styleMask = 0x0F) const;
   void ensureSdCardFontReady(int fontId, const std::vector<std::string>& words, bool includeHyphen,
                              uint8_t styleMask = 0x0F) const;
+  bool releaseSdCardFontForLowMemory(int fontId) const;
 
   // Orientation control (affects logical width/height and coordinate transforms)
   void setOrientation(const Orientation o) { orientation = o; }

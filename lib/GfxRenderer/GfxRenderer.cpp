@@ -78,6 +78,16 @@ void GfxRenderer::ensureSdCardFontReady(int fontId, const std::vector<std::strin
   }
 }
 
+bool GfxRenderer::releaseSdCardFontForLowMemory(int fontId) const {
+  auto it = sdCardFonts_.find(fontId);
+  if (it == sdCardFonts_.end()) {
+    return false;
+  }
+
+  it->second->releaseForLowMemory();
+  return true;
+}
+
 void GfxRenderer::begin() {
   frameBuffer = display.getFrameBuffer();
   if (!frameBuffer) {
