@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Arduino.h>
 #include <CrossPointSettings.h>
 #include <GfxRenderer.h>
+#include <HalTiltSensor.h>
 #include <Logging.h>
 
 #include "MappedInputManager.h"
@@ -10,9 +10,8 @@
 namespace ReaderUtils {
 
 constexpr unsigned long GO_HOME_MS = 1000;
-constexpr unsigned long POWER_DOUBLE_CLICK_MS = 280;
-
-enum class PowerButtonReaderAction { None, NextPage, FullRefresh };
+constexpr unsigned long CONFIRM_DOUBLE_CLICK_MS = 300;
+constexpr unsigned long SKIP_HOLD_MS = 700;
 
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   switch (orientation) {
@@ -36,53 +35,63 @@ inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
 struct PageTurnResult {
   bool prev;
   bool next;
+  bool fromTilt;
 };
 
-inline PageTurnResult detectPageTurn(const MappedInputManager& input, const bool includePowerTurn = true) {
-  const bool usePress = !SETTINGS.longPressChapterSkip;
-  const bool prev = usePress ? (input.wasPressed(MappedInputManager::Button::PageBack) ||
-                                input.wasPressed(MappedInputManager::Button::Left))
+inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
+  const bool usePress = SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_OFF;
+  const bool tiltNext = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedForward();
+  const bool tiltPrev = SETTINGS.tiltPageTurn != CrossPointSettings::TILT_OFF && halTiltSensor.wasTiltedBack();
+  const bool swapFront =
+      SETTINGS.frontButtonFollowOrientation && (SETTINGS.orientation == CrossPointSettings::INVERTED ||
+                                                SETTINGS.orientation == CrossPointSettings::LANDSCAPE_CCW);
+  const auto prevButton = swapFront ? MappedInputManager::Button::Right : MappedInputManager::Button::Left;
+  const auto nextButton = swapFront ? MappedInputManager::Button::Left : MappedInputManager::Button::Right;
+  const bool prev = usePress ? (input.wasPressed(MappedInputManager::Button::PageBack) || input.wasPressed(prevButton))
                              : (input.wasReleased(MappedInputManager::Button::PageBack) ||
-                                input.wasReleased(MappedInputManager::Button::Left));
-  const bool powerTurn = includePowerTurn && SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
+                                input.wasReleased(prevButton));
+  const bool powerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
                          input.wasReleased(MappedInputManager::Button::Power);
   const bool next = usePress ? (input.wasPressed(MappedInputManager::Button::PageForward) || powerTurn ||
-                                input.wasPressed(MappedInputManager::Button::Right))
+                                input.wasPressed(nextButton))
                              : (input.wasReleased(MappedInputManager::Button::PageForward) || powerTurn ||
-                                input.wasReleased(MappedInputManager::Button::Right));
-  return {prev, next};
+                                input.wasReleased(nextButton));
+  return {tiltPrev || prev, tiltNext || next, tiltPrev || tiltNext};
 }
 
-inline PowerButtonReaderAction consumePowerButtonReaderAction(const MappedInputManager& input,
-                                                              bool& pendingPowerSingleClick,
-                                                              unsigned long& pendingPowerReleaseMs) {
-  const bool powerActsAsPageTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN;
-  const unsigned long now = millis();
+inline bool hasNonConfirmNavigationInput(const MappedInputManager& input) {
+  return input.wasPressed(MappedInputManager::Button::Back) || input.wasReleased(MappedInputManager::Button::Back) ||
+         input.wasPressed(MappedInputManager::Button::PageBack) ||
+         input.wasReleased(MappedInputManager::Button::PageBack) ||
+         input.wasPressed(MappedInputManager::Button::PageForward) ||
+         input.wasReleased(MappedInputManager::Button::PageForward) ||
+         input.wasPressed(MappedInputManager::Button::Left) || input.wasReleased(MappedInputManager::Button::Left) ||
+         input.wasPressed(MappedInputManager::Button::Right) || input.wasReleased(MappedInputManager::Button::Right) ||
+         input.wasPressed(MappedInputManager::Button::Up) || input.wasReleased(MappedInputManager::Button::Up) ||
+         input.wasPressed(MappedInputManager::Button::Down) || input.wasReleased(MappedInputManager::Button::Down) ||
+         input.wasPressed(MappedInputManager::Button::Power) || input.wasReleased(MappedInputManager::Button::Power);
+}
 
-  if (pendingPowerSingleClick && (now - pendingPowerReleaseMs) > POWER_DOUBLE_CLICK_MS) {
-    pendingPowerSingleClick = false;
-    if (powerActsAsPageTurn) {
-      return PowerButtonReaderAction::NextPage;
-    }
+inline bool shouldToggleStatusBar(const MappedInputManager& input) {
+  return SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::TOGGLE_STATUS_BAR &&
+         input.wasReleased(MappedInputManager::Button::Power);
+}
+
+inline bool registerConfirmDoubleClick(bool& waitingForSecondClick, unsigned long& firstClickMs, const unsigned long nowMs) {
+  if (waitingForSecondClick && nowMs - firstClickMs <= CONFIRM_DOUBLE_CLICK_MS) {
+    waitingForSecondClick = false;
+    firstClickMs = 0UL;
+    return true;
   }
 
-  if (!input.wasReleased(MappedInputManager::Button::Power)) {
-    return PowerButtonReaderAction::None;
-  }
+  waitingForSecondClick = true;
+  firstClickMs = nowMs;
+  return false;
+}
 
-  if (input.getHeldTime() >= SETTINGS.getPowerButtonDuration()) {
-    pendingPowerSingleClick = false;
-    return PowerButtonReaderAction::None;
-  }
-
-  if (pendingPowerSingleClick && (now - pendingPowerReleaseMs) <= POWER_DOUBLE_CLICK_MS) {
-    pendingPowerSingleClick = false;
-    return PowerButtonReaderAction::FullRefresh;
-  }
-
-  pendingPowerSingleClick = true;
-  pendingPowerReleaseMs = now;
-  return PowerButtonReaderAction::None;
+inline bool hasPendingConfirmSingleClickExpired(const bool waitingForSecondClick, const unsigned long firstClickMs,
+                                                const unsigned long nowMs) {
+  return waitingForSecondClick && nowMs - firstClickMs > CONFIRM_DOUBLE_CLICK_MS;
 }
 
 inline bool getConfiguredReaderRefreshMode(HalDisplay::RefreshMode& mode) {
@@ -105,9 +114,6 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
   }
 
   if (pagesUntilFullRefresh <= 1) {
-    // In dark mode, the stronger maintenance refresh causes a visible white flash
-    // on X4. Keep the cadence counter, but use FAST_REFRESH to preserve the dark
-    // reading experience instead of forcing a light-polarity-looking pass.
     if (renderer.isDarkMode()) {
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     } else {
@@ -118,6 +124,14 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
     renderer.displayBuffer();
     pagesUntilFullRefresh--;
   }
+}
+
+inline void requestReaderUiTransitionRefresh(GfxRenderer& renderer) {
+  if (SETTINGS.darkMode || renderer.isDarkMode()) {
+    return;
+  }
+
+  renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
 }
 
 // Grayscale anti-aliasing pass. Renders content twice (LSB + MSB) to build

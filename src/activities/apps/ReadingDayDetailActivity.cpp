@@ -5,6 +5,7 @@
 
 #include <string>
 
+#include "AppMetricCard.h"
 #include "ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -17,24 +18,9 @@ constexpr int SUMMARY_GAP = 8;
 std::string getBookTitle(const ReadingBookStats& book) { return book.title.empty() ? book.path : book.title; }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 24 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
-  const std::string truncatedValue =
-      renderer.truncatedText(valueFontId, value.c_str(), rect.width - 24, EpdFontFamily::BOLD);
-  renderer.drawText(valueFontId, rect.x + 12, rect.y + (valueFontId == UI_12_FONT_ID ? 14 : 18), truncatedValue.c_str(),
-                    true, EpdFontFamily::BOLD);
-
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 24, 2, EpdFontFamily::REGULAR);
-  int labelY = rect.y + 40;
-  for (const auto& line : labelLines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 12, labelY, line.c_str());
-    labelY += renderer.getLineHeight(UI_10_FONT_ID);
-  }
+  AppMetricCard::Options options;
+  options.labelY = 40;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 }  // namespace
 

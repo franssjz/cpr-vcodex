@@ -1,6 +1,7 @@
 #include "SleepPreviewActivity.h"
 
 #include <Bitmap.h>
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -15,6 +16,7 @@
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/SleepImageUtils.h"
+#include "util/PngSleepRenderer.h"
 
 namespace {
 void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& bitmap) {
@@ -27,13 +29,11 @@ void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& b
 
     if (ratio > rectRatio) {
       x = contentRect.x;
-      y = contentRect.y + std::round((static_cast<float>(contentRect.height) -
-                                      static_cast<float>(contentRect.width) / ratio) /
-                                     2.0f);
+      y = contentRect.y +
+          std::round((static_cast<float>(contentRect.height) - static_cast<float>(contentRect.width) / ratio) / 2.0f);
     } else {
-      x = contentRect.x + std::round((static_cast<float>(contentRect.width) -
-                                      static_cast<float>(contentRect.height) * ratio) /
-                                     2.0f);
+      x = contentRect.x +
+          std::round((static_cast<float>(contentRect.width) - static_cast<float>(contentRect.height) * ratio) / 2.0f);
       y = contentRect.y;
     }
 
@@ -46,9 +46,13 @@ void drawPreviewBitmap(GfxRenderer& renderer, const Rect& contentRect, Bitmap& b
   renderer.drawBitmap(bitmap, x, y, bitmap.getWidth(), bitmap.getHeight(), 0, 0);
 }
 
-void drawPreviewFrame(GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth, const int pageHeight,
-                      const std::string& directoryLabel, const std::string& subtitle, const char* btn1,
-                      const char* btn2, const char* btn3, const char* btn4) {
+bool drawPreviewPng(GfxRenderer& renderer, const Rect& contentRect, const std::string& imagePath) {
+  return PngSleepRenderer::drawTransparentPng(imagePath, renderer, contentRect.x, contentRect.y, contentRect.width,
+                                              contentRect.height);
+}
+
+void drawPreviewFrame(GfxRenderer& renderer, const std::string& directoryLabel, const std::string& subtitle,
+                      const char* btn1, const char* btn2, const char* btn3, const char* btn4) {
   renderer.clearScreen();
   HeaderDateUtils::drawHeaderWithDate(renderer, directoryLabel.c_str(), subtitle.empty() ? nullptr : subtitle.c_str());
   GUI.drawButtonHints(renderer, btn1, btn2, btn3, btn4);
@@ -57,38 +61,33 @@ void drawPreviewFrame(GfxRenderer& renderer, const ThemeMetrics& metrics, const 
 
 void SleepPreviewActivity::onEnter() {
   Activity::onEnter();
-  loading = true;
   selectedIndex = 0;
-  previewDirty = true;
-  requestUpdate();
+  imagePaths.clear();
+
+  Rect popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+  GUI.fillPopupProgress(renderer, popupRect, 20);
+  loadImages();
+  GUI.fillPopupProgress(renderer, popupRect, 50);
+  renderPreview(false);
 }
 
 void SleepPreviewActivity::loadImages() {
-  imagePaths = SleepImageUtils::listBmpFiles(directoryPath);
+  imagePaths = SleepImageUtils::listImageFiles(directoryPath);
   if (selectedIndex >= static_cast<int>(imagePaths.size())) {
     selectedIndex = imagePaths.empty() ? 0 : static_cast<int>(imagePaths.size()) - 1;
   }
-  previewDirty = !imagePaths.empty();
 }
 
 void SleepPreviewActivity::loop() {
-  if (loading) {
-    loadImages();
-    loading = false;
-    requestUpdate(true);
-    return;
-  }
+  Activity::loop();
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     finish();
     return;
   }
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    strncpy(SETTINGS.sleepDirectory, directoryPath.c_str(), sizeof(SETTINGS.sleepDirectory) - 1);
-    SETTINGS.sleepDirectory[sizeof(SETTINGS.sleepDirectory) - 1] = '\0';
-    SETTINGS.saveToFile();
-    requestUpdate(true);
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    selectDirectory();
     return;
   }
 
@@ -97,20 +96,36 @@ void SleepPreviewActivity::loop() {
     return;
   }
 
-  buttonNavigator.onNext([this, itemCount] {
+  buttonNavigator.onNextRelease([this, itemCount] {
     selectedIndex = ButtonNavigator::nextIndex(selectedIndex, itemCount);
-    previewDirty = true;
-    requestUpdate();
+    renderPreview(true);
   });
 
-  buttonNavigator.onPrevious([this, itemCount] {
+  buttonNavigator.onPreviousRelease([this, itemCount] {
     selectedIndex = ButtonNavigator::previousIndex(selectedIndex, itemCount);
-    previewDirty = true;
-    requestUpdate();
+    renderPreview(true);
   });
 }
 
-void SleepPreviewActivity::render(RenderLock&&) {
+void SleepPreviewActivity::selectDirectory() {
+  strncpy(SETTINGS.sleepDirectory, directoryPath.c_str(), sizeof(SETTINGS.sleepDirectory) - 1);
+  SETTINGS.sleepDirectory[sizeof(SETTINGS.sleepDirectory) - 1] = '\0';
+  SETTINGS.saveToFile();
+  GUI.drawPopup(renderer, tr(STR_SELECTED));
+  delay(700);
+  finish();
+}
+
+void SleepPreviewActivity::showLoadError(const char* message) {
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_USE_DIRECTORY), "", "");
+  renderer.clearScreen();
+  HeaderDateUtils::drawHeaderWithDate(renderer, SleepImageUtils::getDirectoryLabel(directoryPath).c_str());
+  renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2 - 10, message);
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+}
+
+void SleepPreviewActivity::renderPreview(bool showLoadingPopup) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();
   const int pageHeight = renderer.getScreenHeight();
@@ -123,56 +138,63 @@ void SleepPreviewActivity::render(RenderLock&&) {
                                             imagePaths.empty() ? "" : tr(STR_DIR_UP),
                                             imagePaths.empty() ? "" : tr(STR_DIR_DOWN));
 
-  drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1, labels.btn2,
-                   labels.btn3, labels.btn4);
+  drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   const Rect contentRect{metrics.contentSidePadding, metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing,
                          pageWidth - metrics.contentSidePadding * 2,
                          pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.buttonHintsHeight +
                                        metrics.verticalSpacing * 3)};
 
-  if (loading) {
-    renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 10, tr(STR_LOADING), true, EpdFontFamily::BOLD);
-  } else if (imagePaths.empty()) {
+  if (imagePaths.empty()) {
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, tr(STR_NO_FILES_FOUND));
   } else {
-    Rect popupRect{};
-    if (previewDirty) {
+    Rect popupRect;
+    if (showLoadingPopup) {
       popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
       GUI.fillPopupProgress(renderer, popupRect, 20);
     }
 
-    FsFile file;
-    if (Storage.openFileForRead("SLP", imagePaths[selectedIndex], file)) {
-      if (previewDirty) {
+    const std::string& imagePath = imagePaths[selectedIndex];
+    const bool isPng = FsHelpers::hasPngExtension(imagePath);
+    bool rendered = false;
+
+    if (isPng) {
+      if (showLoadingPopup) {
         GUI.fillPopupProgress(renderer, popupRect, 55);
       }
-      Bitmap bitmap(file, true);
-      if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-        if (previewDirty) {
-          GUI.fillPopupProgress(renderer, popupRect, 90);
-          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1,
-                           labels.btn2, labels.btn3, labels.btn4);
-        }
-        drawPreviewBitmap(renderer, contentRect, bitmap);
-      } else {
-        if (previewDirty) {
-          drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1,
-                           labels.btn2, labels.btn3, labels.btn4);
-        }
-        renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Invalid BMP File");
-      }
-      file.close();
+      drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+      rendered = drawPreviewPng(renderer, contentRect, imagePath);
     } else {
-      if (previewDirty) {
-        drawPreviewFrame(renderer, metrics, pageWidth, pageHeight, directoryLabel, subtitle, labels.btn1, labels.btn2,
-                         labels.btn3, labels.btn4);
+      FsFile file;
+      if (Storage.openFileForRead("SLP", imagePath, file)) {
+        Bitmap bitmap(file, true);
+        if (bitmap.parseHeaders() == BmpReaderError::Ok) {
+          if (showLoadingPopup) {
+            GUI.fillPopupProgress(renderer, popupRect, 55);
+          }
+          drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+          drawPreviewBitmap(renderer, contentRect, bitmap);
+          rendered = true;
+        }
+        file.close();
+      } else {
+        showLoadError("Could not open file");
+        return;
       }
-      renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Could not open file");
     }
 
-    previewDirty = false;
+    if (!rendered) {
+      drawPreviewFrame(renderer, directoryLabel, subtitle, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+      renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, "Invalid image file");
+    }
   }
 
-  renderer.displayBuffer();
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+}
+
+void SleepPreviewActivity::render(RenderLock&&) {
+  if (imagePaths.empty()) {
+    loadImages();
+  }
+  renderPreview(false);
 }

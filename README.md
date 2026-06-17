@@ -1,6 +1,13 @@
+> **CPR-vCodex is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)**, focused on improving reading consistency, long-term reading habits, and overall reader experience without sacrificing simplicity or performance.
+>
+> Instead of only tracking progress, this fork focuses on the full reading journey — consistency, habits, milestones, statistics, customization, and personal reading identity.
+>
+> The project adds optional layers such as reading streaks, detailed analytics, achievements, heatmaps, Sync Day tracking, session history, and deeper personalization, while still allowing the interface to remain clean and distraction-free if preferred.
+
+# CPR-vCodex
 
 <p align="center">
-  <img src="./docs/images/logotext_by_Which-Estimate4566.svg" alt="cpr-vcodex logo" width="720" />
+  <img src="./docs/images/500x100.png" alt="CPR-vCodex logo" width="500" />
   <br />
   <sub>Logo contributed by Which-Estimate4566.</sub>
 </p>
@@ -8,155 +15,337 @@
 ## Screenshots
 
 <p align="center">
-  <img src="./docs/images/screenshots.png" alt="cpr-vcodex overview" width="1000" />
+  <img src="./docs/images/screenshots.png" alt="CPR-vCodex overview" width="1000" />
 </p>
 
-# cpr-vcodex
+## What's different in this fork
+
+My goal with this fork was to preserve CrossPoint experience while expanding the firmware around long-term reading engagement and personalization.
+
+Unlike a complete rewrite, CPR-vCodex intentionally stays close to the upstream CrossPoint project and only carries forward additions or upstream changes that are stable and safe enough for daily reading.
+
+Some of the main additions include:
+
+- full reading analytics: reading stats, heatmaps, day detail, reading profile, session history, goals, streaks, and achievements
+- Sync Day support for reliable offline day-based statistics on hardware without a trustworthy sleep RTC
+- per-book statistics tools, including reading-time correction, start-date editing, and per-book stats reset
+- StarDict dictionary support from the SD card, with selectable monolingual and translation dictionaries, per-language folders, reader word lookup, suggestions, and lookup history
+- offline Flashcards with CSV decks, multiple study modes, recents, stats, and session summaries
+- EPUB bookmarks with explicit reader-menu actions plus a global bookmarks app
+- customizable Home and Apps shortcuts, reader quick settings, reading layouts, themes, and Lyra Carousel workflow improvements
+- enhanced sleep tools, including custom image directories, cover/custom stats screens, sleep previews, cached sleep frames, and configurable clean sleep refresh
+- downloadable and manually installable SD-card fonts, including vCodex-only families such as `ChareInk`
+- Screen Clean, SD firmware update, Auto Flash, reading stats editor, and other maintenance/workflow utilities
+- KOReader Sync, OPDS filename options, reader refresh controls, Bionic Reading, text darkness, dark mode, and other reader quality-of-life settings
+- carefully selected upstream CrossPoint improvements and fixes adapted without dropping vCodex-specific behavior
+
+The philosophy of this fork is simple: keep the firmware fast, stable, and focused on reading, while making the device feel more rewarding and personal for people who read every day.
 
 ## At a glance
 
 | Item | Value |
 |---|---|
-| Base firmware | `CrossPoint Reader 1.2.0` |
-| Upstream base commit | [`e6c6e72`](https://github.com/crosspoint-reader/crosspoint-reader/commit/e6c6e72a249a0edcd525ee29029739e457e4e797) |
-| Upstream carry-forward | manual carry-forward from [`9b38851`](https://github.com/crosspoint-reader/crosspoint-reader/commit/9b388513869a16f8bb3310fc5a3dd85385614fac), [`1c13331`](https://github.com/crosspoint-reader/crosspoint-reader/commit/1c1333118962f456ff56a3c599f52520d2d204d9), [`11984f8`](https://github.com/crosspoint-reader/crosspoint-reader/commit/11984f8fefc308c57a32d580b47d14b9a53e5621), [`f429f90`](https://github.com/crosspoint-reader/crosspoint-reader/commit/f429f9035c7301636c94b201bf27962d0289fabf), [`fa3c7d9`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fa3c7d96a0020687e1e22dd720e285402987d99b), [`cff3e12`](https://github.com/crosspoint-reader/crosspoint-reader/commit/cff3e12a0ac2bd496cc23588e9fc0b49edfd98d0), [`6cd19f5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/6cd19f561905e199fb5d630b9381d601b9babc56), [`1398aeb`](https://github.com/crosspoint-reader/crosspoint-reader/commit/1398aeb1edb3a2819e90d52bd96f339c8e073491), [`c656673`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c656673b9a887667c360b748ba6df31d64b880df), [`b898d53`](https://github.com/crosspoint-reader/crosspoint-reader/commit/b898d53f7b8726f9a0c74ff064df61c1cc102f16), [`b3b43bb`](https://github.com/crosspoint-reader/crosspoint-reader/commit/b3b43bb3738ab23b14ca9ca881c037050e1107de), [`104f391`](https://github.com/crosspoint-reader/crosspoint-reader/commit/104f391a29d11d504fc4d990eb135fda72eadb04), [`5349e81`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5349e81723b68d7d33f5223ef0bfdedf96d0d810) and [`5ba8529`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5ba85290ab5a423b133dcb067e2d40c4671a285e) |
-| Device | Xteink X4 |
-| Current release (vCodex) | `1.2.0.11` |
-| Version code | `2026041011` |
-| Release notes | [CHANGELOG.md](./CHANGELOG.md) |
-| Recommended install | browser fast flash |
+| Project | `CPR-vCodex` |
+| Device | `Xteink X4`; `Xteink X3` compatibility reported by users, not personally tested |
+| Current release (CPR-vCodex) build | [`1.3.0.25-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.3.0.25-cpr-vcodex) |
+| Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
+| Changelog | [CHANGELOG.md](./CHANGELOG.md) |
+| Current release sync | Selected CrossPoint Reader fixes after [`3392b3e3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3392b3e3) through [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078), including EPUB image/cache/CSS/parser performance, KOReader chapter-start mapping, font-upload hardening, long-press chapter-start navigation, progress-bar placement, and `open-x4-sdk` [`26648d6`](https://github.com/crosspoint-reader/community-sdk/commit/26648d643a1c883ab2f71e1869d05fe2a0c9d498). Hebrew/RTL, translation-only churn, OpenDyslexic storage migration, docs-only guide updates, and t5s3 README-only changes remain deferred. |
+| Current release fixes | Improves heavy EPUB page turns and indexing for large books, especially image-heavy chapters, and adds a reader status-bar toggle for the short power button. |
+| Latest release notes | - EPUB section indexing now streams table content as text and defers image extraction/decoding until images are actually rendered, reducing long `Indexing` stalls on large books.<br>- ZIP prefix reads and lazy image extraction reduce RAM and SD-card pressure during section cache rebuilds, with the section cache format bumped so stale heavy caches are regenerated safely.<br>- `Settings > Controls > Short Power Button Click` now includes `Toggle Status Bar` for EPUB/TXT readers; hiding the bar keeps the same reserved layout space so pagination and reading position stay stable. |
+| Base firmware line | `CrossPoint Reader 1.3.0` |
+| Latest official commit reviewed | [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078) |
+| Latest official commit incorporated | Selected EPUB/rendering, cache, filesystem, image, KOReader Sync, font-upload, SDK, and navigation fixes from [`7accc607`](https://github.com/crosspoint-reader/crosspoint-reader/commit/7accc607) through [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078); larger upstream bookmark, RTL, OTA/downloader, translation-bulk, and settings rewrites remain intentionally deferred. |
+| Intentional upstream exclusions | Unsupported upstream theme variants such as `RoundedRaff` remain out of the supported vCodex theme list; other upstream UI/config changes are adapted selectively to preserve the existing X4 workflow. |
 
-`cpr-vcodex` builds on the great work of **CrossPoint Reader**. The current firmware line is now based on **CrossPoint Reader 1.2.0**, and this fork has been extended and improved with the help of **OpenAI Codex** for the **Xteink X4**.
+## Web tools
 
-In practical terms, the fork currently takes **CrossPoint Reader `1.2.0` / commit `e6c6e72`** as its upstream base and now manually carries forward the upstream work from **`9b38851`**, **`1c13331`**, **`11984f8`**, **`f429f90`**, **`fa3c7d9`**, **`cff3e12`**, **`6cd19f5`**, **`1398aeb`**, **`c656673`**, **`b898d53`**, **`b3b43bb`**, **`104f391`**, **`5349e81`** and **`5ba8529`**, adapted carefully to keep the fork stable on the **Xteink X4**.
+- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware from Chrome or Edge using Web Serial.
+- [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
+
+## SD card DICTIONARIES
+
+`CPR-vCodex` can use StarDict-format dictionaries stored on the microSD card. Dictionary data stays on the SD card; after a dictionary is selected, the firmware creates a small `.cpridx` cache next to it so later lookups stay fast.
+
+Important: a loose `.dict` file is not enough. The dictionary must be a complete StarDict package with matching `.ifo`, `.idx`, and uncompressed `.dict` files using the same base filename.
+
+Recommended microSD layout:
+
+```text
+SD:/
+  dictionaries/
+    spanish/
+      es-es.ifo
+      es-es.idx
+      es-es.dict
+      es-es.syn        # optional synonym/headword file
+      es-es.cpridx     # generated by CPR-vCodex; do not copy manually
+    english-spanish/
+      en-es.ifo
+      en-es.idx
+      en-es.dict
+```
+
+Each language or dictionary group lives in `dictionaries/<language>/`. The directory name is the visible language/group label, so names such as `spanish`, `english`, `english-spanish`, or `en-es` are all valid. Each directory may contain one or more dictionaries.
+
+For every StarDict dictionary, the required files are:
+
+- `<name>.ifo`: dictionary metadata, including name, word count, and format hints.
+- `<name>.idx`: word index; it maps each headword to the byte offset of its definition.
+- uncompressed `<name>.dict`: definition data.
+
+Optional files:
+
+- `<name>.syn` enables alternate headwords and synonym redirects when the dictionary provides them.
+- `<name>.cpridx` is generated by CPR-vCodex after preparing the dictionary and should not be downloaded or copied by hand.
+
+Compressed `<name>.dict.dz` dictionaries are detected but are not currently supported directly. If the downloaded package contains a `.dict.dz` file, open or extract it first and copy the resulting uncompressed `.dict` file to the SD card. The valid format for CPR-vCodex is `.dict`, not compressed `.dict.dz`.
+
+Use on the Xteink:
+
+1. Copy the dictionary files to `dictionaries/<language>/` on the microSD card.
+2. Reinsert the card and open `Apps > Dictionary`.
+3. Choose the definition text size. `Medium` is the default.
+4. Select the dictionary to prepare and activate it. Depending on the dictionary size, the first activation can take several seconds while CPR-vCodex builds its lookup cache.
+5. While reading an EPUB, open the reader menu to use `Look up word`, `Lookup history`, or `Dictionary` to change the active dictionary/configuration and return to the book.
+
+Dictionary download sources vary in quality, completeness, format, and license. Always extract the downloaded package until you have the `.ifo`, `.idx`, and `.dict` files, and check the license before redistributing a dictionary.
+
+Monolingual (Defining) dictionary:
+- [WikDict StarDict downloads](https://download.wikdict.com/dictionaries/stardict/) includes several monolingual and bilingual StarDict packages. Extract packages until you have matching `.ifo`, `.idx`, and uncompressed `.dict` files.
+
+Bilingual (Translation) dictionary:
+- [WikDict StarDict downloads](https://download.wikdict.com/dictionaries/stardict/) includes translation dictionaries such as German-English and English-German, depending on the published package.
+
+If you know reliable public dictionary links for more languages, please contact the project or open an issue/discussion so this list can be updated.
+
+## SD card fonts
+
+`CPR-vCodex` supports extra `.cpfont` families stored on the microSD card. The built-in reader fonts still work as usual, and downloaded SD fonts appear in `Settings > Reader > Font Family` after the firmware discovers them.
+
+SD-card font rendering keeps a fast per-glyph advance cache when it is complete, and falls back to direct glyph measurement when an external font cache is missing an entry. Browser File Transfer downloads also preserve the advertised response size so downloaded files do not fail with content-length mismatch errors.
+
+Device download:
+
+1. Connect the reader to Wi-Fi.
+2. Open `Settings > Reader > Manage Fonts`.
+3. Select a family and download it.
+4. Return to `Reader Font Family` and choose the newly installed font.
+
+Manual install from GitHub is faster when Wi-Fi on the device is slow. The CPR-vCodex package contains only
+vCodex-only additions; use the CrossPoint source/package for common families:
+
+1. Download [`all-fonts.zip`](https://github.com/franssjz/cpr-vcodex/releases/download/sd-fonts-m1-b4/all-fonts.zip) from the latest CPR-vCodex SD font package.
+2. Extract it into the root of the microSD card. The archive creates `fonts/<Family>/*.cpfont`.
+3. Reinsert the card, restart the device, and select the font under `Settings > Reader > Font Family`.
+
+Manual single-family install also works. Download the four files for a family from [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4), create `fonts/<Family>/` on the microSD card, and copy the matching `Family_12.cpfont`, `Family_14.cpfont`, `Family_16.cpfont`, and `Family_18.cpfont` files there.
+
+Recommended microSD layout:
+
+```text
+SD:/
+  fonts/
+    ChareInk/
+      ChareInk_12.cpfont
+      ChareInk_14.cpfont
+      ChareInk_16.cpfont
+      ChareInk_18.cpfont
+```
+
+## Flashcards study modes
+
+`Flashcards` currently offers four review modes:
+
+- `Due`: builds a finite session from cards that are due first, then fills with unseen cards if needed. `Session size` is respected here, and `All` means "all due cards plus unseen cards".
+- `Scheduled`: builds a finite shuffled session from the whole deck. `Session size` is respected here, and `All` means the whole deck.
+- `Infinite`: ignores `Session size`, keeps drawing cards from the whole deck, and never finishes on its own. Exit manually when you want the session summary.
+- `Sequential`: uses every card in CSV order, ignores `Session size`, and finishes after the last card.
+
+Why it is split this way:
+
+- `Study mode` decides **which cards** enter the session
+- `Session size` decides **how many** of those cards are included
+
+`Fail` and `Next` send the current card back through the session flow. In `Infinite`, the queue is rebuilt again when a full pass is consumed, so practice can continue indefinitely. In `Sequential`, the deck is kept in file order.
+
+Example CSV deck structure:
+
+```csv
+front,back
+"What is the capital of France?","Paris"
+"Who wrote Don Quixote?","Miguel de Cervantes"
+"What is 12 x 12?","144"
+```
+
+Sample deck ready to copy to the SD card:
+- [flashcards_sample.csv](./flashcards_sample.csv)
+
+`CPR-vCodex` is a reading-focused firmware fork for the **Xteink X4**, built on top of the stable **CrossPoint Reader** baseline and extended with analytics, reader utilities, branding cleanup, extra UI features, and carefully selected upstream carry-forwards.
+
+The official `crosspoint-reader` project is treated as the stable reference. `vcodex` only carries forward upstream work when it is useful on the X4 and safe enough to keep the reader fast and reliable.
+
+There may be some **involuntary or incidental X3 compatibility** because parts of the upstream codebase still carry X3-aware paths. `CPR-vCodex` now also includes an **experimental X3-only tilt page-turn option** for devices with the QMI8658 IMU, but it is hidden when the sensor is not detected and remains off by default. The firmware is still developed and validated on **X4**, and I do **not** currently have an **X3** device available to test or confirm that compatibility.
 
 This project is **not affiliated with Xteink**.
 
 ## Highlights
 
-- richer reading analytics on the device itself: `Reading Stats`, `Heatmap`, `Reading Day` and per-book detail
-- console-style `Achievements` built on top of the same reading data
-- better day/date model through `Sync Day`, so stats stay coherent on the X4
-- faster-to-use `Home` and `Apps` with configurable shortcut placement and order
-- reader-focused extras like `Dark Mode`, `Text Darkness`, `Lexend` and EPUB bookmarks
-- practical device-side utilities such as `ReadMe`, `If found, please return me` and `Sleep` tools
+- stable upstream-based reader baseline kept fast on large EPUBs
+- richer on-device analytics: `Reading Stats`, `Reading Heatmap`, `Reading Day`, `Reading Profile`
+- manual per-book reading-time/date corrections for missed or accidental stats
+- `Achievements` built on top of the same reading data model
+- `Sync Day` for coherent day-based stats on hardware without a trustworthy sleep RTC
+- `Lyra Carousel` Home theme, originally created by [zgredex](https://github.com/zgredex), adapted to this fork by [erickosanchezj](https://github.com/erickosanchezj), limited to 3 books for smoother X4 navigation, with a sliding bottom shortcut row so every configured Home action remains reachable
+- experimental X3-only `Tilt Page Turn`, hidden unless the QMI8658 IMU is detected and disabled by default
+- downloadable SD-card fonts from CrossPoint plus vCodex-only families such as `ChareInk`
+- SD-card firmware update from Settings for local `.bin` flashing without a browser
+- configurable long-press side-button behavior: `Off`, `Chapter skip`, or `Orientation change`
+- EPUB bookmarks plus a global bookmarks app
+- context-aware screenshot filenames that include the current book title when available
+- KOReader Sync compatibility improvements, including Calibre-Web-Automated `/kosync` support
+- configurable OPDS download filename format: `Author - Title` or `Title - Author`
+- configurable `Home` and `Apps` shortcuts
+- `Flashcards` with offline CSV decks, session summary, recents, stats and settings
+- `Text Darkness`, `Bionic Reading`, `Reader Refresh Mode`, `Lexend`, `X Small`
+- `Sleep` tools with directory selection, preview, cache, sequential and shuffle behavior
+- `Dark Mode (Experimental)`
+- Vietnamese UI support and synchronized translation coverage across all shipped languages
+
+## Languages
+
+`CPR-vCodex` currently ships with **23 UI languages**:
+
+- English
+- Spanish
+- French
+- German
+- Czech
+- Portuguese
+- Russian
+- Swedish
+- Romanian
+- Catalan
+- Ukrainian
+- Belarusian
+- Italian
+- Polish
+- Finnish
+- Danish
+- Dutch
+- Turkish
+- Kazakh
+- Hungarian
+- Lithuanian
+- Slovenian
+- Vietnamese
+
+The translation set is maintained from `english.yaml` as the source of truth. Current shipped UI keys are synchronized across all 23 languages; safe English fallback remains available for future keys that have not been translated yet.
 
 ## Easy installation
 
 For most users, this is the easiest way to install the firmware:
 
-1. Download the latest `cpr-vcodex` firmware from [GitHub Releases](https://github.com/franssjz/cpr-vcodex/releases).
+1. Download the latest `*-cpr-vcodex.bin` release file.
 2. Turn on and unlock your Xteink X4.
 3. Open [xteink.dve.al](https://xteink.dve.al/).
-4. In `OTA fast flash controls`, select the downloaded firmware file.
+4. In `OTA fast flash controls`, select the firmware file.
 5. Click `Flash firmware from file`.
 6. Select the device when the browser asks.
 7. Wait for the installation to finish.
-8. Restart the device:
-   press the bottom-right button once, then press and hold the right power button.
+8. Restart the device if needed.
 
-> To return to the original CrossPoint Reader later, repeat the same process with the original firmware file.
+To return to the original CrossPoint Reader later, repeat the same process with the original firmware file.
 
-The in-device update entry is currently hidden.
-For now, update using the release file from GitHub and the browser flasher above.
+## 5-minute start
+
+If you just flashed `CPR-vCodex` and want the main value quickly:
+
+1. Open `Home > Sync Day`
+2. Connect to Wi-Fi and sync the date
+3. Open a book and read normally
+4. Open `Apps > Reading Stats`
+5. Open `Apps > Reading Heatmap`
+
+That is enough to start using the core `vcodex` additions: coherent day-based analytics, better stats visibility, and improved app-level reading tools.
 
 ## What this fork adds
 
 | Feature | What it adds | More info |
 |---|---|---|
-| `Reading Stats` | richer totals, started books, per-book detail and extended trends | [Reading analytics suite](#reading-analytics-suite) |
-| `Reading Heatmap` | monthly calendar view of reading intensity | [Reading analytics suite](#reading-analytics-suite) |
-| `Reading Day` | drill-down into one specific reading day | [Reading analytics suite](#reading-analytics-suite) |
+| `Reading Stats` | totals, streaks, goal tracking, started books, finished books, and per-book detail | [Reading analytics suite](#reading-analytics-suite) |
+| `Manual stats correction` | add or subtract per-book minutes for a selected date without typing on the device | [Reading analytics suite](#reading-analytics-suite) |
+| `Reading Heatmap` | monthly calendar of reading intensity | [Reading analytics suite](#reading-analytics-suite) |
+| `Reading Day` | one-day drill-down from the heatmap | [Reading analytics suite](#reading-analytics-suite) |
+| `Reading Profile` | weekly reading behavior summary | [Reading analytics suite](#reading-analytics-suite) |
 | `Achievements` | console-style milestones and optional popups | [Achievements](#achievements) |
-| `Sync Day` | manual Wi-Fi day sync plus fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
-| `Home + Shortcuts` | configurable Home/Apps placement and reorderable shortcut lists | [Home and Apps](#home-and-apps) |
-| `Dark Mode` | global white-on-black UI and reader rendering toggle | [Settings](#settings) |
+| `Flashcards` | offline deck study with `Scheduled` and `Infinite` session modes | [Flashcards](#flashcards) |
+| `Sync Day` | manual Wi-Fi date sync and fallback-day logic | [Sync Day and date model](#sync-day-and-date-model) |
+| `Home + Apps shortcuts` | configurable placement, visibility, ordering, and a fallback to `Lyra vCodex` for removed/unknown themes | [Home and Apps](#home-and-apps) |
+| `SD card fonts` | download, upload, or manually install extra `.cpfont` families from the SD card | [Settings](#settings) |
+| `SD firmware update` | select a `.bin` from the SD card and flash it locally from Settings | [Settings](#settings) |
+| `Long-press button behavior` | choose `Off`, `Chapter skip`, or `Orientation change` for reader side-button holds | [Settings](#settings) |
 | `Bookmarks` | EPUB bookmarks plus a global bookmarks app | [Bookmarks](#bookmarks) |
-| `Lyra Custom` default theme | reading-first default presentation from first boot | [Home and Apps](#home-and-apps) |
-| `ReadMe` | on-device quick guide for the main CPR-vCodex features | [ReadMe](#readme) |
-| `If found, please return me` | lost-device contact screen fed by `/if_found.txt` on the SD card | [If found, please return me](#if-found-please-return-me) |
-| `Sleep tools` | folder selection, preview and sequential/shuffle behavior | [Sleep](#sleep) |
-| `Text Darkness` | darker anti-aliased reader text, adapted from the [`crosspet`](https://github.com/trilwu/crosspet) fork | [Settings](#settings) |
-| `Lexend reader font` | additional reader font family adapted from the [`crosspet`](https://github.com/trilwu/crosspet) fork | [Settings](#settings) |
-| `Configurable Daily Goal` | choose `15 / 30 / 45 / 60 min` and use that target for goal-based stats | [Reading analytics suite](#reading-analytics-suite) |
-| `Date controls` | global date format and time zone settings | [Settings](#settings) |
-
-## 5-minute start
-
-If you just flashed the fork and want the main extras immediately:
-
-1. Open `Home > Sync Day`
-2. Connect to Wi-Fi and sync the date
-3. Open a book and read normally
-4. Open `Home > Stats` or `Apps > Reading Stats`
-5. Open `Apps > Reading Heatmap`
-
-That is enough to start using the core value of the fork: coherent day-based reading analytics on the X4.
+| `Sleep tools` | folder selection, preview, cache, sequential and shuffle behavior | [Sleep](#sleep) |
+| `Text Darkness` | global `Normal / Dark / Extra Dark` text rendering control, based on the idea first seen in `crosspet` | [Settings](#settings) |
+| `Bionic Reading` | `Off / Normal / Subtle` EPUB focus-reading modes with stable text weight in BW and anti-aliased rendering | [Settings](#settings) |
+| `Reader Refresh Mode` | `Auto / Fast / Half / Full` | [Settings](#settings) |
+| `Lexend` | additional reader font family | [Settings](#settings) |
+| `Dark Mode (Experimental)` | optional white-on-black UI and reader presentation | [Settings](#settings) |
+| `ReadMe` | on-device quick guide for the main fork features | [ReadMe](#readme) |
+| `If found, please return me` | lost-device contact screen from `/if_found.txt` on the SD card | [If found, please return me](#if-found-please-return-me) |
+| `Vietnamese UI` | extra UI language with matching font binding | [Languages](#languages) |
 
 ## Home and Apps
 
-The default Home menu is:
+The launcher is split into `Home` and `Apps`.
 
-- `Browse Files`
-- `Apps`
-- `Stats`
-- `Sync Day`
+`Home` stays focused on frequently used reading entry points, while `Apps` collects the richer tools added by the fork.
 
-`Lyra Custom` is the default theme for new installs.
+Notable launcher behavior:
 
-Shortcuts can be managed from:
+- shortcut placement can be moved between `Home` and `Apps`
+- shortcut visibility can be toggled
+- ordering is configurable
+- stats-related shortcuts show useful live metadata
+- `Apps` paginates long lists and supports page-jump navigation
+- `Lyra Carousel` is available as an optional cover-focused Home theme and is limited to 3 books for smoother X4 navigation; its bottom shortcut row shows five icons at a time but scrolls laterally with selection so longer Home shortcut lists remain reachable
+  It was originally created by [zgredex](https://github.com/zgredex) and adapted to CPR-vCodex by [erickosanchezj](https://github.com/erickosanchezj).
 
-- `Settings > Apps > Shortcuts > Location Home and Apps`
-- `Settings > Apps > Shortcuts > Visibility Home and Apps`
-- `Settings > Apps > Shortcuts > Order Home shortcuts`
-- `Settings > Apps > Shortcuts > Order Apps shortcuts`
+Management lives in:
 
-Default shortcut placement:
-
-- `Home`: `Browse Files`, `Stats`, `Sync Day`
-- `Apps`: `Settings`, `Reading Stats`, `Reading Heatmap`, `Achievements`, `If found, please return me`, `ReadMe`, `Recent Books`, `Bookmarks`, `File Transfer`, `Sleep`
-
-`Apps` always remains available in `Home`, but it can be moved to a different position.
+- `Settings > Apps > Location Home and Apps`
+- `Settings > Apps > Visibility Home and Apps`
+- `Settings > Apps > Order Home shortcuts`
+- `Settings > Apps > Order Apps shortcuts`
 
 ## Sync Day and date model
 
-This part matters, because several fork features depend on it.
+This part matters, because several `vcodex` features depend on day-level data.
 
-The Xteink X4 should **not** be treated as if it had a reliable real-time clock that survives sleep in a trustworthy way.
-So this fork uses a practical model:
+The ESP32-C3 in the X4 does not provide a sleep-resilient real-time clock you can trust after every sleep cycle. So the fork uses a practical model:
 
-1. `Sync Day` connects over Wi-Fi and fetches the current date/time using NTP.
-2. That date becomes the valid reference for stats.
-3. If the device later loses a valid current clock, the firmware falls back to the **last saved valid date**.
-4. When the header is showing fallback date instead of a fresh synced date, it is marked with `!`.
+1. `Sync Day` connects over Wi-Fi and gets a valid date/time using NTP
+2. that becomes the trusted reference date for stats
+3. if the live clock later becomes unreliable, the firmware falls back to the last valid saved date
+4. day-based views stay coherent instead of drifting randomly
 
-Practical meaning:
+In practice:
 
-- one sync per day before reading is usually enough
-- after that, stats continue using the last valid saved day
-- if the real day changes, you should sync again
-
-By default the time zone is `Spain / Madrid`.
-You can select your own `Time Zone` and `Date Format` from `Settings > Apps`.
-
-`Sync Day` also shows diagnostics such as:
-
-- `Clock valid`
-- `Time source`
-- `Current clock`
-- `Synced this boot`
-- `Header date`
-- `Fallback date`
+- syncing once per day before reading is usually enough
+- day-based stats depend on having a valid day reference
+- timezone and date format are configurable globally
 
 ## Reading analytics suite
 
-All reading analytics features share the same data source.
+All reading analytics features share the same persistence model and data source.
 
 That means these views stay coherent with each other:
 
 - `Reading Stats`
 - `Reading Heatmap`
 - `Reading Day`
+- `Reading Profile`
 - per-book stats detail
 
 ### What gets tracked
@@ -165,21 +354,17 @@ That means these views stay coherent with each other:
 - finished books
 - total reading time
 - daily reading time
-- `7D` and `30D`
-- goal streak
-- max goal streak
-- sessions
-- per-book progress
-- last read date
-- current chapter where available
+- counted sessions
+- daily-goal progress
+- goal streak and max streak
+- per-book progress and last-read state
 
 ### Important rules
 
-- a reading session counts when it reaches at least `3 minutes`
-- `Daily Goal` is configurable to `15 / 30 / 45 / 60 min`
-- `Goal Streak` depends on whether you completed the configured `Daily Goal`
-- `Reading Day` filters out books with less than `3 minutes` on that day
-- books inside `/ignore_stats/` and its subdirectories are excluded from stats, sessions, heatmap and achievement tracking
+- a session counts only after reaching the minimum tracked duration
+- daily goal is configurable
+- day-based analytics depend on a valid synced or recovered day
+- books under ignored stats paths are excluded from tracking
 
 ### Main views
 
@@ -189,156 +374,63 @@ That means these views stay coherent with each other:
 | `More Details` | wider trends and graphs |
 | `Reading Heatmap` | monthly calendar of reading intensity |
 | `Reading Day` | one-day detail view opened from the heatmap |
-| `Per-book stats detail` | cover, progress, sessions, time and last read info for a single book |
+| `Reading Profile` | summary of recent reading behavior |
+| `Per-book stats detail` | cover, progress, sessions, time and last-read info for one book |
 
-`Show after reading` can automatically open per-book stats detail when you exit a book, but only if the reading session was long enough to count as a real session.
+Per-book detail also includes a small settings button under the cover. It opens book-specific stats actions:
+
+- `Adjust reading time` opens the correction screen for missed or accidental reading time
+- `Modify start date` changes only the book's displayed start date metadata
+- `Reset this book's stats` asks for confirmation, then removes that book's stats entry, attributed session history, and rebuilds aggregate reading totals
+
+The correction screen can:
+
+- choose `Add` or `Subtract`
+- choose the exact date with the same numeric picker style used by `Sync Day`
+- choose 15, 30, 45, or 60 minutes
+- subtracting is capped so a day can never go below zero
+
+Manual corrections update the same daily totals used by streaks, heatmaps and achievements.
 
 ## Achievements
 
-`Achievements` adds a lightweight console-style progression layer on top of the same reading data already used by stats.
+`Achievements` adds a lightweight progression layer on top of the same reading data used by stats.
 
 It provides:
 
 - a dedicated `Apps > Achievements` screen
-- top tabs for `Pending` and `Completed`
-- `Settings`-style controls: `Confirm` switches tabs, `Up/Down` moves through the list
-- locked vs unlocked states
-- progress labels for cumulative milestones
-- optional unlock popups
-- reset support from `Settings > Apps`
-- retroactive unlock sync from previous stats
+- pending vs completed sections
+- unlock popups
+- reset support
+- retroactive sync from existing reading stats
 
-Current achievement list:
+The current catalog rewards, among other things:
 
-Current catalog: `62 achievements`
-
-### Started books
-
-| Title | Unlock condition |
-|---|---|
-| `Open Sesame` | start your first book |
-| `My Precious` | start 5 different books |
-| `I Volunteer as Tribute` | start 10 different books |
-| `Through the Wardrobe` | start 25 different books |
-| `So Many Beginnings` | start 50 different books |
-
-### Counted sessions
-
-| Title | Unlock condition |
-|---|---|
-| `Once Upon a Time` | complete your first counted session |
-| `Just One More Page` | complete 10 counted sessions |
-| `Hold the Book!` | complete 25 counted sessions |
-| `Mischief Managed` | complete 50 counted sessions |
-| `The Reading Stone` | complete 100 counted sessions |
-| `The NeverEnding Story` | complete 200 counted sessions |
-
-### Finished books
-
-| Title | Unlock condition |
-|---|---|
-| `It's leviOsa, not levioSA!` | finish your first book |
-| `The Two Towers` | finish 2 books |
-| `Trilogy` | finish 3 books |
-| `Hermione Granger` | finish 5 books |
-| `Jane Eyre` | finish 7 books |
-| `Lizzy Bennet` | finish 10 books |
-| `Belle's Library` | finish 15 books |
-| `Matilda` | finish 20 books |
-| `The NeverEnding Story` | finish 25 books |
-| `The Book Was Better` | finish 30 books |
-| `One More Chapter` | finish 35 books |
-| `Gandalf the White` | finish 40 books |
-| `The Book Thief` | finish 45 books |
-| `Read, Set, Go!` | finish 50 books |
-| `One Read to Rule Them All` | finish 55 books |
-| `The Library of Alexandria` | finish 60 books |
-| `Dorian Read` | finish 65 books |
-| `The Name of the Page` | finish 70 books |
-| `Moony, Wormtail, Padfoot & Read` | finish 75 books |
-| `The Shining` | finish 80 books |
-| `The Ultimate Plot Twist` | finish 85 books |
-| `I, Reader` | finish 90 books |
-| `Robot Dreams` | finish 95 books |
-| `The Pagemaster` | finish 100 books |
-
-### Total reading time
-
-| Title | Unlock condition |
-|---|---|
-| `One Hour Later` | read for 1 hour in total |
-| `An Unexpected Journey` | read for 5 hours in total |
-| `The Fellowship of the Read` | read for 10 hours in total |
-| `A Day in Pages` | read for 24 hours in total |
-| `Halfway to Narnia` | read for 50 hours in total |
-| `Read and Prejudice` | read for 100 hours in total |
-| `Wonderland` | read for 200 hours in total |
-
-### Goal days and streaks
-
-| Title | Unlock condition |
-|---|---|
-| `Mission Accomplished` | reach the daily goal once |
-| `Seven Kingdoms` | reach the daily goal on 7 different days |
-| `The Month of Living Bookishly` | reach the daily goal on 30 different days |
-| `Still Not a Muggle` | reach the daily goal on 60 different days |
-| `Willy Fog` | reach the daily goal on 80 different days |
-| `Not Today` | reach a 3-day goal streak |
-| `White Rabbit` | reach a 7-day goal streak |
-| `Windrunner` | reach a 14-day goal streak |
-| `Stormblessed` | reach a 30-day goal streak |
-| `Radiant` | reach a 60-day goal streak |
-
-### Bookmarks
-
-| Title | Unlock condition |
-|---|---|
-| `Marked for Later` | add your first bookmark |
-| `The Usual Susmarks` | add 10 bookmarks |
-| `The Bookmark Knight Rises` | add 25 bookmarks |
-| `Too Many Tabs` | add 50 bookmarks |
-
-### Long sessions
-
-| Title | Unlock condition |
-|---|---|
-| `And So It Begins` | complete a 15-minute session |
-| `One Does Not Simply Stop` | complete a 30-minute session |
-| `Locked, Loaded, Booked` | complete a 45-minute session |
-| `There and Back Again` | complete a 60-minute session |
-| `The Long Read` | complete a 90-minute session |
-| `Extended Edition` | complete a 120-minute session |
-
-Important behavior:
-
-- achievements are derived from tracked reading data
-- on first use, existing stats can unlock achievements retroactively
-- `Sync with prev. stats` can run that retroactive check again later
-- `Reset achievements` clears achievement progress only, not reading stats
+- started books
+- counted sessions
+- finished books
+- total reading time
+- goal-completion days
+- streaks
+- bookmark usage
+- long sessions
 
 ## ReadMe
 
-`ReadMe` is a built-in on-device guide for the main vCodex features.
+`ReadMe` is an on-device quick guide for the main fork features.
 
-It includes quick pages for:
+It includes compact help pages for:
 
 - `Sync Day`
 - `Reading Stats`
 - `Bookmarks`
+- `Flashcards`
 - `Sleep`
 - `Customize Home and Apps`
 - `Achievements`
 - `If found, please return me`
 
-How it works:
-
-- open `Apps > ReadMe`
-- choose a topic from the list
-- press `Open` to view the full explanation
-- use `Up / Down` to scroll long pages
-- press `Back` to return to the topic list
-
-This is meant to give device-side help without needing to re-open GitHub every time.
+This gives device-side help without needing to reopen GitHub every time.
 
 ## If found, please return me
 
@@ -348,78 +440,101 @@ How it works:
 
 - open `Apps > If found, please return me`
 - the screen always shows a fixed intro message
-- if `/if_found.txt` exists on the SD root, its content is shown below in bold
-- if the file does not exist, the app shows a bold fallback message explaining how to create it
-- long content can be scrolled with `Up / Down`
+- if `/if_found.txt` exists on the SD root, its content is shown below
+- common filename/encoding variants are tolerated, including case differences, `if_found.txt.txt`, UTF-8 BOM, and UTF-16 text files
+- if the file does not exist, the app shows a fallback message explaining how to create it
 
 ## Bookmarks
 
-Bookmarks are implemented for EPUB.
+Bookmarks are implemented for EPUB and work in two ways:
 
-There are two ways to use them:
+- inside the reader
+- from the global `Apps > Bookmarks` screen
 
-- from inside a book
-- from the global `Apps > Bookmarks` app
+Supported flow:
 
-Inside EPUB reading:
+- long-press `Select` inside EPUB reading to toggle bookmark
+- open the reader menu and choose `View bookmarks`
+- open the reader menu and choose `Save bookmark` to save the current page without removing an existing bookmark
+- reopen a book directly at a saved bookmark from the global bookmarks app
+- delete individual bookmarks or all bookmarks for one book
 
-- long press `Select` to add or remove a bookmark
-- use the reader menu to open bookmarks
-- jump directly to a saved bookmark
+## Flashcards
 
-Global bookmarks app:
+`Flashcards` is an offline study app built around CSV decks on the SD card.
 
-- lists books that contain bookmarks
-- opening a book shows its saved bookmarks
-- selecting one opens the EPUB directly at that location
-- long press on a bookmark deletes just that bookmark
-- long press on a book deletes all its bookmarks
+Main sections:
 
-All destructive actions ask for confirmation first.
+- `Open`
+- `Recents`
+- `Statistics`
+- `Settings`
+
+Deck flow:
+
+- open a CSV deck from the SD card
+- study in landscape using `Flip`, `Next`, `Success` and `Fail`
+- leave the deck through the page buttons when you want to finish
+- get a session summary when you exit
+
+Study modes:
+
+- `Due`: finite review-oriented session, using due cards first and unseen cards second
+- `Scheduled`: finite shuffled session from the whole deck
+- `Infinite`: endless practice, ignores `Session size`
+- `Sequential`: whole deck in CSV order, ignores `Session size`
+
+Statistics:
+
+- each deck keeps its own seen / unseen / due / mastered metrics
+- `Statistics` lists known decks
+- holding `Select` on a deck inside `Statistics` lets you reset that deck's flashcard stats after confirmation
 
 ## Sleep
 
 The `Sleep` app makes custom sleep images easier to manage.
 
-It can:
+It supports:
 
-- find valid sleep folders
-- preview images
-- move between images
-- choose the active folder
-- switch between `Shuffle` and `Sequential`
-
-Supported folder names:
-
-- `sleep`
-- `sleep_*`
+- directory discovery
+- preview
+- sequential vs shuffle order
+- persistent selected directory
+- cached sleep framebuffers
+- reduced repetition through recent-wallpaper tracking
+- `Reading Dashboard` sleep mode with daily goal, streak, reading totals, and achievement progress
+- `Cover + Stats` and `Custom + Stats` sleep modes with compact reading overlays on either the current cover or configured custom images
 
 ## Settings
 
-The most important fork-specific options live in:
+The most important fork-specific options are concentrated in `Settings > Apps`, while reader and display behavior stay under the normal settings categories.
 
-- `Settings > Apps`
-
-Main options:
+Useful reader/display additions include:
 
 | Area | Options |
 |---|---|
-| Reader | `Text Anti-Aliasing`, `Text Darkness`, `Reader Font Family` with `Lexend` |
-| Display | `Dark Mode`, `Sunlight Fading Fix`, `UI Theme`, sleep-screen controls |
-| Date | `Display Day`, `Auto Sync Day`, `Date Format`, `Time Zone` |
+| Reader | `Text Anti-Aliasing`, `Text Darkness`, `Bionic Reading`, `Reader Refresh Mode`, `Reader Font Family`, `Reader Font Size`, `Manage Fonts` |
+| Display | `UI Theme`, sleep-screen controls, `Dark Mode (Experimental)`, `Sunlight Fading Fix` |
+| Controls | `Side Button Layout`, `Long-press button behavior`, `Short Power Button Click`, `Tilt Page Turn` |
+| Status bar | EPUB/status-bar fields, battery visibility, `XTC Status Bar` |
+| System | `SD Card Firmware Update`, OTA update check, cache clearing, language, OPDS servers |
+| Date | `Display Day`, `Date Format`, `Time Zone`, `Sync Day` reminder behavior |
 | Reading stats | `Daily Goal`, `Show after reading`, `Reset Reading Stats`, `Export Reading Stats`, `Import Reading Stats` |
 | Achievements | `Enable achievements`, `Achievement popups`, `Reset achievements`, `Sync with prev. stats` |
-| Navigation | `Shortcuts`, `Location Home and Apps`, `Visibility Home and Apps`, `Order Home shortcuts`, `Order Apps shortcuts` |
+| Navigation | `Location Home and Apps`, `Visibility Home and Apps`, `Order Home shortcuts`, `Order Apps shortcuts` |
 
-`Text Darkness` is adapted from the [`crosspet`](https://github.com/trilwu/crosspet) fork. It only affects anti-aliased reader text and gives you `Normal`, `Dark` and `Extra Dark` rendering options.
+`Text Darkness` is a feature idea seen in the `crosspet` fork and adapted here for `vcodex`.
 
-`Dark Mode` adds a global white-on-black rendering toggle from `Settings > Display`. In this fork it is handled centrally in the renderer so menus and text switch cleanly to white-on-black while preserving normal image polarity instead of inverting book art and illustrations.
+Font notes:
 
-`Lexend` is also adapted from the [`crosspet`](https://github.com/trilwu/crosspet) fork as an extra reader font family. In this fork it bundles the regular face across the available sizes and uses it as the fallback for bold and italic variants to keep flash usage under control.
+- `Bookerly` and `Noto Sans` have full regular/bold/italic coverage in the compiled sizes
+- `Lexend` is available as an extra reader family
+- `Lexend` italic and bold-italic still use safe fallbacks rather than separate real italic assets
+- `Manage Fonts` downloads common SD-card font families from CrossPoint and vCodex-only additions from CPR-vCodex release assets, currently `ChareInk`
 
 ## What requires Sync Day
 
-Anything tied to day-level analytics depends on having a valid date reference.
+Anything tied to day-level analytics depends on having a valid day reference.
 
 That includes:
 
@@ -438,59 +553,119 @@ Recommended rule:
 
 ## Data persistence
 
-This fork does **not** use a database.
+`CPR-vCodex` keeps storage compatibility as a first priority.
 
-It stores user state and reading analytics using files on the SD card, mainly in `/.crosspoint/`.
+It does **not** use a database. User state is persisted mainly under `/.crosspoint/`.
 
-Important files include:
+Important artifacts include:
 
 - `/.crosspoint/state.json`
 - `/.crosspoint/reading_stats.json`
 - `/.crosspoint/achievements.json`
-- per-book `bookmarks.bin` files inside the EPUB cache path
-- `/exports/*.json` for reading stats export files
-- `/.crosspoint/recent.json` for recent books history
+- `/.crosspoint/recent.json`
+- per-book `bookmarks.bin`
+- `/exports/*.json` for reading stats export/import
+
+This is one of the main reasons the fork was rebuilt on a cleaner upstream-derived base instead of continuing to patch the older fork in place.
 
 ## Versioning
 
-Each firmware build now keeps the base project version and the fork release separate:
+Each packaged dev build now keeps the base firmware line and the local flash identity easy to distinguish.
 
-- `crosspoint.version`: the upstream base release, currently `1.2.0`
-- `vcodex.version`: the fork release shown to the user, currently `1.2.0.11`
-- `vcodex.version_code`: the exact build identifier, currently `2026041011`
+Practical values to look at:
 
-The firmware UI keeps showing the fork version to avoid confusion, while the base version remains available as metadata for tracking upstream sync.
-For a brief release history, see [CHANGELOG.md](./CHANGELOG.md).
+- base firmware line: `CrossPoint Reader 1.3.0`
+- current release build style: `1.3.0.25-cpr-vcodex`
+- packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
+
+The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
+
+## Main docs
+
+- [User Guide](./USER_GUIDE.md)
+- [Scope](./SCOPE.md)
+- [i18n notes](./docs/i18n.md)
+- [Contributing docs](./docs/contributing/README.md)
 
 ## Build from source
 
-For normal device use, build or flash:
+### Prerequisites
 
-```sh
-pio run -e vcodex_release
+- `PlatformIO Core` (`pio`) or `VS Code + PlatformIO IDE`
+- Python 3.8+
+- USB-C cable for flashing the ESP32-C3
+- Xteink X4
+- Xteink X3 compatibility has been reported by users, but this maintainer does not have X3 hardware for direct validation
+
+Possible note about X3:
+
+- the codebase may still retain some upstream X3-aware behavior
+- the X3-only `Tilt Page Turn` setting is experimental, off by default, and hidden unless the QMI8658 IMU is detected
+- `CPR-vCodex` is not validated on X3 hardware
+- no X3 device is currently available for testing
+
+### Build
+
+Use the project build wrapper:
+
+```powershell
+.\bin\build-vcodex.ps1
 ```
 
-The resulting firmware is:
+The wrapper forces UTF-8 Python/console output for PlatformIO on Windows and
+uses one build job by default for more repeatable local diagnostics. You can
+still pass another environment or job count explicitly:
+
+```powershell
+.\bin\build-vcodex.ps1 -Environment gh_release_rc -Jobs 2
+```
+
+To verify the `gh_release` environment locally without advancing the release
+counter or rewriting this README:
+
+```powershell
+$env:VCODEX_RELEASE_DRY_RUN = "1"
+.\bin\build-vcodex.ps1 -Environment gh_release
+Remove-Item Env:\VCODEX_RELEASE_DRY_RUN
+```
+
+This generates a packaged firmware artifact under:
 
 ```text
-.pio/build/vcodex_release/firmware.bin
+artifacts/<version>-cpr-vcodex.bin
 ```
 
-Development prerequisites:
+Versioning rules:
 
-- PlatformIO Core (`pio`) or VS Code + PlatformIO IDE
-- Python 3.8+
-- USB-C cable
-- Xteink X4
+- release builds: `1.3.0.<release>-cpr-vcodex.bin`
+- dev builds: `1.3.0.<release>.dev<build>-cpr-vcodex.bin`
 
-Clone and build:
+Release publishing:
 
-```sh
-git clone --recursive https://github.com/franssjz/cpr-vcodex.git
-cd cpr-vcodex
-pio run -e vcodex_release
+- before tagging, run:
+
+```powershell
+python scripts/pre_release_check.py --tag 1.3.0.25-cpr-vcodex
 ```
+
+- push a stable tag named like `1.3.0.25-cpr-vcodex`
+- the release workflow builds `gh_release`, validates that the packaged artifact
+  name matches the tag, and attaches only the flashable `<tag>.bin` to the GitHub Release
+- tagged CI release builds derive the firmware release number from the tag, not
+  from a local counter file
+- the auto-flash sync workflow then mirrors that published release asset into
+  `docs/firmware/firmware.bin` and updates `docs/firmware/manifest.json`
+
+## Credits
+
+Huge credit goes to:
+
+- the **CrossPoint Reader** project for the upstream base
+- the Xteink X4 community around the firmware ecosystem
+- [zgredex](https://github.com/zgredex) for the original `Lyra Carousel` Home theme
+- [erickosanchezj](https://github.com/erickosanchezj) for adapting `Lyra Carousel` to CPR-vCodex
+- Which-Estimate4566 for the logo artwork used in the docs
 
 ---
 
-`cpr-vcodex` keeps the strong CrossPoint Reader base, but turns it into a more complete reading product for people who care about habit tracking, progress visibility, and practical reader UX.
+CPR-vCodex is **not affiliated with Xteink or any manufacturer of the X4 hardware**.

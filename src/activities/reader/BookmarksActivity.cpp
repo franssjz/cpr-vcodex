@@ -41,8 +41,7 @@ std::string BookmarksActivity::getItemLabel(const int index) const {
     if (tocIndex != -1) {
       const auto tocItem = epub->getTocItem(tocIndex);
       snprintf(buffer, sizeof(buffer), "%d. ", index + 1);
-      return std::string(buffer) + tocItem.title + " - " + PAGE_LABEL +
-             std::to_string(bookmark.pageNumber + 1);
+      return std::string(buffer) + tocItem.title + " - " + PAGE_LABEL + std::to_string(bookmark.pageNumber + 1);
     }
 
     snprintf(buffer, sizeof(buffer), "%d. %s%d, %s%d", index + 1, tr(STR_SECTION_PREFIX), bookmark.spineIndex + 1,
@@ -179,7 +178,7 @@ void BookmarksActivity::render(RenderLock&&) {
   const auto pageStartIndex = selectorIndex / pageItems * pageItems;
   renderer.fillRect(contentX, 60 + contentY + (selectorIndex % pageItems) * 30 - 2, contentWidth - 1, 30);
 
-  for (int i = 0; i < pageItems; i++) {
+  for (int i = 0; i < pageItems; ++i) {
     const int itemIndex = pageStartIndex + i;
     if (itemIndex >= totalItems) {
       break;

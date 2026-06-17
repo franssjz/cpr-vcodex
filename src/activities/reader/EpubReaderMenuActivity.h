@@ -12,15 +12,20 @@ class EpubReaderMenuActivity final : public Activity {
  public:
   // Menu actions available from the reader menu.
   enum class MenuAction {
+    READER_SETTINGS,
     SELECT_CHAPTER,
     FOOTNOTES,
-    BOOKMARKS,
-    TEXT_DARKNESS,
+    LOOK_UP_WORD,
+    LOOKUP_HISTORY,
+    DICTIONARY,
+    VIEW_BOOKMARKS,
+    SAVE_BOOKMARK,
     GO_TO_PERCENT,
     AUTO_PAGE_TURN,
     ROTATE_SCREEN,
     SCREENSHOT,
     DISPLAY_QR,
+    MARK_AS_FINISHED,
     GO_HOME,
     SYNC,
     DELETE_CACHE
@@ -28,14 +33,13 @@ class EpubReaderMenuActivity final : public Activity {
 
   explicit EpubReaderMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                   const int currentPage, const int totalPages, const int bookProgressPercent,
-                                  const uint8_t currentOrientation, const uint8_t currentTextDarkness,
-                                  const bool hasFootnotes,
-                                  const bool hasBookmarks);
+                                  const uint8_t currentOrientation, const bool hasFootnotes);
 
   void onEnter() override;
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  bool isReaderActivity() const override { return true; }
 
  private:
   struct MenuItem {
@@ -43,7 +47,7 @@ class EpubReaderMenuActivity final : public Activity {
     StrId labelId;
   };
 
-  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes, bool hasBookmarks);
+  static std::vector<MenuItem> buildMenuItems(bool hasFootnotes);
 
   // Fixed menu layout
   const std::vector<MenuItem> menuItems;
@@ -54,10 +58,8 @@ class EpubReaderMenuActivity final : public Activity {
   std::string title = "Reader Menu";
   uint8_t pendingOrientation = 0;
   uint8_t selectedPageTurnOption = 0;
-  uint8_t pendingTextDarkness = 0;
   const std::vector<StrId> orientationLabels = {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED,
                                                 StrId::STR_LANDSCAPE_CCW};
-  const std::vector<StrId> textDarknessLabels = {StrId::STR_NORMAL, StrId::STR_DARK, StrId::STR_EXTRA_DARK};
   const std::vector<const char*> pageTurnLabels = {I18N.get(StrId::STR_STATE_OFF), "1", "3", "6", "12"};
   int currentPage = 0;
   int totalPages = 0;

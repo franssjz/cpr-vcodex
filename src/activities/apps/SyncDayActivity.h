@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Activity.h"
+#include "util/ButtonNavigator.h"
 
 class SyncDayActivity final : public Activity {
   bool wifiConnectedOnEnter = false;
@@ -8,11 +9,13 @@ class SyncDayActivity final : public Activity {
   bool syncing = false;
   bool lastSyncSucceeded = false;
   bool lastSyncFailed = false;
-  unsigned long lastClockRefreshMs = 0;
+  ButtonNavigator buttonNavigator;
+  int selectedIndex = 0;
 
-  void openWifiSelection();
+  void openWifiSelection(bool allowAutoConnect);
+  void openManualDateSelection();
+  void openTimeZoneSelection();
   void syncTime();
-  void updateClockTick();
   bool isWifiConnected() const;
   std::string getStatusMessage() const;
 

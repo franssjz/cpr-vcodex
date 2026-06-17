@@ -31,9 +31,11 @@ class Epub {
   std::vector<std::string> cssFiles;
 
   bool findContentOpfFile(std::string* contentOpfFile) const;
-  bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata);
+  bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, bool writeSpineEntries = true);
   bool parseTocNcxFile() const;
   bool parseTocNavFile() const;
+  void discoverCssFilesFromZip();
+  bool generateThumbBmpToPath(int width, int height, const std::string& thumbPath) const;
   void parseCssFiles() const;
 
  public:
@@ -55,10 +57,14 @@ class Epub {
   bool generateCoverBmp(bool cropped = false) const;
   std::string getThumbBmpPath() const;
   std::string getThumbBmpPath(int height) const;
+  std::string getThumbBmpPath(int width, int height) const;
   bool generateThumbBmp(int height) const;
+  bool generateThumbBmp(int width, int height) const;
   uint8_t* readItemContentsToBytes(const std::string& itemHref, size_t* size = nullptr,
                                    bool trailingNullByte = false) const;
   bool readItemContentsToStream(const std::string& itemHref, Print& out, size_t chunkSize) const;
+  bool readItemPrefixToBuffer(const std::string& itemHref, uint8_t* out, size_t maxBytes, size_t* bytesRead,
+                              size_t chunkSize) const;
   bool getItemSize(const std::string& itemHref, size_t* size) const;
   BookMetadataCache::SpineEntry getSpineItem(int spineIndex) const;
   BookMetadataCache::TocEntry getTocItem(int tocIndex) const;

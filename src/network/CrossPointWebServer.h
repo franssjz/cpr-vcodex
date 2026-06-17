@@ -15,6 +15,7 @@ struct FileInfo {
   size_t size;
   bool isEpub;
   bool isDirectory;
+  bool completed;
 };
 
 class CrossPointWebServer {
@@ -81,6 +82,7 @@ class CrossPointWebServer {
   // WebSocket upload state
   void onWebSocketEvent(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
   static void wsEventCallback(uint8_t num, WStype_t type, uint8_t* payload, size_t length);
+  void abortWsUpload(const char* tag);
 
   // File scanning
   void scanFiles(const char* path, const std::function<void(FileInfo)>& callback) const;
@@ -89,6 +91,7 @@ class CrossPointWebServer {
 
   // Request handlers
   void handleRoot() const;
+  void handleJszip() const;
   void handleNotFound() const;
   void handleStatus() const;
   void handleFileList() const;
@@ -105,4 +108,36 @@ class CrossPointWebServer {
   void handleSettingsPage() const;
   void handleGetSettings() const;
   void handlePostSettings();
+
+  // Font management handlers
+  void handleFontsPage() const;
+  void handleFontList() const;
+  void handleFontUpload();
+  void handleFontUploadData();
+  void handleFontDelete();
+
+  // If Found contact-card handlers
+  void handleIfFoundPage() const;
+  void handleGetIfFound() const;
+  void handlePostIfFound();
+
+  // Font upload state
+  struct FontUploadState {
+    FsFile file;
+    std::string familyName;
+    std::string filePath;
+    bool valid = false;
+    bool magicChecked = false;
+    size_t bytesWritten = 0;
+    static constexpr size_t BUFFER_SIZE = 4096;
+    std::vector<uint8_t> buffer;
+    size_t bufferPos = 0;
+
+    FontUploadState() { buffer.resize(BUFFER_SIZE); }
+  } fontUpload;
+
+  // OPDS server handlers
+  void handleGetOpdsServers() const;
+  void handlePostOpdsServer();
+  void handleDeleteOpdsServer();
 };

@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "AchievementsStore.h"
 #include "../Activity.h"
+#include "AchievementsStore.h"
 #include "util/ButtonNavigator.h"
 
 class AchievementsActivity final : public Activity {
@@ -24,6 +24,8 @@ class AchievementsActivity final : public Activity {
       : Activity("Achievements", renderer, mappedInput) {}
 
   void onEnter() override;
+  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  uint8_t getUiTransitionRefreshWeight() const override { return UI_TRANSITION_REFRESH_WEIGHT_DENSE; }
 };

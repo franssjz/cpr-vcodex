@@ -1,8 +1,12 @@
 #include "ImageBlock.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
+#include <ZipFile.h>
+
+#include <utility>
 
 #include "../converters/DirectPixelWriter.h"
 #include "../converters/ImageDecoderFactory.h"
@@ -14,6 +18,14 @@
 
 ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t height)
     : imagePath(imagePath), width(width), height(height) {}
+
+ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t height, std::string sourceEpubPath,
+                       std::string sourceItemHref)
+    : imagePath(imagePath),
+      sourceEpubPath(std::move(sourceEpubPath)),
+      sourceItemHref(std::move(sourceItemHref)),
+      width(width),
+      height(height) {}
 
 bool ImageBlock::imageExists() const { return Storage.exists(imagePath.c_str()); }
 
@@ -37,7 +49,6 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   uint16_t cachedWidth, cachedHeight;
   if (cacheFile.read(&cachedWidth, 2) != 2 || cacheFile.read(&cachedHeight, 2) != 2) {
-    cacheFile.close();
     return false;
   }
 
@@ -47,7 +58,6 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   if (widthDiff > 1 || heightDiff > 1) {
     LOG_ERR("IMG", "Cache dimension mismatch: %dx%d vs %dx%d", cachedWidth, cachedHeight, expectedWidth,
             expectedHeight);
-    cacheFile.close();
     return false;
   }
 
@@ -57,29 +67,54 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
 
   LOG_DBG("IMG", "Loading from cache: %s (%dx%d)", cachePath.c_str(), cachedWidth, cachedHeight);
 
-  // Read and render row by row to minimize memory usage
+  // Read several rows per SD access. A full-page image is re-rendered on every
+  // grayscale strip pass (~14x per page), and a one-row-per-read loop here means
+  // cachedHeight (~728) tiny reads through the storage mutex + SdFat each time —
+  // the dominant cost of displaying an image page. Batching rows into a ~4KB
+  // buffer cuts that to ~20 reads per pass without holding the whole image.
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
-  uint8_t* rowBuffer = (uint8_t*)malloc(bytesPerRow);
-  if (!rowBuffer) {
+  int rowsPerRead = 4096 / bytesPerRow;
+  if (rowsPerRead < 1) rowsPerRead = 1;
+  if (rowsPerRead > cachedHeight) rowsPerRead = cachedHeight;
+  uint8_t* readBuffer = (uint8_t*)malloc((size_t)rowsPerRead * bytesPerRow);
+  if (!readBuffer) {
+    // Fall back to a single-row buffer under memory pressure.
+    rowsPerRead = 1;
+    readBuffer = (uint8_t*)malloc(bytesPerRow);
+  }
+  if (!readBuffer) {
     LOG_ERR("IMG", "Failed to allocate row buffer");
-    cacheFile.close();
     return false;
   }
 
   DirectPixelWriter pw;
   pw.init(renderer);
 
+  int rowsInBuffer = 0;
+  int bufferRow = 0;
   for (int row = 0; row < cachedHeight; row++) {
-    if (cacheFile.read(rowBuffer, bytesPerRow) != bytesPerRow) {
-      LOG_ERR("IMG", "Cache read error at row %d", row);
-      free(rowBuffer);
-      cacheFile.close();
-      return false;
+    if (bufferRow >= rowsInBuffer) {
+      const int toRead = (cachedHeight - row < rowsPerRead) ? (cachedHeight - row) : rowsPerRead;
+      const size_t bytes = (size_t)toRead * bytesPerRow;
+      if (cacheFile.read(readBuffer, bytes) != static_cast<int>(bytes)) {
+        LOG_ERR("IMG", "Cache read error at row %d", row);
+        free(readBuffer);
+        return false;
+      }
+      rowsInBuffer = toRead;
+      bufferRow = 0;
     }
+
+    const uint8_t* rowBuffer = readBuffer + (size_t)bufferRow * bytesPerRow;
+    bufferRow++;
 
     const int destY = y + row;
     pw.beginRow(destY);
-    for (int col = 0; col < cachedWidth; col++) {
+    // On a grayscale strip pass only a narrow column window of the image is in
+    // the active band; skip the rest instead of unpacking+clipping every pixel.
+    int colStart, colEnd;
+    pw.bandColRange(x, cachedWidth, colStart, colEnd);
+    for (int col = colStart; col < colEnd; col++) {
       const int byteIdx = col >> 2;            // col / 4
       const int bitShift = 6 - (col & 3) * 2;  // MSB first within byte
       uint8_t pixelValue = (rowBuffer[byteIdx] >> bitShift) & 0x03;
@@ -88,15 +123,58 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
     }
   }
 
-  free(rowBuffer);
-  cacheFile.close();
+  free(readBuffer);
   LOG_DBG("IMG", "Cache render complete");
   return true;
 }
 
 }  // namespace
 
+bool ImageBlock::extractLazyImageIfNeeded() {
+  if (Storage.exists(imagePath.c_str())) {
+    FsFile existing;
+    if (Storage.openFileForRead("IMG", imagePath, existing)) {
+      const bool valid = existing.size() > 0;
+      existing.close();
+      if (valid) {
+        return true;
+      }
+    }
+    Storage.remove(imagePath.c_str());
+  }
+
+  if (sourceEpubPath.empty() || sourceItemHref.empty()) {
+    return false;
+  }
+
+  FsFile cachedImageFile;
+  if (!Storage.openFileForWrite("IMG", imagePath, cachedImageFile)) {
+    LOG_ERR("IMG", "Failed to open lazy image cache: %s", imagePath.c_str());
+    return false;
+  }
+
+  const bool extracted = ZipFile(sourceEpubPath).readFileToStream(sourceItemHref.c_str(), cachedImageFile, 4096);
+  cachedImageFile.flush();
+  cachedImageFile.close();
+  if (!extracted) {
+    LOG_ERR("IMG", "Failed to lazy-extract image: %s", sourceItemHref.c_str());
+    Storage.remove(imagePath.c_str());
+    return false;
+  }
+
+  LOG_DBG("IMG", "Lazy image extracted: %s", imagePath.c_str());
+  return true;
+}
+
 void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
+  // The font-prewarm scan pass only accumulates glyphs; an image contributes
+  // none, and its DirectPixelWriter output bypasses the renderer's scan-mode
+  // suppression, so it would otherwise do a full (discarded) cache render every
+  // page view. Skip it here. The image still draws in the real BW/grayscale
+  // passes; on first view this just moves the one-time decode to the BW pass.
+  FontCacheManager* fcm = renderer.getFontCacheManager();
+  if (fcm && fcm->isScanning()) return;
+
   LOG_DBG("IMG", "Rendering image at %d,%d: %s (%dx%d)", x, y, imagePath.c_str(), width, height);
 
   const int screenWidth = renderer.getScreenWidth();
@@ -115,11 +193,16 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
     return;  // Successfully rendered from cache
   }
 
-  // No cache - need to decode the image
-  // Check if image file exists
+  // No pixel cache - need to decode the image. If the image was deferred during
+  // EPUB indexing, extract it from the EPUB now, only for the page being shown.
+  if (!extractLazyImageIfNeeded()) {
+    LOG_ERR("IMG", "Image file not found: %s", imagePath.c_str());
+    return;
+  }
+
   FsFile file;
   if (!Storage.openFileForRead("IMG", imagePath, file)) {
-    LOG_ERR("IMG", "Image file not found: %s", imagePath.c_str());
+    LOG_ERR("IMG", "Image file not readable: %s", imagePath.c_str());
     return;
   }
   size_t fileSize = file.size();
@@ -164,6 +247,12 @@ bool ImageBlock::serialize(FsFile& file) {
   serialization::writeString(file, imagePath);
   serialization::writePod(file, width);
   serialization::writePod(file, height);
+  const bool hasLazySource = !sourceEpubPath.empty() && !sourceItemHref.empty();
+  serialization::writePod(file, hasLazySource);
+  if (hasLazySource) {
+    serialization::writeString(file, sourceEpubPath);
+    serialization::writeString(file, sourceItemHref);
+  }
   return true;
 }
 
@@ -173,5 +262,14 @@ std::unique_ptr<ImageBlock> ImageBlock::deserialize(FsFile& file) {
   int16_t w, h;
   serialization::readPod(file, w);
   serialization::readPod(file, h);
+  bool hasLazySource = false;
+  serialization::readPod(file, hasLazySource);
+  if (hasLazySource) {
+    std::string sourceEpubPath;
+    std::string sourceItemHref;
+    serialization::readString(file, sourceEpubPath);
+    serialization::readString(file, sourceItemHref);
+    return std::unique_ptr<ImageBlock>(new ImageBlock(path, w, h, std::move(sourceEpubPath), std::move(sourceItemHref)));
+  }
   return std::unique_ptr<ImageBlock>(new ImageBlock(path, w, h));
 }

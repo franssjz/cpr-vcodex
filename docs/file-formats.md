@@ -2,7 +2,7 @@
 
 ## `book.bin`
 
-### Version 3
+### Version 6
 
 ImHex Pattern:
 
@@ -12,7 +12,7 @@ import std.string;
 import std.core;
 
 // === Configuration ===
-#define EXPECTED_VERSION 3
+#define EXPECTED_VERSION 6
 #define MAX_STRING_LENGTH 65535
 
 // === String Structure ===
@@ -34,6 +34,7 @@ fn format_string(String s) {
 struct Metadata {
     String title [[comment("Book title")]];
     String author [[comment("Book author")]];
+    String language [[comment("Book language code")]];
     String coverItemHref [[comment("Path to cover image")]];
     String textReferenceHref [[comment("Path to guided first text reference")]];
 } [[comment("Book metadata information")]];
@@ -61,29 +62,29 @@ struct TocEntry {
 struct BookBin {
     // Header
     u8 version [[comment("Format version"), color("FFD93D")]];
-    
+
     // Version validation
     if (version != EXPECTED_VERSION) {
         std::error(std::format("Unsupported version: {} (expected {})", version, EXPECTED_VERSION));
     }
-    
+
     u32 lutOffset [[comment("Offset to lookup tables"), color("6BCB77")]];
     u16 spineCount [[comment("Number of spine entries"), color("4D96FF")]];
     u16 tocCount [[comment("Number of TOC entries"), color("FF6B9D")]];
-    
+
     // Metadata section
     Metadata metadata [[comment("Book metadata")]];
-    
+
     // Validate LUT offset alignment
     u32 currentOffset = $;
     if (currentOffset != lutOffset) {
         std::warning(std::format("LUT offset mismatch: expected 0x{:X}, got 0x{:X}", lutOffset, currentOffset));
     }
-    
+
     // Lookup Tables
     u32 spineLut[spineCount] [[comment("Spine entry offsets"), color("4D96FF")]];
     u32 tocLut[tocCount] [[comment("TOC entry offsets"), color("FF6B9D")]];
-    
+
     // Data Entries
     SpineEntry spines[spineCount] [[comment("Spine entries (reading order)")]];
     TocEntry toc[tocCount] [[comment("Table of contents entries")]];
@@ -104,7 +105,7 @@ if (parsedSize != fileSize) {
 
 ## `section.bin`
 
-### Version 8
+### Version 27
 
 ImHex Pattern:
 
@@ -114,7 +115,7 @@ import std.string;
 import std.core;
 
 // === Configuration ===
-#define EXPECTED_VERSION 8
+#define EXPECTED_VERSION 27
 #define MAX_STRING_LENGTH 65535
 
 // === String Structure ===
@@ -133,15 +134,21 @@ fn format_string(String s) {
 
 // === Page Structure ===
 
-enum StorageType : u8 {
-    PageLine = 1
+enum PageElementTag : u8 {
+    PageLine = 1,
+    PageImage = 2,
+    PageHorizontalRule = 3
 };
 
 enum WordStyle : u8 {
     REGULAR = 0,
     BOLD = 1,
     ITALIC = 2,
-    BOLD_ITALIC = 3
+    BOLD_ITALIC = 3,
+    UNDERLINE = 4,
+    STRIKETHROUGH = 8,
+    SUP = 16,
+    SUB = 32
 };
 
 enum BlockStyle : u8 {
@@ -161,10 +168,29 @@ struct PageLine {
   BlockStyle blockStyle;
 };
 
+struct PageImage {
+    s16 xPos;
+    s16 yPos;
+    String imagePath;
+    s16 width;
+    s16 height;
+};
+
+struct PageHorizontalRule {
+    s16 xPos;
+    s16 yPos;
+    u16 width;
+    u8 thickness;
+};
+
 struct PageElement {
     u8 pageElementType;
     if (pageElementType == 1) {
         PageLine pageLine [[inline]];
+    } else if (pageElementType == 2) {
+        PageImage pageImage [[inline]];
+    } else if (pageElementType == 3) {
+        PageHorizontalRule horizontalRule [[inline]];
     } else {
         std::error(std::format("Unknown page element type: {}", pageElementType));
     }
@@ -175,36 +201,62 @@ struct Page {
     PageElement elements[elementCount] [[inline]];
 };
 
+struct AnchorEntry {
+    String anchor;
+    u16 page;
+};
+
+struct ParagraphLutEntry {
+    u32 xhtmlByteOffset;
+    u16 paragraphIndex;
+    u16 listItemIndex;
+};
+
 // === Section Bin Structure ===
 
 struct SectionBin {
     // Header
     u8 version [[comment("Format version"), color("FFD93D")]];
-    
+
     // Version validation
     if (version != EXPECTED_VERSION) {
         std::error(std::format("Unsupported version: {} (expected {})", version, EXPECTED_VERSION));
     }
-    
+
     // Cache busting parameters
     s32 fontId;
     float lineCompression;
     bool extraParagraphSpacing;
+    bool forceParagraphIndents;
+    u8 paragraphAlignment;
     u16 viewportWidth;
-    u16 vieportHeight;
+    u16 viewportHeight;
+    bool hyphenationEnabled;
+    bool embeddedStyle;
+    u8 imageRendering;
     u16 pageCount;
     u32 lutOffset;
-    
+    u32 anchorMapOffset;
+    u32 paragraphLutOffset;
+
     Page page[pageCount];
-    
+
     // Validate LUT offset alignment
     u32 currentOffset = $;
     if (currentOffset != lutOffset) {
         std::warning(std::format("LUT offset mismatch: expected 0x{:X}, got 0x{:X}", lutOffset, currentOffset));
     }
-    
+
     // Lookup Tables
     u32 lut[pageCount];
+
+    std::mem::set_cursor(anchorMapOffset);
+    u16 anchorCount;
+    AnchorEntry anchors[anchorCount];
+
+    std::mem::set_cursor(paragraphLutOffset);
+    u16 paragraphLutCount;
+    ParagraphLutEntry paragraphLut[paragraphLutCount];
 };
 
 // === File Parsing ===

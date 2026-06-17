@@ -12,6 +12,7 @@
 
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
+#include "util/ScreenshotInfo.h"
 
 class Activity;    // forward declaration
 class RenderLock;  // forward declaration
@@ -62,6 +63,9 @@ class ActivityManager {
   // Whether to trigger a render after the current loop()
   // This variable must only be set by the main loop, to avoid race conditions
   bool requestedUpdate = false;
+  uint8_t autoUiRefreshDebt = 0;
+  uint8_t deferredPreviousUiRefreshWeight = 0;
+  void requestUiTransitionRefresh(uint8_t previousWeight, uint8_t nextWeight);
 
  public:
   explicit ActivityManager(GfxRenderer& renderer, MappedInputManager& mappedInput)
@@ -85,6 +89,7 @@ class ActivityManager {
   void goToRecentBooks();
   void goToBrowser();
   void goToReader(std::string path);
+  void goToKOReaderSync();
   void goToEpubBookmark(std::string path, int spineIndex, uint32_t page);
   void goToSleep();
   void goToBoot();
@@ -102,6 +107,7 @@ class ActivityManager {
   bool preventAutoSleep() const;
   bool isReaderActivity() const;
   bool skipLoopDelay() const;
+  ScreenshotInfo getScreenshotInfo() const;
 
   // If immediate is true, the update will be triggered immediately.
   // Otherwise, it will be deferred until the end of the current loop iteration.

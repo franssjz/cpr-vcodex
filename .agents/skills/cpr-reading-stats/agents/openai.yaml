@@ -1,0 +1,6 @@
+interface:
+  display_name: "CPR Reading Stats"
+  short_description: "Reading stats, streaks, goals, and analytics"
+  default_prompt: "Use $cpr-reading-stats to change CPR-vCodex reading statistics."
+policy:
+  allow_implicit_invocation: true

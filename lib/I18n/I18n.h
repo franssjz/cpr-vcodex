@@ -22,10 +22,9 @@ class I18n {
 
   Language getLanguage() const { return _language; }
   void setLanguage(Language lang);
-  const char* getLanguageName(Language lang) const;
-
-  void saveSettings();
   void loadSettings();
+  const char* getLanguageName(Language lang) const;
+  static Language languageFromCode(const char* code);
 
   // Get all unique characters used in a specific language
   // Returns a sorted string of unique characters
@@ -33,6 +32,7 @@ class I18n {
 
  private:
   I18n() : _language(Language::EN) {}
+  void saveSettings();
 
   Language _language;
 };

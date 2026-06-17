@@ -1,221 +1,60 @@
 # Changelog
 
-Brief firmware history for `cpr-vcodex`.
-
-## 1.2.0.11
-
-- bumped the fork release line to `1.2.0.11`
-- rebuilt the current firmware state as the next visible fork release
-- refreshed README metadata to match the new visible fork version and version code
-
-Version code: `2026041011`
-
-## 1.2.0.10
-
-- bumped the fork release line to `1.2.0.10`
-- rebuilt the current firmware state as the next visible fork release
-- refreshed README metadata to match the new visible fork version and version code
-
-Version code: `2026040910`
-
-## 1.2.0.9
-
-- bumped the fork release line to `1.2.0.9`
-- rebuilt the current firmware state as the next visible fork release
-- refreshed README metadata to match the new visible fork version and version code
-
-Version code: `2026040809`
-
-## 1.2.0.8
-
-- bumped the fork release line to `1.2.0.8`
-- kept the current firmware feature set and upstream carry-forward state intact while publishing the new release build
-- refreshed README metadata to match the new visible fork version and version code
-
-Version code: `2026040808`
-
-## 1.2.0.7
-
-- bumped the fork release line to `1.2.0.7`
-- kept the current firmware feature set and upstream carry-forward state intact while publishing the new release build
-- refreshed README metadata to match the new visible fork version and version code
-
-Version code: `2026040707`
-
-## 1.2.0.6
-
-- bumped the fork release line to `1.2.0.6`
-- refreshed README metadata and release references to match the current fork state
-- kept the firmware feature set unchanged while publishing the updated release line
-
-Version code: `2026040606`
-
-## 1.2.0.5
-
-- rebuilt the current firmware line as `1.2.0.5`
-- restored `Lexend` as a reader font family after the later font-pruning pass removed it
-- restored the translation files to a clean pre-corruption state after the mojibake regression introduced during the OTA/font refactor work
-
-Version code: `2026040605`
-
-## 1.2.0.4
-
-- reviewed the translation set after the book-id migration work and repaired damaged strings in the language files
-- normalized corrupted Hungarian and Lithuanian entries to clean text instead of leaving broken characters on device
-- fixed the damaged Italian `ReadMe > Stats` body text
-- added a global `Dark Mode` toggle in `Settings > Display`, implemented centrally in the renderer so UI text goes white-on-black while book images keep their original polarity
-- added `Text Darkness` for anti-aliased reader text, adapted from the [`crosspet`](https://github.com/trilwu/crosspet) fork
-- switched fork OTA metadata from the GitHub Releases API to a simple repo manifest (`ota.json`) to avoid device-side failures reaching `api.github.com`
-
-Version code: `2026040504`
-
-## 1.2.0.1
-
-- rebased the fork onto the upstream `CrossPoint Reader 1.2.0` line
-- separated base-version metadata from fork-version metadata in the firmware configuration
-- switched the visible `vcodex_release` firmware line to `1.2.0.1` while keeping `CrossPoint Reader 1.2.0` as the tracked upstream base
-
-Version code: `2026040401`
-
-## 1.1.17-vcodex
-
-- added long-press removal with confirmation for recent books in both `Home` and `Apps > Recent Books`
-- kept recent-book removal limited to history only, without deleting the actual book file
-- persisted recent-book removals cleanly through `/.crosspoint/recent.json`
-
-Version code: `2026040201`
-
-## 1.1.16-vcodex
-
-- reduced sleep-screen flashing by switching the normal sleep rendering paths back to `HALF_REFRESH`
-- kept `SleepScreenCache` in place so cached sleep images still load quickly
-- refreshed the README header with the contributed text logo and tighter caption spacing
-
-Version code: `2026040102`
-
-## 1.1.15-vcodex
-
-- improved `Reading Heatmap` month navigation so day selection can cross month boundaries naturally
-- added direct month switching with the side `Up/Down` buttons in `Reading Heatmap`
-- added goal-completion check marks inside heatmap day cells and refined their placement/size
-
-Version code: `2026040101`
-
-## 1.1.14-vcodex
-
-- added `X Small` as a new reader font size with safe settings migration for existing installs
-- regenerated the bundled boot/sleep logo header from the refreshed `Logo120.png`
-- restored real bold and italic rendering for `Bookerly` when using `X Small`
-
-Version code: `2026033102`
-
-## 1.1.13-vcodex
-
-- renamed the documented firmware line from `crosspoint-vcodex` to `cpr-vcodex`
-- refreshed the main README intro to make the `CrossPoint Reader 1.1.1` base and the Codex-assisted evolution of the fork explicit
-- bumped firmware release metadata to `1.1.13-vcodex`
-
-Version code: `2026033101`
-
-## 1.1.12-vcodex
-
-- removed `Reading Timeline` as a separate app and folded the workflow around `Reading Stats`, `Reading Heatmap` and `Reading Day`
-- split shortcut management into `Location Home and Apps` and a real `Visibility Home and Apps` with `Show / Hidden`
-- fixed double-open behavior more robustly by swallowing the inherited `Confirm` release when a new activity becomes active
-
-Version code: `2026033004`
-
-## 1.1.10-vcodex
-
-- improved stability around `Settings > Apps` actions by removing redundant settings saves from export/sync flows and reducing write pressure while reordering shortcuts
-- reduced transient memory usage by writing more JSON stores directly to file instead of building intermediate strings in RAM
-- optimized `Settings` and shortcut ordering flows with less repeated list rebuilding and lower allocation churn
-
-Version code: `2026033002`
-
-## 1.1.9-vcodex
-
-- promoted the current firmware line to `1.1.9-vcodex`
-- refreshed bundled documentation and release metadata to match the current firmware state
-
-Version code: `2026033001`
-
-## 1.1.8-vcodex
-
-- rebuilt the achievements catalog with the new title set and many more finished-book milestones up to `100 books`
-- moved achievements names and conditions to real i18n-backed strings instead of English/Spanish-only code paths
-- regenerated the translation files from a clean base to fix corrupted language text such as the mojibake seen in `Languages`
-
-Version code: `2026032908`
-
-## 1.1.7-vcodex
-
-- fixed `Achievements` title/description mismatches caused by definition lookup using enum order instead of the real achievement id
-- restored coherence between progress targets and labels such as `Belle of the Books`, `Trilogy`, `Finish Line`, `Word Warden`, `Bookmark Hoarder` and `Flag Garden`
-
-Version code: `2026032907`
-
-## 1.1.6-vcodex
-
-- fixed `Achievements` list navigation so the on-screen `Up/Down` controls actually scroll the achievements list
-- expanded finished-book achievements with many more milestones, from early reading streaks to a `100 books` trophy line
-- improved achievements ordering so milestone branches stay grouped more naturally in the list
-
-Version code: `2026032906`
-
-## 1.1.5-vcodex
-
-- fixed `Achievements` opening behavior so it no longer auto-switches tabs on entry
-- aligned `Achievements` navigation with `Settings`: `Confirm` switches tabs and `Up/Down` moves through the list
-- expanded the achievements catalogue with more late-game milestones for books, sessions, goal days, streaks, bookmarks and long sessions
-
-Version code: `2026032905`
-
-## 1.1.4-vcodex
-
-- redesigned `Achievements` with top tabs for `Pending` and `Completed`
-- expanded the achievements catalogue with more session, books, goal-day, goal-streak and bookmark milestones
-- added a stronger ladder of long-session trophies up to a real `Marathon`
-
-Version code: `2026032904`
-
-## 1.1.3-vcodex
-
-- made `Daily Goal` configurable in `Settings > Apps` with `15 min / 30 min / 45 min / 60 min`
-- aligned `Goal Streak`, Home stats shortcut, Reading Stats cards and Heatmap logic with the selected goal
-- updated achievement goal-day and goal-streak progress so they stay coherent after changing the configured goal
-
-Version code: `2026032903`
-
-## 1.1.2-vcodex
-
-- formalized firmware versioning and version code tracking
-- added a concise changelog to make release-to-release changes easier to follow
-- kept the current feature set stable as the new documented release line
-
-Version code: `2026032902`
-
-## 1.1.1-vcodex
-
-- added `Achievements` with retroactive unlock bootstrap, popups and reset controls
-- added `Sync with prev. stats` for achievements
-- added shortcut visibility management and separate Home/Apps ordering
-- added `/ignore_stats/` exclusion for stats, sessions, timeline, heatmap and achievement-related tracking
-- polished Home/Apps navigation and fixed several app-entry double-open issues
-
-Version code: `2026032901`
-
-## 1.1.0-vcodex
-
-- added `Reading Heatmap`, `Reading Day` and `Reading Timeline`
-- expanded `Reading Stats` with richer per-book and aggregate views
-- added `Sync Day` diagnostics, configurable date format and time zone selection
-- improved Home with dynamic reading stats shortcut and configurable shortcut placement
-- added a global `Bookmarks` app for EPUB bookmarks
-
-## 1.0.0-vcodex
-
-- established the fork identity and `Lyra Custom` default theme
-- added the first `Sync Day + fallback` model for day-coherent reading analytics
-- added the first wave of reading-focused UX improvements, custom sleep handling and stats workflows
-- kept full CrossPoint Reader compatibility as the base firmware
+This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking release changes in this file.
+
+| Version | Changes |
+|---|---|
+| `Unreleased` | - No unreleased changes yet. |
+| `1.3.0.25` | - Improved heavy EPUB page changes by streaming table content as text and deferring image extraction/decoding during indexing, so large books are less likely to get stuck on `Indexing` before the next page renders.<br>- Added lazy ZIP prefix reads and lazy EPUB image extraction so image-heavy chapters keep lower RAM and SD-card pressure, with safer cache rebuilds after the section cache format bump.<br>- Added `Toggle Status Bar` to `Settings > Controls > Short Power Button Click` for EPUB/TXT readers, keeping the reserved status-bar layout space while hiding the bar so pagination stays stable. |
+| `1.3.0.24` | - Improved EPUB memory resilience on X3/X4 by checking both free heap and the largest allocatable heap block before heavy reader, CSS, JPEG, PNG, and sleep-image operations.<br>- Freed SD-card font caches before memory-heavy EPUB image/layout work, and made low-memory EPUB image handling fall back cleanly instead of risking a device abort.<br>- Added safer EPUB section-build abort paths and heap diagnostics so incomplete section caches are discarded and crash reports/logs show free/max-alloc heap at the failure point.<br>- Improved SD-font conversion fallback coverage for missing glyphs, reduced duplicate Wi-Fi scan entries, fixed current-book stats on Reading Dashboard sleep screens, and reduced the reader refresh intensity after closing dictionary overlays.<br>- Added WikDict's public StarDict dictionary source to the README dictionary documentation. |
+| `1.3.0.23` | - Restored the fast EPUB reader dictionary path after the failed short-power-button experiment: the dictionary shortcut option has been removed, stale saved settings are migrated safely, and reader lookups again show the preparation/search popups before opening the result.<br>- Simplified dictionary definition rendering to built-in UI fonts with only the real supported text sizes (`Small` and `Large`), keeping custom size selection without the slower/heavier SD-font rendering path that was hurting X3/X4 responsiveness.<br>- Kept dictionary navigation memory-light by avoiding full-screen framebuffer caches and preserving the current non-image reader page for lookup/history overlays.<br>- Fixed an OPDS crash reported with Calibre-Web `Recent Books` by making the OPDS parser stream safe for HTTP read/peek probes instead of calling `abort()`, and by guarding XML parser finalization/write errors ([#100](https://github.com/franssjz/cpr-vcodex/issues/100)). |
+| `1.3.0.22` | - Reworked EPUB reader dictionary word selection to restore only the previous/current selected-word regions instead of keeping a full-screen framebuffer copy, reducing heap pressure on X3/X4 while keeping fast left/right/up/down cursor movement.<br>- Improved dictionary selection and definition rendering for all reader fonts by measuring with the renderer advance path, prewarming the selected word and visible definition lines, and using SD-card advance preparation only where external SD fonts need it.<br>- Reused the current non-image reader page when opening dictionary lookup/history overlays, avoiding an extra SD page reload before the selector appears.<br>- Updated GitHub Actions release flow so the tag workflow publishes the Release asset without pushing a second docs commit to `master`, added CI concurrency/docs-only skips, and removed the duplicate PR title-check trigger. |
+| `1.3.0.21` | - Fixed the `1.3.0.20` dictionary crash on X3/X4 by freeing the reader word-selection framebuffer cache before preparing or looking up a dictionary entry, restoring heap headroom at the exact point where large dictionaries need it most.<br>- Changed reader lookups to reuse the already-saved active StarDict `.ifo` from `1.3.0.19`/`1.3.0.20` instead of requiring users to reopen `Dictionary` or scanning every `/dictionaries/<language>/` directory first.<br>- Bounded Dictionary app scanning, metadata size, checkpoint caches, definition reads, wrapped definition lines, and suggestion candidates so oversized dictionary sets and very large `.idx`/`.dict` files degrade gracefully instead of aborting on `std::bad_alloc`.<br>- Kept fast word movement when there is enough contiguous heap, while falling back to normal redraws instead of allocating a full-screen cache on memory-constrained X3/X4 states. |
+| `1.3.0.20` | - Improved dictionary word-selection responsiveness by caching the rendered reader page while moving the selected word, so dictionary lookup navigation no longer redraws the whole page for every left/right/up/down step on slower devices.<br>- Reduced Dictionary app list-navigation work when many StarDict dictionaries are present by reusing the active dictionary scan results instead of repeatedly walking the SD-card dictionary tree.<br>- Fixed OPDS downloads so per-server download directories under `/opds/` remain reusable after cleanup, and new server subdirectories are created safely when needed ([#97](https://github.com/franssjz/cpr-vcodex/pull/97)).<br>- Added Turkish hyphenation/casefolding support and the Istanbul time zone from the accepted upstream contribution ([#88](https://github.com/franssjz/cpr-vcodex/pull/88)).<br>- Made Reading Heatmap left/right navigation use a fast refresh path instead of triggering a clean screen refresh on every month change. |
+| `1.3.0.19` | - Fixed web portal downloads for books, screenshots, and other SD-card files by streaming downloads in checked chunks instead of relying on a single low-level file-to-socket write that could stop early and trigger browser `Content length mismatch` errors ([#93](https://github.com/franssjz/cpr-vcodex/issues/93)). |
+| `1.3.0.18` | - Added the new `Dictionary` app with StarDict dictionaries loaded from `/dictionaries/<language>/` on the SD card, selectable active dictionaries, persistent definition text size, cleanable lookup history, and generated `.cpridx` lookup caches for fast later searches.<br>- Added EPUB reader dictionary actions: `Look up word`, `Lookup history`, and `Dictionary`, with in-page word selection, rounded word highlights, suggestion fallback when an exact match is missing, and a 75% floating definition overlay with pagination and dark-mode support.<br>- Improved dictionary handling for complete StarDict packages (`.ifo`, `.idx`, uncompressed `.dict`, optional `.syn`), Spanish/English fallback forms, history capped to 15 recent words, reader-font-based definition rendering, and safer cleanup/formatting of dictionary definition text.<br>- Documented SD-card dictionary setup, required StarDict files, `.dict.dz` extraction, first-activation cache time, and public dictionary download sources in the README. |
+| `1.3.0.17` | - Restored EPUB reader-menu bookmark access with explicit `View bookmarks` and `Save bookmark` actions; the bookmark list is available even before the first bookmark exists, and the save action does not remove an already-saved page.<br>- Added synchronized translations for the new bookmark actions and duplicate-bookmark popup across all 23 bundled UI languages. |
+| `1.3.0.16` | - Fixed Bionic Reading Normal spacing in EPUB pages by making the real-bold prefix layout-aware, storing the prefix/suffix positions in the section cache so bold text no longer overlaps the rest of the word or shifts following text ([#94](https://github.com/franssjz/cpr-vcodex/issues/94)).<br>- Fixed SD-card font layout fallbacks and browser File Transfer downloads reported in [#93](https://github.com/franssjz/cpr-vcodex/issues/93), avoiding zero-width glyph advances when an external font's compact advance cache is incomplete and writing downloads through the active WebServer client with the expected response size.<br>- Changed the per-book `Reading Stats` settings button into a book stats action menu with `Adjust reading time`, `Modify start date`, and a confirmed `Reset this book's stats` action; start-date edits update only the book's displayed start metadata, while resets remove the book entry and attributed session log entries, rebuild aggregate reading totals, and refresh achievement progress.<br>- Filled recent non-English translation gaps for sleep refresh, front-button behavior, KOReader auto-sync, per-book stats reset, Screen Clean, SD-card fonts, and SD firmware/recovery UI strings so current shipped keys no longer fall back to English. |
+| `1.3.0.15` | - Added `Custom + Stats v1` and `Custom + Stats v2` sleep screens, reusing the configured custom sleep-image directory/order/fallbacks with the same compact stats overlays used by `Cover + Stats`.<br>- Restored the `Entering sleep` popup for the new `Custom + Stats` modes when sleep is triggered from the shortcut/button path, while clearing PNG-backed sleep buffers before composing the final transparent-image stats screen. |
+| `1.3.0.14` | - Synced selected CrossPoint Reader upstream fixes and improvements after [`3392b3e3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3392b3e3) through [`fd5b8078`](https://github.com/crosspoint-reader/crosspoint-reader/commit/fd5b8078) while preserving CPR-vCodex reader stats, bookmarks, apps, release, and Auto Flash behavior.<br>- Improved EPUB performance and reliability with lazy CSS parsing, reduced CSS parser allocations, decoded percent-encoded internal asset paths, streaming JPEG/PNG image pixel caches, and safer grayscale cleanup after image pages.<br>- Updated the bundled `open-x4-sdk` to [`26648d6`](https://github.com/crosspoint-reader/community-sdk/commit/26648d643a1c883ab2f71e1869d05fe2a0c9d498), including the upstream e-ink gate-space/banding fix and X3 first page-turn ghosting cleanup after full refreshes reported in [#81](https://github.com/franssjz/cpr-vcodex/issues/81).<br>- Fixed KOReader Sync drift at chapter-start XPaths, long-press Back behavior so it returns to the current chapter start before jumping chapters, progress-bar top offset handling, invalid font-upload filename cleanup, and unnecessary underline work during font-cache scans.<br>- Fixed EPUB Bionic Reading Normal text-weight regressions reported in [#63](https://github.com/franssjz/cpr-vcodex/issues/63) and [#64](https://github.com/franssjz/cpr-vcodex/issues/64) by restoring real bold-face rendering for emphasized word prefixes in both BW and anti-aliased passes, with matching font-cache prewarm.<br>- Hardened Wi-Fi joins reported in [#85](https://github.com/franssjz/cpr-vcodex/issues/85) by retaining the strongest scanned AP's BSSID/channel for connection attempts and disabling Wi-Fi sleep while scanning/connecting.<br>- Fixed Lyra Carousel Home ghosting after returning from Reading Heatmap and other Home-launched apps reported in [#86](https://github.com/franssjz/cpr-vcodex/issues/86) by invalidating the resident carousel frame and requesting the same half-refresh exit path used by the other dense reading-stat screens.<br>- Made Lyra Carousel's bottom shortcut row keep every configured Home shortcut reachable by rendering a sliding five-icon window with edge indicators instead of truncating the list to five items; `Settings` is injected if missing and `Apps` stays pinned last as an escape hatch.<br>- Made on-device OTA update checks more resilient for [#89](https://github.com/franssjz/cpr-vcodex/issues/89) by falling back from the GitHub Pages firmware manifest to the latest GitHub Release firmware asset, while treating missing newer firmware as `No update` instead of a failed update.<br>- Added a `Clean Sleep Refresh` display setting for [#92](https://github.com/franssjz/cpr-vcodex/issues/92), keeping a single full clean sleep refresh as the default while allowing users to disable it for a quieter half-refresh sleep transition.<br>- Deliberately deferred upstream Hebrew/RTL localization, translation-only churn, OpenDyslexic storage migration, docs-only guide updates, and t5s3 README-only changes until they can be adapted safely or are relevant to vCodex. |
+| `1.3.0.13` | - Synced selected CrossPoint Reader upstream fixes and improvements through [`3392b3e3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3392b3e3) while preserving CPR-vCodex reader stats, bookmarks, apps, release, and Auto Flash behavior.<br>- Added EPUB rendering support for horizontal rules, superscript/subscript tags, CSS `vertical-align: super/sub`, and TOC subchapter anchor navigation.<br>- Improved EPUB styling and layout compatibility by combining underline/strikethrough/sup/sub flags with bionic reading, validating OPF cover images, discovering CSS files beside OPF content when missing from the manifest, and keeping cache format docs in sync.<br>- Hardened resource handling and storage paths with MDNS/DNS cleanup, serialized SdFat file close, recursive folder-delete cache cleanup, a corrected book-cache version, pinned `PNGdec` `1.1.6`, and smaller OPDS parser buffer requests.<br>- Updated SD-card font conversion presets and documentation, including the broader `reading` preset and direct Unicode range listing.<br>- Deliberately deferred larger upstream bookmark, RTL, OTA/downloader, settings, and translation-bulk rewrites until they can be adapted safely to vCodex. |
+| `1.3.0.12` | - Fixed `Settings > System > SD Card Firmware Update` so the firmware picker actually lists `.bin` files from the SD card.<br>- Kept the normal book browser filter unchanged while applying the `.bin` filter only to firmware-pick mode, restoring local SD-card firmware flashing for rollback/recovery workflows. |
+| `1.3.0.11` | - Added `Reading Dashboard` and `Cover + Stats` sleep-screen modes so reading goals, streaks, achievements, current book progress, and chapter progress can be shown while the device sleeps.<br>- Tuned the new sleep overlays for the Xteink screen with compact bordered panels, safe text truncation, progress bars, and a daily-goal completion check that avoids overlapping long book/chapter titles.<br>- Added a sequential flashcard study mode that uses the whole deck in CSV/Excel order without shuffling, matching decks that are meant to be learned top-to-bottom.<br>- Integrated PR #71's browser Auto Flash reboot fix and PR #69's font-converter letterlike-symbol coverage.<br>- Added the new sleep-mode labels to the bundled translation files, using English fallbacks where translations are still pending. |
+| `1.3.0.10` | - Fixed OTA update checks after SD-font releases by reading the CPR-vCodex Auto Flash firmware manifest instead of GitHub's generic `releases/latest` endpoint.<br>- Marked SD-font releases as prereleases so existing firmware builds that still use `releases/latest` ignore font packages and find the latest firmware again.<br>- Hardened the Auto Flash sync script so it selects the newest stable `*-cpr-vcodex` firmware release even when newer non-firmware releases exist. |
+| `1.3.0.9` | - Reworked `Manage Fonts` so devices can download common families from the official CrossPoint font repo and vCodex-only additions from the CPR-vCodex repo.<br>- Trimmed the CPR-vCodex SD-font manifest to vCodex-only `ChareInk`, avoiding duplicate downloads for fonts already published by CrossPoint.<br>- Added the `Screen Clean` app with quick and deep e-ink refresh cycles plus popup completion feedback.<br>- Integrated selected current CrossPoint display, SDK, network, file-transfer, and cache-cleanup fixes while preserving vCodex settings, apps, translations, and reader behavior.<br>- Reduced UI ghosting on app transitions by using `HALF_REFRESH` for Reading Stats, Reading Profile, Achievements, Flashcards, and related dense screens.<br>- Improved flashcard review rendering so long front/back text wraps and scales more gracefully instead of being cut off immediately.<br>- Hardened font/update download paths with safer retry, validation, and low-memory behavior. |
+| `1.3.0.8` | - Merged PR [#62](https://github.com/franssjz/cpr-vcodex/pull/62) to fix a Lyra Carousel ghost-screen case after cancelling the Home delete-from-recents/favorites confirmation.<br>- Invalidates the resident carousel frame marker when returning from that confirmation, so Home no longer trusts a framebuffer that was overwritten by the prompt.<br>- Forces an immediate repaint on the cancel path, restoring the cached carousel frame promptly on e-ink. |
+| `1.3.0.7` | - Fixed sleep-screen rendering so blank, default, custom, cached, PNG, and cover sleep screens clear pending refresh overrides and use the intended full refresh before sleep.<br>- Restored renderer dark-mode state after sleep-screen rendering, including custom and cover sleep paths that previously returned early.<br>- Fixed long localized Settings tabs so all five tabs remain visible without wasting width on ellipses.<br>- Improved Vietnamese language selection by rendering the language list with a Vietnamese-capable UI font and restoring the selected UI font on exit.<br>- Reduced unnecessary full refreshes when changing reader render-only options such as `Text Darkness`; full refresh is still kept for dark mode, orientation, and pagination changes.<br>- Removed the duplicate legacy `Stats` shortcut from Home/Apps configuration, keeping `Reading Stats` and migrating old `Stats` placements to it. |
+| `1.3.0.6` | - Fixed the global `Bookmarks` app so saved EPUB bookmarks are listed again after the stable book-id storage migration.<br>- Corrected the `BookmarkStore` legacy fallback, allowing old `/.crosspoint/epub_*/bookmarks.bin` files to be loaded and migrated into the stable per-book data directory when needed.<br>- Made the `Bookmarks` app discover EPUB candidates from Reading Stats, Recents, and Favorites instead of relying only on Reading Stats entries, so valid bookmarked books are less likely to disappear from the list.<br>- When listing bookmarks, the app now tries the current content-based book id, any stored preferred id, and legacy path-based ids before deciding a book has no bookmarks. |
+| `1.3.0.5` | - Applied a CrossPoint/jpirnay-style `HALF_REFRESH` when leaving the reader or opening reader-side UI in light mode, reducing menu ghosting without adding another user-facing refresh-mode setting.<br>- Added `Anti-ghosting (experimental)` in `Settings > Display`, disabled by default, to optionally run extra preventive cleanup after dense UI screen transitions.<br>- Kept all new anti-ghosting cleanup disabled in dark mode so the panel does not flash through a white refresh when using the dark interface.<br>- Marked dense UI screens such as Home, Settings, Reading Stats, Heatmap, Profile, Achievements, Web Server, keyboard, QR, BMP preview, and sleep preview for the optional cleanup policy while leaving EPUB/TXT/XTC reading pages on their existing reader refresh path.<br>- Added long-press removal for individual entries in Reading Stats `Started Books`, with aggregate stats rebuilt immediately after deletion.<br>- Added synchronized labels for the new anti-ghosting setting across all bundled UI languages. |
+| `1.3.0.4` | - Improved default EPUB text rendering so normal reading uses fuller, smoother glyphs without requiring users to tune advanced settings.<br>- Regenerated the bundled reader fonts, including Bookerly, with darker anti-aliased edge pixels for cleaner e-ink text.<br>- Kept `Extra Dark` available while making the normal mode the best default reading experience, and renamed the legacy black-and-white style to `Crisp` / `Nítido` in the UI.<br>- Hardened the anti-aliased page-render path so failed BW-buffer backups no longer leave mixed grayscale/opacity artifacts when turning pages or opening reader menus.<br>- Sped up EPUB page preparation by prewarming font glyph usage directly from page text instead of doing an extra full render pass.<br>- Preserved real carousel progress for completed books and fixed resume handling for saved EPUB positions in spine index `0`, integrating PR #54. |
+| `1.3.0.3` | - Added an optional `Move completed books` setting, disabled by default, which moves finished books into `/finished_books` after the reader closes them.<br>- Added `Mark as finished` to the open-book EPUB menu, with confirmation, completion stats, and achievement progress before the optional move.<br>- Kept completed-book moves safe by updating Reading Stats, Recents, Favorites, and KOReader auto-push return paths when the file is renamed.<br>- Exposed the setting in on-device `Settings > Apps > Reading Stats` and in File Transfer web settings.<br>- Restored automatic achievement event persistence and polished Spanish/Catalan UI translations. |
+| `1.3.0.2` | - Added an X3/X4 model selector to the browser Auto Flash page, matching the newer xteink flasher flow and validating/writing against the selected model's OTA partition layout.<br>- Kept X4 as the default auto-flash target while adding X3 offsets and app-slot size checks so users do not accidentally flash against the wrong partition table.<br>- Added an `if_found.txt` page to File Transfer, allowing the SD-root contact file to be viewed, created, and edited from the browser.<br>- Shared the `if_found` file detection/normalization between the on-device app and web editor, including `/if_found`, `/if_found.txt`, common hidden-extension mistakes, UTF-8 BOM, UTF-16 text, and newline cleanup.<br>- Updated File Transfer web pages to use the CPR-vCodex title and a consistent `Home / File Manager / Settings / Fonts / if_found.txt` navigation bar. |
+| `1.3.0.1` | - Moved CPR-vCodex onto the CrossPoint Reader `1.3.0` base line and synced selected upstream fixes through [`0af0ad5`](https://github.com/crosspoint-reader/crosspoint-reader/commit/0af0ad5).<br>- Updated `open-x4-sdk` to [`f4e12ad`](https://github.com/crosspoint-reader/community-sdk/commit/f4e12ad5af7d6f5742dcce029b39327678fb8fbb), including the grayscale/AA cleanup fix that clears display state after restoring the BW buffer.<br>- Brought in upstream SD-card font manager and runtime improvements while keeping CPR-vCodex font downloads pinned to `franssjz/cpr-vcodex` release assets.<br>- Added Polish and Swedish hyphenation support, refreshed Spanish/Italian translations, and kept recent-book pruning for missing SD-card entries.<br>- Preserved vCodex reader features, stats, `Lyra Carousel`, KOReader sync extensions, and X4-focused settings while leaving risky or unsupported upstream UI-flow changes out of this release. |
+| `1.2.0.51` | - Fixed doubled daily reading totals in the Reading Heatmap and best-day summary when older `legacyReadingDays` aggregates overlapped with newer per-book `readingDays` data.<br>- Migrated reading stats to format `6`, where legacy reading days are preserved only as unassigned fallback time instead of being summed again on top of per-book stats.<br>- Updated the browser Reading Stats Editor so normalized/exported files no longer write rebuilt aggregate totals back into `legacyReadingDays`.<br>- Added a small progress-percentage badge to the central `Lyra Carousel` cover and included book progress in the carousel frame cache key so cached Home frames refresh when progress changes.<br>- Fixed selected `Lyra Carousel` shortcut icon contrast in dark mode while keeping the existing light-mode selected icon behavior. |
+| `1.2.0.50` | - Reintroduced the community `Lyra Carousel` Home theme from PR [#48](https://github.com/franssjz/cpr-vcodex/pull/48), keeping the cover-focused Home experience while limiting the carousel to 3 books for smoother X4 navigation.<br>- Integrated the carousel with the existing vCodex Home cover pipeline so generated EPUB/XTC cover thumbnails can appear directly from Home instead of requiring the book to be opened first.<br>- Added `Force Paragraph Indents` for EPUBs that render as dense walls of text, available in `Settings > Reader`, File Transfer web settings, and in-reader `Reading Quick Settings`.<br>- Made the forced-indent setting invalidate the EPUB section cache, so changing it regenerates pages with the correct paragraph layout instead of reusing stale cached chapters.<br>- Added translated labels for `Force Paragraph Indents` across the bundled UI languages. |
+| `1.2.0.49` | - Improved KOReader Sync round-tripping with EPUB XPath indexing, list-item tracking, better percentage reconciliation, and optional `Auto-pull on open` / `Auto-push on close` settings that stay disabled by default.<br>- Restored the configurable Home book source in `Settings > Display`, including `Recents` / `Favorites`, and made Favorites Home resolve metadata for books that were favorited before being opened while pruning missing files safely.<br>- Hardened Home cover loading so books can generate cover metadata without being opened first, invalid or empty thumbnails are removed and regenerated, TXT/Markdown sidecar covers can be used, PNG sidecar covers are supported, and the Home screen forces a real refresh after loading.<br>- Added the translated GitHub Pages `Tools` hub, simplified the Pages header to `Home / Auto Flash / Tools / GitHub / Support`, and kept recommendation links opening in a new tab.<br>- Kept the `If found, please return me` app outside reading stats and achievements, so opening the SD-root contact card no longer creates reading activity. |
+| `1.2.0.48` | - Added EPUB strikethrough support for `<s>`, `<strike>`, `<del>`, and CSS `text-decoration: line-through`, including combined underline + strikethrough decoration values.<br>- Tuned EPUB text-decoration rendering so underline and strikethrough lines are thicker, clearer, and better positioned on the X4 display.<br>- Hardened the `If found, please return me` app so SD-root contact files are found more reliably, including case variants, common hidden-extension mistakes such as `if_found.txt.txt`, UTF-8 BOM files, and UTF-16 text files.<br>- Added a Ko-fi `Support` button to the GitHub Pages header across the tools homepage, auto-flash page, and reading-stats editor. |
+| `1.2.0.47` | - Fixed on-device OTA updates failing immediately at `0%` by downloading the GitHub Release firmware to the SD card first, then flashing it through CPR-vCodex's validated raw firmware writer instead of the ESP HTTPS OTA streaming path.<br>- Kept OTA progress visible during both download and flashing, including downloads where the server does not report a content length.<br>- Allowed any `.dev` build to update back to the latest stable GitHub Release from `Settings > System > OTA Update`, even when the local dev build number is equal to or newer than the published stable release. |
+| `1.2.0.46` | - Removed the hidden NTP sync from generic Wi-Fi selection so `Manage Fonts` no longer performs UDP/SNTP work before loading the font manifest.<br>- Hardened SD-font downloads with manifest/file retries, CRC/`.cpfont` validation retries, and Wi-Fi sleep disabled during font transfers.<br>- Synced selected upstream changes through [`bc57e5d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc57e5d), including separate `Download All` / `Update All` actions, SD-font style fallbacks, unsupported-character advance fixes, hold-to-page-jump in font/language lists, and BMP viewer navigation labels.<br>- Added `Reading Quick Settings` from the in-reader menu so common reader options can be changed without leaving the active reading session.<br>- Made `Sleep` directory previews use the faster BMP-viewer-style loading flow, show a confirmation popup when a directory is selected, and return to the Sleep directory list after selection.<br>- Let the standard `Lyra` Home theme show five shortcut buttons per page while keeping `Lyra vCodex` at four for its tighter layout.<br>- Updated the Reading Heatmap intensity scale to `15m+`, `30m+`, `60m+`, `120m+`, and `240m+`, with two extra grayscale steps for clearer long-session contrast.<br>- Made i18n generation summaries safer on Windows terminals that cannot encode every language name. |
+| `1.2.0.45` | - Fixed paragraph indentation when using SD-card fonts with `Extra Paragraph Spacing` disabled by replacing the old `U+2003` em-space fallback with a pixel-based first-line layout offset.<br>- Bumped the EPUB section cache format so books are re-laid out after updating and do not keep stale no-indent cached pages.<br>- Simplified firmware GitHub Release assets so stable firmware releases publish only the flashable `<tag>.bin`; metadata and firmware-budget reports remain internal workflow validation outputs instead of public release assets. |
+| `1.2.0.44` | - Synced selected upstream reader, font, firmware-update, and tooling work through [`63d5094`](https://github.com/crosspoint-reader/crosspoint-reader/commit/63d5094), while keeping the supported vCodex theme list and X4-focused UI defaults intact.<br>- Added SD-card font support from the fork's own release assets, published the CPR-vCodex `sd-fonts-m1-b4` manifest, and added `ChareInk` to the downloadable font collection.<br>- Added `Settings > System > SD Card Firmware Update`, allowing users to choose a local `.bin` from the SD card and flash it without using a browser.<br>- Replaced the old long-press chapter-skip toggle with `Long-press button behavior`: `Off`, `Chapter skip`, or `Orientation change`, defaulting to the previous chapter-skip behavior and migrating old settings safely.<br>- Exposed `XTC Status Bar` in web settings so XTC reader status-bar placement can be configured from the browser settings page.<br>- Added a GitHub button to the CPR-vCodex Pages header and home tool list, alongside `Reading Stats` and `Auto Flash`. |
+| `1.2.0.43` | - Added experimental X3-only `Tilt Page Turn` support using the QMI8658 IMU, based on the CrossInk/CrossPoint tilt paging approach.<br>- Kept the new tilt setting disabled by default and hidden unless the IMU is detected, so X4 users and X3 units without the sensor do not see or run it.<br>- Wired tilt page turns into EPUB, TXT, and XTC readers without triggering long-press chapter/page skips, and count tilt input as activity for auto-sleep.<br>- Exposed `Tilt Page Turn` in on-device Controls and web settings with `Off`, `Normal`, and `Inverted` modes.<br>- Added translated labels for the new setting across all bundled UI languages. |
+| `1.2.0.42` | - Temporarily removed the community `Lyra Carousel` Home theme until a stable and fast version is ready for daily use.<br>- Migrated stored/unknown theme values back to the default `Lyra vCodex` theme, and removed the carousel-specific Settings/Web Settings entries so users do not get stuck on a removed theme.<br>- Removed the carousel-only cover rendering paths and thumbnail helpers, returning Home cover rendering to the simpler existing recents flow.<br>- Added an estimated full-book time-left card at the end of each book's `Reading Stats` detail page, using the book's current progress and recorded reading time.<br>- Added scroll support to the per-book stats detail page so the new estimate and lower metrics remain reachable on the X4 screen.<br>- Improved QR-code readability by sizing payloads to the visible QR area, adding a quiet zone, and avoiding oversized unreadable QR versions.<br>- Configured File Transfer access-point DHCP explicitly on `192.168.4.x` to avoid clients receiving a conflicting gateway address. |
+| `1.2.0.41` | - Merged the community `Lyra Carousel` Home theme from PR [#38](https://github.com/franssjz/cpr-vcodex/pull/38), adding a cover-focused Home carousel for recent or favorite books.<br>- Limited the carousel to 3 books on X4 so navigation stays predictable and avoids expensive multi-cover redraws.<br>- Added an SD-backed carousel framebuffer cache, so already-rendered Home carousel frames can be reused without keeping every frame in RAM.<br>- Cleaned up the carousel shortcut row in dark mode by repainting the whole icon band, using transparent icons, and replacing the filled selected-button block with a compact underline.<br>- Fixed the carousel Wi-Fi shortcut icon orientation after switching to transparent icon rendering.<br>- Kept cached carousel frames separated by light/dark mode and bumped the cache key so older test frames are ignored automatically. |
+| `1.2.0.40` | - Added manual per-book reading-time correction from the per-book `Reading Stats` detail screen, opened through the settings button below the cover.<br>- Added an on-device date picker for corrections, plus `Add`/`Subtract` actions and 15/30/45/60 minute amounts.<br>- Prevented subtract corrections from making a day total negative, and show the day total preview before applying the change.<br>- Rebuild reading-day aggregates, streak inputs, and achievement progress after manual corrections and after importing reading stats from Settings.<br>- Kept the book-detail flow direct from `Reading Stats`, while making the new adjustment-button focus behave like Home navigation.<br>- Cached the per-book stats detail framebuffer so selecting the adjustment button no longer reloads the cover or redraws the whole screen.<br>- Added synchronized translation keys for the new correction flow across all bundled UI languages. |
+| `1.2.0.39` | - Synced selected upstream changes through [`78625af`](https://github.com/crosspoint-reader/crosspoint-reader/commit/78625afe7612abee1d8adbdb87fc36c5f3b0621e), focusing on stability and low-risk improvements.<br>- Adopted upstream streaming GitHub release parsing for OTA checks while keeping CPR-vCodex tag-named firmware assets and legacy `firmware.bin` fallback support.<br>- Made the browser auto-flash page show the release source, asset name, firmware size, and SHA-256 fingerprint before flashing.<br>- Added visible firmware budget reports to pre-release and release workflows, including flash/RAM usage, headroom, and uploaded JSON/Markdown artifacts.<br>- Restored compatibility with legacy XTC files whose page table starts at offset `0x30`, including 64-bit-safe file seek/size wrappers and improved XTC page-load diagnostics.<br>- Added nested block-style stack handling in EPUB HTML parsing to prevent styles from bleeding across nested blocks.<br>- Brought in small render/navigation refactors: simpler polygon sorting, no heap vector for page-turn rate labels, `std::size` cleanup, File Transfer Wi-Fi self-healing with dBm display, OPDS wording cleanup, and firmware size history RAM reporting.<br>- Made German Liang hyphenation data opt-in at build time, reducing release firmware flash usage by about 200KB while keeping German EPUB rendering support.<br>- Deliberately left larger or identity-changing upstream changes out for now: i18n offset-buffer migration, RoundedRaff theme, page-turn orientation setting, and SD-card firmware update/X3 bootloader flow. |
+| `1.2.0.38` | - Added a manual `Set Date` picker to Sync Day, using numeric day, month, and year rows for devices without a reliable current date.<br>- Kept day and month editing independent, with wrapping `01`-`31` and `01`-`12` controls and final validation before saving impossible dates.<br>- Added translated date-picker strings across all bundled UI languages. |
+| `1.2.0.37` | - Added a configurable `OPDS Filename Format` setting for OPDS downloads, with `Author - Title` and `Title - Author` options.<br>- Kept `Author - Title` as the default to preserve the current behavior, while allowing KOReader libraries named `Title - Author.epub` to keep filename-based sync compatible.<br>- Exposed the setting both on-device under `Settings > System` and in the File Transfer web settings under `KOReader Sync`. |
+| `1.2.0.36` | - Merged Calibre-Web-Automated KOSync compatibility from PR [#27](https://github.com/franssjz/cpr-vcodex/pull/27), including `/kosync` endpoint support, HTTP Basic Auth, endpoint fallback, binary document-hash retry, and improved standalone sync session restore.<br>- Fixed remote-progress application so `Apply Remote` reopens EPUBs at the synced remote position, with paragraph-based restore when available.<br>- Synced selected upstream changes through [`ba4a361`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ba4a3613cd5cf8ea5dbfc3379eea90d87a2c5d72).<br>- Added upstream OTA fixes for X3/X4 update handling and OTA progress reporting.<br>- Switched KOReader Sync networking to the upstream `esp_http_client` implementation to reduce TLS memory pressure on ESP32-C3.<br>- Adopted context-aware screenshot filenames with book titles for EPUB/TXT/XTC readers.<br>- Moved File Transfer EPUB/DONE badges into the `Type` column, kept OPDS filename matching, capped EPUB horizontal CSS insets, refreshed Python requirements, and retained PlatformIO build cache support.<br>- Deliberately kept larger upstream migrations out for now: i18n offset tables, JSON-backed language setting, X3 gyroscope tilt paging, and the RoundedRaff theme. |
+| `1.2.0.35` | - Fixed the File Transfer web Settings page crash/reboot on X4 by replacing the heavy shared settings metadata path with a lightweight static web settings table.<br>- Reduced web Settings heap pressure by streaming smaller category-based responses and avoiding dynamic `ArduinoJson` documents for Settings/OPDS GET responses.<br>- Kept web Settings save support, including KOReader credentials/match method and OPDS server management, while avoiding the previous `std::vector`/callback-heavy settings list during WiFi operation.<br>- The Settings page may load a little more slowly, but it now opens and saves reliably during File Transfer testing. |
+| `1.2.0.34` | - Added a new `Legacy BW` option to `Text Darkness`, giving users `Normal`, `Legacy BW`, `Dark`, and `Extra Dark` text rendering modes.<br>- Restored the classic black-and-white glyph fill behavior from older firmware for `Legacy BW`, making reader text fuller and smoother without forcing `Extra Dark`.<br>- Matched the older anti-aliasing/grayscale text mapping for `Legacy BW` so users with `Text AA` enabled get closer to the `1.2.0.11` reading feel.<br>- Preserved existing `Dark` and `Extra Dark` settings through a settings migration so users do not get moved to the new mode accidentally.<br>- Synced selected upstream fixes: OPDS downloads now use `Author - Title.epub` filenames for better KOReader filename matching, Swedish OPDS strings, Python requirements updates, PlatformIO build cache config, short-SHA dev versioning, and EPUB CSS horizontal inset capping.<br>- Reduced release firmware size by stripping CPR-vCodex event/report logging from release builds and deduplicating repeated reading-stats/flashcard UI helper code. |
+| `1.2.0.33` | - Fixed OTA updates to select the firmware asset named after the GitHub release tag, while still accepting legacy `firmware.bin` assets.<br>- Treated `.dev` builds as prereleases when comparing OTA versions.<br>- Changed `Bionic Reading` from an on/off toggle to `Off`, `Normal`, and `Subtle` modes, with `Subtle` using a lighter faux-semibold prefix instead of the full bold font. |
+| `1.2.0.32` | - Synced the fork with selected upstream changes after `e28918b`, including multiple OPDS server support, long branch name display, browser title/header cleanup, long filename footnote navigation fixes, keyboard cursor behavior fixes, Swedish keyboard translations, and Spanish/Italian translation tweaks.<br>- Wired the new keyboard hint translation keys into the vCodex keyboard UI so generated i18n data and runtime text stay aligned.<br>- Made the OPDS Browser home shortcut configurable through the normal shortcut location, visibility, and order settings.<br>- Kept Bookerly intentionally by not applying upstream's Bookerly replacement, and skipped the royalty.dev add/revert pair because it has no final firmware effect. |
+| `1.2.0.31` | - Fixed custom BMP sleep screens rendering blank when `Sleep Screen Cover Mode` was set to `Crop`.<br>- Bumped the sleep framebuffer cache key so existing bad cached sleep screens are ignored automatically after updating. |
+| `1.2.0.30` | - Added runtime `Bionic Reading` / metaguiding support to the EPUB renderer.<br>- Added a manual Wi-Fi selection option for `Sync Day` settings.<br>- Changed Wi-Fi connection flow to scan first, auto-connect to the best saved network after scanning, and still respect a manual Wi-Fi choice. |
+| `1.2.0.29` | - Synced the fork with upstream through `e28918b`, including OPDS/copyparty fixes, KOSync improvements, keyboard updates, web UI tweaks, and minor typo cleanups.<br>- Fixed the `Lyra vCodex` theme so opening the Wi-Fi password keyboard no longer freezes when connecting to protected networks. |
+| `1.2.0.28` | - Tuned `Text Darkness` again so the first black-and-white page render in `Normal` matches the final anti-aliased result more closely.<br>- Kept `Dark` and `Extra Dark` bold while reducing the visible "first bold, then softer" jump when turning pages. |
+| `1.2.0.27` | - Rebalanced `Text Darkness` so `Normal`, `Dark`, and `Extra Dark` all render noticeably bolder.<br>- Improved the perceived text weight without adding extra rendering passes or slowing the reader down. |
+| `1.2.0.26` | - Hardened book completion tracking so achievements still register when leaving from explicit `End of book` states.<br>- Applied the completion fix consistently across EPUB, TXT, and XTC readers. |
+| `1.2.0.25` | - Added PNG sleep image compatibility while keeping BMP sleep images unchanged.<br>- PNG sleep images now work as transparent overlays on top of the last visible screen.<br>- Sleep preview now recognizes and previews both BMP and PNG files. |
+| `1.2.0.24` | - Reviewed and corrected all 23 bundled UI languages.<br>- Synced the fork with upstream through `64f5ef0`, including keyboard, XTC, parser, docs, font, and i18n updates.<br>- Fixed runtime UI font replacement so Vietnamese glyphs render correctly.<br>- Normalized translation newlines and multiline text handling again after the YAML/i18n regressions. |

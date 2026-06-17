@@ -50,6 +50,7 @@ size_t getFileSize(const std::string& path) {
   if (!Storage.openFileForRead("BID", path, file)) {
     return 0;
   }
+
   const size_t fileSize = file.fileSize();
   file.close();
   return fileSize;

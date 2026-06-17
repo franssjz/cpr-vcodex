@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide helps you build and run CrossPoint locally.
+This guide helps you build and run CPR-vCodex locally.
 
 ## Prerequisites
 
@@ -43,14 +43,21 @@ The reported major version must be 21 or newer.
 ## Clone and initialize
 
 ```sh
-git clone --recursive https://github.com/crosspoint-reader/crosspoint-reader
-cd crosspoint-reader
+git clone --recursive https://github.com/franssjz/cpr-vcodex
+cd cpr-vcodex
 ```
 
 If you already cloned without submodules:
 
 ```sh
 git submodule update --init --recursive
+```
+
+Enable the repository-managed Git hooks (required once per clone):
+
+```sh
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
 ```
 
 ## Build

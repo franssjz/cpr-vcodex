@@ -44,7 +44,8 @@ void drawHeaderTopLine(const GfxRenderer& renderer, const ThemeMetrics& metrics,
 }
 
 std::string formatHeaderDateText(const uint32_t timestamp, const bool usedFallback) {
-  return TimeUtils::formatDate(timestamp, usedFallback);
+  (void)usedFallback;
+  return TimeUtils::formatDate(timestamp, false);
 }
 }  // namespace
 

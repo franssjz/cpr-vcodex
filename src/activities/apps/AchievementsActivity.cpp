@@ -105,9 +105,15 @@ void AchievementsActivity::refreshEntries() {
 
 void AchievementsActivity::onEnter() {
   Activity::onEnter();
+  renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   refreshEntries();
   requestUpdate();
+}
+
+void AchievementsActivity::onExit() {
+  renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
+  Activity::onExit();
 }
 
 void AchievementsActivity::loop() {

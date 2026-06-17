@@ -17,8 +17,10 @@ class HalDisplay {
     FAST_REFRESH   // Fast refresh using custom LUT
   };
 
-  // Initialize the display hardware and driver
-  void begin();
+  // Pass seamless=true on any path where the panel already shows the content
+  // it should after begin() returns. Skips wakeup-gated requestResync() and
+  // defuses the SDK's X3 initial full-sync counter.
+  void begin(bool seamless = false);
 
   // Display dimensions
   static constexpr uint16_t DISPLAY_WIDTH = EInkDisplay::DISPLAY_WIDTH;

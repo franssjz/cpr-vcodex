@@ -1,7 +1,6 @@
 #include "IfFoundActivity.h"
 
 #include <GfxRenderer.h>
-#include <HalStorage.h>
 #include <I18n.h>
 
 #include <algorithm>
@@ -11,10 +10,9 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
+#include "util/IfFoundFile.h"
 
 namespace {
-constexpr const char* IF_FOUND_FILE = "/if_found.txt";
-
 std::string trim(const std::string& value) {
   const auto begin = value.find_first_not_of(" \t\r\n");
   if (begin == std::string::npos) {
@@ -22,15 +20,6 @@ std::string trim(const std::string& value) {
   }
   const auto end = value.find_last_not_of(" \t\r\n");
   return value.substr(begin, end - begin + 1);
-}
-
-std::string normalizeNewlines(std::string value) {
-  size_t pos = 0;
-  while ((pos = value.find("\r\n", pos)) != std::string::npos) {
-    value.replace(pos, 2, "\n");
-  }
-  value.erase(std::remove(value.begin(), value.end(), '\r'), value.end());
-  return value;
 }
 
 std::vector<std::string> splitLinesPreserveEmpty(const std::string& value) {
@@ -51,12 +40,12 @@ std::vector<std::string> splitLinesPreserveEmpty(const std::string& value) {
 
 void IfFoundActivity::loadContent() {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const int textWidth =
-      renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth - metrics.scrollBarRightOffset - 8;
+  const int textWidth = renderer.getScreenWidth() - metrics.contentSidePadding * 2 - metrics.scrollBarWidth -
+                        metrics.scrollBarRightOffset - 8;
 
   introLines = renderer.wrappedText(UI_10_FONT_ID, tr(STR_IF_FOUND_MESSAGE), textWidth, 8, EpdFontFamily::REGULAR);
 
-  std::string body = normalizeNewlines(std::string(Storage.readFile(IF_FOUND_FILE).c_str()));
+  std::string body = IfFoundFile::readNormalized(IfFoundFile::findPath());
   if (trim(body).empty()) {
     body = tr(STR_IF_FOUND_FILE_HINT);
   }

@@ -1,0 +1,106 @@
+#include "DictionarySuggestionsActivity.h"
+
+#include <FontCacheManager.h>
+#include <GfxRenderer.h>
+#include <I18n.h>
+
+#include <optional>
+
+#include "CrossPointSettings.h"
+#include "DictionaryDefinitionActivity.h"
+#include "DictionaryStore.h"
+#include "MappedInputManager.h"
+#include "components/UITheme.h"
+#include "fontIds.h"
+
+void DictionarySuggestionsActivity::onEnter() {
+  Activity::onEnter();
+  requestUpdate();
+}
+
+void DictionarySuggestionsActivity::lookupSelected() {
+  if (selectedIndex < 0 || selectedIndex >= static_cast<int>(suggestions.size())) return;
+  const auto lookup = DICTIONARIES.lookup(suggestions[selectedIndex], false);
+  if (lookup.status != DictionaryLookupResult::Status::Found) {
+    GUI.drawPopup(renderer, tr(STR_DEFINITION_NOT_FOUND));
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    delay(700);
+    requestUpdate();
+    return;
+  }
+
+  startActivityForResult(std::make_unique<DictionaryDefinitionActivity>(
+                             renderer, mappedInput, page, lookup.headword, lookup.definition, lookup.truncated,
+                             readerFontId, DICTIONARIES.getDefinitionFontId(readerFontId), marginLeft, marginTop),
+                         [this](const ActivityResult& result) {
+                           if (!result.isCancelled) {
+                             setResult(ActivityResult{});
+                             finish();
+                             return;
+                           }
+                           requestUpdate();
+                         });
+}
+
+void DictionarySuggestionsActivity::loop() {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    ActivityResult result;
+    result.isCancelled = true;
+    setResult(std::move(result));
+    finish();
+    return;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    lookupSelected();
+    return;
+  }
+
+  buttonNavigator.onNext([this] {
+    if (!suggestions.empty()) {
+      selectedIndex = ButtonNavigator::nextIndex(selectedIndex, static_cast<int>(suggestions.size()));
+      requestUpdate();
+    }
+  });
+  buttonNavigator.onPrevious([this] {
+    if (!suggestions.empty()) {
+      selectedIndex = ButtonNavigator::previousIndex(selectedIndex, static_cast<int>(suggestions.size()));
+      requestUpdate();
+    }
+  });
+}
+
+void DictionarySuggestionsActivity::render(RenderLock&&) {
+  renderer.clearScreen();
+  std::optional<FontCacheManager::PrewarmScope> pageFontPrewarm;
+  if (page) {
+    if (auto* fcm = renderer.getFontCacheManager()) {
+      pageFontPrewarm.emplace(*fcm);
+      page->recordFontUsage(*fcm, readerFontId, SETTINGS.bionicReading);
+      pageFontPrewarm->endScanAndPrewarm();
+    }
+    page->render(renderer, readerFontId, marginLeft, marginTop, SETTINGS.bionicReading);
+  }
+
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  const int overlayHeight = std::max((screenHeight * 3) / 4, 160);
+  const Rect rect{10, screenHeight - overlayHeight - 10, screenWidth - 20, overlayHeight};
+
+  renderer.fillRect(rect.x, rect.y, rect.width, rect.height, false);
+  renderer.drawRect(rect.x, rect.y, rect.width, rect.height, 2, true);
+
+  GUI.drawSubHeader(renderer, Rect{rect.x + 4, rect.y + 8, rect.width - 8, 40}, tr(STR_DID_YOU_MEAN),
+                    originalWord.c_str());
+  const int listTop = rect.y + 58;
+  const int listHeight = rect.height - 68;
+  if (suggestions.empty()) {
+    renderer.drawCenteredText(UI_10_FONT_ID, listTop + 20, tr(STR_NO_SUGGESTIONS));
+  } else {
+    GUI.drawList(renderer, Rect{rect.x, listTop, rect.width, listHeight}, static_cast<int>(suggestions.size()),
+                 selectedIndex, [this](int index) { return suggestions[index]; });
+  }
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+}

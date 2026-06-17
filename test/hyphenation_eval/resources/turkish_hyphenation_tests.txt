@@ -1,0 +1,23 @@
+# Turkish hyphenation smoke data generated from lib/Epub/Epub/hyphenation/generated/hyph-tr.trie.h
+# Format: word|hyphenated|frequency
+İstanbul|İs=tan=bul|100
+Istanbul|Is=tan=bul|101
+Türkiye|Tür=ki=ye|102
+Cumhuriyet|Cum=hu=ri=yet|103
+kitaplarımızdan|ki=tap=la=rı=mız=dan|104
+öğretmenlerimiz|öğ=ret=men=le=ri=miz|105
+bilgisayarlarımız|bil=gi=sa=yar=la=rı=mız|106
+çalışmalarımızdan|ça=lış=ma=la=rı=mız=dan|107
+geliştiriciler|ge=liş=ti=ri=ci=ler|108
+kütüphanemizde|kü=tüp=ha=ne=miz=de|109
+sorumluluklarımız|so=rum=lu=luk=la=rı=mız|110
+değerlendirme|de=ğer=len=dir=me|111
+özgürlüklerden|öz=gür=lük=ler=den|112
+şehirlerarası|şe=hir=le=ra=ra=sı|113
+yayınlarımız|ya=yın=la=rı=mız|114
+okuyucularımız|oku=yu=cu=la=rı=mız|115
+programcılarımız|prog=ram=cı=la=rı=mız|116
+görüntüleyici|gö=rün=tü=le=yi=ci|117
+hızlandırılmış|hız=lan=dı=rıl=mış|118
+KIRIKKALE|KI=RIK=KA=LE|119
+İZMİR|İZ=MİR|120

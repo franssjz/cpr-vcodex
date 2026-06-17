@@ -6,6 +6,8 @@
 #include <ObfuscationUtils.h>
 #include <Serialization.h>
 
+#include <string>
+
 #include "../../src/JsonSettingsIO.h"
 
 // Initialize the static instance
@@ -40,6 +42,13 @@ bool KOReaderCredentialStore::saveToFile() const {
 }
 
 bool KOReaderCredentialStore::loadFromFile() {
+  const std::string tempPath = std::string(KOREADER_FILE_JSON) + ".tmp";
+  if (!Storage.exists(KOREADER_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), KOREADER_FILE_JSON)) {
+      LOG_DBG("KRS", "Recovered koreader.json from interrupted temp file");
+    }
+  }
+
   // Try JSON first
   if (Storage.exists(KOREADER_FILE_JSON)) {
     String json = Storage.readFile(KOREADER_FILE_JSON);
@@ -82,7 +91,6 @@ bool KOReaderCredentialStore::loadFromBinaryFile() {
   serialization::readPod(file, version);
   if (version != KOREADER_FILE_VERSION) {
     LOG_DBG("KRS", "Unknown file version: %u", version);
-    file.close();
     return false;
   }
 
@@ -113,7 +121,6 @@ bool KOReaderCredentialStore::loadFromBinaryFile() {
     matchMethod = DocumentMatchMethod::FILENAME;
   }
 
-  file.close();
   LOG_DBG("KRS", "Loaded KOReader credentials from binary for user: %s", username.c_str());
   return true;
 }
@@ -153,16 +160,22 @@ void KOReaderCredentialStore::setServerUrl(const std::string& url) {
 }
 
 std::string KOReaderCredentialStore::getBaseUrl() const {
+  std::string url;
   if (serverUrl.empty()) {
-    return DEFAULT_SERVER_URL;
+    url = DEFAULT_SERVER_URL;
+  } else if (serverUrl.find("://") == std::string::npos) {
+    // Normalize URL: add http:// if no protocol specified (local servers typically don't have SSL)
+    url = "http://" + serverUrl;
+  } else {
+    url = serverUrl;
   }
 
-  // Normalize URL: add http:// if no protocol specified (local servers typically don't have SSL)
-  if (serverUrl.find("://") == std::string::npos) {
-    return "http://" + serverUrl;
+  // Strip trailing slashes to avoid double-slash in API paths
+  while (!url.empty() && url.back() == '/') {
+    url.pop_back();
   }
 
-  return serverUrl;
+  return url;
 }
 
 void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) {

@@ -1,5 +1,4 @@
 #include <HalGPIO.h>
-
 #include <Logging.h>
 #include <Preferences.h>
 #include <SPI.h>
@@ -83,6 +82,7 @@ bool probeDS3231Signature() {
   }
   const uint8_t tensDigit = (sec >> 4) & 0x07;
   const uint8_t onesDigit = sec & 0x0F;
+
   return tensDigit <= 5 && onesDigit <= 9;
 }
 
@@ -116,8 +116,8 @@ X3ProbeResult runX3ProbePass() {
 
 namespace {
 constexpr char HW_NAMESPACE[] = "cphw";
-constexpr char NVS_KEY_DEV_OVERRIDE[] = "dev_ovr";
-constexpr char NVS_KEY_DEV_CACHED[] = "dev_det";
+constexpr char NVS_KEY_DEV_OVERRIDE[] = "dev_ovr";  // 0=auto, 1=x4, 2=x3
+constexpr char NVS_KEY_DEV_CACHED[] = "dev_det";    // 0=unknown, 1=x4, 2=x3
 
 enum class NvsDeviceValue : uint8_t { Unknown = 0, X4 = 1, X3 = 2 };
 
@@ -194,15 +194,12 @@ void HalGPIO::begin() {
   inputMgr.begin();
   SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
 
-  deviceType_ = detectDeviceTypeWithFingerprint();
+  _deviceType = detectDeviceTypeWithFingerprint();
 
   if (deviceIsX4()) {
     pinMode(BAT_GPIO0, INPUT);
     pinMode(UART0_RXD, INPUT);
   }
-
-  lastUsbConnected = isUsbConnected();
-  usbStateChanged = false;
 }
 
 void HalGPIO::update() {
@@ -211,6 +208,8 @@ void HalGPIO::update() {
   usbStateChanged = (connected != lastUsbConnected);
   lastUsbConnected = connected;
 }
+
+bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
 
 bool HalGPIO::isPressed(uint8_t buttonIndex) const { return inputMgr.isPressed(buttonIndex); }
 
@@ -224,22 +223,29 @@ bool HalGPIO::wasAnyReleased() const { return inputMgr.wasAnyReleased(); }
 
 unsigned long HalGPIO::getHeldTime() const { return inputMgr.getHeldTime(); }
 
+unsigned long HalGPIO::getPowerButtonHeldTime() const { return inputMgr.getPowerButtonHeldTime(); }
+
 void HalGPIO::startDeepSleep() {
   // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
   while (inputMgr.isPressed(BTN_POWER)) {
     delay(50);
     inputMgr.update();
   }
-  // Arm the wakeup trigger after the button is released
+  // Arm the wakeup trigger *after* the button is released
   esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
+  // Enter Deep Sleep
   esp_deep_sleep_start();
 }
 
 void HalGPIO::verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed) {
   if (shortPressAllowed) {
+    // Fast path - no duration check needed
     return;
   }
+  // TODO: Intermittent edge case remains: a single tap followed by another single tap
+  // can still power on the device. Tighten wake debounce/state handling here.
 
+  // Calibrate: subtract boot time already elapsed, assuming button held since boot
   const uint16_t calibration = millis();
   const uint16_t calibratedDuration = (calibration < requiredDurationMs) ? (requiredDurationMs - calibration) : 1;
 
@@ -254,8 +260,8 @@ void HalGPIO::verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPre
     do {
       delay(10);
       inputMgr.update();
-    } while (inputMgr.isPressed(BTN_POWER) && inputMgr.getHeldTime() < calibratedDuration);
-    if (inputMgr.getHeldTime() < calibratedDuration) {
+    } while (inputMgr.isPressed(BTN_POWER) && inputMgr.getPowerButtonHeldTime() < calibratedDuration);
+    if (inputMgr.getPowerButtonHeldTime() < calibratedDuration) {
       startDeepSleep();
     }
   } else {
@@ -280,11 +286,10 @@ bool HalGPIO::isUsbConnected() const {
   return digitalRead(UART0_RXD) == HIGH;
 }
 
-bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
-
 HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
+
   const bool usbConnected = isUsbConnected();
 
   if ((wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && !usbConnected) ||

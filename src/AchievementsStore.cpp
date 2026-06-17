@@ -1,7 +1,5 @@
 #include "AchievementsStore.h"
 
-#include <Arduino.h>
-#include <Epub.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <JsonSettingsIO.h>
@@ -10,7 +8,6 @@
 #include <cstdio>
 #include <ctime>
 
-#include "CrossPointSettings.h"
 #include "activities/reader/BookmarkStore.h"
 #include "util/TimeUtils.h"
 
@@ -202,12 +199,12 @@ const std::array<AchievementDefinition, static_cast<size_t>(AchievementId::_COUN
                             30ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_THIRTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::FortyFiveMinuteSession, AchievementMetric::MaxSessionMs,
                             45ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_FORTY_FIVE_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs,
-                            60ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
+      AchievementDefinition{AchievementId::SixtyMinuteSession, AchievementMetric::MaxSessionMs, 60ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_SIXTY_MINUTE_SESSION},
       AchievementDefinition{AchievementId::NinetyMinuteSession, AchievementMetric::MaxSessionMs,
                             90ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_NINETY_MINUTE_SESSION},
-      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs,
-                            120ULL * 60ULL * 1000ULL, StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
+      AchievementDefinition{AchievementId::TwoHourSession, AchievementMetric::MaxSessionMs, 120ULL * 60ULL * 1000ULL,
+                            StrId::STR_ACH_TITLE_TWO_HOUR_SESSION},
   };
   return items;
 }
@@ -224,14 +221,11 @@ bool AchievementsStore::hasString(const std::vector<std::string>& values, const 
 
 const AchievementDefinition& AchievementsStore::getDefinition(const AchievementId id) const {
   const auto& items = definitions();
-  const auto it = std::find_if(items.begin(), items.end(), [id](const AchievementDefinition& definition) {
-    return definition.id == id;
-  });
-
+  const auto it = std::find_if(items.begin(), items.end(),
+                               [id](const AchievementDefinition& definition) { return definition.id == id; });
   if (it != items.end()) {
     return *it;
   }
-
   return items.front();
 }
 
@@ -549,6 +543,13 @@ bool AchievementsStore::saveToFile() const {
 }
 
 bool AchievementsStore::loadFromFile() {
+  const std::string tempPath = std::string(ACHIEVEMENTS_FILE_JSON) + ".tmp";
+  if (!Storage.exists(ACHIEVEMENTS_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), ACHIEVEMENTS_FILE_JSON)) {
+      LOG_DBG("ACH", "Recovered achievements.json from interrupted temp file");
+    }
+  }
+
   if (!Storage.exists(ACHIEVEMENTS_FILE_JSON)) {
     bootstrapFromCurrentStats();
     return saveToFile();
@@ -559,7 +560,8 @@ bool AchievementsStore::loadFromFile() {
     return false;
   }
 
-  dirty = false;
+  const bool loadNeedsSave = dirty;
+  dirty = loadNeedsSave;
   if (refreshGoalDerivedProgressFromStats()) {
     markDirty();
   }
@@ -623,5 +625,10 @@ void AchievementsStore::syncWithPreviousStats() {
 
   markDirty();
   evaluateProgress(false);
+  saveToFile();
+}
+
+void AchievementsStore::rebuildProgressFromCurrentStats() {
+  bootstrapFromCurrentStats();
   saveToFile();
 }

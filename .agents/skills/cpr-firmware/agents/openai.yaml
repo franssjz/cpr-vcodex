@@ -1,0 +1,6 @@
+interface:
+  display_name: "CPR Firmware"
+  short_description: "Firmware-safe CPR-vCodex changes"
+  default_prompt: "Use $cpr-firmware to make a safe firmware change in CPR-vCodex."
+policy:
+  allow_implicit_invocation: true

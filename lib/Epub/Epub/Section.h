@@ -16,8 +16,9 @@ class Section {
   std::string filePath;
   FsFile file;
 
-  void writeSectionFileHeader(int fontId, float lineCompression, bool extraParagraphSpacing, uint8_t paragraphAlignment,
-                              uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled,
+  void writeSectionFileHeader(int fontId, float lineCompression, bool extraParagraphSpacing,
+                              bool forceParagraphIndents, uint8_t paragraphAlignment, uint16_t viewportWidth,
+                              uint16_t viewportHeight, bool hyphenationEnabled, bool focusReadingEnabled,
                               bool embeddedStyle, uint8_t imageRendering);
   uint32_t onPageComplete(std::unique_ptr<Page> page);
 
@@ -31,15 +32,28 @@ class Section {
         renderer(renderer),
         filePath(epub->getCachePath() + "/sections/" + std::to_string(spineIndex) + ".bin") {}
   ~Section() = default;
-  bool loadSectionFile(int fontId, float lineCompression, bool extraParagraphSpacing, uint8_t paragraphAlignment,
-                       uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled, bool embeddedStyle,
-                       uint8_t imageRendering);
+  bool loadSectionFile(int fontId, float lineCompression, bool extraParagraphSpacing, bool forceParagraphIndents,
+                       uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
+                       bool hyphenationEnabled, bool focusReadingEnabled, bool embeddedStyle, uint8_t imageRendering);
   bool clearCache() const;
-  bool createSectionFile(int fontId, float lineCompression, bool extraParagraphSpacing, uint8_t paragraphAlignment,
-                         uint16_t viewportWidth, uint16_t viewportHeight, bool hyphenationEnabled, bool embeddedStyle,
-                         uint8_t imageRendering, const std::function<void()>& popupFn = nullptr);
+  bool createSectionFile(int fontId, float lineCompression, bool extraParagraphSpacing, bool forceParagraphIndents,
+                         uint8_t paragraphAlignment, uint16_t viewportWidth, uint16_t viewportHeight,
+                         bool hyphenationEnabled, bool focusReadingEnabled, bool embeddedStyle, uint8_t imageRendering,
+                         const std::function<void()>& popupFn = nullptr);
   std::unique_ptr<Page> loadPageFromSectionFile();
 
   // Look up the page number for an anchor id from the section cache file.
   std::optional<uint16_t> getPageForAnchor(const std::string& anchor) const;
+
+  // Look up the page number for a synthetic paragraph index from XPath p[N].
+  std::optional<uint16_t> getPageForParagraphIndex(uint16_t pIndex) const;
+
+  // Look up the page number for a running list-item index from a KOReader li XPath.
+  std::optional<uint16_t> getPageForListItemIndex(uint16_t liIndex) const;
+
+  // Look up the synthetic paragraph index for the given rendered page.
+  std::optional<uint16_t> getParagraphIndexForPage(uint16_t page) const;
+
+  // Look up the XHTML byte offset recorded at the page boundary for the given page.
+  std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
 };

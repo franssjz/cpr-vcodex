@@ -7,17 +7,19 @@
 #include <algorithm>
 #include <ctime>
 
+#include "CrossPointState.h"
+#include "ManualDateActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/settings/TimeZoneSelectActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "CrossPointState.h"
 #include "util/HeaderDateUtils.h"
 #include "util/TimeUtils.h"
+#include "util/TimeZoneRegistry.h"
 
 namespace {
-constexpr int INFO_CARD_HEIGHT = 98;
-constexpr int DIAGNOSTICS_CARD_MIN_HEIGHT = 248;
-constexpr int CARD_GAP = 16;
+constexpr int ACTION_COUNT = 5;
+constexpr int HELP_TEXT_LINE_HEIGHT = 18;
 
 void wifiOff() {
   TimeUtils::stopNtp();
@@ -27,144 +29,62 @@ void wifiOff() {
   delay(100);
 }
 
-void drawInfoCard(GfxRenderer& renderer, const Rect& rect, const char* title, const std::string& primaryLine,
-                  const std::string& secondaryLine = "", const std::string& tertiaryLine = "") {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const int textWidth = rect.width - 24;
-  const int left = rect.x + 12;
-  int top = rect.y + 12;
-
-  renderer.drawText(UI_10_FONT_ID, left, top, title, true, EpdFontFamily::BOLD);
-  top += 22;
-
-  if (!primaryLine.empty()) {
-    const std::string primary = renderer.truncatedText(UI_12_FONT_ID, primaryLine.c_str(), textWidth, EpdFontFamily::BOLD);
-    renderer.drawText(UI_12_FONT_ID, left, top, primary.c_str(), true, EpdFontFamily::BOLD);
-    top += 24;
+int drawWrappedHelpLine(GfxRenderer& renderer, const int left, const int top, const int width, const char* text) {
+  int currentTop = top;
+  const auto wrappedLines = renderer.wrappedText(UI_10_FONT_ID, text, width, 3);
+  for (const auto& line : wrappedLines) {
+    renderer.drawText(UI_10_FONT_ID, left, currentTop, line.c_str());
+    currentTop += HELP_TEXT_LINE_HEIGHT;
   }
-
-  if (!secondaryLine.empty()) {
-    const std::string secondary = renderer.truncatedText(UI_10_FONT_ID, secondaryLine.c_str(), textWidth);
-    renderer.drawText(UI_10_FONT_ID, left, top, secondary.c_str());
-    top += 18;
-  }
-
-  if (!tertiaryLine.empty()) {
-    const std::string tertiary = renderer.truncatedText(UI_10_FONT_ID, tertiaryLine.c_str(), textWidth);
-    renderer.drawText(UI_10_FONT_ID, left, top, tertiary.c_str());
-  }
+  return currentTop;
 }
 
-std::string formatTimestampLabel(const uint32_t timestamp, const bool includeTime = false, const bool appendBang = false) {
-  const std::string formatted =
-      includeTime ? TimeUtils::formatDateTime(timestamp, appendBang) : TimeUtils::formatDate(timestamp, appendBang);
-  return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
+int drawHowItWorksText(GfxRenderer& renderer, const int left, const int top, const int width) {
+  int currentTop = top;
+  renderer.drawText(UI_10_FONT_ID, left, currentTop, tr(STR_SYNC_DAY_INFO_TITLE), true, EpdFontFamily::BOLD);
+  currentTop += 22;
+
+  currentTop = drawWrappedHelpLine(renderer, left, currentTop, width, tr(STR_SYNC_DAY_INFO_1));
+  currentTop += 2;
+  currentTop = drawWrappedHelpLine(renderer, left, currentTop, width, tr(STR_SYNC_DAY_INFO_2));
+  currentTop += 2;
+  currentTop = drawWrappedHelpLine(renderer, left, currentTop, width, tr(STR_SYNC_DAY_INFO_3));
+
+  return currentTop;
 }
 
-std::string getCurrentDateTimeLabel() {
-  const uint32_t now = static_cast<uint32_t>(time(nullptr));
-  const std::string formatted = TimeUtils::formatDateTime(now);
-  return formatted.empty() ? std::string(tr(STR_NOT_SET)) : formatted;
-}
-
-std::string getDeviceTimeLabel() {
-  return formatTimestampLabel(TimeUtils::getAuthoritativeTimestamp(), true);
-}
-
-std::string getHeaderDateLabel() {
-  const auto info = HeaderDateUtils::getDisplayDateInfo();
-  if (!TimeUtils::isClockValid(info.timestamp)) {
+std::string getObtainedDateLabel() {
+  const auto displayInfo = HeaderDateUtils::getDisplayDateInfo();
+  if (!TimeUtils::isClockValid(displayInfo.timestamp)) {
     return tr(STR_NOT_SET);
   }
 
-  return formatTimestampLabel(info.timestamp, false, info.usedFallback);
+  return TimeUtils::formatDate(displayInfo.timestamp, displayInfo.usedFallback);
 }
 
-std::string getFallbackDateLabel() {
-  const auto info = HeaderDateUtils::getDisplayDateInfo();
-  if (info.usedFallback && TimeUtils::isClockValid(info.timestamp)) {
-    return formatTimestampLabel(info.timestamp, true, true);
-  }
-
-  return tr(STR_NOT_SET);
+std::string getTimeZoneLabel() {
+  return TimeZoneRegistry::getPresetLabel(TimeZoneRegistry::clampPresetIndex(SETTINGS.timeZonePreset));
 }
 
-std::string getBooleanLabel(const bool value) { return value ? tr(STR_YES) : tr(STR_NO); }
-
-std::string getTimeSourceLabel(const bool clockValid, const bool syncedThisBoot,
-                               const HeaderDateUtils::DisplayDateInfo& displayInfo) {
-  if (clockValid && syncedThisBoot) {
-    return tr(STR_TIME_SOURCE_SYNCED);
+std::string getDateFormatLabel() {
+  switch (static_cast<CrossPointSettings::DATE_FORMAT>(SETTINGS.dateFormat)) {
+    case CrossPointSettings::DATE_MM_DD_YYYY:
+      return tr(STR_DATE_FORMAT_MM_DD_YYYY);
+    case CrossPointSettings::DATE_YYYY_MM_DD:
+      return tr(STR_DATE_FORMAT_YYYY_MM_DD);
+    case CrossPointSettings::DATE_DD_MM_YYYY:
+    default:
+      return tr(STR_DATE_FORMAT_DD_MM_YYYY);
   }
-
-  if (displayInfo.usedFallback && TimeUtils::isClockValid(displayInfo.timestamp)) {
-    return tr(STR_TIME_SOURCE_FALLBACK);
-  }
-
-  return tr(STR_TIME_SOURCE_UNAVAILABLE);
 }
 
-void drawDiagnosticCard(GfxRenderer& renderer, const Rect& rect) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
+std::string getWifiChoiceLabel() {
+  return SETTINGS.syncDayWifiChoice == CrossPointSettings::SYNC_DAY_WIFI_MANUAL ? std::string(tr(STR_MANUAL))
+                                                                                : std::string(tr(STR_REFRESH_MODE_AUTO));
+}
 
-  const int textWidth = rect.width - 24;
-  const int left = rect.x + 12;
-  int top = rect.y + 14;
-  const int lineHeight = 18;
-
-  const bool clockValid = TimeUtils::isClockValid();
-  const bool syncedThisBoot = TimeUtils::wasTimeSyncedThisBoot();
-  const auto displayInfo = HeaderDateUtils::getDisplayDateInfo();
-
-  renderer.drawText(UI_10_FONT_ID, left, top, tr(STR_SYNC_DAY_INFO_TITLE), true, EpdFontFamily::BOLD);
-  top += 20;
-
-  const char* infoLines[] = {
-      tr(STR_SYNC_DAY_INFO_1),
-      tr(STR_SYNC_DAY_INFO_2),
-      tr(STR_SYNC_DAY_INFO_3),
-  };
-
-  for (const char* infoLine : infoLines) {
-    const auto wrappedLines = renderer.wrappedText(UI_10_FONT_ID, infoLine, textWidth, 3);
-    for (const auto& wrappedLine : wrappedLines) {
-      renderer.drawText(UI_10_FONT_ID, left, top, wrappedLine.c_str());
-      top += lineHeight;
-    }
-    top += 4;
-  }
-
-  top += 8;
-  renderer.drawLine(left, top, left + textWidth, top);
-  top += 16;
-
-  renderer.drawText(UI_10_FONT_ID, left, top, tr(STR_SYNC_DIAGNOSTICS), true, EpdFontFamily::BOLD);
-  top += 24;
-
-  const std::string lines[] = {
-      std::string(tr(STR_CLOCK_VALID)) + ": " + getBooleanLabel(clockValid),
-      std::string(tr(STR_TIME_SOURCE)) + ": " + getTimeSourceLabel(clockValid, syncedThisBoot, displayInfo),
-      std::string(tr(STR_CURRENT_CLOCK)) + ": " + getCurrentDateTimeLabel(),
-      std::string(tr(STR_SYNCED_THIS_BOOT)) + ": " + getBooleanLabel(syncedThisBoot),
-      std::string(tr(STR_HEADER_DATE)) + ": " + getHeaderDateLabel(),
-      std::string(tr(STR_FALLBACK_DATE)) + ": " + getFallbackDateLabel(),
-  };
-
-  for (const auto& line : lines) {
-    const std::string truncated = renderer.truncatedText(UI_10_FONT_ID, line.c_str(), textWidth);
-    renderer.drawText(UI_10_FONT_ID, left, top, truncated.c_str());
-    top += lineHeight;
-  }
-
-  if (displayInfo.usedFallback) {
-    top += 2;
-    const std::string note = renderer.truncatedText(UI_10_FONT_ID, tr(STR_SYNC_DATE_STALE_NOTE), textWidth);
-    renderer.drawText(UI_10_FONT_ID, left, top, note.c_str(), true, EpdFontFamily::BOLD);
-    top += lineHeight;
-  }
+std::string getNetworkStatusLabel() {
+  return WiFi.status() == WL_CONNECTED ? std::string(tr(STR_CONNECTED)) : std::string(tr(STR_NOT_CONNECTED));
 }
 }  // namespace
 
@@ -176,7 +96,7 @@ void SyncDayActivity::onEnter() {
   syncing = false;
   lastSyncSucceeded = false;
   lastSyncFailed = false;
-  lastClockRefreshMs = millis();
+  selectedIndex = std::clamp(selectedIndex, 0, ACTION_COUNT - 1);
   requestUpdate();
 }
 
@@ -189,8 +109,6 @@ void SyncDayActivity::onExit() {
 }
 
 void SyncDayActivity::loop() {
-  updateClockTick();
-
   if (syncing) {
     return;
   }
@@ -201,12 +119,40 @@ void SyncDayActivity::loop() {
   }
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    if (isWifiConnected()) {
-      syncTime();
+    if (selectedIndex == 0) {
+      const bool chooseWifiManually = SETTINGS.syncDayWifiChoice == CrossPointSettings::SYNC_DAY_WIFI_MANUAL;
+      if (chooseWifiManually) {
+        openWifiSelection(false);
+      } else if (isWifiConnected()) {
+        syncTime();
+      } else {
+        openWifiSelection(true);
+      }
+    } else if (selectedIndex == 1) {
+      openManualDateSelection();
+    } else if (selectedIndex == 2) {
+      SETTINGS.syncDayWifiChoice = (SETTINGS.syncDayWifiChoice + 1) % CrossPointSettings::SYNC_DAY_WIFI_CHOICE_COUNT;
+      SETTINGS.saveToFile();
+      requestUpdate();
+    } else if (selectedIndex == 3) {
+      openTimeZoneSelection();
     } else {
-      openWifiSelection();
+      SETTINGS.dateFormat = (SETTINGS.dateFormat + 1) % CrossPointSettings::DATE_FORMAT_COUNT;
+      SETTINGS.saveToFile();
+      requestUpdate();
     }
+    return;
   }
+
+  buttonNavigator.onNextRelease([this] {
+    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, ACTION_COUNT);
+    requestUpdate();
+  });
+
+  buttonNavigator.onPreviousRelease([this] {
+    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, ACTION_COUNT);
+    requestUpdate();
+  });
 }
 
 void SyncDayActivity::render(RenderLock&&) {
@@ -227,25 +173,43 @@ void SyncDayActivity::render(RenderLock&&) {
   }
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const std::string wifiPrimary = isWifiConnected() ? std::string(tr(STR_CONNECTED)) : std::string(tr(STR_NOT_CONNECTED));
-  const std::string wifiSecondary =
-      isWifiConnected() ? std::string(tr(STR_NETWORK_PREFIX)) + WiFi.SSID().c_str() : std::string(tr(STR_SYNC_DAY_WIFI_HINT));
+  const int listTop = contentTop;
+  const int listHeight = metrics.listWithSubtitleRowHeight * ACTION_COUNT;
+  GUI.drawList(
+      renderer, Rect{0, listTop, pageWidth, listHeight}, ACTION_COUNT, selectedIndex,
+      [](int index) {
+        if (index == 0) return std::string(tr(STR_SYNC_NOW));
+        if (index == 1) return std::string(tr(STR_SET_DATE));
+        if (index == 2) return std::string(tr(STR_CHOOSE_WIFI));
+        if (index == 3) return std::string(tr(STR_TIME_ZONE));
+        return std::string(tr(STR_DATE_FORMAT));
+      },
+      [](int index) {
+        if (index == 0) return getObtainedDateLabel();
+        if (index == 1) return std::string(tr(STR_MANUAL));
+        if (index == 2) return getWifiChoiceLabel();
+        if (index == 3) return getTimeZoneLabel();
+        return getDateFormatLabel();
+      },
+      [](int index) {
+        if (index == 0) return UIIcon::Wifi;
+        if (index == 1) return UIIcon::Recent;
+        if (index == 2) return UIIcon::Settings;
+        if (index == 3) return UIIcon::Settings;
+        return UIIcon::Recent;
+      },
+      [](int index) { return index == 0 ? getNetworkStatusLabel() : std::string(); }, false);
 
-  drawInfoCard(renderer, Rect{sidePadding, contentTop, pageWidth - sidePadding * 2, INFO_CARD_HEIGHT}, tr(STR_WIFI),
-               wifiPrimary, wifiSecondary);
+  int infoTop = listTop + listHeight + metrics.verticalSpacing;
+  const int infoWidth = pageWidth - sidePadding * 2;
+  if (selectedIndex == 0) {
+    const std::string helperText = renderer.truncatedText(UI_10_FONT_ID, getStatusMessage().c_str(), infoWidth);
+    renderer.drawText(UI_10_FONT_ID, sidePadding, infoTop, helperText.c_str());
+    infoTop += HELP_TEXT_LINE_HEIGHT + 10;
+  }
+  drawHowItWorksText(renderer, sidePadding, infoTop, infoWidth);
 
-  const int timeCardTop = contentTop + INFO_CARD_HEIGHT + CARD_GAP;
-  drawInfoCard(renderer, Rect{sidePadding, timeCardTop, pageWidth - sidePadding * 2, INFO_CARD_HEIGHT},
-               tr(STR_DEVICE_TIME), getDeviceTimeLabel(), getStatusMessage());
-
-  const int diagnosticsTop = timeCardTop + INFO_CARD_HEIGHT + CARD_GAP;
-  const int diagnosticsHeight =
-      std::max(DIAGNOSTICS_CARD_MIN_HEIGHT,
-               pageHeight - diagnosticsTop - metrics.buttonHintsHeight - metrics.verticalSpacing);
-  drawDiagnosticCard(renderer, Rect{sidePadding, diagnosticsTop, pageWidth - sidePadding * 2, diagnosticsHeight});
-
-  const char* actionLabel = isWifiConnected() ? tr(STR_SYNC_NOW) : tr(STR_CONNECT);
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), actionLabel, "", "");
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
@@ -257,20 +221,32 @@ std::string SyncDayActivity::getStatusMessage() const {
   if (lastSyncSucceeded) {
     return tr(STR_TIME_SYNCED);
   }
+
   if (lastSyncFailed) {
     return tr(STR_TIME_SYNC_FAILED);
   }
-  if (TimeUtils::isClockValid(TimeUtils::getAuthoritativeTimestamp())) {
-    return tr(STR_SYNC_DAY_HINT);
+
+  const auto displayInfo = HeaderDateUtils::getDisplayDateInfo();
+  if (displayInfo.usedFallback || !TimeUtils::isClockValid(displayInfo.timestamp)) {
+    return tr(STR_SYNC_DAY_WIFI_HINT);
   }
-  if (HeaderDateUtils::getDisplayDateInfo().usedFallback) {
-    return tr(STR_SYNC_DATE_STALE_NOTE);
-  }
-  return tr(STR_SYNC_DAY_WIFI_HINT);
+
+  return tr(STR_SYNC_DAY_HINT);
 }
 
-void SyncDayActivity::openWifiSelection() {
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
+void SyncDayActivity::openTimeZoneSelection() {
+  startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput), [this](const ActivityResult&) {
+    requestUpdate();
+  });
+}
+
+void SyncDayActivity::openManualDateSelection() {
+  startActivityForResult(std::make_unique<ManualDateActivity>(renderer, mappedInput),
+                         [this](const ActivityResult&) { requestUpdate(); });
+}
+
+void SyncDayActivity::openWifiSelection(const bool allowAutoConnect) {
+  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, allowAutoConnect),
                          [this](const ActivityResult& result) {
                            if (result.isCancelled || !isWifiConnected()) {
                              requestUpdate();
@@ -294,26 +270,13 @@ void SyncDayActivity::syncTime() {
   const bool ntpSuccess = TimeUtils::syncTimeWithNtp();
   const uint32_t currentValidTimestamp = TimeUtils::getCurrentValidTimestamp();
   const bool effectiveSuccess = ntpSuccess || (!hadValidTimeBefore && currentValidTimestamp > 0);
-  if (currentValidTimestamp > 0) {
+  if (effectiveSuccess && currentValidTimestamp > 0) {
     APP_STATE.registerValidTimeSync(currentValidTimestamp);
     APP_STATE.saveToFile();
   }
+
   syncing = false;
   lastSyncSucceeded = effectiveSuccess;
   lastSyncFailed = !effectiveSuccess;
-  lastClockRefreshMs = millis();
   requestUpdate(true);
-}
-
-void SyncDayActivity::updateClockTick() {
-  if (!TimeUtils::isClockValid()) {
-    return;
-  }
-
-  if (millis() - lastClockRefreshMs < 1000) {
-    return;
-  }
-
-  lastClockRefreshMs = millis();
-  requestUpdate();
 }

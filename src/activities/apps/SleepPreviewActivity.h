@@ -11,10 +11,11 @@ class SleepPreviewActivity final : public Activity {
   std::string directoryPath;
   std::vector<std::string> imagePaths;
   int selectedIndex = 0;
-  bool loading = true;
-  bool previewDirty = true;
 
   void loadImages();
+  void renderPreview(bool showLoadingPopup);
+  void selectDirectory();
+  void showLoadError(const char* message);
 
  public:
   SleepPreviewActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string directoryPath)
@@ -23,4 +24,5 @@ class SleepPreviewActivity final : public Activity {
   void onEnter() override;
   void loop() override;
   void render(RenderLock&&) override;
+  uint8_t getUiTransitionRefreshWeight() const override { return UI_TRANSITION_REFRESH_WEIGHT_DENSE; }
 };

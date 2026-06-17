@@ -14,5 +14,7 @@ build
 /.cache
 .history/
 /.venv
+/artifacts/
 *.local*
-open-x4-sdk
+*.log
+/.codex-build/

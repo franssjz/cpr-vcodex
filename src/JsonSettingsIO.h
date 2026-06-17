@@ -5,8 +5,10 @@ class CrossPointState;
 class WifiCredentialStore;
 class KOReaderCredentialStore;
 class RecentBooksStore;
+class FavoritesStore;
 class ReadingStatsStore;
 class AchievementsStore;
+class OpdsServerStore;
 
 namespace JsonSettingsIO {
 
@@ -29,7 +31,10 @@ bool loadKOReader(KOReaderCredentialStore& store, const char* json, bool* needsR
 // RecentBooksStore
 bool saveRecentBooks(const RecentBooksStore& store, const char* path);
 bool loadRecentBooks(RecentBooksStore& store, const char* json);
-bool loadRecentBooksFromFile(RecentBooksStore& store, const char* path);
+
+// FavoritesStore
+bool saveFavorites(const FavoritesStore& store, const char* path);
+bool loadFavorites(FavoritesStore& store, const char* json);
 
 // ReadingStatsStore
 bool saveReadingStats(const ReadingStatsStore& store, const char* path);
@@ -38,5 +43,9 @@ bool loadReadingStatsFromFile(ReadingStatsStore& store, const char* path);
 bool saveAchievements(const AchievementsStore& store, const char* path);
 bool loadAchievements(AchievementsStore& store, const char* json);
 bool loadAchievementsFromFile(AchievementsStore& store, const char* path);
+
+// OpdsServerStore
+bool saveOpds(const OpdsServerStore& store, const char* path);
+bool loadOpds(OpdsServerStore& store, const char* json, bool* needsResave = nullptr);
 
 }  // namespace JsonSettingsIO

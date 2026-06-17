@@ -18,7 +18,6 @@ class RecentBooksStore;
 namespace JsonSettingsIO {
 bool saveRecentBooks(const RecentBooksStore& store, const char* path);
 bool loadRecentBooks(RecentBooksStore& store, const char* json);
-bool loadRecentBooksFromFile(RecentBooksStore& store, const char* path);
 }  // namespace JsonSettingsIO
 
 class RecentBooksStore {
@@ -27,9 +26,8 @@ class RecentBooksStore {
 
   std::vector<RecentBook> recentBooks;
 
-  friend bool JsonSettingsIO::loadRecentBooks(RecentBooksStore&, const char*);
-  friend bool JsonSettingsIO::loadRecentBooksFromFile(RecentBooksStore&, const char*);
   friend bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore&, const char*);
+  friend bool JsonSettingsIO::loadRecentBooks(RecentBooksStore&, const char*);
 
  public:
   ~RecentBooksStore() = default;
@@ -43,7 +41,18 @@ class RecentBooksStore {
 
   void updateBook(const std::string& path, const std::string& title, const std::string& author,
                   const std::string& coverBmpPath, const std::string& bookId = "");
+  bool updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title = "",
+                      const std::string& author = "", const std::string& coverBmpPath = "",
+                      const std::string& bookId = "");
+
   bool removeBook(const std::string& key);
+
+  // True if the book's backing file is no longer present on the SD card.
+  static bool isMissing(const RecentBook& book);
+
+  // Remove entries whose backing file is no longer on the SD card.
+  // Returns true if any entry was removed. Does not persist; caller decides.
+  bool pruneMissing();
 
   // Get the list of recent books (most recent first)
   const std::vector<RecentBook>& getBooks() const { return recentBooks; }

@@ -21,11 +21,11 @@ struct MenuResult {
   int action = -1;
   uint8_t orientation = 0;
   uint8_t pageTurnOption = 0;
-  uint8_t textDarkness = 0;
 };
 
 struct ChapterResult {
   int spineIndex = 0;
+  std::string anchor;
 };
 
 struct PercentResult {
@@ -44,6 +44,10 @@ struct BookmarkResult {
 struct SyncResult {
   int spineIndex = 0;
   int page = 0;
+  uint16_t paragraphIndex = 0;
+  bool hasParagraphIndex = false;
+  uint16_t listItemIndex = 0;
+  bool hasListItemIndex = false;
 };
 
 enum class NetworkMode;
@@ -56,9 +60,32 @@ struct FootnoteResult {
   std::string href;
 };
 
+struct FilePathResult {
+  std::string path;
+};
+
+struct FlashcardSessionResult {
+  std::string deckId;
+  std::string deckPath;
+  std::string deckTitle;
+  int reviewed = 0;
+  int correct = 0;
+  int failed = 0;
+  int skipped = 0;
+  int newSeen = 0;
+  int dueRemaining = 0;
+  int totalCards = 0;
+  int seenCards = 0;
+  int unseenCards = 0;
+  int dueCards = 0;
+  int masteredCards = 0;
+  int successRatePercent = 0;
+  int sessionCount = 0;
+};
+
 using ResultVariant =
     std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, PageResult,
-                 BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult>;
+                 BookmarkResult, SyncResult, NetworkModeResult, FootnoteResult, FilePathResult, FlashcardSessionResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

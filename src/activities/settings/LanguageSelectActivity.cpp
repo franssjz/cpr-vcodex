@@ -13,6 +13,7 @@
 
 void LanguageSelectActivity::onEnter() {
   Activity::onEnter();
+  useLanguageSelectionUiFonts();
 
   // Set current selection based on current language
   const auto currentLang = static_cast<uint8_t>(I18N.getLanguage());
@@ -24,7 +25,10 @@ void LanguageSelectActivity::onEnter() {
   requestUpdate();
 }
 
-void LanguageSelectActivity::onExit() { Activity::onExit(); }
+void LanguageSelectActivity::onExit() {
+  refreshUiFontsForCurrentLanguage();
+  Activity::onExit();
+}
 
 void LanguageSelectActivity::loop() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
@@ -38,6 +42,8 @@ void LanguageSelectActivity::loop() {
   }
 
   // Handle navigation
+  const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false);
+
   buttonNavigator.onNextRelease([this] {
     selectedIndex = ButtonNavigator::nextIndex(static_cast<int>(selectedIndex), totalItems);
     requestUpdate();
@@ -47,6 +53,16 @@ void LanguageSelectActivity::loop() {
     selectedIndex = ButtonNavigator::previousIndex(static_cast<int>(selectedIndex), totalItems);
     requestUpdate();
   });
+
+  buttonNavigator.onNextContinuous([this, pageItems] {
+    selectedIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectedIndex), totalItems, pageItems);
+    requestUpdate();
+  });
+
+  buttonNavigator.onPreviousContinuous([this, pageItems] {
+    selectedIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectedIndex), totalItems, pageItems);
+    requestUpdate();
+  });
 }
 
 void LanguageSelectActivity::handleSelection() {
@@ -54,7 +70,6 @@ void LanguageSelectActivity::handleSelection() {
     RenderLock lock(*this);
     I18N.setLanguage(static_cast<Language>(SORTED_LANGUAGE_INDICES[selectedIndex]));
     refreshUiFontsForCurrentLanguage();
-    renderer.requestNextFullRefresh();
   }
 
   // Return to previous page

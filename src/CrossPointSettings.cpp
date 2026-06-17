@@ -28,10 +28,21 @@ constexpr char SETTINGS_FILE_JSON[] = "/.crosspoint/settings.json";
 constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 constexpr uint8_t LEGACY_FONT_SIZE_COUNT = 4;
 
+uint8_t migrateLegacyUiTheme(const uint8_t legacyUiTheme) {
+  switch (legacyUiTheme) {
+    case 0:  // Classic
+    case 1:  // Lyra
+    default:
+      return CrossPointSettings::LYRA;
+    case 2:  // Lyra Extended
+    case 3:  // Lyra Custom
+      return CrossPointSettings::LYRA_CUSTOM;
+  }
+}
+
 uint8_t migrateLegacyFontSize(const uint8_t legacyFontSize) {
-  return legacyFontSize < LEGACY_FONT_SIZE_COUNT
-             ? static_cast<uint8_t>(legacyFontSize + 1)
-             : static_cast<uint8_t>(CrossPointSettings::MEDIUM);
+  return legacyFontSize < LEGACY_FONT_SIZE_COUNT ? static_cast<uint8_t>(legacyFontSize + 1)
+                                                 : static_cast<uint8_t>(CrossPointSettings::MEDIUM);
 }
 
 // Convert legacy front button layout into explicit logical->hardware mapping.
@@ -89,6 +100,13 @@ bool CrossPointSettings::saveToFile() const {
 }
 
 bool CrossPointSettings::loadFromFile() {
+  const std::string tempPath = std::string(SETTINGS_FILE_JSON) + ".tmp";
+  if (!Storage.exists(SETTINGS_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), SETTINGS_FILE_JSON)) {
+      LOG_DBG("CPS", "Recovered settings.json from interrupted temp file");
+    }
+  }
+
   // Try JSON first
   if (Storage.exists(SETTINGS_FILE_JSON)) {
     String json = Storage.readFile(SETTINGS_FILE_JSON);
@@ -133,7 +151,6 @@ bool CrossPointSettings::loadFromBinaryFile() {
   serialization::readPod(inputFile, version);
   if (version != SETTINGS_FILE_VERSION) {
     LOG_ERR("CPS", "Deserialization failed: Unknown version %u", version);
-    inputFile.close();
     return false;
   }
 
@@ -188,7 +205,11 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, hideBatteryPercentage, HIDE_BATTERY_PERCENTAGE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
-    serialization::readPod(inputFile, longPressChapterSkip);
+    {
+      uint8_t legacyLongPressChapterSkip = 1;
+      serialization::readPod(inputFile, legacyLongPressChapterSkip);
+      longPressButtonBehavior = legacyLongPressChapterSkip ? LONG_PRESS_CHAPTER_SKIP : LONG_PRESS_OFF;
+    }
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, hyphenationEnabled);
     if (++settingsRead >= fileSettingsCount) break;
@@ -208,7 +229,11 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, sleepScreenCoverFilter, SLEEP_SCREEN_COVER_FILTER_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
-    readAndValidate(inputFile, uiTheme, UI_THEME_COUNT);
+    {
+      uint8_t legacyUiTheme = static_cast<uint8_t>(LYRA);
+      serialization::readPod(inputFile, legacyUiTheme);
+      uiTheme = migrateLegacyUiTheme(legacyUiTheme);
+    }
     if (++settingsRead >= fileSettingsCount) break;
     readAndValidate(inputFile, frontButtonBack, FRONT_BUTTON_HARDWARE_COUNT);
     if (++settingsRead >= fileSettingsCount) break;
@@ -223,6 +248,8 @@ bool CrossPointSettings::loadFromBinaryFile() {
     if (++settingsRead >= fileSettingsCount) break;
     serialization::readPod(inputFile, embeddedStyle);
     if (++settingsRead >= fileSettingsCount) break;
+    serialization::readPod(inputFile, frontButtonFollowOrientation);
+    if (++settingsRead >= fileSettingsCount) break;
   } while (false);
 
   if (frontButtonMappingRead) {
@@ -231,7 +258,6 @@ bool CrossPointSettings::loadFromBinaryFile() {
     applyLegacyFrontButtonLayout(*this);
   }
 
-  inputFile.close();
   LOG_DBG("CPS", "Settings loaded from binary file");
   return true;
 }
@@ -279,12 +305,13 @@ unsigned long CrossPointSettings::getSleepTimeoutMs() const {
     case SLEEP_5_MIN:
       return 5UL * 60 * 1000;
     case SLEEP_10_MIN:
-    default:
       return 10UL * 60 * 1000;
     case SLEEP_15_MIN:
       return 15UL * 60 * 1000;
     case SLEEP_30_MIN:
       return 30UL * 60 * 1000;
+    default:
+      return 10UL * 60 * 1000;
   }
 }
 
@@ -304,6 +331,9 @@ uint64_t CrossPointSettings::getDailyGoalMs() const {
 
 uint8_t CrossPointSettings::getSyncDayReminderStartThreshold() const {
   switch (syncDayReminderStarts) {
+    case SYNC_DAY_REMINDER_OFF:
+    default:
+      return 0;
     case SYNC_DAY_REMINDER_10:
       return 10;
     case SYNC_DAY_REMINDER_20:
@@ -316,9 +346,6 @@ uint8_t CrossPointSettings::getSyncDayReminderStartThreshold() const {
       return 50;
     case SYNC_DAY_REMINDER_60:
       return 60;
-    case SYNC_DAY_REMINDER_OFF:
-    default:
-      return 0;
   }
 }
 
@@ -356,6 +383,13 @@ bool CrossPointSettings::getForcedReaderRefreshMode(HalDisplay::RefreshMode& mod
 }
 
 int CrossPointSettings::getReaderFontId() const {
+  if (sdFontFamilyName[0] != '\0' && sdFontIdResolver) {
+    const int id = sdFontIdResolver(sdFontResolverCtx, sdFontFamilyName, fontSize);
+    if (id != 0) {
+      return id;
+    }
+  }
+
   switch (fontFamily) {
     case BOOKERLY:
     default:

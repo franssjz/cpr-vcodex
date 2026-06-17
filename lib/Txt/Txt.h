@@ -20,7 +20,9 @@ class Txt {
   [[nodiscard]] const std::string& getCachePath() const { return cachePath; }
   [[nodiscard]] std::string getTitle() const;
   [[nodiscard]] size_t getFileSize() const { return fileSize; }
+  [[nodiscard]] bool isMarkdown() const;
 
+  bool clearCache() const;
   void setupCacheDir() const;
 
   // Cover image support - looks for cover.bmp/jpg/jpeg/png in same folder as txt file

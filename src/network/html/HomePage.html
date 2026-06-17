@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CrossPoint Reader</title>
+    <title>CPR-vCodex</title>
     <style>
       :root {
         --font-color: #333;
@@ -76,10 +76,14 @@
         color: white;
         font-size: 0.9em;
       }
+      .status.ap {
+        background-color: #f39c12;
+      }
       .nav-links {
         margin: 20px 0;
         display: flex;
         gap: 10px;
+        flex-wrap: wrap;
       }
       .nav-links a {
         padding: 10px 20px;
@@ -95,15 +99,33 @@
         background-color: var(--accent-hover-color);
         color: white;
       }
+      .goal-status {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(39, 174, 96, 0.14);
+        color: #1f7a47;
+        font-size: 0.82em;
+        font-weight: 600;
+      }
+      @media (prefers-color-scheme: dark) {
+        .goal-status {
+          background: rgba(39, 174, 96, 0.22);
+          color: #8ee2ab;
+        }
+      }
     </style>
   </head>
   <body>
-    <h1>📚 CrossPoint Reader</h1>
+    <h1>📚 CPR-vCodex</h1>
 
     <div class="nav-links">
       <a href="/" class="active">Home</a>
       <a href="/files">File Manager</a>
       <a href="/settings">Settings</a>
+      <a href="/fonts">Fonts</a>
+      <a href="/if-found">if_found.txt</a>
     </div>
 
     <div class="card">
@@ -114,24 +136,93 @@
       </div>
       <div class="info-row">
         <span class="label">WiFi Status</span>
-        <span class="status">Connected</span>
+        <span class="status" id="wifi-status">Loading...</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Network Mode</span>
+        <span class="value" id="network-mode"></span>
       </div>
       <div class="info-row">
         <span class="label">IP Address</span>
         <span class="value" id="ip-address"></span>
       </div>
       <div class="info-row">
+        <span class="label">Signal</span>
+        <span class="value" id="signal-strength"></span>
+      </div>
+      <div class="info-row">
         <span class="label">Free Memory</span>
         <span class="value" id="free-heap"></span>
+      </div>
+      <div class="info-row">
+        <span class="label">Uptime</span>
+        <span class="value" id="uptime"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Reading Snapshot</h2>
+      <div class="info-row">
+        <span class="label">Today</span>
+        <span class="value" id="today-reading"></span>
+      </div>
+      <div class="info-row">
+        <span class="label">Streak</span>
+        <span class="value" id="reading-streak"></span>
+      </div>
+      <div class="info-row">
+        <span class="label">Books</span>
+        <span class="value" id="books-progress"></span>
+      </div>
+      <div class="info-row">
+        <span class="label">Achievements</span>
+        <span class="value" id="achievements-progress"></span>
+      </div>
+      <div class="info-row">
+        <span class="label">Recents</span>
+        <span class="value" id="recent-count"></span>
       </div>
     </div>
 
     <div class="card">
       <p style="text-align: center; color: #95a5a6; margin: 0">
-        CrossPoint E-Reader • Open Source
+        CPR-vCodex • Open Source
       </p>
     </div>
   <script>
+    function formatUptime(totalSeconds) {
+      if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
+        return 'N/A';
+      }
+
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+      if (days > 0) {
+        return `${days}d ${hours}h ${minutes}m`;
+      }
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+      return `${minutes}m`;
+    }
+
+    function formatDurationCompact(totalMs) {
+      if (!Number.isFinite(totalMs) || totalMs < 0) {
+        return 'N/A';
+      }
+
+      const totalMinutes = Math.floor(totalMs / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+
+      if (hours === 0) {
+        return `${minutes}m`;
+      }
+      return `${hours}h ${minutes}m`;
+    }
+
     async function fetchStatus() {
       try {
         const response = await fetch('/api/status');
@@ -139,11 +230,32 @@
           throw new Error('Failed to fetch status: ' + response.status + ' ' + response.statusText);
         }
         const data = await response.json();
+        const wifiStatus = document.getElementById('wifi-status');
         document.getElementById('version').textContent = data.version || 'N/A';
         document.getElementById('ip-address').textContent = data.ip || 'N/A';
+        document.getElementById('network-mode').textContent = data.mode === 'AP' ? 'Access Point' : 'WiFi Client';
+        document.getElementById('signal-strength').textContent =
+          data.mode === 'AP' ? 'N/A in AP mode' : (Number.isFinite(data.rssi) ? `${data.rssi} dBm` : 'N/A');
         document.getElementById('free-heap').textContent = data.freeHeap
           ? data.freeHeap.toLocaleString() + ' bytes'
           : 'N/A';
+        document.getElementById('uptime').textContent = formatUptime(data.uptime);
+        wifiStatus.textContent = data.mode === 'AP' ? 'Access Point Active' : 'Connected';
+        wifiStatus.classList.toggle('ap', data.mode === 'AP');
+        const todayReading = Number.isFinite(data.todayReadingMs) ? data.todayReadingMs : 0;
+        const dailyGoal = Number.isFinite(data.dailyGoalMs) ? data.dailyGoalMs : 0;
+        const goalMet = dailyGoal > 0 && todayReading >= dailyGoal;
+        document.getElementById('today-reading').innerHTML =
+          `${formatDurationCompact(todayReading)} / ${formatDurationCompact(dailyGoal)}`
+          + (goalMet ? '<span class="goal-status">Goal met</span>' : '');
+        document.getElementById('reading-streak').textContent =
+          `${Number.isFinite(data.streakDays) ? data.streakDays : 0} day${data.streakDays === 1 ? '' : 's'}`;
+        document.getElementById('books-progress').textContent =
+          `${Number.isFinite(data.booksCompleted) ? data.booksCompleted : 0} completed / ${Number.isFinite(data.booksStarted) ? data.booksStarted : 0} started`;
+        document.getElementById('achievements-progress').textContent =
+          `${Number.isFinite(data.achievementsUnlocked) ? data.achievementsUnlocked : 0} / ${Number.isFinite(data.achievementsTotal) ? data.achievementsTotal : 0} unlocked`;
+        document.getElementById('recent-count').textContent =
+          `${Number.isFinite(data.recentCount) ? data.recentCount : 0} books`;
       } catch (error) {
         console.error('Error fetching status:', error);
       }

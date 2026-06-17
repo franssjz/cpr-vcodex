@@ -1,0 +1,31 @@
+# SD Card Font Families for CPR-vCodex.
+#
+# CPR-vCodex exposes CrossPoint's official font repository as the primary
+# source in Manage Fonts. Keep this manifest limited to families that are not
+# already published by CrossPoint, so the vCodex source stays small and avoids
+# duplicate slow downloads.
+#
+# Adding a new vCodex-only font family = adding a block here. No code changes
+# needed; release-fonts.yml will build the .cpfont files and fonts.json.
+#
+# Fields:
+#   name:        Output family name (used in filenames and on-device UI)
+#   description: Human-readable description (shown in download UI and manifest)
+#   intervals:   Comma-separated Unicode interval presets for fontconvert_sdcard.py
+#   sizes:       Point sizes to generate
+#   force_autohint: (optional) Force FreeType auto-hinter instead of native hinting
+#   darken_aa:   (optional, default true) Use darker 2-bit AA thresholds for reader fonts
+#   styles:      Map of style name -> font source
+#                  path: relative to lib/EpdFont (for committed fonts)
+#                  url:  download URL (for fonts not in the repo)
+
+families:
+  - name: ChareInk
+    description: "E-reader tuned serif based on Charis SIL (Latin, Greek, Cyrillic)"
+    intervals: latin-ext,greek,cyrillic
+    sizes: [12, 14, 16, 18]
+    styles:
+      regular:    {path: "builtinFonts/source/ChareInk7/ChareInk7-Regular.ttf"}
+      bold:       {path: "builtinFonts/source/ChareInk7/ChareInk7-Bold.ttf"}
+      italic:     {path: "builtinFonts/source/ChareInk7/ChareInk7-Italic.ttf"}
+      bolditalic: {path: "builtinFonts/source/ChareInk7/ChareInk7-BoldItalic.ttf"}

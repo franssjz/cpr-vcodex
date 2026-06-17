@@ -19,6 +19,20 @@ constexpr char RECENT_BOOKS_FILE_BIN[] = "/.crosspoint/recent.bin";
 constexpr char RECENT_BOOKS_FILE_JSON[] = "/.crosspoint/recent.json";
 constexpr char RECENT_BOOKS_FILE_BAK[] = "/.crosspoint/recent.bin.bak";
 constexpr int MAX_RECENT_BOOKS = 10;
+
+std::string fallbackTitleFromPath(const std::string& path) {
+  std::string filename = path;
+  const size_t lastSlash = filename.find_last_of('/');
+  if (lastSlash != std::string::npos) {
+    filename = filename.substr(lastSlash + 1);
+  }
+
+  const size_t dotPos = filename.find_last_of('.');
+  if (dotPos != std::string::npos) {
+    filename = filename.substr(0, dotPos);
+  }
+  return filename;
+}
 }  // namespace
 
 RecentBooksStore RecentBooksStore::instance;
@@ -105,6 +119,9 @@ void RecentBooksStore::normalizeBooks() {
 
 void RecentBooksStore::addBook(const std::string& path, const std::string& title, const std::string& author,
                                const std::string& coverBmpPath, const std::string& bookId) {
+  // Drop stale entries first so a new add cannot evict a valid book in their stead.
+  pruneMissing();
+
   const std::string normalizedPath = BookIdentity::normalizePath(path);
   const std::string resolvedBookId =
       !bookId.empty() ? bookId : (!normalizedPath.empty() ? BookIdentity::resolveStableBookId(normalizedPath) : "");
@@ -144,6 +161,39 @@ void RecentBooksStore::updateBook(const std::string& path, const std::string& ti
   }
 }
 
+bool RecentBooksStore::updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title,
+                                      const std::string& author, const std::string& coverBmpPath,
+                                      const std::string& bookId) {
+  const std::string normalizedNewPath = BookIdentity::normalizePath(newPath);
+  if (normalizedNewPath.empty()) {
+    return false;
+  }
+
+  const std::string resolvedBookId =
+      !bookId.empty() ? bookId : (!normalizedNewPath.empty() ? BookIdentity::resolveStableBookId(normalizedNewPath) : "");
+  const int existingIndex = findBookIndex(oldKey, resolvedBookId);
+  if (existingIndex < 0) {
+    return false;
+  }
+
+  RecentBook& book = recentBooks[existingIndex];
+  if (!resolvedBookId.empty()) {
+    book.bookId = resolvedBookId;
+  }
+  book.path = normalizedNewPath;
+  if (!title.empty()) {
+    book.title = title;
+  }
+  if (!author.empty()) {
+    book.author = author;
+  }
+  if (!coverBmpPath.empty()) {
+    book.coverBmpPath = coverBmpPath;
+  }
+  saveToFile();
+  return true;
+}
+
 bool RecentBooksStore::removeBook(const std::string& key) {
   const int existingIndex = findBookIndex(key, key);
   if (existingIndex < 0) {
@@ -153,6 +203,17 @@ bool RecentBooksStore::removeBook(const std::string& key) {
   recentBooks.erase(recentBooks.begin() + existingIndex);
   saveToFile();
   return true;
+}
+
+bool RecentBooksStore::isMissing(const RecentBook& book) {
+  return book.path.empty() || !Storage.exists(book.path.c_str());
+}
+
+bool RecentBooksStore::pruneMissing() {
+  const size_t before = recentBooks.size();
+  recentBooks.erase(std::remove_if(recentBooks.begin(), recentBooks.end(), &RecentBooksStore::isMissing),
+                    recentBooks.end());
+  return recentBooks.size() != before;
 }
 
 bool RecentBooksStore::saveToFile() const {
@@ -191,9 +252,19 @@ RecentBook RecentBooksStore::getDataFromBook(std::string path) const {
 }
 
 bool RecentBooksStore::loadFromFile() {
+  const std::string tempPath = std::string(RECENT_BOOKS_FILE_JSON) + ".tmp";
+  if (!Storage.exists(RECENT_BOOKS_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), RECENT_BOOKS_FILE_JSON)) {
+      LOG_DBG("RBS", "Recovered recent.json from interrupted temp file");
+    }
+  }
+
   // Try JSON first
   if (Storage.exists(RECENT_BOOKS_FILE_JSON)) {
-    return JsonSettingsIO::loadRecentBooksFromFile(*this, RECENT_BOOKS_FILE_JSON);
+    String json = Storage.readFile(RECENT_BOOKS_FILE_JSON);
+    if (!json.isEmpty()) {
+      return JsonSettingsIO::loadRecentBooks(*this, json.c_str());
+    }
   }
 
   // Fall back to binary migration
@@ -218,7 +289,7 @@ bool RecentBooksStore::loadFromBinaryFile() {
   uint8_t version;
   serialization::readPod(inputFile, version);
   if (version == 1 || version == 2) {
-    // Old version, just read paths
+    // Old version: migrate lightly to avoid opening EPUB/XTC during boot.
     uint8_t count;
     serialization::readPod(inputFile, count);
     recentBooks.clear();
@@ -226,18 +297,23 @@ bool RecentBooksStore::loadFromBinaryFile() {
     for (uint8_t i = 0; i < count; i++) {
       std::string path;
       serialization::readString(inputFile, path);
-
-      // load book to get missing data
-      RecentBook book = getDataFromBook(path);
-      if (book.title.empty() && book.author.empty() && version == 2) {
-        // Fall back to loading what we can from the store
-        std::string title, author;
+      std::string title;
+      std::string author;
+      if (version == 2) {
         serialization::readString(inputFile, title);
         serialization::readString(inputFile, author);
-        recentBooks.push_back({BookIdentity::resolveStableBookId(path), path, title, author, ""});
-      } else {
-        recentBooks.push_back(book);
       }
+
+      const std::string normalizedPath = BookIdentity::normalizePath(path);
+      if (normalizedPath.empty()) {
+        continue;
+      }
+
+      if (title.empty()) {
+        title = fallbackTitleFromPath(normalizedPath);
+      }
+
+      recentBooks.push_back({BookIdentity::resolveStableBookId(normalizedPath), normalizedPath, title, author, ""});
     }
   } else if (version == 3) {
     uint8_t count;
@@ -264,6 +340,7 @@ bool RecentBooksStore::loadFromBinaryFile() {
     }
 
     if (omitted > 0) {
+      // Explicitly close() file before saveToFile() rewrites the same file
       inputFile.close();
       saveToFile();
       LOG_DBG("RBS", "Omitted %u recent book(s) with missing title", omitted);
@@ -271,7 +348,6 @@ bool RecentBooksStore::loadFromBinaryFile() {
     }
   } else {
     LOG_ERR("RBS", "Deserialization failed: Unknown version %u", version);
-    inputFile.close();
     return false;
   }
 

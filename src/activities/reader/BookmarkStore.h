@@ -10,7 +10,6 @@
 
 #include "util/BookIdentity.h"
 
-// Stores per-book bookmarks inside the reader cache directory.
 class BookmarkStore {
  public:
   struct Bookmark {
@@ -31,13 +30,14 @@ class BookmarkStore {
     } else {
       storagePath = cachePath.empty() ? "" : (cachePath + "/bookmarks.bin");
     }
+
     bookmarks.clear();
     dirty = false;
 
     FsFile file;
     bool loadedLegacyPath = false;
     if (!Storage.openFileForRead("BKM", getFilePath(), file)) {
-      if (storagePath != legacyPath || legacyPath.empty() || !Storage.openFileForRead("BKM", legacyPath, file)) {
+      if (storagePath == legacyPath || legacyPath.empty() || !Storage.openFileForRead("BKM", legacyPath, file)) {
         return;
       }
       loadedLegacyPath = true;
@@ -54,14 +54,23 @@ class BookmarkStore {
       return;
     }
 
-    uint16_t count = 0;
-    if (file.read(reinterpret_cast<uint8_t*>(&count), sizeof(count)) != sizeof(count) || count > MAX_BOOKMARKS) {
-      file.close();
-      return;
+    uint32_t count = 0;
+    if (version >= 3) {
+      if (file.read(reinterpret_cast<uint8_t*>(&count), sizeof(count)) != sizeof(count)) {
+        file.close();
+        return;
+      }
+    } else {
+      uint16_t legacyCount = 0;
+      if (file.read(reinterpret_cast<uint8_t*>(&legacyCount), sizeof(legacyCount)) != sizeof(legacyCount)) {
+        file.close();
+        return;
+      }
+      count = legacyCount;
     }
 
-    bookmarks.reserve(count);
-    for (uint16_t index = 0; index < count; index++) {
+    bookmarks.reserve(static_cast<size_t>(count));
+    for (uint32_t index = 0; index < count; ++index) {
       Bookmark bookmark;
       if (file.read(reinterpret_cast<uint8_t*>(&bookmark.spineIndex), sizeof(bookmark.spineIndex)) !=
               sizeof(bookmark.spineIndex) ||
@@ -86,6 +95,7 @@ class BookmarkStore {
           }
         }
       }
+
       bookmarks.push_back(bookmark);
     }
 
@@ -112,7 +122,7 @@ class BookmarkStore {
       return file.write(reinterpret_cast<const uint8_t*>(&value), sizeof(value)) == sizeof(value);
     };
 
-    const uint16_t count = static_cast<uint16_t>(bookmarks.size());
+    const uint32_t count = static_cast<uint32_t>(bookmarks.size());
     bool ok = writePodChecked(FILE_VERSION) && writePodChecked(count);
 
     for (const auto& bookmark : bookmarks) {
@@ -177,8 +187,7 @@ class BookmarkStore {
   void markDirty() { dirty = true; }
 
  private:
-  static constexpr uint8_t FILE_VERSION = 2;
-  static constexpr uint16_t MAX_BOOKMARKS = 1000;
+  static constexpr uint8_t FILE_VERSION = 3;
   static constexpr uint8_t MAX_SNIPPET_LEN = 80;
 
   std::vector<Bookmark> bookmarks;

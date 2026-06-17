@@ -9,6 +9,8 @@
 class ImageBlock final : public Block {
  public:
   ImageBlock(const std::string& imagePath, int16_t width, int16_t height);
+  ImageBlock(const std::string& imagePath, int16_t width, int16_t height, std::string sourceEpubPath,
+             std::string sourceItemHref);
   ~ImageBlock() override = default;
 
   const std::string& getImagePath() const { return imagePath; }
@@ -26,6 +28,10 @@ class ImageBlock final : public Block {
 
  private:
   std::string imagePath;
+  std::string sourceEpubPath;
+  std::string sourceItemHref;
   int16_t width;
   int16_t height;
+
+  bool extractLazyImageIfNeeded();
 };

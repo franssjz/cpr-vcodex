@@ -30,10 +30,11 @@
 #include <builtinFonts/lexend_16_regular.h>
 #include <builtinFonts/lexend_18_bold.h>
 #include <builtinFonts/lexend_18_regular.h>
-#include <builtinFonts/ubuntu_8_bold.h>
-#include <builtinFonts/ubuntu_8_regular.h>
-#include <builtinFonts/notosans_8_regular.h>
+#include <builtinFonts/notosans_10_bold.h>
+#include <builtinFonts/notosans_10_bolditalic.h>
+#include <builtinFonts/notosans_10_italic.h>
 #include <builtinFonts/notosans_10_regular.h>
+#include <builtinFonts/notosans_8_regular.h>
 #include <builtinFonts/notosans_12_bold.h>
 #include <builtinFonts/notosans_12_bolditalic.h>
 #include <builtinFonts/notosans_12_italic.h>

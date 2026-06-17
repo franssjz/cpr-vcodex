@@ -10,11 +10,12 @@
 
 #include "CrossPointState.h"
 #include "ReadingStatsStore.h"
+#include "AppMetricCard.h"
 #include "ReadingDayDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ReadingStatsAnalytics.h"
 #include "util/HeaderDateUtils.h"
+#include "util/ReadingStatsAnalytics.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -42,9 +43,7 @@ struct MonthSummary {
   unsigned bestDayOfMonth = 0;
 };
 
-bool isLeapYear(const int year) {
-  return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-}
+bool isLeapYear(const int year) { return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0); }
 
 unsigned getDaysInMonth(const int year, const unsigned month) {
   static constexpr unsigned DAYS_PER_MONTH[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -105,38 +104,33 @@ int getHeatLevel(const uint64_t readingMs) {
     return 0;
   }
 
-  const uint64_t totalMinutes = std::max<uint64_t>(1, readingMs / 60000ULL);
-  if (totalMinutes < 10ULL) {
-    return 1;
+  const uint64_t totalMinutes = readingMs / 60000ULL;
+  if (totalMinutes < 15ULL) {
+    return 0;
   }
   if (totalMinutes < 30ULL) {
-    return 2;
+    return 1;
   }
   if (totalMinutes < 60ULL) {
+    return 2;
+  }
+  if (totalMinutes < 120ULL) {
     return 3;
   }
-  return 4;
+  if (totalMinutes < 240ULL) {
+    return 4;
+  }
+  return 5;
 }
 
 void drawMetricCard(GfxRenderer& renderer, const Rect& rect, const char* label, const std::string& value) {
-  renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
-  renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
-
-  const int valueFontId =
-      renderer.getTextWidth(UI_12_FONT_ID, value.c_str(), EpdFontFamily::BOLD) <= rect.width - 20 ? UI_12_FONT_ID
-                                                                                                    : UI_10_FONT_ID;
-  const std::string truncatedValue =
-      renderer.truncatedText(valueFontId, value.c_str(), rect.width - 20, EpdFontFamily::BOLD);
-  renderer.drawText(valueFontId, rect.x + 10, rect.y + (valueFontId == UI_12_FONT_ID ? 13 : 16), truncatedValue.c_str(),
-                    true, EpdFontFamily::BOLD);
-
-  const auto labelLines =
-      renderer.wrappedText(UI_10_FONT_ID, label, rect.width - 20, 2, EpdFontFamily::REGULAR);
-  int labelY = rect.y + 39;
-  for (const auto& line : labelLines) {
-    renderer.drawText(UI_10_FONT_ID, rect.x + 10, labelY, line.c_str());
-    labelY += renderer.getLineHeight(UI_10_FONT_ID);
-  }
+  AppMetricCard::Options options;
+  options.paddingX = 10;
+  options.contentInset = 20;
+  options.valueLargeY = 13;
+  options.valueSmallY = 16;
+  options.labelY = 39;
+  AppMetricCard::draw(renderer, rect, label, value, options);
 }
 
 void drawGoalCheckBadge(GfxRenderer& renderer, const Rect& rect, const bool darkBackground) {
@@ -163,13 +157,16 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
       renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::LightGray);
       break;
     case 2:
-      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::DarkGray);
+      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::MediumGray);
       break;
     case 3:
       renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::DarkGray);
-      renderer.drawRect(fillRect.x + 2, fillRect.y + 2, std::max(0, fillRect.width - 4), std::max(0, fillRect.height - 4));
       break;
     case 4:
+      renderer.fillRectDither(fillRect.x, fillRect.y, fillRect.width, fillRect.height, Color::ExtraDarkGray);
+      textBlack = false;
+      break;
+    case 5:
       renderer.fillRect(fillRect.x, fillRect.y, fillRect.width, fillRect.height);
       textBlack = false;
       break;
@@ -180,23 +177,21 @@ void drawHeatCell(GfxRenderer& renderer, const Rect& rect, const HeatmapCell& ce
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height);
 
   const std::string dayText = cell.day == 0 ? "" : std::to_string(cell.day);
-  const int dayTextX = rect.x + 6;
-  const int dayTextY = rect.y + 5;
   if (!dayText.empty()) {
-    renderer.drawText(SMALL_FONT_ID, dayTextX, dayTextY, dayText.c_str(), textBlack,
+    renderer.drawText(SMALL_FONT_ID, rect.x + 6, rect.y + 5, dayText.c_str(), textBlack,
                       cell.inViewedMonth ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
   }
 
   if (cell.inViewedMonth && cell.readingMs >= getDailyReadingGoalMs()) {
-    drawGoalCheckBadge(renderer, rect, level == 4);
+    drawGoalCheckBadge(renderer, rect, level >= 4);
   }
 
   if (cell.isReferenceDay) {
-    renderer.drawRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, level == 4 ? false : true);
+    renderer.drawRect(rect.x + 2, rect.y + 2, rect.width - 4, rect.height - 4, level >= 4 ? false : true);
   }
   if (cell.isSelected) {
     renderer.drawRect(rect.x + 4, rect.y + 4, std::max(0, rect.width - 8), std::max(0, rect.height - 8),
-                      level == 4 ? false : true);
+                      level >= 4 ? false : true);
   }
 }
 
@@ -208,13 +203,15 @@ void drawLegendSwatch(GfxRenderer& renderer, const Rect& rect, const int level) 
       renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::LightGray);
       break;
     case 2:
-      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::DarkGray);
+      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::MediumGray);
       break;
     case 3:
       renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::DarkGray);
-      renderer.drawRect(heatRect.x + 2, heatRect.y + 2, std::max(0, heatRect.width - 4), std::max(0, heatRect.height - 4));
       break;
     case 4:
+      renderer.fillRectDither(heatRect.x, heatRect.y, heatRect.width, heatRect.height, Color::ExtraDarkGray);
+      break;
+    case 5:
       renderer.fillRect(heatRect.x, heatRect.y, heatRect.width, heatRect.height);
       break;
     default:
@@ -253,7 +250,6 @@ std::array<HeatmapCell, 42> buildHeatmapCells(const int year, const unsigned mon
                                               const uint32_t selectedDayOrdinal) {
   std::array<HeatmapCell, 42> cells{};
   const uint32_t firstDayOrdinal = TimeUtils::getDayOrdinalForDate(year, month, 1);
-  const unsigned daysInMonth = getDaysInMonth(year, month);
   const int firstWeekday = static_cast<int>((firstDayOrdinal + 3U) % 7U);  // Monday = 0
   const uint32_t gridStartOrdinal = firstDayOrdinal - static_cast<uint32_t>(firstWeekday);
 
@@ -289,15 +285,16 @@ void drawLegend(GfxRenderer& renderer, const Rect& rect) {
     int level;
     const char* label;
   };
-  static constexpr LegendLevel LEVELS[] = {{1, "1m+"}, {2, "10m+"}, {3, "30m+"}, {4, "60m+"}};
+  static constexpr LegendLevel LEVELS[] = {
+      {1, "15m+"}, {2, "30m+"}, {3, "60m+"}, {4, "120m+"}, {5, "240m+"}};
+  constexpr int LEVEL_COUNT = sizeof(LEVELS) / sizeof(LEVELS[0]);
 
-  const int itemWidth = rect.width / 4;
-  for (int index = 0; index < 4; ++index) {
+  const int itemWidth = rect.width / LEVEL_COUNT;
+  for (int index = 0; index < LEVEL_COUNT; ++index) {
     const int itemX = rect.x + index * itemWidth;
     const Rect swatch{itemX + 6, rect.y + 3, LEGEND_SWATCH_SIZE, LEGEND_SWATCH_SIZE};
     drawLegendSwatch(renderer, swatch, LEVELS[index].level);
-    const int labelX = itemX + 28;
-    renderer.drawText(SMALL_FONT_ID, labelX, rect.y + 6, LEVELS[index].label);
+    renderer.drawText(SMALL_FONT_ID, itemX + 28, rect.y + 6, LEVELS[index].label);
   }
 }
 }  // namespace
@@ -315,6 +312,11 @@ void ReadingHeatmapActivity::onEnter() {
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   resetSelectedDay();
   requestUpdate();
+}
+
+void ReadingHeatmapActivity::onExit() {
+  renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
+  Activity::onExit();
 }
 
 void ReadingHeatmapActivity::goToAdjacentMonth(const int delta) {
@@ -508,5 +510,5 @@ void ReadingHeatmapActivity::render(RenderLock&&) {
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OPEN), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-  renderer.displayBuffer();
+  renderer.displayBuffer(HalDisplay::FAST_REFRESH);
 }
