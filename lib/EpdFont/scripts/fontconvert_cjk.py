@@ -54,6 +54,9 @@ intervals = [
     # All precomposed Vietnamese characters with tone marks
     # Ả Ấ Ầ Ẩ Ẫ Ậ Ắ Ằ Ẳ Ẵ Ặ Ẹ Ẻ Ẽ Ế Ề Ể Ễ Ệ Ỉ Ị Ọ Ỏ Ố Ồ Ổ Ỗ Ộ Ớ Ờ Ở Ỡ Ợ Ụ Ủ Ứ Ừ Ử Ữ Ự Ỳ Ỵ Ỷ Ỹ
     (0x1EA0, 0x1EF9),
+    ### Greek Extended ###
+    # Polytonic Greek for classical texts, plus some modern Greek variants
+    (0x1F00, 0x1FFF), #U+1F00 - U+1FFF
     ### General Punctuation (core subset) ###
     # Smart quotes, en dash, em dash, ellipsis, NO-BREAK SPACE
     (0x2000, 0x206F),
@@ -733,6 +736,7 @@ if compress:
         (0x0370, 0x03FF),   # Greek and Coptic
         (0x0400, 0x04FF),   # Cyrillic
         (0x1EA0, 0x1EF9),   # Vietnamese Extended
+        (0x1000, 0x1FFF),   # Greek Extended, IPA Extensions, Phonetic Extensions
         (0x2000, 0x206F),   # General Punctuation
         (0x2070, 0x209F),   # Superscripts & Subscripts
         (0x20A0, 0x20CF),   # Currency Symbols
