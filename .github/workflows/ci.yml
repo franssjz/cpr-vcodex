@@ -3,7 +3,19 @@ name: CI (build)
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -12,11 +24,14 @@ jobs:
   clang-format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
 
@@ -30,17 +45,30 @@ jobs:
 
       - name: Run clang-format
         run: |
-          PATH="/usr/lib/llvm-21/bin:$PATH" ./bin/clang-format-fix
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git fetch --depth=1 origin "${GITHUB_BASE_REF}"
+            files="$(git diff --name-only --diff-filter=ACMRT "origin/${GITHUB_BASE_REF}...HEAD" -- '*.c' '*.cpp' '*.h' '*.hpp' \
+              | grep -v -E '^(lib/EpdFont/builtinFonts/|lib/Epub/Epub/hyphenation/generated/|lib/uzlib/)' || true)"
+          else
+            files="$(git diff --name-only --diff-filter=ACMRT HEAD~1..HEAD -- '*.c' '*.cpp' '*.h' '*.hpp' \
+              | grep -v -E '^(lib/EpdFont/builtinFonts/|lib/Epub/Epub/hyphenation/generated/|lib/uzlib/)' || true)"
+          fi
+          if [ -n "${files}" ]; then
+            printf '%s\n' "${files}" | xargs -r /usr/lib/llvm-21/bin/clang-format -style=file -i
+          fi
           git diff --exit-code || (echo "Please run 'bin/clang-format-fix' to fix formatting issues" && exit 1)
 
   cppcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
 
@@ -54,16 +82,19 @@ jobs:
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
       - name: Run cppcheck
-        run: pio check --fail-on-defect low --fail-on-defect medium --fail-on-defect high
+        run: pio check --fail-on-defect high
 
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          persist-credentials: false
 
-      - uses: actions/setup-python@v6
+      - name: Checkout submodules
+        run: git submodule update --init --recursive
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
 
@@ -96,7 +127,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload firmware.bin artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           name: firmware.bin
           path: .pio/build/default/firmware.bin

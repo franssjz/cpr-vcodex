@@ -7,10 +7,11 @@
 #include <string>
 
 class FontDecompressor;
+class SdCardFont;
 
 class FontCacheManager {
  public:
-  explicit FontCacheManager(const std::map<int, EpdFontFamily>& fontMap);
+  FontCacheManager(const std::map<int, EpdFontFamily>& fontMap, const std::map<int, SdCardFont*>& sdCardFonts);
 
   void setFontDecompressor(FontDecompressor* d);
 
@@ -22,6 +23,7 @@ class FontCacheManager {
   // Scan-mode API: called by GfxRenderer::drawText() during scan pass
   bool isScanning() const;
   void recordText(const char* text, int fontId, EpdFontFamily::Style style);
+  void recordStyle(int fontId, EpdFontFamily::Style style);
 
   // The FontDecompressor pointer, needed by GfxRenderer::getGlyphBitmap()
   FontDecompressor* getDecompressor() const { return fontDecompressor_; }
@@ -45,6 +47,7 @@ class FontCacheManager {
 
  private:
   const std::map<int, EpdFontFamily>& fontMap_;
+  const std::map<int, SdCardFont*>& sdCardFonts_;
   FontDecompressor* fontDecompressor_ = nullptr;
 
   enum class ScanMode : uint8_t { None, Scanning };

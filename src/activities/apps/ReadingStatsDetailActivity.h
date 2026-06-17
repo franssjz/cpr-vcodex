@@ -1,10 +1,10 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
-#include "util/ButtonNavigator.h"
-
 #include "../Activity.h"
+#include "util/ButtonNavigator.h"
 
 struct ReadingStatsDetailContext {
   bool showSessionSummary = false;
@@ -16,9 +16,23 @@ class ReadingStatsDetailActivity final : public Activity {
   std::string resolvedCoverBmpPath;
   ReadingStatsDetailContext context;
   bool coverLoadPending = false;
+  int selectedStatsItem = 0;
+  bool waitForConfirmRelease = false;
+  bool waitForBackRelease = false;
+  bool baseScreenBufferStored = false;
+  uint8_t* baseScreenBuffer = nullptr;
+  std::string baseScreenBookPath;
+  std::string baseScreenCoverPath;
+  int baseScreenScrollOffset = -1;
+  int scrollOffset = 0;
+  int maxScrollOffset = 0;
 
-  void setCurrentBookByIndex(int index);
-  void navigateBook(int direction);
+  void openStatsActions();
+  void guardChildReturn();
+  bool storeBaseScreenBuffer();
+  bool restoreBaseScreenBuffer();
+  void invalidateBaseScreenBuffer();
+  void freeBaseScreenBuffer();
 
  public:
   explicit ReadingStatsDetailActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string bookPath,
@@ -28,6 +42,8 @@ class ReadingStatsDetailActivity final : public Activity {
         context(std::move(context)) {}
 
   void onEnter() override;
+  void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  uint8_t getUiTransitionRefreshWeight() const override { return UI_TRANSITION_REFRESH_WEIGHT_DENSE; }
 };

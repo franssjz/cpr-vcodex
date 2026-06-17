@@ -22,17 +22,30 @@ enum class SettingAction {
   Network,
   ClearCache,
   CheckForUpdates,
+  SdFirmwareUpdate,
   Language,
+  SyncDay,
   TimeZone,
+  ReadingStats,
+  ResetReadingStats,
+  ExportReadingStats,
+  ImportReadingStats,
+  ReadingHeatmap,
+  ReadingProfile,
+  Achievements,
+  ResetAchievements,
+  SyncAchievementsFromStats,
   ShortcutLocation,
   ShortcutVisibility,
   OrderHomeShortcuts,
   OrderAppsShortcuts,
-  ResetReadingStats,
-  ExportReadingStats,
-  ImportReadingStats,
-  ResetAchievements,
-  SyncAchievementsFromStats,
+  Bookmarks,
+  Favorites,
+  Flashcards,
+  ScreenClean,
+  SleepApp,
+  IfFound,
+  DownloadFonts,
 };
 
 struct SettingInfo {
@@ -159,6 +172,8 @@ struct SettingInfo {
 };
 
 class SettingsActivity final : public Activity {
+  using SettingRef = const SettingInfo*;
+
   ButtonNavigator buttonNavigator;
 
   int selectedCategoryIndex = 0;  // Currently selected category
@@ -166,12 +181,12 @@ class SettingsActivity final : public Activity {
   int settingsCount = 0;
 
   // Per-category settings derived from shared list + device-only actions
-  std::vector<const SettingInfo*> displaySettings;
-  std::vector<const SettingInfo*> readerSettings;
-  std::vector<const SettingInfo*> controlsSettings;
-  std::vector<const SettingInfo*> systemSettings;
-  std::vector<const SettingInfo*> appSettings;
-  const std::vector<const SettingInfo*>* currentSettings = nullptr;
+  std::vector<SettingRef> displaySettings;
+  std::vector<SettingRef> readerSettings;
+  std::vector<SettingRef> controlsSettings;
+  std::vector<SettingRef> systemSettings;
+  std::vector<SettingRef> appSettings;
+  const std::vector<SettingRef>* currentSettings = nullptr;
   bool settingsListsBuilt = false;
 
   static constexpr int categoryCount = 5;
@@ -182,6 +197,8 @@ class SettingsActivity final : public Activity {
   int firstSelectableSettingIndex() const;
   int stepSettingSelection(int direction) const;
   void renderAppSettingsList(const Rect& rect) const;
+  bool prewarmSettingsRenderText(const char* settingsTitle, const char* selectedCategoryLabel,
+                                 const char* firmwareVersion, const char* confirmLabel) const;
   void showTransientPopup(const char* message, int progress = -1, unsigned long delayMs = 0);
   void toggleCurrentSetting();
   void buildSettingsLists();
@@ -193,4 +210,5 @@ class SettingsActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  uint8_t getUiTransitionRefreshWeight() const override { return UI_TRANSITION_REFRESH_WEIGHT_DENSE; }
 };

@@ -27,6 +27,7 @@ struct ReadingBookStats {
   uint32_t lastSessionMs = 0;
   uint32_t firstReadAt = 0;
   uint32_t lastReadAt = 0;
+  uint32_t completedAt = 0;
   uint8_t lastProgressPercent = 0;
   uint8_t chapterProgressPercent = 0;
   bool completed = false;
@@ -47,6 +48,8 @@ struct ReadingSessionSnapshot {
 struct ReadingSessionLogEntry {
   uint32_t dayOrdinal = 0;
   uint32_t sessionMs = 0;
+  std::string bookId;
+  std::string path;
 };
 
 class ReadingStatsStore;
@@ -115,7 +118,8 @@ class ReadingStatsStore {
   uint32_t getReferenceDayOrdinal() const;
   void updateBookReadTimestamp(ReadingBookStats& book, uint32_t preferredTimestamp);
   void recordReadingTime(ReadingBookStats& book, uint32_t epochSeconds, uint64_t readingMs);
-  void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs);
+  void appendSessionLogEntry(uint32_t dayOrdinal, uint32_t sessionMs, const ReadingBookStats& book);
+  bool convertLegacyReadingDaysToUnassigned();
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
   void invalidateSummaryCache();
@@ -131,16 +135,21 @@ class ReadingStatsStore {
   static ReadingStatsStore& getInstance() { return instance; }
 
   void beginSession(const std::string& path, const std::string& title, const std::string& author,
-                    const std::string& coverBmpPath, uint8_t progressPercent = 0,
-                    const std::string& chapterTitle = "", uint8_t chapterProgressPercent = 0);
+                    const std::string& coverBmpPath, uint8_t progressPercent = 0, const std::string& chapterTitle = "",
+                    uint8_t chapterProgressPercent = 0);
   void noteActivity();
   void tickActiveSession();
   void resumeSession();
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
+  bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
+  bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,
                           const std::string& coverBmpPath);
+  bool updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title = "",
+                      const std::string& author = "", const std::string& coverBmpPath = "",
+                      const std::string& bookId = "");
   bool removeBook(const std::string& path);
   const ReadingBookStats* findBook(const std::string& key) const;
   const ReadingBookStats* findMatchingBookForPath(const std::string& path, const std::string& title = "",
@@ -167,6 +176,8 @@ class ReadingStatsStore {
   bool importFromFile(const std::string& path);
   bool saveToFile() const;
   bool loadFromFile();
+  bool releaseMemoryForNetwork();
+  bool reloadAfterNetwork();
 };
 
 #define READING_STATS ReadingStatsStore::getInstance()

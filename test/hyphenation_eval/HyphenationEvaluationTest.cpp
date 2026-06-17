@@ -44,6 +44,9 @@ const std::vector<LanguageConfig> kSupportedLanguages = {
     {"russian", "test/hyphenation_eval/resources/russian_hyphenation_tests.txt", "ru"},
     {"spanish", "test/hyphenation_eval/resources/spanish_hyphenation_tests.txt", "es"},
     {"italian", "test/hyphenation_eval/resources/italian_hyphenation_tests.txt", "it"},
+    {"polish", "test/hyphenation_eval/resources/polish_hyphenation_tests.txt", "pl"},
+    {"swedish", "test/hyphenation_eval/resources/swedish_hyphenation_tests.txt", "sv"},
+    {"turkish", "test/hyphenation_eval/resources/turkish_hyphenation_tests.txt", "tr"},
 };
 
 std::vector<size_t> expectedPositionsFromAnnotatedWord(const std::string& annotated) {
@@ -302,6 +305,38 @@ void printResults(const std::string& language, const std::vector<TestCase>& test
   }
 }
 
+bool runTurkishCasefoldRegression() {
+  const auto* hyphenator = getLanguageHyphenatorForPrimaryTag("tr");
+  if (!hyphenator) {
+    std::cerr << "No Turkish hyphenator registered for casefold regression." << std::endl;
+    return false;
+  }
+
+  const auto hyphenate = [hyphenator](const std::string& word) {
+    return hyphenateWordWithHyphenator(word, *hyphenator);
+  };
+
+  const std::vector<std::pair<std::string, std::string>> equivalentWords = {
+      {"KIRIKKALE", "k\xC4\xB1r\xC4\xB1kkale"},
+      {"ISPARTA", "\xC4\xB1sparta"},
+      {"\xC4\xB0ZM\xC4\xB0R", "izmir"},
+      {"I\xCC\x87stanbul", "istanbul"},
+  };
+
+  for (const auto& [source, expectedEquivalent] : equivalentWords) {
+    const std::vector<size_t> sourceBreaks = hyphenate(source);
+    const std::vector<size_t> equivalentBreaks = hyphenate(expectedEquivalent);
+    if (sourceBreaks != equivalentBreaks) {
+      std::cerr << "Turkish casefold regression failed:" << std::endl;
+      std::cerr << "  Source:     " << positionsToHyphenated(source, sourceBreaks) << std::endl;
+      std::cerr << "  Equivalent: " << positionsToHyphenated(expectedEquivalent, equivalentBreaks) << std::endl;
+      return false;
+    }
+  }
+
+  return true;
+}
+
 int main(int argc, char* argv[]) {
   const bool summaryMode = argc <= 1;
   const std::string languageSelection = summaryMode ? "all" : argv[1];
@@ -309,6 +344,10 @@ int main(int argc, char* argv[]) {
   std::vector<LanguageConfig> languages = resolveLanguages(languageSelection);
   if (languages.empty()) {
     std::cerr << "Unknown language: " << languageSelection << std::endl;
+    return 1;
+  }
+
+  if (!runTurkishCasefoldRegression()) {
     return 1;
   }
 

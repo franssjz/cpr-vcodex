@@ -1,6 +1,7 @@
 #include "TxtReaderActivity.h"
 
 #include <FontCacheManager.h>
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -8,6 +9,7 @@
 #include <Utf8.h>
 
 #include <algorithm>
+#include <cctype>
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -16,17 +18,21 @@
 #include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "SdCardFontGlobals.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/CompletedBookMover.h"
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 2;          // Increment when cache format changes
+constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format changes
+constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
+constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
 std::string getStableProgressPath(const std::string& bookId) {
   return BookIdentity::getStableDataFilePath(bookId, "txt_progress.bin");
@@ -49,6 +55,236 @@ void exitReaderToHomeOrStats(GfxRenderer& renderer, MappedInputManager& mappedIn
     activityManager.goHome();
   }
 }
+
+bool startsWithAt(const std::string& text, const size_t pos, const char* marker) {
+  const size_t markerLen = strlen(marker);
+  return pos + markerLen <= text.length() && text.compare(pos, markerLen, marker) == 0;
+}
+
+std::string trimMarkdownWhitespace(const std::string& text) {
+  size_t begin = 0;
+  while (begin < text.length() && std::isspace(static_cast<unsigned char>(text[begin]))) {
+    begin++;
+  }
+  size_t end = text.length();
+  while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1]))) {
+    end--;
+  }
+  return text.substr(begin, end - begin);
+}
+
+EpdFontFamily::Style combineMarkdownStyle(const EpdFontFamily::Style baseStyle, const bool bold, const bool italic) {
+  uint8_t style = static_cast<uint8_t>(baseStyle);
+  if (bold) {
+    style |= EpdFontFamily::BOLD;
+  }
+  if (italic) {
+    style |= EpdFontFamily::ITALIC;
+  }
+  return static_cast<EpdFontFamily::Style>(style & EpdFontFamily::BOLD_ITALIC);
+}
+
+void appendMarkdownSpan(TxtReaderActivity::TextLine& line, const std::string& text, const EpdFontFamily::Style style) {
+  if (text.empty()) {
+    return;
+  }
+  line.text += text;
+  const uint8_t rawStyle = static_cast<uint8_t>(style);
+  if (!line.spans.empty() && line.spans.back().style == rawStyle) {
+    line.spans.back().text += text;
+    return;
+  }
+  line.spans.push_back({text, rawStyle});
+}
+
+void parseMarkdownInlineSpans(TxtReaderActivity::TextLine& line, const std::string& text,
+                              const EpdFontFamily::Style baseStyle) {
+  std::string buffer;
+  bool bold = false;
+  bool italic = false;
+  bool code = false;
+
+  const auto flush = [&]() {
+    appendMarkdownSpan(line, buffer, code ? baseStyle : combineMarkdownStyle(baseStyle, bold, italic));
+    buffer.clear();
+  };
+
+  for (size_t i = 0; i < text.length(); ++i) {
+    const char c = text[i];
+    if (c == '\\' && i + 1 < text.length()) {
+      buffer += text[++i];
+      continue;
+    }
+
+    if (c == '`') {
+      flush();
+      code = !code;
+      continue;
+    }
+
+    if (!code && c == '!' && i + 1 < text.length() && text[i + 1] == '[') {
+      i++;
+      continue;
+    }
+
+    if (!code && text[i] == '[') {
+      const size_t labelEnd = text.find(']', i + 1);
+      if (labelEnd != std::string::npos && labelEnd + 1 < text.length() && text[labelEnd + 1] == '(') {
+        const size_t urlEnd = text.find(')', labelEnd + 2);
+        if (urlEnd != std::string::npos) {
+          flush();
+          parseMarkdownInlineSpans(line, text.substr(i + 1, labelEnd - i - 1),
+                                   combineMarkdownStyle(baseStyle, bold, italic));
+          i = urlEnd;
+          continue;
+        }
+      }
+    }
+
+    if (!code && (c == '*' || c == '_')) {
+      const bool triple = i + 2 < text.length() && text[i + 1] == c && text[i + 2] == c;
+      const bool doubleMarker = i + 1 < text.length() && text[i + 1] == c;
+      if (triple || doubleMarker) {
+        flush();
+        if (triple) {
+          bold = !bold;
+          italic = !italic;
+          i += 2;
+        } else {
+          bold = !bold;
+          i++;
+        }
+        continue;
+      }
+      if (text.find(c, i + 1) != std::string::npos) {
+        flush();
+        italic = !italic;
+        continue;
+      }
+    }
+
+    buffer += c;
+  }
+
+  flush();
+}
+
+TxtReaderActivity::TextLine makePlainTextLine(const std::string& text,
+                                              const uint8_t alignment = CrossPointSettings::LEFT_ALIGN) {
+  TxtReaderActivity::TextLine line;
+  line.text = text;
+  line.alignment = alignment;
+  if (!text.empty()) {
+    line.spans.push_back({text, line.style});
+  }
+  return line;
+}
+
+TxtReaderActivity::TextLine parseMarkdownLine(const std::string& rawLine,
+                                              const uint8_t fallbackAlignment = CrossPointSettings::LEFT_ALIGN) {
+  TxtReaderActivity::TextLine line;
+  line.alignment = fallbackAlignment;
+
+  std::string text = rawLine;
+  size_t pos = 0;
+  while (pos < text.length() && pos < 3 && text[pos] == ' ') {
+    pos++;
+  }
+  text = text.substr(pos);
+
+  if (text.empty()) {
+    return line;
+  }
+
+  int headerLevel = 0;
+  while (headerLevel < 6 && headerLevel < static_cast<int>(text.length()) && text[headerLevel] == '#') {
+    headerLevel++;
+  }
+  if (headerLevel > 0 && headerLevel < static_cast<int>(text.length()) &&
+      std::isspace(static_cast<unsigned char>(text[headerLevel]))) {
+    line.style = EpdFontFamily::BOLD;
+    line.alignment = CrossPointSettings::CENTER_ALIGN;
+    parseMarkdownInlineSpans(line, trimMarkdownWhitespace(text.substr(headerLevel + 1)), EpdFontFamily::BOLD);
+    return line;
+  }
+
+  if (startsWithAt(text, 0, ">")) {
+    size_t quotePos = 1;
+    if (quotePos < text.length() && text[quotePos] == ' ') {
+      quotePos++;
+    }
+    line.style = EpdFontFamily::ITALIC;
+    line.indent = MARKDOWN_QUOTE_INDENT;
+    parseMarkdownInlineSpans(line, trimMarkdownWhitespace(text.substr(quotePos)), EpdFontFamily::ITALIC);
+    return line;
+  }
+
+  if ((startsWithAt(text, 0, "- ") || startsWithAt(text, 0, "* ") || startsWithAt(text, 0, "+ "))) {
+    line.indent = MARKDOWN_LIST_INDENT;
+    appendMarkdownSpan(line, "- ", EpdFontFamily::REGULAR);
+    parseMarkdownInlineSpans(line, trimMarkdownWhitespace(text.substr(2)), EpdFontFamily::REGULAR);
+    return line;
+  }
+
+  size_t numberPos = 0;
+  while (numberPos < text.length() && std::isdigit(static_cast<unsigned char>(text[numberPos]))) {
+    numberPos++;
+  }
+  if (numberPos > 0 && numberPos + 1 < text.length() && text[numberPos] == '.' && text[numberPos + 1] == ' ') {
+    line.indent = MARKDOWN_LIST_INDENT;
+    appendMarkdownSpan(line, text.substr(0, numberPos + 2), EpdFontFamily::REGULAR);
+    parseMarkdownInlineSpans(line, trimMarkdownWhitespace(text.substr(numberPos + 2)), EpdFontFamily::REGULAR);
+    return line;
+  }
+
+  if ((startsWithAt(text, 0, "```") || startsWithAt(text, 0, "~~~"))) {
+    line.text.clear();
+    return line;
+  }
+
+  parseMarkdownInlineSpans(line, text, EpdFontFamily::REGULAR);
+  return line;
+}
+
+int getTextLineWidth(GfxRenderer& renderer, const int fontId, const TxtReaderActivity::TextLine& line) {
+  if (line.spans.empty()) {
+    return renderer.getTextAdvanceX(fontId, line.text.c_str(), static_cast<EpdFontFamily::Style>(line.style));
+  }
+  int width = 0;
+  for (const auto& span : line.spans) {
+    width += renderer.getTextAdvanceX(fontId, span.text.c_str(), static_cast<EpdFontFamily::Style>(span.style));
+  }
+  return width;
+}
+
+TxtReaderActivity::TextLine sliceTextLine(const TxtReaderActivity::TextLine& source, const size_t begin,
+                                          const size_t length) {
+  TxtReaderActivity::TextLine out;
+  out.style = source.style;
+  out.alignment = source.alignment;
+  out.indent = source.indent;
+
+  const size_t end = begin + length;
+  size_t spanBegin = 0;
+  for (const auto& span : source.spans) {
+    const size_t spanEnd = spanBegin + span.text.length();
+    if (spanEnd > begin && spanBegin < end) {
+      const size_t localBegin = begin > spanBegin ? begin - spanBegin : 0;
+      const size_t localEnd = std::min(span.text.length(), end - spanBegin);
+      std::string part = span.text.substr(localBegin, localEnd - localBegin);
+      out.text += part;
+      out.spans.push_back({std::move(part), span.style});
+    }
+    spanBegin = spanEnd;
+  }
+
+  if (out.spans.empty() && !source.text.empty()) {
+    out.text = source.text.substr(begin, length);
+    out.spans.push_back({out.text, source.style});
+  }
+
+  return out;
+}
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -58,9 +294,9 @@ void TxtReaderActivity::onEnter() {
     return;
   }
 
+  ensureSdFontLoaded();
+
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
-  renderer.setTextDarkness(SETTINGS.textDarkness);
-  pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
 
   txt->setupCacheDir();
 
@@ -80,9 +316,10 @@ void TxtReaderActivity::onEnter() {
 void TxtReaderActivity::onExit() {
   Activity::onExit();
 
+  ReaderUtils::requestReaderUiTransitionRefresh(renderer);
+
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-  renderer.setTextDarkness(0);
 
   pageOffsets.clear();
   currentPageLines.clear();
@@ -95,37 +332,48 @@ void TxtReaderActivity::onExit() {
 
 void TxtReaderActivity::loop() {
   READING_STATS.tickActiveSession();
+  const unsigned long nowMs = millis();
 
-  const auto powerAction =
-      ReaderUtils::consumePowerButtonReaderAction(mappedInput, pendingPowerSingleClick, pendingPowerReleaseMs);
-  if (powerAction == ReaderUtils::PowerButtonReaderAction::FullRefresh) {
-    pendingManualFullRefresh = true;
-    requestUpdate();
+  if (waitingForConfirmSecondClick && ReaderUtils::hasNonConfirmNavigationInput(mappedInput)) {
+    waitingForConfirmSecondClick = false;
+    firstConfirmClickMs = 0UL;
+  }
+
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) &&
+      ReaderUtils::registerConfirmDoubleClick(waitingForConfirmSecondClick, firstConfirmClickMs, nowMs)) {
+    requestCurrentPageFullRefresh();
+    return;
+  }
+
+  if (ReaderUtils::shouldToggleStatusBar(mappedInput)) {
+    toggleTemporaryStatusBar();
     return;
   }
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+    const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
     ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
     showPendingAchievementPopups(renderer);
-    activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+    activityManager.goToFileBrowser(fileBrowserPath);
     return;
   }
 
   // Short press BACK goes directly to home
   if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
-    exitReaderToHomeOrStats(renderer, mappedInput, txt ? txt->getPath() : "");
+    exitReaderAfterOptionalCompletedMove();
     return;
   }
 
-  auto [prevTriggered, nextTriggered] = ReaderUtils::detectPageTurn(mappedInput, false);
-  if (powerAction == ReaderUtils::PowerButtonReaderAction::NextPage) {
-    nextTriggered = true;
-  }
+  auto [prevTriggered, nextTriggered, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
   if (!prevTriggered && !nextTriggered) {
     return;
+  }
+  if (fromTilt) {
+    waitingForConfirmSecondClick = false;
+    firstConfirmClickMs = 0UL;
   }
 
   if (prevTriggered && currentPage > 0) {
@@ -138,9 +386,55 @@ void TxtReaderActivity::loop() {
       currentPage++;
       requestUpdate();
     } else {
-      exitReaderToHomeOrStats(renderer, mappedInput, txt ? txt->getPath() : "");
+      READING_STATS.updateProgress(100, true, "", 100);
+      exitReaderAfterOptionalCompletedMove();
     }
   }
+}
+
+void TxtReaderActivity::requestCurrentPageFullRefresh() {
+  READING_STATS.noteActivity();
+  pendingForceFullRefresh = true;
+  requestUpdate();
+}
+
+void TxtReaderActivity::toggleTemporaryStatusBar() {
+  READING_STATS.noteActivity();
+  statusBarTemporarilyHidden = !statusBarTemporarilyHidden;
+  initialized = false;
+  pageOffsets.clear();
+  currentPageLines.clear();
+  pendingForceFullRefresh = true;
+  requestUpdate();
+}
+
+std::string TxtReaderActivity::moveCompletedBookIfEnabled() {
+  if (!txt) {
+    return "";
+  }
+
+  const std::string sourcePath = txt->getPath();
+  if (!SETTINGS.moveCompletedBooks) {
+    return sourcePath;
+  }
+
+  const auto* statsBook = READING_STATS.findBook(!stableBookId.empty() ? stableBookId : sourcePath);
+  if (!statsBook || !statsBook->completed) {
+    return sourcePath;
+  }
+
+  const std::string title = txt->getTitle();
+  const std::string coverBmpPath = txt->getCoverBmpPath();
+  txt.reset();
+
+  const auto moveResult =
+      CompletedBookMover::moveCompletedBookIfEnabled(sourcePath, title, "", coverBmpPath, stableBookId);
+  return moveResult.moved ? moveResult.destinationPath : sourcePath;
+}
+
+void TxtReaderActivity::exitReaderAfterOptionalCompletedMove() {
+  const std::string exitPath = moveCompletedBookIfEnabled();
+  exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
 
 void TxtReaderActivity::initializeReader() {
@@ -159,8 +453,8 @@ void TxtReaderActivity::initializeReader() {
   cachedOrientedMarginTop += cachedScreenMargin;
   cachedOrientedMarginLeft += cachedScreenMargin;
   cachedOrientedMarginRight += cachedScreenMargin;
-  cachedOrientedMarginBottom +=
-      std::max(cachedScreenMargin, static_cast<uint8_t>(UITheme::getInstance().getStatusBarHeight()));
+  const uint8_t statusBarHeight = statusBarTemporarilyHidden ? 0 : UITheme::getInstance().getStatusBarHeight();
+  cachedOrientedMarginBottom += std::max(cachedScreenMargin, statusBarHeight);
 
   viewportWidth = renderer.getScreenWidth() - cachedOrientedMarginLeft - cachedOrientedMarginRight;
   const int viewportHeight = renderer.getScreenHeight() - cachedOrientedMarginTop - cachedOrientedMarginBottom;
@@ -197,7 +491,7 @@ void TxtReaderActivity::buildPageIndex() {
   GUI.drawPopup(renderer, tr(STR_INDEXING));
 
   while (offset < fileSize) {
-    std::vector<std::string> tempLines;
+    std::vector<TextLine> tempLines;
     size_t nextOffset = offset;
 
     if (!loadPageAtOffset(offset, tempLines, nextOffset)) {
@@ -224,7 +518,7 @@ void TxtReaderActivity::buildPageIndex() {
   LOG_DBG("TRS", "Built page index: %d pages", totalPages);
 }
 
-bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>& outLines, size_t& nextOffset) {
+bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset) {
   outLines.clear();
   const size_t fileSize = txt->getFileSize();
 
@@ -245,6 +539,12 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
     return false;
   }
   buffer[chunkSize] = '\0';
+
+  // SD-card fonts need advance metrics before wrapping text. Prime them once
+  // per chunk so TXT/Markdown readers do not thrash the small overflow glyph cache.
+  if (renderer.isSdCardFont(cachedFontId)) {
+    renderer.ensureSdCardFontReady(cachedFontId, reinterpret_cast<const char*>(buffer), /*styleMask=*/0x0F);
+  }
 
   // Parse lines from buffer
   size_t pos = 0;
@@ -272,25 +572,42 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
     size_t displayLen = hasCR ? lineContentLen - 1 : lineContentLen;
 
     // Extract line content for display (without CR/LF)
-    std::string line(reinterpret_cast<char*>(buffer + pos), displayLen);
+    const std::string sourceLine(reinterpret_cast<char*>(buffer + pos), displayLen);
+    TextLine lineInfo =
+        txt->isMarkdown() ? parseMarkdownLine(sourceLine, cachedParagraphAlignment)
+                          : makePlainTextLine(sourceLine, cachedParagraphAlignment);
+    if (lineInfo.text.empty() && txt->isMarkdown() && trimMarkdownWhitespace(sourceLine).empty() &&
+        static_cast<int>(outLines.size()) < linesPerPage) {
+      outLines.push_back(std::move(lineInfo));
+      pos = lineEnd + 1;
+      continue;
+    }
+    size_t wrappedLineStart = 0;
 
     // Track position within this source line (in bytes from pos)
     size_t lineBytePos = 0;
 
     // Word wrap if needed
-    while (!line.empty() && static_cast<int>(outLines.size()) < linesPerPage) {
-      int lineWidth = renderer.getTextWidth(cachedFontId, line.c_str());
+    while (wrappedLineStart < lineInfo.text.length() && static_cast<int>(outLines.size()) < linesPerPage) {
+      const std::string line = lineInfo.text.substr(wrappedLineStart);
+      const auto lineStyle = static_cast<EpdFontFamily::Style>(lineInfo.style);
+      const int indentPx = lineInfo.indent * renderer.getSpaceWidth(cachedFontId, lineStyle) * 2;
+      const int lineViewportWidth = std::max(1, viewportWidth - indentPx);
+      int lineWidth = getTextLineWidth(renderer, cachedFontId, sliceTextLine(lineInfo, wrappedLineStart, line.length()));
 
-      if (lineWidth <= viewportWidth) {
-        outLines.push_back(line);
+      if (lineWidth <= lineViewportWidth) {
+        TextLine displayLine = sliceTextLine(lineInfo, wrappedLineStart, line.length());
+        outLines.push_back(std::move(displayLine));
         lineBytePos = displayLen;  // Consumed entire display content
-        line.clear();
+        wrappedLineStart = lineInfo.text.length();
         break;
       }
 
       // Find break point
       size_t breakPos = line.length();
-      while (breakPos > 0 && renderer.getTextWidth(cachedFontId, line.substr(0, breakPos).c_str()) > viewportWidth) {
+      while (breakPos > 0 &&
+             getTextLineWidth(renderer, cachedFontId, sliceTextLine(lineInfo, wrappedLineStart, breakPos)) >
+                 lineViewportWidth) {
         // Try to break at space
         size_t spacePos = line.rfind(' ', breakPos - 1);
         if (spacePos != std::string::npos && spacePos > 0) {
@@ -309,7 +626,8 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
         breakPos = 1;
       }
 
-      outLines.push_back(line.substr(0, breakPos));
+      TextLine displayLine = sliceTextLine(lineInfo, wrappedLineStart, breakPos);
+      outLines.push_back(std::move(displayLine));
 
       // Skip space at break point
       size_t skipChars = breakPos;
@@ -317,11 +635,11 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
         skipChars++;
       }
       lineBytePos += skipChars;
-      line = line.substr(skipChars);
+      wrappedLineStart += skipChars;
     }
 
     // Determine how much of the source buffer we consumed
-    if (line.empty()) {
+    if (wrappedLineStart >= lineInfo.text.length()) {
       // Fully consumed this source line, move past the newline
       pos = lineEnd + 1;
     } else {
@@ -355,9 +673,6 @@ void TxtReaderActivity::render(RenderLock&&) {
     return;
   }
 
-  const bool forceFullRefresh = pendingManualFullRefresh;
-  pendingManualFullRefresh = false;
-
   // Initialize reader if not done
   if (!initialized) {
     initializeReader();
@@ -381,13 +696,13 @@ void TxtReaderActivity::render(RenderLock&&) {
   loadPageAtOffset(offset, currentPageLines, nextOffset);
 
   renderer.clearScreen();
-  renderPage(forceFullRefresh);
+  renderPage();
 
   // Save progress
   saveProgress();
 }
 
-void TxtReaderActivity::renderPage(const bool forceFullRefresh) {
+void TxtReaderActivity::renderPage() {
   const int lineHeight = renderer.getLineHeight(cachedFontId);
   const int contentWidth = viewportWidth;
 
@@ -395,22 +710,24 @@ void TxtReaderActivity::renderPage(const bool forceFullRefresh) {
   auto renderLines = [&]() {
     int y = cachedOrientedMarginTop;
     for (const auto& line : currentPageLines) {
-      if (!line.empty()) {
+      if (!line.text.empty()) {
+        const auto lineStyle = static_cast<EpdFontFamily::Style>(line.style);
+        const int indentPx = line.indent * renderer.getSpaceWidth(cachedFontId, lineStyle) * 2;
         int x = cachedOrientedMarginLeft;
 
         // Apply text alignment
-        switch (cachedParagraphAlignment) {
+        switch (line.alignment) {
           case CrossPointSettings::LEFT_ALIGN:
           default:
             // x already set to left margin
             break;
           case CrossPointSettings::CENTER_ALIGN: {
-            int textWidth = renderer.getTextWidth(cachedFontId, line.c_str());
+            int textWidth = getTextLineWidth(renderer, cachedFontId, line);
             x = cachedOrientedMarginLeft + (contentWidth - textWidth) / 2;
             break;
           }
           case CrossPointSettings::RIGHT_ALIGN: {
-            int textWidth = renderer.getTextWidth(cachedFontId, line.c_str());
+            int textWidth = getTextLineWidth(renderer, cachedFontId, line);
             x = cachedOrientedMarginLeft + contentWidth - textWidth;
             break;
           }
@@ -419,8 +736,20 @@ void TxtReaderActivity::renderPage(const bool forceFullRefresh) {
             // (true justification would require word spacing adjustments)
             break;
         }
+        if (line.alignment == CrossPointSettings::LEFT_ALIGN || line.alignment == CrossPointSettings::JUSTIFIED) {
+          x += indentPx;
+        }
 
-        renderer.drawText(cachedFontId, x, y, line.c_str());
+        if (line.spans.empty()) {
+          renderer.drawText(cachedFontId, x, y, line.text.c_str(), true, lineStyle);
+        } else {
+          int spanX = x;
+          for (const auto& span : line.spans) {
+            const auto spanStyle = static_cast<EpdFontFamily::Style>(span.style);
+            renderer.drawText(cachedFontId, spanX, y, span.text.c_str(), true, spanStyle);
+            spanX += renderer.getTextAdvanceX(cachedFontId, span.text.c_str(), spanStyle);
+          }
+        }
       }
       y += lineHeight;
     }
@@ -436,6 +765,8 @@ void TxtReaderActivity::renderPage(const bool forceFullRefresh) {
   renderLines();
   renderStatusBar();
 
+  const bool forceFullRefresh = pendingForceFullRefresh;
+  pendingForceFullRefresh = false;
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh, forceFullRefresh);
 
   if (SETTINGS.textAntiAliasing) {
@@ -445,6 +776,10 @@ void TxtReaderActivity::renderPage(const bool forceFullRefresh) {
 }
 
 void TxtReaderActivity::renderStatusBar() const {
+  if (statusBarTemporarilyHidden) {
+    return;
+  }
+
   const float progress = totalPages > 0 ? (currentPage + 1) * 100.0f / totalPages : 0;
   std::string title;
   if (SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE) {
@@ -457,12 +792,15 @@ void TxtReaderActivity::saveProgress() const {
   const uint8_t progressPercent =
       totalPages > 0 ? static_cast<uint8_t>(std::min(100, ((currentPage + 1) * 100) / totalPages)) : 0;
   READING_STATS.updateProgress(progressPercent, totalPages > 0 && currentPage + 1 >= totalPages, "", progressPercent);
+
   FsFile f;
-  const std::string progressPath = getStableProgressPath(stableBookId);
+  std::string progressPath = getStableProgressPath(stableBookId);
   if (!progressPath.empty()) {
     BookIdentity::ensureStableDataDir(stableBookId);
+  } else {
+    progressPath = getLegacyProgressPath(*txt);
   }
-  if (Storage.openFileForWrite("TRS", progressPath.empty() ? getLegacyProgressPath(*txt) : progressPath, f)) {
+  if (Storage.openFileForWrite("TRS", progressPath, f)) {
     uint8_t data[4];
     data[0] = currentPage & 0xFF;
     data[1] = (currentPage >> 8) & 0xFF;
@@ -475,17 +813,15 @@ void TxtReaderActivity::saveProgress() const {
 
 void TxtReaderActivity::loadProgress() {
   FsFile f;
-  const std::string progressPath = getStableProgressPath(stableBookId);
+  bool loadedFromLegacy = false;
+  const std::string stableProgressPath = getStableProgressPath(stableBookId);
   const std::string legacyProgressPath = getLegacyProgressPath(*txt);
-  bool loadedLegacyProgress = false;
-  bool openedProgress = false;
-  if (!progressPath.empty() && Storage.openFileForRead("TRS", progressPath, f)) {
-    openedProgress = true;
-  } else if (Storage.openFileForRead("TRS", legacyProgressPath, f)) {
-    loadedLegacyProgress = true;
-    openedProgress = true;
+  const std::string progressPath =
+      (!stableProgressPath.empty() && Storage.exists(stableProgressPath.c_str())) ? stableProgressPath : legacyProgressPath;
+  if (progressPath == legacyProgressPath) {
+    loadedFromLegacy = !stableProgressPath.empty() && Storage.exists(legacyProgressPath.c_str());
   }
-  if (openedProgress) {
+  if (Storage.openFileForRead("TRS", progressPath, f)) {
     uint8_t data[4];
     if (f.read(data, 4) == 4) {
       currentPage = data[0] + (data[1] << 8);
@@ -498,7 +834,7 @@ void TxtReaderActivity::loadProgress() {
       LOG_DBG("TRS", "Loaded progress: page %d/%d", currentPage, totalPages);
     }
     f.close();
-    if (loadedLegacyProgress) {
+    if (loadedFromLegacy) {
       saveProgress();
     }
   }
@@ -529,7 +865,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, magic);
   if (magic != CACHE_MAGIC) {
     LOG_DBG("TRS", "Cache magic mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -537,7 +872,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, version);
   if (version != CACHE_VERSION) {
     LOG_DBG("TRS", "Cache version mismatch (%d != %d), rebuilding", version, CACHE_VERSION);
-    f.close();
     return false;
   }
 
@@ -545,7 +879,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, fileSize);
   if (fileSize != txt->getFileSize()) {
     LOG_DBG("TRS", "Cache file size mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -553,7 +886,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, cachedWidth);
   if (cachedWidth != viewportWidth) {
     LOG_DBG("TRS", "Cache viewport width mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -561,7 +893,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, cachedLines);
   if (cachedLines != linesPerPage) {
     LOG_DBG("TRS", "Cache lines per page mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -569,7 +900,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, fontId);
   if (fontId != cachedFontId) {
     LOG_DBG("TRS", "Cache font ID mismatch (%d != %d), rebuilding", fontId, cachedFontId);
-    f.close();
     return false;
   }
 
@@ -577,7 +907,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, margin);
   if (margin != cachedScreenMargin) {
     LOG_DBG("TRS", "Cache screen margin mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -585,7 +914,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   serialization::readPod(f, alignment);
   if (alignment != cachedParagraphAlignment) {
     LOG_DBG("TRS", "Cache paragraph alignment mismatch, rebuilding");
-    f.close();
     return false;
   }
 
@@ -602,7 +930,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
     pageOffsets.push_back(offset);
   }
 
-  f.close();
   totalPages = pageOffsets.size();
   LOG_DBG("TRS", "Loaded page index cache: %d pages", totalPages);
   return true;
@@ -632,6 +959,19 @@ void TxtReaderActivity::savePageIndexCache() const {
     serialization::writePod(f, static_cast<uint32_t>(offset));
   }
 
-  f.close();
   LOG_DBG("TRS", "Saved page index cache: %d pages", totalPages);
+}
+
+ScreenshotInfo TxtReaderActivity::getScreenshotInfo() const {
+  ScreenshotInfo info;
+  info.readerType = ScreenshotInfo::ReaderType::Txt;
+  if (txt) {
+    const std::string t = txt->getTitle();
+    snprintf(info.title, sizeof(info.title), "%s", t.c_str());
+  }
+  info.currentPage = currentPage + 1;
+  info.totalPages = totalPages;
+  info.progressPercent = totalPages > 0 ? static_cast<int>((currentPage + 1) * 100.0f / totalPages + 0.5f) : 0;
+  if (info.progressPercent > 100) info.progressPercent = 100;
+  return info;
 }

@@ -6,7 +6,6 @@
 #include <string>
 
 #include "AchievementsStore.h"
-#include "CrossPointSettings.h"
 #include "components/UITheme.h"
 
 inline bool showPendingAchievementPopups(GfxRenderer& renderer, const unsigned long delayMs = 700) {

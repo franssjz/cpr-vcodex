@@ -4,6 +4,8 @@
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
+#include <Logging.h>
+#include <esp_heap_caps.h>
 
 #include <algorithm>
 #include <ctime>
@@ -24,6 +26,27 @@ uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 
 
 bool countsForStreak(const ReadingDayStats& day) { return day.readingMs >= getDailyReadingGoalMs(); }
 
+std::string toLowerAscii(std::string value) {
+  for (char& c : value) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+  return value;
+}
+
+bool isRootIfFoundPath(const std::string& normalizedPath) {
+  if (normalizedPath.size() <= 1 || normalizedPath.front() != '/') {
+    return false;
+  }
+  if (normalizedPath.find('/', 1) != std::string::npos) {
+    return false;
+  }
+
+  const std::string lowerName = toLowerAscii(normalizedPath.substr(1));
+  return lowerName == "if_found.txt" || lowerName == "if_found.txt.txt";
+}
+
 bool isIgnoredStatsPath(const std::string& path) {
   if (path.empty()) {
     return false;
@@ -38,12 +61,13 @@ bool isIgnoredStatsPath(const std::string& path) {
     normalized.insert(normalized.begin(), '/');
   }
 
-  return normalized == "/ignore_stats" || normalized.rfind("/ignore_stats/", 0) == 0;
+  return normalized == "/ignore_stats" || normalized.rfind("/ignore_stats/", 0) == 0 || isRootIfFoundPath(normalized);
 }
 
 void normalizeReadingDays(std::vector<ReadingDayStats>& readingDays) {
-  std::sort(readingDays.begin(), readingDays.end(),
-            [](const ReadingDayStats& left, const ReadingDayStats& right) { return left.dayOrdinal < right.dayOrdinal; });
+  std::sort(readingDays.begin(), readingDays.end(), [](const ReadingDayStats& left, const ReadingDayStats& right) {
+    return left.dayOrdinal < right.dayOrdinal;
+  });
 
   std::vector<ReadingDayStats> mergedDays;
   mergedDays.reserve(readingDays.size());
@@ -63,8 +87,9 @@ void addReadingToDays(std::vector<ReadingDayStats>& days, const uint32_t dayOrdi
     return;
   }
 
-  auto it = std::lower_bound(days.begin(), days.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+  auto it =
+      std::lower_bound(days.begin(), days.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == days.end() || it->dayOrdinal != dayOrdinal) {
     days.insert(it, ReadingDayStats{dayOrdinal, readingMs});
   } else {
@@ -74,6 +99,26 @@ void addReadingToDays(std::vector<ReadingDayStats>& days, const uint32_t dayOrdi
 
 bool containsString(const std::vector<std::string>& values, const std::string& value) {
   return !value.empty() && std::find(values.begin(), values.end(), value) != values.end();
+}
+
+bool containsReadingDay(const std::vector<ReadingDayStats>& days, const uint32_t dayOrdinal) {
+  return dayOrdinal != 0 &&
+         std::any_of(days.begin(), days.end(),
+                     [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+}
+
+bool sessionHasBookIdentity(const ReadingSessionLogEntry& session) {
+  return !session.bookId.empty() || !session.path.empty();
+}
+
+bool sessionMatchesBook(const ReadingSessionLogEntry& session, const ReadingBookStats& book) {
+  if (!session.bookId.empty() && !book.bookId.empty() && session.bookId == book.bookId) {
+    return true;
+  }
+
+  const std::string normalizedSessionPath = BookIdentity::normalizePath(session.path);
+  return !normalizedSessionPath.empty() &&
+         (normalizedSessionPath == book.path || containsString(book.knownPaths, normalizedSessionPath));
 }
 
 void dedupeStrings(std::vector<std::string>& values) {
@@ -161,7 +206,8 @@ void ReadingStatsStore::rememberBookIdAlias(ReadingBookStats&, const std::string
 void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBookStats& duplicate) {
   const uint32_t primaryLastReadAtBefore = primary.lastReadAt;
 
-  if (primary.bookId.empty() || (BookIdentity::isLegacyBookId(primary.bookId) && !BookIdentity::isLegacyBookId(duplicate.bookId))) {
+  if (primary.bookId.empty() ||
+      (BookIdentity::isLegacyBookId(primary.bookId) && !BookIdentity::isLegacyBookId(duplicate.bookId))) {
     primary.bookId = duplicate.bookId;
   }
 
@@ -201,6 +247,11 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
     primary.firstReadAt = duplicate.firstReadAt;
   }
   primary.lastReadAt = std::max(primary.lastReadAt, duplicate.lastReadAt);
+  if (primary.completedAt == 0) {
+    primary.completedAt = duplicate.completedAt;
+  } else if (duplicate.completedAt != 0) {
+    primary.completedAt = std::min(primary.completedAt, duplicate.completedAt);
+  }
   if (duplicate.lastReadAt >= primary.lastReadAt) {
     primary.lastProgressPercent = duplicate.lastProgressPercent;
     primary.chapterProgressPercent = duplicate.chapterProgressPercent;
@@ -272,7 +323,8 @@ size_t ReadingStatsStore::getOrCreateBookIndex(const std::string& path, const st
   }
 
   auto& book = books[index];
-  if (book.bookId.empty() || (BookIdentity::isLegacyBookId(book.bookId) && !BookIdentity::isLegacyBookId(resolvedBookId))) {
+  if (book.bookId.empty() ||
+      (BookIdentity::isLegacyBookId(book.bookId) && !BookIdentity::isLegacyBookId(resolvedBookId))) {
     book.bookId = resolvedBookId;
   }
   rememberBookPath(book, normalizedPath);
@@ -326,8 +378,9 @@ const ReadingBookStats* ReadingStatsStore::findMatchingBookForPath(const std::st
 
 ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
-  auto it = std::lower_bound(readingDays.begin(), readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+  auto it =
+      std::lower_bound(readingDays.begin(), readingDays.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }
@@ -336,8 +389,9 @@ ReadingDayStats& ReadingStatsStore::getOrCreateReadingDay(const uint32_t epochSe
 
 ReadingDayStats& ReadingStatsStore::getOrCreateBookReadingDay(ReadingBookStats& book, const uint32_t epochSeconds) {
   const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(epochSeconds);
-  auto it = std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
-                             [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+  auto it =
+      std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
+                       [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
   if (it == book.readingDays.end() || it->dayOrdinal != dayOrdinal) {
     it = book.readingDays.insert(it, ReadingDayStats{dayOrdinal, 0});
   }
@@ -350,6 +404,9 @@ uint32_t ReadingStatsStore::getLatestKnownTimestamp() const {
     if (isClockValid(book.lastReadAt)) {
       latestTimestamp = std::max(latestTimestamp, book.lastReadAt);
     }
+    if (isClockValid(book.completedAt)) {
+      latestTimestamp = std::max(latestTimestamp, book.completedAt);
+    }
     if (isClockValid(book.firstReadAt)) {
       latestTimestamp = std::max(latestTimestamp, book.firstReadAt);
     }
@@ -357,9 +414,14 @@ uint32_t ReadingStatsStore::getLatestKnownTimestamp() const {
   return latestTimestamp;
 }
 
-uint32_t ReadingStatsStore::getReferenceTimestamp(const uint32_t preferredTimestamp, const uint32_t bookTimestamp) const {
+uint32_t ReadingStatsStore::getReferenceTimestamp(const uint32_t preferredTimestamp,
+                                                  const uint32_t bookTimestamp) const {
   if (isClockValid(preferredTimestamp)) {
     return preferredTimestamp;
+  }
+
+  if (isClockValid(APP_STATE.lastKnownValidTimestamp)) {
+    return APP_STATE.lastKnownValidTimestamp;
   }
 
   const uint32_t latestKnownTimestamp = getLatestKnownTimestamp();
@@ -415,7 +477,8 @@ bool ReadingStatsStore::isClockValid(const uint32_t epochSeconds) { return TimeU
 
 bool ReadingStatsStore::shouldIgnorePath(const std::string& path) { return isIgnoredStatsPath(path); }
 
-void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t epochSeconds, const uint64_t readingMs) {
+void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t epochSeconds,
+                                          const uint64_t readingMs) {
   if (!isClockValid(epochSeconds) || readingMs == 0) {
     return;
   }
@@ -424,16 +487,65 @@ void ReadingStatsStore::recordReadingTime(ReadingBookStats& book, const uint32_t
   getOrCreateReadingDay(epochSeconds).readingMs += readingMs;
 }
 
-void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const uint32_t sessionMs) {
+void ReadingStatsStore::appendSessionLogEntry(const uint32_t dayOrdinal, const uint32_t sessionMs,
+                                              const ReadingBookStats& book) {
   if (dayOrdinal == 0 || sessionMs == 0) {
     return;
   }
 
-  sessionLog.push_back(ReadingSessionLogEntry{dayOrdinal, sessionMs});
+  sessionLog.push_back(ReadingSessionLogEntry{dayOrdinal, sessionMs, book.bookId, book.path});
   if (sessionLog.size() > MAX_SESSION_LOG_ENTRIES) {
     sessionLog.erase(sessionLog.begin(),
                      sessionLog.begin() + static_cast<std::ptrdiff_t>(sessionLog.size() - MAX_SESSION_LOG_ENTRIES));
   }
+}
+
+bool ReadingStatsStore::convertLegacyReadingDaysToUnassigned() {
+  std::vector<ReadingDayStats> bookTotals;
+  for (const auto& book : books) {
+    for (const auto& day : book.readingDays) {
+      addReadingToDays(bookTotals, day.dayOrdinal, day.readingMs);
+    }
+  }
+
+  std::vector<ReadingDayStats> legacyTotals = legacyReadingDays;
+  normalizeReadingDays(legacyTotals);
+
+  std::vector<ReadingDayStats> unassignedDays;
+  unassignedDays.reserve(legacyTotals.size());
+  for (const auto& legacyDay : legacyTotals) {
+    if (legacyDay.dayOrdinal == 0 || legacyDay.readingMs == 0) {
+      continue;
+    }
+
+    uint64_t assignedMs = 0;
+    auto it =
+        std::lower_bound(bookTotals.begin(), bookTotals.end(), legacyDay.dayOrdinal,
+                         [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+    if (it != bookTotals.end() && it->dayOrdinal == legacyDay.dayOrdinal) {
+      assignedMs = it->readingMs;
+    }
+
+    if (legacyDay.readingMs > assignedMs) {
+      unassignedDays.push_back(ReadingDayStats{legacyDay.dayOrdinal, legacyDay.readingMs - assignedMs});
+    }
+  }
+
+  const auto sameDays = [](const std::vector<ReadingDayStats>& left, const std::vector<ReadingDayStats>& right) {
+    if (left.size() != right.size()) {
+      return false;
+    }
+    for (size_t index = 0; index < left.size(); ++index) {
+      if (left[index].dayOrdinal != right[index].dayOrdinal || left[index].readingMs != right[index].readingMs) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const bool changed = !sameDays(legacyReadingDays, unassignedDays);
+  legacyReadingDays = std::move(unassignedDays);
+  return changed;
 }
 
 void ReadingStatsStore::rebuildAggregatedReadingDays() {
@@ -493,7 +605,6 @@ void ReadingStatsStore::rebuildSummaryCache() const {
       cache.booksFinishedCount++;
     }
   }
-
   if (cache.referenceDayOrdinal != 0) {
     const uint32_t start7DayOrdinal = (cache.referenceDayOrdinal >= 6) ? (cache.referenceDayOrdinal - 6) : 0;
     const uint32_t start30DayOrdinal = (cache.referenceDayOrdinal >= 29) ? (cache.referenceDayOrdinal - 29) : 0;
@@ -635,8 +746,8 @@ void ReadingStatsStore::resumeSession() {
   activeSession.lastInteractionMs = millis();
 }
 
-void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool completed, const std::string& chapterTitle,
-                                       const uint8_t chapterProgressPercent) {
+void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool completed,
+                                       const std::string& chapterTitle, const uint8_t chapterProgressPercent) {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
     return;
   }
@@ -661,6 +772,9 @@ void ReadingStatsStore::updateProgress(const uint8_t progressPercent, const bool
   }
 
   updateBookReadTimestamp(book, TimeUtils::getAuthoritativeTimestamp());
+  if (completionChanged && book.completedAt == 0) {
+    book.completedAt = book.lastReadAt;
+  }
 
   markDirty();
   if (shouldSaveDeferred()) {
@@ -703,6 +817,45 @@ bool ReadingStatsStore::updateBookMetadata(const std::string& path, const std::s
   return changed;
 }
 
+bool ReadingStatsStore::updateBookPath(const std::string& oldKey, const std::string& newPath,
+                                       const std::string& title, const std::string& author,
+                                       const std::string& coverBmpPath, const std::string& bookId) {
+  const std::string normalizedNewPath = BookIdentity::normalizePath(newPath);
+  if (normalizedNewPath.empty() || shouldIgnorePath(normalizedNewPath)) {
+    return false;
+  }
+
+  size_t index = findBookIndexByPath(oldKey);
+  if (index >= books.size() && !bookId.empty()) {
+    index = findBookIndexByBookId(bookId);
+  }
+  if (index >= books.size()) {
+    return false;
+  }
+
+  auto& book = books[index];
+  if (!bookId.empty() &&
+      (book.bookId.empty() || (BookIdentity::isLegacyBookId(book.bookId) && !BookIdentity::isLegacyBookId(bookId)))) {
+    book.bookId = bookId;
+  }
+
+  rememberBookPath(book, oldKey);
+  rememberBookPath(book, normalizedNewPath);
+  if (!title.empty()) {
+    book.title = title;
+  }
+  if (!author.empty()) {
+    book.author = author;
+  }
+  if (!coverBmpPath.empty()) {
+    book.coverBmpPath = coverBmpPath;
+  }
+
+  markDirty();
+  saveToFile();
+  return true;
+}
+
 bool ReadingStatsStore::removeBook(const std::string& path) {
   const size_t index = findBookIndexByPath(path);
   if (index >= books.size()) {
@@ -710,7 +863,9 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
   }
 
   auto it = books.begin() + static_cast<std::ptrdiff_t>(index);
-  const bool hadBookReadingDays = !it->readingDays.empty();
+  const ReadingBookStats removedBook = *it;
+  const std::vector<ReadingDayStats> removedReadingDays = removedBook.readingDays;
+  const bool hadBookReadingDays = !removedReadingDays.empty();
   const size_t removedIndex = index;
   books.erase(it);
 
@@ -724,6 +879,27 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
 
   if (hadBookReadingDays) {
     rebuildAggregatedReadingDays();
+  }
+
+  const auto oldSessionLogSize = sessionLog.size();
+  sessionLog.erase(
+      std::remove_if(sessionLog.begin(), sessionLog.end(),
+                     [&](const ReadingSessionLogEntry& session) {
+                       if (sessionMatchesBook(session, removedBook)) {
+                         return true;
+                       }
+                       return !sessionHasBookIdentity(session) && containsReadingDay(removedReadingDays, session.dayOrdinal) &&
+                              !containsReadingDay(readingDays, session.dayOrdinal);
+                     }),
+      sessionLog.end());
+
+  if ((!removedBook.bookId.empty() && lastSessionSnapshot.bookId == removedBook.bookId) ||
+      lastSessionSnapshot.path == removedBook.path || containsString(removedBook.knownPaths, lastSessionSnapshot.path)) {
+    lastSessionSnapshot = {};
+  }
+
+  if (oldSessionLogSize != sessionLog.size()) {
+    invalidateSummaryCache();
   }
   markDirty();
   saveToFile();
@@ -741,15 +917,15 @@ void ReadingStatsStore::endSession() {
 
   auto& book = books[activeSession.bookIndex];
   const bool countedSession = activeSession.accumulatedMs >= MIN_SESSION_READING_MS;
-  const uint32_t sessionMs =
-      (activeSession.accumulatedMs > static_cast<uint64_t>(UINT32_MAX)) ? UINT32_MAX
-                                                                        : static_cast<uint32_t>(activeSession.accumulatedMs);
+  const uint32_t sessionMs = (activeSession.accumulatedMs > static_cast<uint64_t>(UINT32_MAX))
+                                 ? UINT32_MAX
+                                 : static_cast<uint32_t>(activeSession.accumulatedMs);
   if (countedSession) {
     book.sessions++;
     book.lastSessionMs = sessionMs;
     const uint32_t sessionTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     if (isClockValid(sessionTimestamp)) {
-      appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs);
+      appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs, book);
     }
     markDirty();
   }
@@ -766,6 +942,89 @@ void ReadingStatsStore::endSession() {
 
   activeSession = {};
   saveToFile();
+}
+
+bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,
+                                              const int32_t deltaMs) {
+  if (dayOrdinal == 0 || deltaMs == 0) {
+    return false;
+  }
+
+  const size_t index = findBookIndexByPath(path);
+  if (index >= books.size()) {
+    return false;
+  }
+
+  auto& book = books[index];
+  if (deltaMs > 0) {
+    const uint64_t addedMs = static_cast<uint64_t>(deltaMs);
+    addReadingToDays(book.readingDays, dayOrdinal, addedMs);
+    book.totalReadingMs += addedMs;
+  } else {
+    const uint64_t requestedRemoveMs = static_cast<uint64_t>(-deltaMs);
+    auto it =
+        std::lower_bound(book.readingDays.begin(), book.readingDays.end(), dayOrdinal,
+                         [](const ReadingDayStats& day, const uint32_t ordinal) { return day.dayOrdinal < ordinal; });
+    if (it == book.readingDays.end() || it->dayOrdinal != dayOrdinal || it->readingMs < requestedRemoveMs ||
+        book.totalReadingMs < requestedRemoveMs) {
+      return false;
+    }
+    it->readingMs -= requestedRemoveMs;
+    if (it->readingMs == 0) {
+      book.readingDays.erase(it);
+    }
+    book.totalReadingMs -= requestedRemoveMs;
+  }
+
+  rebuildAggregatedReadingDays();
+  markDirty();
+  return saveToFile();
+}
+
+bool ReadingStatsStore::setBookFirstReadDate(const std::string& path, const uint32_t dayOrdinal) {
+  if (dayOrdinal == 0) {
+    return false;
+  }
+
+  const size_t index = findBookIndexByPath(path);
+  if (index >= books.size()) {
+    return false;
+  }
+
+  auto& book = books[index];
+  const uint32_t referenceDayOrdinal = getReferenceDayOrdinal();
+  if (referenceDayOrdinal != 0 && dayOrdinal > referenceDayOrdinal) {
+    return false;
+  }
+  if (!book.readingDays.empty() && dayOrdinal > book.readingDays.front().dayOrdinal) {
+    return false;
+  }
+  if (isClockValid(book.lastReadAt) && dayOrdinal > TimeUtils::getLocalDayOrdinal(book.lastReadAt)) {
+    return false;
+  }
+  if (isClockValid(book.completedAt) && dayOrdinal > TimeUtils::getLocalDayOrdinal(book.completedAt)) {
+    return false;
+  }
+
+  int year = 0;
+  unsigned month = 0;
+  unsigned day = 0;
+  if (!TimeUtils::getDateFromDayOrdinal(dayOrdinal, year, month, day)) {
+    return false;
+  }
+
+  uint32_t timestamp = 0;
+  if (!TimeUtils::getTimestampForLocalDate(year, month, day, &timestamp)) {
+    return false;
+  }
+
+  if (book.firstReadAt == timestamp) {
+    return true;
+  }
+
+  book.firstReadAt = timestamp;
+  markDirty();
+  return saveToFile();
 }
 
 uint32_t ReadingStatsStore::getBooksFinishedCount() const {
@@ -891,7 +1150,7 @@ bool ReadingStatsStore::importFromFile(const std::string& path) {
   removeIgnoredBooks();
   rebuildAggregatedReadingDays();
   const uint32_t latestKnownTimestamp = getLatestKnownTimestamp();
-  if (isClockValid(latestKnownTimestamp) && latestKnownTimestamp > APP_STATE.lastKnownValidTimestamp) {
+  if (!isClockValid(APP_STATE.lastKnownValidTimestamp) && isClockValid(latestKnownTimestamp)) {
     APP_STATE.lastKnownValidTimestamp = latestKnownTimestamp;
     APP_STATE.saveToFile();
   }
@@ -910,6 +1169,13 @@ bool ReadingStatsStore::saveToFile() const {
 }
 
 bool ReadingStatsStore::loadFromFile() {
+  const std::string tempPath = std::string(READING_STATS_FILE_JSON) + ".tmp";
+  if (!Storage.exists(READING_STATS_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), READING_STATS_FILE_JSON)) {
+      LOG_DBG("RST", "Recovered reading_stats.json from interrupted temp file");
+    }
+  }
+
   if (!Storage.exists(READING_STATS_FILE_JSON)) {
     return false;
   }
@@ -922,7 +1188,7 @@ bool ReadingStatsStore::loadFromFile() {
     removeIgnoredBooks();
     rebuildAggregatedReadingDays();
     const uint32_t latestKnownTimestamp = getLatestKnownTimestamp();
-    if (isClockValid(latestKnownTimestamp) && latestKnownTimestamp > APP_STATE.lastKnownValidTimestamp) {
+    if (!isClockValid(APP_STATE.lastKnownValidTimestamp) && isClockValid(latestKnownTimestamp)) {
       APP_STATE.lastKnownValidTimestamp = latestKnownTimestamp;
     }
     activeSession = {};
@@ -930,8 +1196,7 @@ bool ReadingStatsStore::loadFromFile() {
     sessionSerialCounter = 0;
     if (sessionLog.size() > MAX_SESSION_LOG_ENTRIES) {
       sessionLog.erase(sessionLog.begin(),
-                       sessionLog.begin() +
-                           static_cast<std::ptrdiff_t>(sessionLog.size() - MAX_SESSION_LOG_ENTRIES));
+                       sessionLog.begin() + static_cast<std::ptrdiff_t>(sessionLog.size() - MAX_SESSION_LOG_ENTRIES));
     }
     invalidateSummaryCache();
     if (needsSave) {
@@ -941,6 +1206,52 @@ bool ReadingStatsStore::loadFromFile() {
       dirty = false;
       lastSaveMs = millis();
     }
+  }
+  return loaded;
+}
+
+bool ReadingStatsStore::releaseMemoryForNetwork() {
+  LOG_DBG("RST", "Before network release: free=%u largest=%u", ESP.getFreeHeap(),
+          heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
+
+  if (activeSession.active) {
+    endSession();
+  }
+
+  if (dirty && !saveToFile()) {
+    LOG_ERR("RST", "Failed to save reading stats before network memory release");
+    return false;
+  }
+
+  books.clear();
+  books.shrink_to_fit();
+  legacyReadingDays.clear();
+  legacyReadingDays.shrink_to_fit();
+  readingDays.clear();
+  readingDays.shrink_to_fit();
+  sessionLog.clear();
+  sessionLog.shrink_to_fit();
+
+  activeSession = {};
+  lastSessionSnapshot = {};
+  sessionSerialCounter = 0;
+  invalidateSummaryCache();
+  dirty = false;
+  lastSaveMs = millis();
+
+  LOG_DBG("RST", "After network release: free=%u largest=%u", ESP.getFreeHeap(),
+          heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT));
+  return true;
+}
+
+bool ReadingStatsStore::reloadAfterNetwork() {
+  if (!Storage.exists(READING_STATS_FILE_JSON)) {
+    return true;
+  }
+
+  const bool loaded = loadFromFile();
+  if (!loaded) {
+    LOG_ERR("RST", "Failed to reload reading stats after network operation");
   }
   return loaded;
 }

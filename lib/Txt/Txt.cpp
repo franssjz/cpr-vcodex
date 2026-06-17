@@ -3,6 +3,7 @@
 #include <FsHelpers.h>
 #include <JpegToBmpConverter.h>
 #include <Logging.h>
+#include <PngToBmpConverter.h>
 
 Txt::Txt(std::string path, std::string cacheBasePath)
     : filepath(std::move(path)), cacheBasePath(std::move(cacheBasePath)) {
@@ -40,12 +41,33 @@ std::string Txt::getTitle() const {
   size_t lastSlash = filepath.find_last_of('/');
   std::string filename = (lastSlash != std::string::npos) ? filepath.substr(lastSlash + 1) : filepath;
 
-  // Remove .txt extension
+  // Remove plain text / Markdown extension
   if (FsHelpers::hasTxtExtension(filename)) {
     filename = filename.substr(0, filename.length() - 4);
+  } else if (FsHelpers::checkFileExtension(filename, ".markdown")) {
+    filename = filename.substr(0, filename.length() - 9);
+  } else if (FsHelpers::checkFileExtension(filename, ".md")) {
+    filename = filename.substr(0, filename.length() - 3);
   }
 
   return filename;
+}
+
+bool Txt::isMarkdown() const { return FsHelpers::hasMarkdownExtension(filepath); }
+
+bool Txt::clearCache() const {
+  if (!Storage.exists(cachePath.c_str())) {
+    LOG_DBG("TXT", "Cache does not exist, no action needed");
+    return true;
+  }
+
+  if (!Storage.removeDir(cachePath.c_str())) {
+    LOG_ERR("TXT", "Failed to clear cache");
+    return false;
+  }
+
+  LOG_DBG("TXT", "Cache cleared successfully");
+  return true;
 }
 
 void Txt::setupCacheDir() const {
@@ -120,7 +142,6 @@ bool Txt::generateCoverBmp() const {
       return false;
     }
     if (!Storage.openFileForWrite("TXT", getCoverBmpPath(), dst)) {
-      src.close();
       return false;
     }
     uint8_t buffer[1024];
@@ -154,10 +175,30 @@ bool Txt::generateCoverBmp() const {
       LOG_DBG("TXT", "Generated BMP from JPG cover image");
     }
     return success;
+  } else if (FsHelpers::hasPngExtension(coverImagePath)) {
+    LOG_DBG("TXT", "Generating BMP from PNG cover image");
+    FsFile coverPng, coverBmp;
+    if (!Storage.openFileForRead("TXT", coverImagePath, coverPng)) {
+      return false;
+    }
+    if (!Storage.openFileForWrite("TXT", getCoverBmpPath(), coverBmp)) {
+      coverPng.close();
+      return false;
+    }
+    const bool success = PngToBmpConverter::pngFileToBmpStream(coverPng, coverBmp);
+    coverPng.close();
+    coverBmp.close();
+
+    if (!success) {
+      LOG_ERR("TXT", "Failed to generate BMP from PNG cover image");
+      Storage.remove(getCoverBmpPath().c_str());
+    } else {
+      LOG_DBG("TXT", "Generated BMP from PNG cover image");
+    }
+    return success;
   }
 
-  // PNG files are not supported (would need a PNG decoder)
-  LOG_ERR("TXT", "Cover image format not supported (only BMP/JPG/JPEG)");
+  LOG_ERR("TXT", "Cover image format not supported (only BMP/JPG/JPEG/PNG)");
   return false;
 }
 
@@ -172,12 +213,9 @@ bool Txt::readContent(uint8_t* buffer, size_t offset, size_t length) const {
   }
 
   if (!file.seek(offset)) {
-    file.close();
     return false;
   }
 
   size_t bytesRead = file.read(buffer, length);
-  file.close();
-
   return bytesRead > 0;
 }

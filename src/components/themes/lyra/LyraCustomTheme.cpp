@@ -67,8 +67,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
               const float coverHeight = static_cast<float>(bitmap.getHeight());
               const float coverWidth = static_cast<float>(bitmap.getWidth());
               const float ratio = coverWidth / coverHeight;
-              const float tileRatio = static_cast<float>(tileWidth - 2 * H_PADDING) /
-                                      static_cast<float>(LyraCustomMetrics::values.homeCoverHeight);
+              const float tileRatio =
+                  static_cast<float>(tileWidth - 2 * H_PADDING) / static_cast<float>(LyraCustomMetrics::values.homeCoverHeight);
               const float cropX = 1.0f - (tileRatio / ratio);
 
               renderer.drawBitmap(bitmap, tileX + H_PADDING, tileY + H_PADDING, tileWidth - 2 * H_PADDING,
@@ -109,7 +109,8 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       const std::string progressText = std::to_string(progressPercent) + "%";
       const int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
       const int progressRowHeight = std::max(titleLineHeight, PROGRESS_BAR_HEIGHT);
-      const int bottomBlockHeight = PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
+      const int bottomBlockHeight =
+          PROGRESS_ROW_TOP + progressRowHeight + TITLE_TOP_GAP + titleBlockHeight + H_PADDING + 5;
 
       if (bookSelected) {
         renderer.fillRoundedRect(tileX, tileY, tileWidth, H_PADDING, CORNER_RADIUS, true, true, false, false,

@@ -1,50 +1,239 @@
 #include "TextBlock.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Serialization.h>
 
-void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y) const {
-  // Validate iterator bounds before rendering
-  if (words.size() != wordXpos.size() || words.size() != wordStyles.size()) {
-    LOG_ERR("TXB", "Render skipped: size mismatch (words=%u, xpos=%u, styles=%u)\n", (uint32_t)words.size(),
-            (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size());
+#include <algorithm>
+
+namespace {
+constexpr uint8_t BIONIC_READING_OFF = 0;
+constexpr uint8_t BIONIC_READING_NORMAL = 1;
+constexpr uint8_t BIONIC_READING_SUBTLE = 2;
+constexpr int DECORATION_LINE_THICKNESS = 4;
+constexpr int STRIKETHROUGH_ASCENDER_PERCENT = 66;
+constexpr int UNDERLINE_BASELINE_OFFSET_PX = 6;
+
+// Bionic Reading helpers — no heap, no std::string, stack-only slicing.
+
+// Faithful port of metaguiding.py:78 — midpoint = 1 if n in (1,3) else ceil(n/2)
+static constexpr int bionicMidpoint(int n) { return (n == 1 || n == 3) ? 1 : (n + 1) / 2; }
+
+// Count UTF-8 codepoints in [begin, end) by skipping continuation bytes.
+static int utf8CodepointCount(const char* begin, const char* end) {
+  int n = 0;
+  for (const char* p = begin; p < end; ++p) {
+    if ((static_cast<uint8_t>(*p) & 0xC0) != 0x80) ++n;
+  }
+  return n;
+}
+
+// Mirrors Python's \w under re.UNICODE: ASCII alnum/underscore + all non-ASCII bytes (UTF-8).
+static inline bool isWordByte(uint8_t b) {
+  if (b >= 0x80) return true;
+  return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b == '_');
+}
+
+struct TextDecorationMetrics {
+  int startX = 0;
+  int width = 0;
+};
+
+TextDecorationMetrics getDecorationMetrics(const GfxRenderer& renderer, const int fontId, const int wordX,
+                                           const std::string& word, const EpdFontFamily::Style style) {
+  TextDecorationMetrics metrics{wordX, renderer.getTextWidth(fontId, word.c_str(), style)};
+
+  // If word starts with em-space ("\xe2\x80\x83"), account for the additional indent
+  // before drawing decoration lines.
+  if (word.size() >= 3 && static_cast<uint8_t>(word[0]) == 0xE2 && static_cast<uint8_t>(word[1]) == 0x80 &&
+      static_cast<uint8_t>(word[2]) == 0x83) {
+    const char* visiblePtr = word.c_str() + 3;
+    const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", style);
+    metrics.startX = wordX + prefixWidth;
+    metrics.width = renderer.getTextWidth(fontId, visiblePtr, style);
+  }
+
+  return metrics;
+}
+
+void drawDecorationLine(const GfxRenderer& renderer, const int startX, const int centerY, const int width) {
+  if (width <= 0) {
+    return;
+  }
+  const int lineY = centerY - DECORATION_LINE_THICKNESS / 2;
+  renderer.drawLine(startX, lineY, startX + width - 1, lineY, DECORATION_LINE_THICKNESS, true);
+}
+}  // namespace
+
+void TextBlock::recordFontUsage(FontCacheManager& fontCacheManager, const int fontId,
+                                const uint8_t bionicReadingMode) const {
+  if (words.size() != wordStyles.size()) {
+    LOG_ERR("TXB", "Font usage scan skipped: size mismatch (words=%u, styles=%u)\n", (uint32_t)words.size(),
+            (uint32_t)wordStyles.size());
     return;
   }
 
   for (size_t i = 0; i < words.size(); i++) {
+    const EpdFontFamily::Style style = wordStyles[i];
+    fontCacheManager.recordText(words[i].c_str(), fontId, style);
+    if (bionicReadingMode == BIONIC_READING_NORMAL && (style & EpdFontFamily::BOLD) == 0) {
+      fontCacheManager.recordStyle(fontId, static_cast<EpdFontFamily::Style>(style | EpdFontFamily::BOLD));
+    }
+  }
+}
+
+void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int x, const int y,
+                       const uint8_t bionicReadingMode) const {
+  // Validate iterator bounds before rendering
+  const bool hasFocusAnnotations = !wordFocusBoundary.empty() || !wordFocusSuffixX.empty();
+  if (words.size() != wordXpos.size() || words.size() != wordStyles.size() ||
+      (hasFocusAnnotations && (words.size() != wordFocusBoundary.size() || words.size() != wordFocusSuffixX.size()))) {
+    LOG_ERR("TXB", "Render skipped: size mismatch (words=%u, xpos=%u, styles=%u, boundary=%u, suffixX=%u)\n",
+            (uint32_t)words.size(), (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size(),
+            (uint32_t)wordFocusBoundary.size(), (uint32_t)wordFocusSuffixX.size());
+    return;
+  }
+
+  const bool scanning = renderer.isFontCacheScanning();
+  const int ascender = renderer.getFontAscenderSize(fontId);
+  for (size_t i = 0; i < words.size(); i++) {
     const int wordX = wordXpos[i] + x;
     const EpdFontFamily::Style currentStyle = wordStyles[i];
-    renderer.drawText(fontId, wordX, y, words[i].c_str(), true, currentStyle);
+    const std::string& w = words[i];
 
-    if ((currentStyle & EpdFontFamily::UNDERLINE) != 0) {
-      const std::string& w = words[i];
-      const int fullWordWidth = renderer.getTextWidth(fontId, w.c_str(), currentStyle);
-      // y is the top of the text line; add ascender to reach baseline, then offset 2px below
-      const int underlineY = y + renderer.getFontAscenderSize(fontId) + 2;
+    // SUP/SUB shifts are relative to the full-size ascender; glyphs are scaled in drawText.
+    int wordY = y;
+    if ((currentStyle & EpdFontFamily::SUP) != 0) {
+      wordY -= ascender * 2 / 5;
+    } else if ((currentStyle & EpdFontFamily::SUB) != 0) {
+      wordY += ascender / 4;
+    }
 
-      int startX = wordX;
-      int underlineWidth = fullWordWidth;
-
-      // if word starts with em-space ("\xe2\x80\x83"), account for the additional indent before drawing the line
-      if (w.size() >= 3 && static_cast<uint8_t>(w[0]) == 0xE2 && static_cast<uint8_t>(w[1]) == 0x80 &&
-          static_cast<uint8_t>(w[2]) == 0x83) {
-        const char* visiblePtr = w.c_str() + 3;
-        const int prefixWidth = renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle);
-        const int visibleWidth = renderer.getTextWidth(fontId, visiblePtr, currentStyle);
-        startX = wordX + prefixWidth;
-        underlineWidth = visibleWidth;
+    // Normal uses layout-time focus annotations; Subtle remains render-only.
+    const bool alreadyBold = (currentStyle & EpdFontFamily::BOLD) != 0;
+    const bool bionicEnabled = bionicReadingMode == BIONIC_READING_NORMAL || bionicReadingMode == BIONIC_READING_SUBTLE;
+    const bool bionicNormal = bionicReadingMode == BIONIC_READING_NORMAL;
+    const uint8_t focusBoundary =
+        hasFocusAnnotations && bionicNormal && !alreadyBold ? wordFocusBoundary[i] : 0;
+    if (bionicNormal) {
+      if (focusBoundary > 0) {
+        char buf[40];
+        size_t splitByte = std::min<size_t>({static_cast<size_t>(focusBoundary), w.size(), sizeof(buf) - 1});
+        while (splitByte > 0 && splitByte < w.size() && (static_cast<uint8_t>(w[splitByte]) & 0xC0) == 0x80) {
+          --splitByte;
+        }
+        if (splitByte > 0 && splitByte < w.size()) {
+          memcpy(buf, w.data(), splitByte);
+          buf[splitByte] = '\0';
+          const EpdFontFamily::Style boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
+          renderer.drawText(fontId, wordX, wordY, buf, true, boldStyle);
+          renderer.drawText(fontId, wordX + wordFocusSuffixX[i], wordY, w.c_str() + splitByte, true, currentStyle);
+        } else {
+          renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
+        }
+      } else {
+        renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
       }
+    } else if (bionicReadingMode == BIONIC_READING_OFF || !bionicEnabled || alreadyBold || w.size() >= 128) {
+      renderer.drawText(fontId, wordX, wordY, w.c_str(), true, currentStyle);
+    } else {
+      // Stack slice buffer (<128 bytes, well within CLAUDE.md <256 byte rule).
+      char buf[128];
+      int cursorX = wordX;
+      size_t i0 = 0;
 
-      renderer.drawLine(startX, underlineY, startX + underlineWidth, underlineY, true);
+      while (i0 < w.size()) {
+        // Non-word run: draw in original style, advance cursor.
+        size_t j = i0;
+        while (j < w.size() && !isWordByte(static_cast<uint8_t>(w[j]))) ++j;
+        if (j > i0) {
+          const size_t n = j - i0;
+          memcpy(buf, w.data() + i0, n);
+          buf[n] = '\0';
+          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle);
+          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+          i0 = j;
+          if (i0 >= w.size()) break;
+        }
+
+        // Word run: emphasize the first M codepoints, regular for the rest.
+        size_t k = i0;
+        while (k < w.size() && isWordByte(static_cast<uint8_t>(w[k]))) ++k;
+
+        const int ncp = utf8CodepointCount(w.data() + i0, w.data() + k);
+        const int mcp = bionicMidpoint(ncp);
+
+        // Find byte boundary after the M-th codepoint.
+        size_t splitByte = i0;
+        {
+          size_t p = i0;
+          int seen = 0;
+          while (p < k && seen < mcp) {
+            ++p;
+            while (p < k && (static_cast<uint8_t>(w[p]) & 0xC0) == 0x80) ++p;
+            ++seen;
+          }
+          splitByte = p;
+        }
+
+        // Emphasized prefix.
+        {
+          const size_t n = splitByte - i0;
+          memcpy(buf, w.data() + i0, n);
+          buf[n] = '\0';
+          if (bionicReadingMode == BIONIC_READING_SUBTLE) {
+            renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle);
+            renderer.drawText(fontId, cursorX + 1, wordY, buf, true, currentStyle);
+            cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+          } else {
+            const EpdFontFamily::Style boldStyle =
+                static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
+            renderer.drawText(fontId, cursorX, wordY, buf, true, boldStyle);
+            cursorX += renderer.getTextAdvanceX(fontId, buf, boldStyle);
+          }
+        }
+
+        // Regular suffix (if any).
+        if (splitByte < k) {
+          const size_t n = k - splitByte;
+          memcpy(buf, w.data() + splitByte, n);
+          buf[n] = '\0';
+          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle);
+          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+        }
+
+        i0 = k;
+      }
+    }
+
+    const bool hasUnderline = (currentStyle & EpdFontFamily::UNDERLINE) != 0;
+    const bool hasStrikethrough = (currentStyle & EpdFontFamily::STRIKETHROUGH) != 0;
+    if (!scanning && (hasUnderline || hasStrikethrough)) {
+      const auto decoration = getDecorationMetrics(renderer, fontId, wordX, w, currentStyle);
+      if (decoration.width <= 0) {
+        continue;
+      }
+      if (hasStrikethrough) {
+        const int strikeY = wordY + ascender * STRIKETHROUGH_ASCENDER_PERCENT / 100;
+        drawDecorationLine(renderer, decoration.startX, strikeY, decoration.width);
+      }
+      if (hasUnderline) {
+        // y is the top of the text line; add ascender to reach baseline, then offset below.
+        const int underlineY = wordY + ascender + UNDERLINE_BASELINE_OFFSET_PX;
+        drawDecorationLine(renderer, decoration.startX, underlineY, decoration.width);
+      }
     }
   }
 }
 
 bool TextBlock::serialize(FsFile& file) const {
-  if (words.size() != wordXpos.size() || words.size() != wordStyles.size()) {
-    LOG_ERR("TXB", "Serialization failed: size mismatch (words=%u, xpos=%u, styles=%u)\n", words.size(),
-            wordXpos.size(), wordStyles.size());
+  const bool hasFocusAnnotations = !wordFocusBoundary.empty() || !wordFocusSuffixX.empty();
+  if (words.size() != wordXpos.size() || words.size() != wordStyles.size() ||
+      (hasFocusAnnotations && (words.size() != wordFocusBoundary.size() || words.size() != wordFocusSuffixX.size()))) {
+    LOG_ERR("TXB", "Serialization failed: size mismatch (words=%u, xpos=%u, styles=%u, boundary=%u, suffixX=%u)\n",
+            (uint32_t)words.size(), (uint32_t)wordXpos.size(), (uint32_t)wordStyles.size(),
+            (uint32_t)wordFocusBoundary.size(), (uint32_t)wordFocusSuffixX.size());
     return false;
   }
 
@@ -53,6 +242,11 @@ bool TextBlock::serialize(FsFile& file) const {
   for (const auto& w : words) serialization::writeString(file, w);
   for (auto x : wordXpos) serialization::writePod(file, x);
   for (auto s : wordStyles) serialization::writePod(file, s);
+  serialization::writePod(file, static_cast<uint8_t>(hasFocusAnnotations ? 1 : 0));
+  if (hasFocusAnnotations) {
+    for (auto b : wordFocusBoundary) serialization::writePod(file, b);
+    for (auto sx : wordFocusSuffixX) serialization::writePod(file, sx);
+  }
 
   // Style (alignment + margins/padding/indent)
   serialization::writePod(file, blockStyle.alignment);
@@ -76,6 +270,8 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   std::vector<std::string> words;
   std::vector<int16_t> wordXpos;
   std::vector<EpdFontFamily::Style> wordStyles;
+  std::vector<uint8_t> wordFocusBoundary;
+  std::vector<uint16_t> wordFocusSuffixX;
   BlockStyle blockStyle;
 
   // Word count
@@ -94,6 +290,14 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   for (auto& w : words) serialization::readString(file, w);
   for (auto& x : wordXpos) serialization::readPod(file, x);
   for (auto& s : wordStyles) serialization::readPod(file, s);
+  uint8_t hasFocusAnnotations = 0;
+  serialization::readPod(file, hasFocusAnnotations);
+  if (hasFocusAnnotations != 0) {
+    wordFocusBoundary.resize(wc);
+    wordFocusSuffixX.resize(wc);
+    for (auto& b : wordFocusBoundary) serialization::readPod(file, b);
+    for (auto& sx : wordFocusSuffixX) serialization::readPod(file, sx);
+  }
 
   // Style (alignment + margins/padding/indent)
   serialization::readPod(file, blockStyle.alignment);
@@ -109,6 +313,7 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(FsFile& file) {
   serialization::readPod(file, blockStyle.textIndent);
   serialization::readPod(file, blockStyle.textIndentDefined);
 
-  return std::unique_ptr<TextBlock>(
-      new TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles), blockStyle));
+  return std::unique_ptr<TextBlock>(new TextBlock(std::move(words), std::move(wordXpos), std::move(wordStyles),
+                                                  std::move(wordFocusBoundary), std::move(wordFocusSuffixX),
+                                                  blockStyle));
 }

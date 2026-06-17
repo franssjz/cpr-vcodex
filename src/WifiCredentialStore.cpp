@@ -6,6 +6,8 @@
 #include <ObfuscationUtils.h>
 #include <Serialization.h>
 
+#include <string>
+
 // Initialize the static instance
 WifiCredentialStore WifiCredentialStore::instance;
 
@@ -35,6 +37,13 @@ bool WifiCredentialStore::saveToFile() const {
 }
 
 bool WifiCredentialStore::loadFromFile() {
+  const std::string tempPath = std::string(WIFI_FILE_JSON) + ".tmp";
+  if (!Storage.exists(WIFI_FILE_JSON) && Storage.exists(tempPath.c_str())) {
+    if (Storage.rename(tempPath.c_str(), WIFI_FILE_JSON)) {
+      LOG_DBG("WCS", "Recovered wifi.json from interrupted temp file");
+    }
+  }
+
   // Try JSON first
   if (Storage.exists(WIFI_FILE_JSON)) {
     String json = Storage.readFile(WIFI_FILE_JSON);
@@ -76,7 +85,6 @@ bool WifiCredentialStore::loadFromBinaryFile() {
   serialization::readPod(file, version);
   if (version > WIFI_FILE_VERSION) {
     LOG_DBG("WCS", "Unknown file version: %u", version);
-    file.close();
     return false;
   }
 
@@ -98,7 +106,6 @@ bool WifiCredentialStore::loadFromBinaryFile() {
     credentials.push_back(cred);
   }
 
-  file.close();
   // LOG_DBG("WCS", "Loaded %zu WiFi credentials from binary file", credentials.size());
   return true;
 }

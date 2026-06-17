@@ -5,8 +5,6 @@
 
 class GfxRenderer;
 
-// Cache rendered BW sleep framebuffers to SD to avoid re-rendering static BMP sleep screens.
-// Greyscale sleep images are intentionally skipped because they require the extra grey buffer path.
 class SleepScreenCache {
  public:
   static bool load(GfxRenderer& renderer, const std::string& sourcePath);

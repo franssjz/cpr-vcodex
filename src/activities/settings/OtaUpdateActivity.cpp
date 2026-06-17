@@ -1,22 +1,50 @@
 #include "OtaUpdateActivity.h"
 
+#include <cstdio>
+
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <WiFi.h>
 
 #include "MappedInputManager.h"
+#include "ReadingStatsStore.h"
+#include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/OtaUpdater.h"
 
-void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
-  if (!success) {
-    LOG_ERR("OTA", "WiFi connection failed, exiting");
-    finish();
-    return;
+namespace {
+std::string formatByteSizeCompact(const size_t bytes) {
+  static constexpr const char* units[] = {"B", "KB", "MB", "GB"};
+  double value = static_cast<double>(bytes);
+  size_t unitIndex = 0;
+  while (value >= 1024.0 && unitIndex + 1 < (sizeof(units) / sizeof(units[0]))) {
+    value /= 1024.0;
+    ++unitIndex;
   }
 
+  char buffer[32];
+  if (unitIndex == 0 || value >= 100.0) {
+    snprintf(buffer, sizeof(buffer), "%.0f %s", value, units[unitIndex]);
+  } else if (value >= 10.0) {
+    snprintf(buffer, sizeof(buffer), "%.1f %s", value, units[unitIndex]);
+  } else {
+    snprintf(buffer, sizeof(buffer), "%.2f %s", value, units[unitIndex]);
+  }
+  return buffer;
+}
+
+std::string buildNewVersionLine(const OtaUpdater& updater) {
+  std::string line = std::string(tr(STR_NEW_VERSION)) + updater.getLatestVersion();
+  if (updater.getOtaSize() > 0) {
+    line += " (" + formatByteSizeCompact(updater.getOtaSize()) + ")";
+  }
+  return line;
+}
+}  // namespace
+
+void OtaUpdateActivity::checkForUpdateNow() {
   LOG_DBG("OTA", "WiFi connected, checking for update");
 
   {
@@ -26,6 +54,15 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   requestUpdateAndWait();
 
   const auto res = updater.checkForUpdate();
+  if (res == OtaUpdater::NO_UPDATE) {
+    LOG_DBG("OTA", "No firmware update available");
+    {
+      RenderLock lock(*this);
+      state = NO_UPDATE;
+    }
+    return;
+  }
+
   if (res != OtaUpdater::OK) {
     LOG_DBG("OTA", "Update check failed: %d", res);
     {
@@ -50,8 +87,20 @@ void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   }
 }
 
+void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
+  if (!success) {
+    LOG_ERR("OTA", "WiFi connection failed, exiting");
+    finish();
+    return;
+  }
+
+  checkForUpdateNow();
+}
+
 void OtaUpdateActivity::onEnter() {
   Activity::onEnter();
+
+  READING_STATS.releaseMemoryForNetwork();
 
   // Turn on WiFi immediately
   LOG_DBG("OTA", "Turning on WiFi...");
@@ -66,11 +115,13 @@ void OtaUpdateActivity::onEnter() {
 void OtaUpdateActivity::onExit() {
   Activity::onExit();
 
-  // Turn off wifi
-  WiFi.disconnect(false);  // false = don't erase credentials, send disconnect frame
-  delay(100);              // Allow disconnect frame to be sent
-  WiFi.mode(WIFI_OFF);
-  delay(100);  // Allow WiFi hardware to fully power down
+  // Success path reboots via SHUTTING_DOWN, so the new firmware boots
+  // normally. Back-out/failure paths land here with WiFi still active.
+  if (WiFi.getMode() != WIFI_MODE_NULL) {
+    WiFi.disconnect(false);
+    delay(30);
+    silentRestart();
+  }
 }
 
 void OtaUpdateActivity::render(RenderLock&&) {
@@ -86,8 +137,9 @@ void OtaUpdateActivity::render(RenderLock&&) {
 
   float updaterProgress = 0;
   if (state == UPDATE_IN_PROGRESS) {
-    LOG_DBG("OTA", "Update progress: %d / %d", updater.getProcessedSize(), updater.getTotalSize());
-    updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
+    if (updater.getTotalSize() > 0) {
+      updaterProgress = static_cast<float>(updater.getProcessedSize()) / static_cast<float>(updater.getTotalSize());
+    }
     // Only update every 2% at the most
     if (static_cast<int>(updaterProgress * 50) == lastUpdaterPercentage / 2) {
       return;
@@ -102,7 +154,7 @@ void OtaUpdateActivity::render(RenderLock&&) {
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, top + height + metrics.verticalSpacing,
                       (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, top + height * 2 + metrics.verticalSpacing * 2,
-                      (std::string(tr(STR_NEW_VERSION)) + updater.getLatestVersion()).c_str());
+                      buildNewVersionLine(updater).c_str());
 
     const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_UPDATE), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
@@ -116,19 +168,28 @@ void OtaUpdateActivity::render(RenderLock&&) {
         static_cast<int>(updaterProgress * 100), 100);
 
     y += metrics.progressBarHeight + metrics.verticalSpacing;
-    renderer.drawCenteredText(UI_10_FONT_ID, y,
-                              (std::to_string(static_cast<int>(updaterProgress * 100)) + "%").c_str());
+    // Percent label is drawn by BaseTheme::drawProgressBar; this slot is left intentionally empty
+    // so the bytes line below stays at the same Y it was at when the activity drew its own percent.
     y += height + metrics.verticalSpacing;
-    renderer.drawCenteredText(
-        UI_10_FONT_ID, y,
-        (std::to_string(updater.getProcessedSize()) + " / " + std::to_string(updater.getTotalSize())).c_str());
+    renderer.drawCenteredText(UI_10_FONT_ID, y,
+                              (formatByteSizeCompact(updater.getProcessedSize()) + " / " +
+                               formatByteSizeCompact(updater.getTotalSize()))
+                                  .c_str());
   } else if (state == NO_UPDATE) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_NO_UPDATE), true, EpdFontFamily::BOLD);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing,
+                              (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_RETRY), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_FAILED), true, EpdFontFamily::BOLD);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing,
+                              (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+    if (!updater.getLatestVersion().empty()) {
+      renderer.drawCenteredText(UI_10_FONT_ID, top + height * 2 + metrics.verticalSpacing * 2,
+                                buildNewVersionLine(updater).c_str());
+    }
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_RETRY), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == FINISHED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_COMPLETE), true, EpdFontFamily::BOLD);
@@ -139,20 +200,23 @@ void OtaUpdateActivity::render(RenderLock&&) {
 }
 
 void OtaUpdateActivity::loop() {
-  // TODO @ngxson : refactor this logic later
-  if (updater.getRender()) {
-    requestUpdate();
-  }
-
   if (state == WAITING_CONFIRMATION) {
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
       LOG_DBG("OTA", "New update available, starting download...");
       {
         RenderLock lock(*this);
         state = UPDATE_IN_PROGRESS;
+        lastUpdaterPercentage = UNINITIALIZED_PERCENTAGE;
       }
       requestUpdateAndWait();
-      const auto res = updater.installUpdate();
+      const auto res = updater.installUpdate(
+          [](void* ctx) {
+            // immediate=true notifies the render task directly. The default deferred path only
+            // sets a flag consumed at the end of ActivityManager::loop(), which never runs while
+            // installUpdate() blocks this task.
+            static_cast<OtaUpdateActivity*>(ctx)->requestUpdate(true);
+          },
+          this);
 
       if (res != OtaUpdater::OK) {
         LOG_DBG("OTA", "Update failed: %d", res);
@@ -168,7 +232,13 @@ void OtaUpdateActivity::loop() {
         RenderLock lock(*this);
         state = FINISHED;
       }
-      requestUpdate();
+      requestUpdateAndWait();
+      // Hold the completion screen briefly so the user sees it, then restart.
+      delay(3000);
+      {
+        RenderLock lock(*this);
+        state = SHUTTING_DOWN;
+      }
     }
 
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
@@ -179,6 +249,11 @@ void OtaUpdateActivity::loop() {
   }
 
   if (state == FAILED) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      checkForUpdateNow();
+      requestUpdate();
+      return;
+    }
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       finish();
     }
@@ -186,6 +261,11 @@ void OtaUpdateActivity::loop() {
   }
 
   if (state == NO_UPDATE) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
+      checkForUpdateNow();
+      requestUpdate();
+      return;
+    }
     if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
       finish();
     }

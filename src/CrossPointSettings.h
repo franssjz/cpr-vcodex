@@ -25,6 +25,11 @@ class CrossPointSettings {
     COVER = 3,
     BLANK = 4,
     COVER_CUSTOM = 5,
+    READING_DASHBOARD = 6,
+    COVER_STATS = 7,
+    COVER_STATS_V2 = 8,
+    CUSTOM_STATS = 9,
+    CUSTOM_STATS_V2 = 10,
     SLEEP_SCREEN_MODE_COUNT
   };
   enum SLEEP_SCREEN_COVER_MODE { FIT = 0, CROP = 1, SLEEP_SCREEN_COVER_MODE_COUNT };
@@ -58,6 +63,12 @@ class CrossPointSettings {
     STATUS_BAR_PROGRESS_BAR_THICKNESS_COUNT
   };
   enum STATUS_BAR_TITLE { BOOK_TITLE = 0, CHAPTER_TITLE = 1, HIDE_TITLE = 2, STATUS_BAR_TITLE_COUNT };
+  enum XTC_STATUS_BAR_MODE {
+    XTC_STATUS_BAR_HIDE = 0,
+    XTC_STATUS_BAR_BOTTOM = 1,
+    XTC_STATUS_BAR_TOP = 2,
+    XTC_STATUS_BAR_MODE_COUNT
+  };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -94,8 +105,22 @@ class CrossPointSettings {
 
   // Font family options
   enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, LEXEND = 2, FONT_FAMILY_COUNT };
+  static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   // Font size options
   enum FONT_SIZE { X_SMALL = 0, SMALL = 1, MEDIUM = 2, LARGE = 3, EXTRA_LARGE = 4, FONT_SIZE_COUNT };
+  enum TEXT_DARKNESS {
+    TEXT_DARKNESS_NORMAL = 0,
+    TEXT_DARKNESS_LEGACY_BW = 1,
+    TEXT_DARKNESS_DARK = 2,
+    TEXT_DARKNESS_EXTRA_DARK = 3,
+    TEXT_DARKNESS_COUNT
+  };
+  enum BIONIC_READING_MODE {
+    BIONIC_READING_OFF = 0,
+    BIONIC_READING_NORMAL = 1,
+    BIONIC_READING_SUBTLE = 2,
+    BIONIC_READING_MODE_COUNT
+  };
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
@@ -135,26 +160,52 @@ class CrossPointSettings {
   };
 
   // Short power button press actions
-  enum SHORT_PWRBTN { IGNORE = 0, SLEEP = 1, PAGE_TURN = 2, FORCE_REFRESH = 3, SHORT_PWRBTN_COUNT };
+  enum SHORT_PWRBTN {
+    IGNORE = 0,
+    SLEEP = 1,
+    PAGE_TURN = 2,
+    FORCE_REFRESH = 3,
+    TOGGLE_STATUS_BAR = 4,
+    SHORT_PWRBTN_COUNT
+  };
+  enum TILT_PAGE_TURN { TILT_OFF = 0, TILT_NORMAL = 1, TILT_INVERTED = 2, TILT_PAGE_TURN_COUNT };
 
   // Hide battery percentage
   enum HIDE_BATTERY_PERCENTAGE { HIDE_NEVER = 0, HIDE_READER = 1, HIDE_ALWAYS = 2, HIDE_BATTERY_PERCENTAGE_COUNT };
 
-  // UI Theme
-  enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, LYRA_CUSTOM = 3, UI_THEME_COUNT };
-  enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
-  enum DATE_FORMAT {
-    DATE_DD_MM_YYYY = 0,
-    DATE_MM_DD_YYYY = 1,
-    DATE_YYYY_MM_DD = 2,
-    DATE_FORMAT_COUNT
+  // Page turn button long-press behavior
+  enum LONG_PRESS_BUTTON_BEHAVIOR {
+    LONG_PRESS_OFF = 0,
+    LONG_PRESS_CHAPTER_SKIP = 1,
+    LONG_PRESS_ORIENTATION_CHANGE = 2,
+    LONG_PRESS_BUTTON_BEHAVIOR_COUNT
   };
+
+  // UI Theme
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
+  enum DATE_FORMAT { DATE_DD_MM_YYYY = 0, DATE_MM_DD_YYYY = 1, DATE_YYYY_MM_DD = 2, DATE_FORMAT_COUNT };
+  enum SYNC_DAY_WIFI_CHOICE { SYNC_DAY_WIFI_AUTO = 0, SYNC_DAY_WIFI_MANUAL = 1, SYNC_DAY_WIFI_CHOICE_COUNT };
   enum DAILY_GOAL_TARGET {
     DAILY_GOAL_15_MIN = 0,
     DAILY_GOAL_30_MIN = 1,
     DAILY_GOAL_45_MIN = 2,
     DAILY_GOAL_60_MIN = 3,
     DAILY_GOAL_TARGET_COUNT
+  };
+  enum FLASHCARD_STUDY_MODE {
+    FLASHCARD_STUDY_DUE = 0,
+    FLASHCARD_STUDY_SCHEDULED = 1,
+    FLASHCARD_STUDY_INFINITE = 2,
+    FLASHCARD_STUDY_SEQUENTIAL = 3,
+    FLASHCARD_STUDY_MODE_COUNT
+  };
+  enum FLASHCARD_SESSION_SIZE {
+    FLASHCARD_SESSION_10 = 0,
+    FLASHCARD_SESSION_20 = 1,
+    FLASHCARD_SESSION_30 = 2,
+    FLASHCARD_SESSION_50 = 3,
+    FLASHCARD_SESSION_ALL = 4,
+    FLASHCARD_SESSION_SIZE_COUNT
   };
   enum SYNC_DAY_REMINDER_STARTS {
     SYNC_DAY_REMINDER_OFF = 0,
@@ -166,11 +217,14 @@ class CrossPointSettings {
     SYNC_DAY_REMINDER_60 = 6,
     SYNC_DAY_REMINDER_STARTS_COUNT
   };
-  enum SHORTCUT_LOCATION {
-    SHORTCUT_HOME = 0,
-    SHORTCUT_APPS = 1,
-    SHORTCUT_LOCATION_COUNT
+  enum OPDS_FILENAME_FORMAT {
+    OPDS_FILENAME_AUTHOR_TITLE = 0,
+    OPDS_FILENAME_TITLE_AUTHOR = 1,
+    OPDS_FILENAME_FORMAT_COUNT
   };
+  enum SHORTCUT_LOCATION { SHORTCUT_HOME = 0, SHORTCUT_APPS = 1, SHORTCUT_LOCATION_COUNT };
+  enum HOME_BOOK_SOURCE { HOME_BOOKS_RECENTS = 0, HOME_BOOKS_FAVORITES = 1, HOME_BOOK_SOURCE_COUNT };
+  enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -181,6 +235,8 @@ class CrossPointSettings {
   uint8_t sleepScreenCoverMode = FIT;
   // Sleep screen cover filter
   uint8_t sleepScreenCoverFilter = NO_FILTER;
+  // Use a full clean refresh when drawing the sleep screen
+  uint8_t cleanSleepRefresh = 1;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
@@ -189,20 +245,23 @@ class CrossPointSettings {
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
+  uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
+  uint8_t forceParagraphIndents = 0;
   uint8_t textAntiAliasing = 1;
-  // Text darkness for anti-aliased reader text: 0=normal, 1=dark, 2=extra dark.
-  // Default stays at 0 to preserve the existing rendering on upgraded installs.
-  uint8_t textDarkness = 0;
+  uint8_t textDarkness = TEXT_DARKNESS_NORMAL;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
+  // Tilt-based page turning (X3 only, requires QMI8658 IMU)
+  uint8_t tiltPageTurn = TILT_OFF;
   // EPUB reading orientation settings
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 = landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
   // Button layouts (front layout retained for migration only)
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
+  uint8_t frontButtonFollowOrientation = 0;
   // Front button remap (logical -> hardware)
   // Used by MappedInputManager to translate logical buttons into physical front buttons.
   uint8_t frontButtonBack = FRONT_HW_BACK;
@@ -221,6 +280,8 @@ class CrossPointSettings {
   // Reader refresh override (default auto)
   uint8_t readerRefreshMode = READER_REFRESH_AUTO;
   uint8_t hyphenationEnabled = 0;
+  uint8_t bionicReading = 0;
+  char sdFontFamilyName[32] = "";
 
   // Reader screen margin settings
   uint8_t screenMargin = 5;
@@ -228,30 +289,44 @@ class CrossPointSettings {
   char opdsServerUrl[128] = "";
   char opdsUsername[64] = "";
   char opdsPassword[64] = "";
+  uint8_t opdsFilenameFormat = OPDS_FILENAME_AUTHOR_TITLE;
+  uint8_t koSyncAutoPullOnOpen = 0;
+  uint8_t koSyncAutoPushOnClose = 0;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
-  // Long-press chapter skip on side buttons
-  uint8_t longPressChapterSkip = 1;
+  // Page turn button long-press behavior
+  uint8_t longPressButtonBehavior = LONG_PRESS_CHAPTER_SKIP;
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
+  // Experimental global dark mode for the device UI and supported readers.
+  uint8_t darkMode = 0;
+  uint8_t antiGhostingExperimental = 0;
   // Home/apps helpers
   uint8_t displayDay = 1;
   uint8_t autoSyncDay = 1;
-  uint8_t syncDayReminderStarts = SYNC_DAY_REMINDER_OFF;
+  uint8_t homeBookSource = HOME_BOOKS_RECENTS;
+  uint8_t syncDayWifiChoice = SYNC_DAY_WIFI_AUTO;
+  uint8_t syncDayReminderStarts = SYNC_DAY_REMINDER_20;
+  char sleepDirectory[128] = "";
+  uint8_t sleepImageOrder = SLEEP_IMAGE_SHUFFLE;
   uint8_t timeZonePreset = 0;
   uint8_t dateFormat = DATE_DD_MM_YYYY;
   uint8_t dailyGoalTarget = DAILY_GOAL_30_MIN;
+  uint8_t flashcardStudyMode = FLASHCARD_STUDY_DUE;
+  uint8_t flashcardSessionSize = FLASHCARD_SESSION_ALL;
   uint8_t showStatsAfterReading = 1;
+  uint8_t moveCompletedBooks = 0;
   uint8_t achievementsEnabled = 1;
   uint8_t achievementPopups = 1;
   uint8_t appsHubShortcutOrder = 1;
   uint8_t browseFilesShortcut = SHORTCUT_HOME;
   uint8_t browseFilesShortcutOrder = 0;
+  // Legacy Stats shortcut fields retained for settings.json migration to readingStatsShortcut.
   uint8_t statsShortcut = SHORTCUT_HOME;
   uint8_t statsShortcutOrder = 2;
   uint8_t syncDayShortcut = SHORTCUT_HOME;
   uint8_t syncDayShortcutOrder = 3;
-  uint8_t settingsShortcut = SHORTCUT_APPS;
+  uint8_t settingsShortcut = SHORTCUT_HOME;
   uint8_t settingsShortcutOrder = 4;
   uint8_t readingStatsShortcut = SHORTCUT_APPS;
   uint8_t readingStatsShortcutOrder = 5;
@@ -269,11 +344,22 @@ class CrossPointSettings {
   uint8_t recentBooksShortcutOrder = 11;
   uint8_t bookmarksShortcut = SHORTCUT_APPS;
   uint8_t bookmarksShortcutOrder = 12;
+  uint8_t favoritesShortcut = SHORTCUT_APPS;
+  uint8_t favoritesShortcutOrder = 13;
+  uint8_t flashcardsShortcut = SHORTCUT_APPS;
+  uint8_t flashcardsShortcutOrder = 14;
+  uint8_t dictionaryShortcut = SHORTCUT_APPS;
+  uint8_t dictionaryShortcutOrder = 15;
   uint8_t fileTransferShortcut = SHORTCUT_APPS;
-  uint8_t fileTransferShortcutOrder = 13;
+  uint8_t fileTransferShortcutOrder = 16;
+  uint8_t screenCleanShortcut = SHORTCUT_APPS;
+  uint8_t screenCleanShortcutOrder = 17;
   uint8_t sleepShortcut = SHORTCUT_APPS;
-  uint8_t sleepShortcutOrder = 14;
+  uint8_t sleepShortcutOrder = 18;
+  uint8_t opdsBrowserShortcut = SHORTCUT_HOME;
+  uint8_t opdsBrowserShortcutOrder = 19;
   uint8_t browseFilesShortcutVisible = 1;
+  // Legacy Stats shortcut visibility retained for settings.json migration to readingStatsShortcut.
   uint8_t statsShortcutVisible = 1;
   uint8_t syncDayShortcutVisible = 1;
   uint8_t settingsShortcutVisible = 1;
@@ -285,27 +371,30 @@ class CrossPointSettings {
   uint8_t readMeShortcutVisible = 1;
   uint8_t recentBooksShortcutVisible = 1;
   uint8_t bookmarksShortcutVisible = 1;
+  uint8_t favoritesShortcutVisible = 1;
+  uint8_t flashcardsShortcutVisible = 1;
+  uint8_t dictionaryShortcutVisible = 1;
   uint8_t fileTransferShortcutVisible = 1;
+  uint8_t screenCleanShortcutVisible = 1;
   uint8_t sleepShortcutVisible = 1;
+  uint8_t opdsBrowserShortcutVisible = 1;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
-  // Dark mode for UI and reader rendering
-  uint8_t darkMode = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
   uint8_t embeddedStyle = 1;
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
-  // Selected SD directory used for custom sleep images
-  char sleepDirectory[128] = "";
-  // Sleep image rotation order for custom sleep folders
-  uint8_t sleepImageOrder = SLEEP_IMAGE_SHUFFLE;
 
   ~CrossPointSettings() = default;
 
   // Get singleton instance
   static CrossPointSettings& getInstance() { return instance; }
+
+  using SdFontIdResolver = int (*)(void* ctx, const char* familyName, uint8_t fontSize);
+  SdFontIdResolver sdFontIdResolver = nullptr;
+  void* sdFontResolverCtx = nullptr;
 
   uint16_t getPowerButtonDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
@@ -327,9 +416,9 @@ class CrossPointSettings {
   float getReaderLineCompression() const;
   unsigned long getSleepTimeoutMs() const;
   uint64_t getDailyGoalMs() const;
+  uint8_t getSyncDayReminderStartThreshold() const;
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
-  uint8_t getSyncDayReminderStartThreshold() const;
 };
 
 // Helper macro to access settings

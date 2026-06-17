@@ -2,6 +2,7 @@
 #include <Logging.h>
 
 #include <cassert>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -11,6 +12,7 @@
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
 #include "RenderLock.h"
+#include "util/ScreenshotInfo.h"
 
 class Activity {
   friend class ActivityManager;
@@ -24,6 +26,9 @@ class Activity {
   ActivityResult result;
 
  public:
+  static constexpr uint8_t UI_TRANSITION_REFRESH_WEIGHT_NONE = 0;
+  static constexpr uint8_t UI_TRANSITION_REFRESH_WEIGHT_DENSE = 2;
+
   explicit Activity(std::string name, GfxRenderer& renderer, MappedInputManager& mappedInput)
       : name(std::move(name)), renderer(renderer), mappedInput(mappedInput) {}
   virtual ~Activity() = default;
@@ -43,6 +48,8 @@ class Activity {
   virtual bool skipLoopDelay() { return false; }
   virtual bool preventAutoSleep() { return false; }
   virtual bool isReaderActivity() const { return false; }
+  virtual uint8_t getUiTransitionRefreshWeight() const { return UI_TRANSITION_REFRESH_WEIGHT_NONE; }
+  virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 
   // Start a new activity without destroying the current one
   // Note: requestUpdate() will be invoked automatically once resultHandler finishes

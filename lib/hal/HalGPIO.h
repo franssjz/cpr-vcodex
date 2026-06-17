@@ -23,20 +23,20 @@
 #define X3_I2C_FREQ 400000
 
 // TI BQ27220 Fuel gauge I2C
-#define I2C_ADDR_BQ27220 0x55
-#define BQ27220_SOC_REG 0x2C
-#define BQ27220_CUR_REG 0x0C
-#define BQ27220_VOLT_REG 0x08
+#define I2C_ADDR_BQ27220 0x55  // Fuel gauge I2C address
+#define BQ27220_SOC_REG 0x2C   // StateOfCharge() command code (%)
+#define BQ27220_CUR_REG 0x0C   // Current() command code (signed mA)
+#define BQ27220_VOLT_REG 0x08  // Voltage() command code (mV)
 
-// DS3231 RTC I2C
-#define I2C_ADDR_DS3231 0x68
-#define DS3231_SEC_REG 0x00
+// Analog DS3231 RTC I2C
+#define I2C_ADDR_DS3231 0x68  // RTC I2C address
+#define DS3231_SEC_REG 0x00   // Seconds command code (BCD)
 
-// QMI8658 IMU I2C
-#define I2C_ADDR_QMI8658 0x6B
-#define I2C_ADDR_QMI8658_ALT 0x6A
-#define QMI8658_WHO_AM_I_REG 0x00
-#define QMI8658_WHO_AM_I_VALUE 0x05
+// QST QMI8658 IMU I2C
+#define I2C_ADDR_QMI8658 0x6B        // IMU I2C address
+#define I2C_ADDR_QMI8658_ALT 0x6A    // IMU I2C fallback address
+#define QMI8658_WHO_AM_I_REG 0x00    // WHO_AM_I command code
+#define QMI8658_WHO_AM_I_VALUE 0x05  // WHO_AM_I expected value
 
 class HalGPIO {
 #if CROSSPOINT_EMULATED == 0
@@ -50,13 +50,14 @@ class HalGPIO {
   enum class DeviceType : uint8_t { X4, X3 };
 
  private:
-  DeviceType deviceType_ = DeviceType::X4;
+  DeviceType _deviceType = DeviceType::X4;
 
  public:
   HalGPIO() = default;
 
-  bool deviceIsX3() const { return deviceType_ == DeviceType::X3; }
-  bool deviceIsX4() const { return deviceType_ == DeviceType::X4; }
+  // Inline device type helpers for cleaner downstream checks
+  inline bool deviceIsX3() const { return _deviceType == DeviceType::X3; }
+  inline bool deviceIsX4() const { return _deviceType == DeviceType::X4; }
 
   // Start button GPIO and setup SPI for screen and SD card
   void begin();
@@ -69,12 +70,20 @@ class HalGPIO {
   bool wasReleased(uint8_t buttonIndex) const;
   bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
+  unsigned long getPowerButtonHeldTime() const;
 
+  // Setup wake up GPIO and enter deep sleep
   void startDeepSleep();
+
+  // Verify power button was held long enough after wakeup.
+  // If verification fails, enters deep sleep and does not return.
+  // Should only be called when wakeup reason is PowerButton.
   void verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed);
 
   // Check if USB is connected
   bool isUsbConnected() const;
+
+  // Returns true once per edge (plug or unplug) since the last update()
   bool wasUsbStateChanged() const;
 
   enum class WakeupReason { PowerButton, AfterFlash, AfterUSBPower, Other };

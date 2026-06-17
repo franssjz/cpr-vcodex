@@ -1,0 +1,1298 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X3 or X4 using a browser-based Web Serial installer.">
+  <title>Auto Flash - CPR-vCodex</title>
+  <link rel="stylesheet" href="assets/site.css">
+  <style>
+    :root {
+      color-scheme: light;
+      --accent: #B621B4;
+      --accent-dark: #891587;
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --surface-2: #f1f1f4;
+      --surface-3: #fafafd;
+      --text: #111118;
+      --muted: #666672;
+      --line: #e5e5e8;
+      --danger: #ef233c;
+      --success: #16803a;
+      --warning: #a45b00;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f0f14;
+      --surface: #181820;
+      --surface-2: #22222b;
+      --surface-3: #1d1d25;
+      --text: #f4f4f6;
+      --muted: #aaa7b0;
+      --line: #30303a;
+      --success: #53d978;
+      --warning: #ffb35c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, var(--surface) 0, var(--bg) 360px);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    main {
+      width: min(1040px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #ffffff;
+    }
+
+    .button.primary:hover {
+      background: var(--accent-dark);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    main {
+      padding: 34px 0 48px;
+    }
+
+    .hero {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .hero p:not(.eyebrow) {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 18px;
+      box-shadow: 0 14px 34px rgba(17, 17, 24, 0.08);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 4px;
+      font-size: 15px;
+    }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+      counter-reset: step;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .step p,
+    .note,
+    .manual p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .flash-panel {
+      display: grid;
+      gap: 14px;
+    }
+
+    .device-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+
+    .device-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .device-box p {
+      margin: 5px 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .device-options {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .device-option {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 10px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .device-option[aria-checked="true"] {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .device-option:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .device-option strong {
+      font-size: 15px;
+    }
+
+    .device-option span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .version-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 12px;
+    }
+
+    .version-box span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .version-box strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 18px;
+    }
+
+    .firmware-details {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0 0;
+      padding: 0;
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: minmax(92px, 0.46fr) minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    .detail-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .detail-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .detail-value code {
+      font-size: 12px;
+    }
+
+    .warning {
+      border-left: 4px solid var(--danger);
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+      padding: 12px;
+      color: var(--text);
+    }
+
+    .unsupported,
+    .error {
+      display: none;
+      border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+      color: var(--danger);
+      padding: 12px;
+      font-weight: 700;
+      white-space: pre-wrap;
+    }
+
+    .unsupported.active,
+    .error.active {
+      display: block;
+    }
+
+    .runner {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-3);
+      padding: 12px;
+    }
+
+    .runner.active {
+      display: block;
+    }
+
+    .runner ol {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .run-step {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      padding: 10px;
+    }
+
+    .run-step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .run-step-name {
+      font-weight: 800;
+    }
+
+    .run-step-state {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .run-step[data-state="running"] .run-step-state {
+      color: var(--accent);
+    }
+
+    .run-step[data-state="done"] .run-step-state {
+      color: var(--success);
+    }
+
+    .run-step[data-state="failed"] .run-step-state {
+      color: var(--danger);
+    }
+
+    .run-step-detail {
+      display: none;
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .run-step-detail.active {
+      display: block;
+    }
+
+    .progress-track {
+      height: 8px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: var(--surface-2);
+    }
+
+    .progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 160ms ease;
+    }
+
+    .status {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .status.success {
+      color: var(--success);
+      font-weight: 800;
+    }
+
+    .status.warning {
+      color: var(--warning);
+      font-weight: 800;
+    }
+
+    .manual {
+      margin-top: 18px;
+    }
+
+    pre {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 14px;
+      font-size: 13px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    @media (max-width: 760px) {
+      .site-topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .device-options {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-topbar">
+      <a class="site-brand" href="./">CPR-vCodex Tools</a>
+      <nav class="site-nav" aria-label="Tools">
+        <a href="./" data-site-i18n="navHome">Home</a>
+        <a href="./flash.html" aria-current="page" data-site-i18n="navFlash">Auto Flash</a>
+        <a href="./tools.html" data-site-i18n="navTools">Tools</a>
+        <a href="https://github.com/franssjz/cpr-vcodex" data-site-i18n="navGithub">GitHub</a>
+        <a href="https://ko-fi.com/franssjz" data-site-i18n="navSupport">Support</a>
+      </nav>
+      <div class="site-actions">
+        <button class="site-control icon-only" data-role="theme-toggle" type="button" aria-label="Dark mode" title="Dark mode"><span data-role="theme-icon"></span></button>
+        <select class="site-select" data-role="language-select" aria-label="Language"></select>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow" data-site-i18n="flashEyebrow">Browser-based installer</p>
+      <h1 data-site-i18n="flashTitle">Flash CPR-vCodex</h1>
+      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X3 or X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2 data-site-i18n="beforeFlash">Before you flash</h2>
+        <div class="steps">
+          <div class="step">
+            <div>
+              <h3 data-site-i18n="backupTitle">Back up first</h3>
+              <p data-site-i18n="backupText">Skip this step if you have flashed before. If this is your first time, keep a "Save Full Flash" backup from https://xteink.dve.al/.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3 data-site-i18n="cableTitle">Use a data USB-C cable</h3>
+              <p data-site-i18n="cableText">Connect the Xteink X3 or X4 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3 data-site-i18n="browserTitle">Use Chrome or Edge on desktop</h3>
+              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the ESP32-C3 USB serial port.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3 data-site-i18n="unplugTitle">Do not unplug while flashing</h3>
+              <p data-site-i18n-html="unplugText">The page validates the partition table, writes the inactive OTA app slot, updates <code>otadata</code>, and resets the device when it finishes.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <aside class="card flash-panel">
+        <div class="device-box">
+          <span class="device-label" id="device-model-title" data-site-i18n="deviceModelTitle">Device model</span>
+          <p data-site-i18n="deviceModelText">Choose the exact model before flashing. X3 and X4 use different OTA app partition sizes.</p>
+          <div class="device-options" role="radiogroup" aria-labelledby="device-model-title">
+            <button class="device-option" type="button" role="radio" aria-checked="true" data-device="x4">
+              <strong data-site-i18n="deviceX4">Xteink X4</strong>
+              <span>6.4 MB OTA slot</span>
+            </button>
+            <button class="device-option" type="button" role="radio" aria-checked="false" data-device="x3">
+              <strong data-site-i18n="deviceX3">Xteink X3</strong>
+              <span>7.4 MB OTA slot</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="version-box">
+          <span data-site-i18n="latestPackage">Latest firmware package</span>
+          <strong id="firmware-version">1.3.0.25-cpr-vcodex</strong>
+          <dl class="firmware-details">
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSource">Source</dt>
+              <dd class="detail-value" id="firmware-source">GitHub release</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareAsset">Asset</dt>
+              <dd class="detail-value" id="firmware-asset">1.3.0.25-cpr-vcodex.bin</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSize">Size</dt>
+              <dd class="detail-value" id="firmware-size">Loading...</dd>
+            </div>
+            <div class="detail-row">
+              <dt class="detail-label" data-site-i18n="firmwareSha256">SHA-256</dt>
+              <dd class="detail-value"><code id="firmware-sha">Loading...</code></dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="warning" data-site-i18n="flashWarning">
+          Use at your own risk. Flashing custom firmware can fail if the cable disconnects or the device loses power.
+        </div>
+
+        <div class="unsupported" id="unsupported" data-site-i18n="unsupported">
+          Web Serial is not available in this browser. Use Chrome or Edge on a desktop computer, or use the manual download below.
+        </div>
+
+        <div class="error" id="error-box">
+          <span id="error-message"></span>
+        </div>
+
+        <button class="button primary" id="flash-button" type="button">Flash CPR-vCodex Firmware for Xteink X4</button>
+
+        <div class="runner" id="runner" aria-live="polite">
+          <ol id="step-list"></ol>
+        </div>
+
+        <p class="status" id="status" data-site-i18n="readyStatus">Ready. Clicking Flash will open the browser serial device chooser.</p>
+
+        <div class="actions">
+          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.25-cpr-vcodex/1.3.0.25-cpr-vcodex.bin" data-site-i18n="downloadBin">Download .bin</a>
+          <a class="button" href="https://xteink.dve.al/" rel="noopener" data-site-i18n="communityFlasher">Community flasher</a>
+        </div>
+
+        <p class="note" data-site-i18n="flashNote">The automatic flasher uses a local firmware copy synchronized from the latest published GitHub release.</p>
+      </aside>
+    </section>
+
+    <section class="card manual">
+      <h2 data-site-i18n="manualTitle">Manual PlatformIO flash</h2>
+      <p data-site-i18n="manualText">For development builds, clone the repo, set the upload port, then use PlatformIO.</p>
+      <pre><code>git clone https://github.com/franssjz/cpr-vcodex.git
+cd cpr-vcodex
+
+pio run -e gh_release -t upload</code></pre>
+    </section>
+  </main>
+
+  <script src="assets/site.js"></script>
+  <script type="module">
+    import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
+
+    const USB_VENDOR_ID = 0x303a;
+    const USB_PRODUCT_ID = 0x1001;
+    const PARTITION_TABLE_OFFSET = 0x8000;
+    const PARTITION_TABLE_SIZE = 0x2000;
+    const OTADATA_OFFSET = 0xe000;
+    const OTADATA_SIZE = 0x2000;
+    const APP_MIN_SIZE = 0xf0000;
+    const DEVICE_STORAGE_KEY = "cprVcodexFlashDevice";
+    const DEVICE_CONFIGS = {
+      x4: {
+        label: "Xteink X4",
+        appSize: 0x640000,
+        appOffsets: {
+          app0: 0x10000,
+          app1: 0x650000
+        },
+        partitions: [
+          {type: "data-nvs", offset: 36864, size: 20480},
+          {type: "data-ota", offset: 57344, size: 8192},
+          {type: "app-ota_0", offset: 65536, size: 6553600},
+          {type: "app-ota_1", offset: 6619136, size: 6553600},
+          {type: "data-spiffs", offset: 13172736, size: 3538944},
+          {type: "data-coredump", offset: 16711680, size: 65536}
+        ]
+      },
+      x3: {
+        label: "Xteink X3",
+        appSize: 0x770000,
+        appOffsets: {
+          app0: 0x10000,
+          app1: 0x780000
+        },
+        partitions: [
+          {type: "data-nvs", offset: 36864, size: 20480},
+          {type: "data-ota", offset: 57344, size: 8192},
+          {type: "app-ota_0", offset: 65536, size: 7798784},
+          {type: "app-ota_1", offset: 7864320, size: 7798784},
+          {type: "data-spiffs", offset: 15663104, size: 1048576},
+          {type: "data-coredump", offset: 16711680, size: 65536}
+        ]
+      }
+    };
+    const STEP_IDS = [
+      "connect",
+      "partition",
+      "download",
+      "read-otadata",
+      "flash-app",
+      "flash-otadata",
+      "reset"
+    ];
+    const STEP_LABEL_KEYS = {
+      connect: "stepConnect",
+      partition: "stepPartition",
+      download: "stepDownload",
+      "read-otadata": "stepReadOtadata",
+      "flash-app": "stepFlashApp",
+      "flash-otadata": "stepFlashOtadata",
+      reset: "stepReset"
+    };
+    const PARTITION_TYPES = {
+      0x00: {
+        0x00: "app-factory",
+        0x10: "app-ota_0",
+        0x11: "app-ota_1",
+        0x12: "app-ota_2",
+        0x13: "app-ota_3",
+        0x20: "app-test"
+      },
+      0x01: {
+        0x00: "data-ota",
+        0x01: "data-phy",
+        0x02: "data-nvs",
+        0x03: "data-coredump",
+        0x04: "data-nvs_keys",
+        0x05: "data-efuse",
+        0x06: "data-undefined",
+        0x80: "data-esphttpd",
+        0x81: "data-fat",
+        0x82: "data-spiffs",
+        0x83: "data-littlefs"
+      }
+    };
+    const FALLBACK_RELEASE = {
+      version: "1.3.0.25-cpr-vcodex",
+      firmwareUrl: "firmware/firmware.bin",
+      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.25-cpr-vcodex/1.3.0.25-cpr-vcodex.bin",
+      size: 6336560,
+      sha256: "19c6d9090bf71d84311e63f84d6b3c7fa45875254a71685e23722819f1a35225",
+      source: {
+        type: "github-release",
+        repo: "franssjz/cpr-vcodex",
+        tag: "1.3.0.25-cpr-vcodex",
+        asset: "1.3.0.25-cpr-vcodex.bin"
+      }
+    };
+
+    const els = {
+      flashButton: document.getElementById("flash-button"),
+      runner: document.getElementById("runner"),
+      stepList: document.getElementById("step-list"),
+      status: document.getElementById("status"),
+      version: document.getElementById("firmware-version"),
+      source: document.getElementById("firmware-source"),
+      asset: document.getElementById("firmware-asset"),
+      size: document.getElementById("firmware-size"),
+      sha: document.getElementById("firmware-sha"),
+      downloadLink: document.getElementById("download-link"),
+      unsupported: document.getElementById("unsupported"),
+      errorBox: document.getElementById("error-box"),
+      errorMessage: document.getElementById("error-message"),
+      deviceOptions: document.querySelectorAll("[data-device]")
+    };
+
+    const firmware = {...FALLBACK_RELEASE};
+    const stepNodes = new Map();
+    let currentTransport = null;
+    let selectedDevice = localStorage.getItem(DEVICE_STORAGE_KEY);
+    if (!DEVICE_CONFIGS[selectedDevice]) {
+      selectedDevice = "x4";
+    }
+    const webSerialSupported = "serial" in navigator;
+
+    if (!webSerialSupported) {
+      els.unsupported.classList.add("active");
+      els.flashButton.disabled = true;
+    }
+
+    fetch("firmware/manifest.json", {cache: "no-store"})
+      .then(response => response.ok ? response.json() : null)
+      .then(manifest => {
+        if (!manifest) return;
+        firmware.version = manifest.version || firmware.version;
+        firmware.firmwareUrl = manifest.firmwareUrl || firmware.firmwareUrl;
+        firmware.downloadUrl = manifest.downloadUrl || firmware.downloadUrl;
+        firmware.size = manifest.size || firmware.size;
+        firmware.sha256 = manifest.sha256 || firmware.sha256;
+        firmware.source = manifest.source || firmware.source;
+        updateFirmwareDetails();
+      })
+      .catch(() => updateFirmwareDetails());
+
+    updateFirmwareDetails();
+    updateDeviceSelection();
+
+    els.deviceOptions.forEach(button => {
+      button.addEventListener("click", () => {
+        selectedDevice = button.dataset.device;
+        localStorage.setItem(DEVICE_STORAGE_KEY, selectedDevice);
+        updateDeviceSelection();
+      });
+    });
+    window.addEventListener("cpr-tools-language-change", updateDeviceSelection);
+    els.flashButton.addEventListener("click", startFlash);
+
+    async function startFlash() {
+      let loader = null;
+      const device = getDeviceConfig();
+      setError("");
+      setStatus(siteT("choosePort"));
+      resetSteps();
+      setRunning(true);
+
+      try {
+        loader = await runStep("connect", async () => {
+          const port = await navigator.serial.requestPort({
+            filters: [{usbVendorId: USB_VENDOR_ID, usbProductId: USB_PRODUCT_ID}]
+          });
+          currentTransport = new Transport(port, false);
+          const espLoader = new ESPLoader({
+            transport: currentTransport,
+            baudrate: 115200,
+            romBaudrate: 115200,
+            enableTracing: false
+          });
+
+          updateStep("connect", {detail: siteT("openingConnection")});
+          await espLoader.main();
+          return espLoader;
+        });
+
+        await runStep("partition", async () => {
+          const table = parsePartitionTable(await readFlashBytes(loader, PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE));
+          validatePartitionTable(table, device);
+          updateStep("partition", {detail: siteT("partitionOk", {device: device.label})});
+        });
+
+        const firmwareData = await runStep("download", async () => {
+          updateStep("download", {detail: siteT("fetchingFirmware")});
+          const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
+          if (!response.ok) {
+            throw new Error(`${siteT("firmwareDownloadFailed")}: HTTP ${response.status}`);
+          }
+          const data = new Uint8Array(await response.arrayBuffer());
+          if (data.length > device.appSize) {
+            throw new Error(siteT("firmwareTooLarge", {
+              size: formatBytes(data.length),
+              max: formatBytes(device.appSize),
+              device: device.label
+            }));
+          }
+          if (data.length < APP_MIN_SIZE) {
+            throw new Error(siteT("firmwareTooSmall"));
+          }
+          if (firmware.size && data.length !== firmware.size) {
+            throw new Error(siteT("firmwareSizeMismatch", {expected: formatBytes(firmware.size), actual: formatBytes(data.length)}));
+          }
+          if (firmware.sha256) {
+            if (!crypto.subtle) {
+              throw new Error(siteT("firmwareHashUnavailable"));
+            }
+            const digest = await sha256Hex(data);
+            if (digest !== firmware.sha256.toLowerCase()) {
+              throw new Error(siteT("firmwareHashMismatch"));
+            }
+          }
+          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}, SHA-256 ${shortSha(firmware.sha256)}`});
+          return data;
+        });
+
+        const otaPartition = await runStep("read-otadata", async () => {
+          const otaData = await readFlashBytes(loader, OTADATA_OFFSET, OTADATA_SIZE, (current, total) => {
+            updateStep("read-otadata", {
+              progress: percent(current, total),
+              detail: `${formatBytes(current)} / ${formatBytes(total)}`
+            });
+          });
+          const partition = new OtaPartition(otaData);
+          const currentBoot = partition.getCurrentBootPartitionLabel();
+          const backup = partition.getCurrentBackupPartitionLabel();
+          updateStep("read-otadata", {detail: siteT("currentBootTarget", {current: currentBoot, target: backup})});
+          return partition;
+        });
+
+        const targetPartition = otaPartition.getCurrentBackupPartitionLabel();
+        await runStep("flash-app", async () => {
+          updateStep("flash-app", {
+            name: `${siteT("stepFlashApp")} (${targetPartition})`,
+            detail: siteT("writingOffset", {offset: hex(device.appOffsets[targetPartition])})
+          });
+          await writeBytes(loader, device.appOffsets[targetPartition], firmwareData, (fileIndex, written, total) => {
+            updateStep("flash-app", {
+              progress: percent(written, total),
+              detail: `${formatBytes(written)} / ${formatBytes(total)}`
+            });
+          });
+        });
+
+        await runStep("flash-otadata", async () => {
+          otaPartition.setBootPartition(targetPartition);
+          await writeBytes(loader, OTADATA_OFFSET, otaPartition.data, (fileIndex, written, total) => {
+            updateStep("flash-otadata", {
+              progress: percent(written, total),
+              detail: `${formatBytes(written)} / ${formatBytes(total)}`
+            });
+          });
+        });
+
+        await runStep("reset", async () => {
+          // esptool-js 0.5.7's usbJTAGSerialReset.reset() is broken for native USB
+          // (pid 0x1001): its entire body is `wait 200ms → setRTS(false) → wait 200ms`.
+          // Since RTS is already false after the bootloader-entry sequence, this is a
+          // no-op and the device never resets. Bypass loader.after() and implement
+          // esptool.py's hard_reset() directly: setRTS(true) → 100ms → setRTS(false).
+          if (currentTransport) {
+            try {
+              await currentTransport.setDTR(false); // IO0 high → normal boot (not download mode)
+              await currentTransport.setRTS(true);  // EN low → assert reset
+              await new Promise(r => setTimeout(r, 100));
+              await currentTransport.setRTS(false); // EN high → release, device boots
+              await new Promise(r => setTimeout(r, 400));
+            } catch (_) {}
+          }
+          loader = null;
+          if (currentTransport) {
+            try { await currentTransport.disconnect(); } catch (_) {}
+            currentTransport = null;
+          }
+        });
+
+        setStatus(siteT("flashComplete"), "success");
+      } catch (error) {
+        console.error(error);
+        const message = error && error.message ? error.message : siteT("unknownFlashError");
+        setError(message);
+        setStatus(siteT("flashStopped"), "warning");
+        markRunningStepFailed(message);
+      } finally {
+        if (loader || currentTransport) {
+          try {
+            await disconnectLoader(loader, true);
+          } catch (_) {}
+        }
+        setRunning(false);
+      }
+    }
+
+    function resetSteps() {
+      stepNodes.clear();
+      els.stepList.innerHTML = "";
+      els.runner.classList.add("active");
+      for (const id of STEP_IDS) {
+        const item = document.createElement("li");
+        item.className = "run-step";
+        item.dataset.step = id;
+        item.dataset.state = "pending";
+        item.innerHTML = `
+          <div class="run-step-header">
+            <span class="run-step-name">${stepLabel(id)}</span>
+            <span class="run-step-state">${siteT("stepPending")}</span>
+          </div>
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="run-step-detail"></p>
+        `;
+        els.stepList.appendChild(item);
+        stepNodes.set(id, {
+          item,
+          name: item.querySelector(".run-step-name"),
+          state: item.querySelector(".run-step-state"),
+          fill: item.querySelector(".progress-fill"),
+          detail: item.querySelector(".run-step-detail")
+        });
+      }
+    }
+
+    async function runStep(id, task) {
+      updateStep(id, {state: "running", progress: 3});
+      try {
+        const result = await task();
+        updateStep(id, {state: "done", progress: 100});
+        return result;
+      } catch (error) {
+        updateStep(id, {
+          state: "failed",
+          detail: error && error.message ? error.message : "Failed"
+        });
+        throw error;
+      }
+    }
+
+    function updateStep(id, options) {
+      const node = stepNodes.get(id);
+      if (!node) return;
+      if (options.name) {
+        node.name.textContent = options.name;
+      }
+      if (options.state) {
+        node.item.dataset.state = options.state;
+        node.state.textContent = {
+          pending: siteT("stepPending"),
+          running: siteT("stepRunning"),
+          done: siteT("stepDone"),
+          failed: siteT("stepFailed")
+        }[options.state] || options.state;
+      }
+      if (Number.isFinite(options.progress)) {
+        node.fill.style.width = `${Math.max(0, Math.min(100, options.progress))}%`;
+      }
+      if (options.detail) {
+        node.detail.textContent = options.detail;
+        node.detail.classList.add("active");
+      }
+    }
+
+    function markRunningStepFailed(message) {
+      for (const id of STEP_IDS) {
+        const node = stepNodes.get(id);
+        if (node && node.item.dataset.state === "running") {
+          updateStep(id, {state: "failed", detail: message});
+          break;
+        }
+      }
+    }
+
+    async function readFlashBytes(loader, address, size, onProgress) {
+      const data = await loader.readFlash(address, size, (_packet, current, total) => {
+        if (onProgress) onProgress(current, total);
+      });
+      return toUint8Array(data);
+    }
+
+    async function writeBytes(loader, address, data, reportProgress) {
+      await loader.writeFlash({
+        fileArray: [{data: loader.ui8ToBstr(data), address}],
+        flashSize: "keep",
+        flashMode: "keep",
+        flashFreq: "keep",
+        eraseAll: false,
+        compress: true,
+        reportProgress
+      });
+    }
+
+    async function disconnectLoader(loader, skipReset) {
+      try {
+        if (loader) {
+          await loader.after(skipReset ? "no_reset" : "hard_reset");
+        }
+      } finally {
+        if (currentTransport) {
+          await currentTransport.disconnect();
+          currentTransport = null;
+        }
+      }
+    }
+
+    function parsePartitionTable(data) {
+      const partitions = [];
+      for (let offset = 0; offset + 32 <= data.length; offset += 32) {
+        const chunk = data.slice(offset, offset + 32);
+        if (chunk.every(byte => byte === 0xff)) {
+          break;
+        }
+        if (chunk[0] === 0xeb && chunk[1] === 0xeb) {
+          continue;
+        }
+        const type = PARTITION_TYPES[chunk[2]]?.[chunk[3]] || "unknown";
+        partitions.push({
+          type,
+          offset: leBytesToU32(chunk.slice(4, 8)),
+          size: leBytesToU32(chunk.slice(8, 12))
+        });
+      }
+      return partitions;
+    }
+
+    function validatePartitionTable(table, device) {
+      const ok = table.length === device.partitions.length &&
+        device.partitions.every((expected, index) => {
+          const actual = table[index];
+          return actual &&
+            actual.type === expected.type &&
+            actual.offset === expected.offset &&
+            actual.size === expected.size;
+        });
+      if (!ok) {
+        throw new Error(
+          `${siteT("partitionUnexpected", {device: device.label})}\n` +
+          `Selected model: ${device.label}\n` +
+          JSON.stringify(table, null, 2)
+        );
+      }
+    }
+
+    class OtaPartition {
+      constructor(data) {
+        this.data = data;
+        this.cached = null;
+      }
+
+      otaAppPartitions() {
+        if (!this.cached) {
+          this.cached = [
+            this.parseOtaAppPartition("app0"),
+            this.parseOtaAppPartition("app1")
+          ];
+        }
+        return this.cached;
+      }
+
+      getCurrentBootPartition() {
+        return this.otaAppPartitions()
+          .filter(partition => !["invalid", "aborted"].includes(partition.state) && partition.crcValid)
+          .sort((a, b) => b.sequence - a.sequence)[0];
+      }
+
+      getCurrentBootPartitionLabel() {
+        return this.getCurrentBootPartition()?.partitionLabel || "app0";
+      }
+
+      getCurrentBackupPartitionLabel() {
+        return this.getCurrentBootPartitionLabel() === "app0" ? "app1" : "app0";
+      }
+
+      setBootPartition(partitionLabel) {
+        const current = this.getCurrentBootPartition();
+        if (current?.partitionLabel === partitionLabel) {
+          return;
+        }
+        const nextSequence = (current?.sequence || 0) + 1;
+        this.setOtaPartitionDetails({
+          partitionLabel,
+          sequence: nextSequence,
+          state: "new"
+        });
+      }
+
+      parseOtaAppPartition(partitionLabel) {
+        const offset = partitionLabel === "app1" ? 0x1000 : 0;
+        const sequence = leBytesToU32(this.data.slice(offset, offset + 4));
+        const state = otaPartitionStateFromBytes(this.data.slice(offset + 0x18, offset + 0x1c));
+        const crcBytes = this.data.slice(offset + 0x1c, offset + 0x20);
+        const expectedCrc = generateCrc32Le(sequence);
+        return {
+          partitionLabel,
+          sequence,
+          state,
+          crcBytes,
+          crcValid: isEqualBytes(crcBytes, expectedCrc)
+        };
+      }
+
+      setOtaPartitionDetails(partition) {
+        const offset = partition.partitionLabel === "app1" ? 0x1000 : 0;
+        this.cached = null;
+        this.data.set(u32ToLeBytes(partition.sequence), offset);
+        this.data.set(otaPartitionStateToBytes(partition.state), offset + 0x18);
+        this.data.set(generateCrc32Le(partition.sequence), offset + 0x1c);
+      }
+    }
+
+    function otaPartitionStateFromBytes(bytes) {
+      const state = leBytesToU32(bytes);
+      if (state === 0) return "new";
+      if (state === 1) return "pending_verify";
+      if (state === 2) return "valid";
+      if (state === 3) return "invalid";
+      if (state === 4) return "aborted";
+      if (state === 0xffffffff) return "undefined";
+      throw new Error("Invalid otadata state");
+    }
+
+    function otaPartitionStateToBytes(state) {
+      if (state === "new") return u32ToLeBytes(0);
+      if (state === "pending_verify") return u32ToLeBytes(1);
+      if (state === "valid") return u32ToLeBytes(2);
+      if (state === "invalid") return u32ToLeBytes(3);
+      if (state === "undefined") return new Uint8Array([0xff, 0xff, 0xff, 0xff]);
+      throw new Error("Invalid otadata state");
+    }
+
+    function toUint8Array(data) {
+      if (data instanceof Uint8Array) return data;
+      if (data instanceof ArrayBuffer) return new Uint8Array(data);
+      if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      if (typeof data === "string") {
+        return Uint8Array.from(data, char => char.charCodeAt(0) & 0xff);
+      }
+      return new Uint8Array(data);
+    }
+
+    function u32ToLeBytes(value) {
+      return new Uint8Array([
+        value & 0xff,
+        (value >>> 8) & 0xff,
+        (value >>> 16) & 0xff,
+        (value >>> 24) & 0xff
+      ]);
+    }
+
+    function leBytesToU32(bytes) {
+      return (
+        (bytes[0] || 0) +
+        (((bytes[1] || 0) << 8) >>> 0) +
+        (((bytes[2] || 0) << 16) >>> 0) +
+        (((bytes[3] || 0) << 24) >>> 0)
+      ) >>> 0;
+    }
+
+    function isEqualBytes(left, right) {
+      if (left.length !== right.length) return false;
+      for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) return false;
+      }
+      return true;
+    }
+
+    const CRC32_TABLE = new Uint32Array(256);
+    for (let i = 0; i < CRC32_TABLE.length; i += 1) {
+      let value = i;
+      for (let bit = 0; bit < 8; bit += 1) {
+        value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+      }
+      CRC32_TABLE[i] = value >>> 0;
+    }
+
+    function generateCrc32Le(sequence) {
+      return u32ToLeBytes(crc32WithPrevious(u32ToLeBytes(sequence), 0xffffffff));
+    }
+
+    function crc32WithPrevious(data, previous) {
+      let crc = previous === 0 ? 0 : (previous | 0) ^ -1;
+      for (const byte of data) {
+        crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ -1) >>> 0;
+    }
+
+    function setRunning(isRunning) {
+      els.flashButton.disabled = isRunning || !webSerialSupported;
+      els.flashButton.textContent = isRunning ? siteT("flashing") : flashButtonLabel();
+      els.deviceOptions.forEach(button => {
+        button.disabled = isRunning;
+      });
+    }
+
+    function setStatus(message, tone) {
+      els.status.textContent = message;
+      els.status.classList.toggle("success", tone === "success");
+      els.status.classList.toggle("warning", tone === "warning");
+    }
+
+    function setError(message) {
+      if (!message) {
+        els.errorBox.classList.remove("active");
+        els.errorMessage.textContent = "";
+        return;
+      }
+      els.errorMessage.textContent = message;
+      els.errorBox.classList.add("active");
+    }
+
+    function percent(current, total) {
+      return total ? Math.round((current / total) * 100) : 0;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes >= 1024 * 1024) {
+        return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      }
+      if (bytes >= 1024) {
+        return `${Math.round(bytes / 1024)} KB`;
+      }
+      return `${bytes} B`;
+    }
+
+    function updateFirmwareDetails() {
+      const source = firmware.source || {};
+      const sourceTag = source.tag || firmware.version;
+      const sourceRepo = source.repo || "franssjz/cpr-vcodex";
+      els.version.textContent = firmware.version;
+      els.source.textContent = source.type === "github-release"
+        ? `${sourceRepo}@${sourceTag}`
+        : siteT("firmwareSourceUnknown");
+      els.asset.textContent = source.asset || firmware.downloadUrl.split("/").pop() || siteT("firmwareSourceUnknown");
+      els.size.textContent = firmware.size ? formatBytes(firmware.size) : siteT("firmwareSizeUnknown");
+      els.sha.textContent = firmware.sha256 ? shortSha(firmware.sha256) : siteT("firmwareSourceUnknown");
+      els.sha.title = firmware.sha256 || "";
+      els.downloadLink.href = firmware.downloadUrl;
+      updateDeviceSelection();
+    }
+
+    function updateDeviceSelection() {
+      const device = getDeviceConfig();
+      els.deviceOptions.forEach(button => {
+        button.setAttribute("aria-checked", button.dataset.device === selectedDevice ? "true" : "false");
+      });
+      if (!els.flashButton.disabled || !webSerialSupported) {
+        els.flashButton.textContent = flashButtonLabel();
+      }
+      els.flashButton.setAttribute("aria-label", flashButtonLabel());
+      els.flashButton.title = flashButtonLabel();
+      els.downloadLink.title = `${firmware.version} for ${device.label}`;
+    }
+
+    function getDeviceConfig() {
+      return DEVICE_CONFIGS[selectedDevice] || DEVICE_CONFIGS.x4;
+    }
+
+    function flashButtonLabel() {
+      return siteT("flashButtonForDevice", {device: getDeviceConfig().label});
+    }
+
+    function shortSha(value) {
+      return value ? `${value.slice(0, 12)}...${value.slice(-8)}` : "";
+    }
+
+    function hex(value) {
+      return `0x${value.toString(16)}`;
+    }
+
+    async function sha256Hex(bytes) {
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function siteT(key, vars) {
+      return window.CPRTools ? window.CPRTools.t(key, vars || {}) : key;
+    }
+
+    function stepLabel(id) {
+      return siteT(STEP_LABEL_KEYS[id] || id);
+    }
+  </script>
+</body>
+</html>

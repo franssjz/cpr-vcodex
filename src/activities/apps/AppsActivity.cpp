@@ -1,60 +1,59 @@
 #include "AppsActivity.h"
 
-#include "AchievementsActivity.h"
 #include <GfxRenderer.h>
 #include <I18n.h>
 
 #include <algorithm>
-#include "ReadingStatsStore.h"
+
+#include "AchievementsActivity.h"
 #include "BookmarksAppActivity.h"
+#include "DictionaryActivity.h"
+#include "FavoritesAppActivity.h"
+#include "FlashcardsAppActivity.h"
 #include "IfFoundActivity.h"
-#include "ReadMeActivity.h"
 #include "ReadingHeatmapActivity.h"
 #include "ReadingProfileActivity.h"
 #include "ReadingStatsActivity.h"
+#include "ScreenCleanActivity.h"
 #include "SleepAppActivity.h"
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "OpdsServerStore.h"
 #include "util/HeaderDateUtils.h"
-#include "util/ShortcutRegistry.h"
+#include "util/ShortcutUiMetadata.h"
 
 namespace {
-std::string formatDurationHmCompact(const uint64_t totalMs) {
-  const uint64_t totalMinutes = totalMs / 60000ULL;
-  const uint64_t hours = totalMinutes / 60ULL;
-  const uint64_t minutes = totalMinutes % 60ULL;
-  if (hours == 0) {
-    return std::to_string(minutes) + "m";
-  }
-  return std::to_string(hours) + "h " + std::to_string(minutes) + "m";
-}
-
-std::string getStatsShortcutSubtitle() {
-  const std::string todayValue = formatDurationHmCompact(READING_STATS.getTodayReadingMs());
-  const std::string goalValue = formatDurationHmCompact(getDailyReadingGoalMs());
-  return todayValue + " / " + goalValue + " | " + std::to_string(READING_STATS.getCurrentStreakDays());
-}
-
-std::string getShortcutSubtitle(const ShortcutDefinition& definition) {
-  if (definition.id == ShortcutId::Stats) {
-    return getStatsShortcutSubtitle();
-  }
-  if (definition.descriptionId == StrId::STR_NONE_OPT) {
+std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItems, const int itemsPerPage) {
+  if (totalItems <= 0) {
     return "";
   }
-  return I18N.get(definition.descriptionId);
+
+  const int safeItemsPerPage = std::max(1, itemsPerPage);
+  const int currentPage = std::clamp(selectedIndex, 0, totalItems - 1) / safeItemsPerPage + 1;
+  const int totalPages = (totalItems + safeItemsPerPage - 1) / safeItemsPerPage;
+  return std::to_string(currentPage) + "/" + std::to_string(totalPages) + " | " + std::to_string(totalItems);
 }
 }  // namespace
 
 void AppsActivity::onEnter() {
   Activity::onEnter();
   appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
+  if (!OPDS_STORE.hasServers()) {
+    appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(),
+                                      [](const ShortcutDefinition* definition) {
+                                        return definition && definition->id == ShortcutId::OpdsBrowser;
+                                      }),
+                       appShortcuts.end());
+  }
   selectedIndex = 0;
+  rebuildShortcutSubtitles();
   requestUpdate();
 }
 
 void AppsActivity::loop() {
+  const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, true);
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     onGoHome();
     return;
@@ -65,7 +64,7 @@ void AppsActivity::loop() {
     return;
   }
 
-  buttonNavigator.onNext([this] {
+  buttonNavigator.onNextPress([this] {
     if (appShortcuts.empty()) {
       return;
     }
@@ -73,11 +72,27 @@ void AppsActivity::loop() {
     requestUpdate();
   });
 
-  buttonNavigator.onPrevious([this] {
+  buttonNavigator.onPreviousPress([this] {
     if (appShortcuts.empty()) {
       return;
     }
     selectedIndex = ButtonNavigator::previousIndex(selectedIndex, static_cast<int>(appShortcuts.size()));
+    requestUpdate();
+  });
+
+  buttonNavigator.onNextContinuous([this, pageItems] {
+    if (appShortcuts.empty()) {
+      return;
+    }
+    selectedIndex = ButtonNavigator::nextPageIndex(selectedIndex, static_cast<int>(appShortcuts.size()), pageItems);
+    requestUpdate();
+  });
+
+  buttonNavigator.onPreviousContinuous([this, pageItems] {
+    if (appShortcuts.empty()) {
+      return;
+    }
+    selectedIndex = ButtonNavigator::previousPageIndex(selectedIndex, static_cast<int>(appShortcuts.size()), pageItems);
     requestUpdate();
   });
 }
@@ -88,8 +103,11 @@ void AppsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
+  const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, true);
+  const std::string headerSubtitle =
+      buildAppsHeaderSubtitle(selectedIndex, static_cast<int>(appShortcuts.size()), pageItems);
 
-  HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_APPS));
+  HeaderDateUtils::drawHeaderWithDate(renderer, tr(STR_APPS), headerSubtitle.empty() ? nullptr : headerSubtitle.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
@@ -100,7 +118,10 @@ void AppsActivity::render(RenderLock&&) {
     GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(appShortcuts.size()),
                  selectedIndex,
                  [this](const int index) { return std::string(I18N.get(appShortcuts[index]->nameId)); },
-                 [this](const int index) { return getShortcutSubtitle(*appShortcuts[index]); },
+                 [this](const int index) {
+                   return (index >= 0 && index < static_cast<int>(shortcutSubtitles.size())) ? shortcutSubtitles[index]
+                                                                                              : std::string{};
+                 },
                  [this](const int index) { return appShortcuts[index]->icon; });
   }
 
@@ -108,6 +129,19 @@ void AppsActivity::render(RenderLock&&) {
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();
+}
+
+void AppsActivity::rebuildShortcutSubtitles() {
+  shortcutSubtitles.clear();
+  shortcutSubtitles.reserve(appShortcuts.size());
+
+  for (const ShortcutDefinition* definition : appShortcuts) {
+    if (definition == nullptr) {
+      shortcutSubtitles.emplace_back();
+      continue;
+    }
+    shortcutSubtitles.push_back(ShortcutUiMetadata::getSubtitle(*definition));
+  }
 }
 
 void AppsActivity::openSelectedApp() {
@@ -120,7 +154,6 @@ void AppsActivity::openSelectedApp() {
     case ShortcutId::BrowseFiles:
       activityManager.goToFileBrowser();
       return;
-    case ShortcutId::Stats:
     case ShortcutId::ReadingStats:
       activity = std::make_unique<ReadingStatsActivity>(renderer, mappedInput);
       break;
@@ -142,25 +175,38 @@ void AppsActivity::openSelectedApp() {
     case ShortcutId::IfFound:
       activity = std::make_unique<IfFoundActivity>(renderer, mappedInput);
       break;
-    case ShortcutId::ReadMe:
-      activity = std::make_unique<ReadMeActivity>(renderer, mappedInput);
-      break;
     case ShortcutId::RecentBooks:
       activityManager.goToRecentBooks();
       return;
     case ShortcutId::Bookmarks:
       activity = std::make_unique<BookmarksAppActivity>(renderer, mappedInput);
       break;
+    case ShortcutId::Favorites:
+      activity = std::make_unique<FavoritesAppActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::Flashcards:
+      activity = std::make_unique<FlashcardsAppActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::Dictionary:
+      activity = std::make_unique<DictionaryActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::FileTransfer:
       activityManager.goToFileTransfer();
       return;
+    case ShortcutId::ScreenClean:
+      activity = std::make_unique<ScreenCleanActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::Sleep:
       activity = std::make_unique<SleepAppActivity>(renderer, mappedInput);
       break;
+    case ShortcutId::OpdsBrowser:
+      activityManager.goToBrowser();
+      return;
   }
 
   startActivityForResult(std::move(activity), [this](const ActivityResult&) {
     appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
+    rebuildShortcutSubtitles();
     if (!appShortcuts.empty()) {
       selectedIndex = std::min(selectedIndex, static_cast<int>(appShortcuts.size()) - 1);
     } else {

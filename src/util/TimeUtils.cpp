@@ -1,11 +1,13 @@
 #include "TimeUtils.h"
 
 #include "CrossPointSettings.h"
+
 #include <Arduino.h>
 #include <esp_sntp.h>
 
 #include <algorithm>
 #include <ctime>
+#include <sys/time.h>
 
 #include "util/TimeZoneRegistry.h"
 
@@ -13,6 +15,19 @@ namespace {
 constexpr uint32_t VALID_CLOCK_THRESHOLD = 1704067200UL;  // 2024-01-01 UTC
 bool syncedThisBoot = false;
 uint8_t configuredTimeZonePreset = UINT8_MAX;
+
+bool isLeapYear(const int year) { return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0); }
+
+unsigned getDaysInMonth(const int year, const unsigned month) {
+  static constexpr unsigned DAYS_PER_MONTH[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (month == 2) {
+    return isLeapYear(year) ? 29U : 28U;
+  }
+  if (month < 1 || month > 12) {
+    return 0;
+  }
+  return DAYS_PER_MONTH[month - 1];
+}
 
 std::string formatDateBuffer(const int year, const unsigned month, const unsigned day, const bool appendBang) {
   const char* bang = appendBang ? "!" : "";
@@ -116,6 +131,70 @@ uint32_t TimeUtils::getAuthoritativeTimestamp() {
 uint32_t TimeUtils::getCurrentValidTimestamp() {
   const uint32_t now = static_cast<uint32_t>(time(nullptr));
   return isClockValid(now) ? now : 0;
+}
+
+bool TimeUtils::setCurrentDate(const int year, const unsigned month, const unsigned day, uint32_t* epochSeconds) {
+  configureTimezone();
+
+  const unsigned daysInMonth = getDaysInMonth(year, month);
+  if (day < 1 || daysInMonth == 0 || day > daysInMonth) {
+    return false;
+  }
+
+  tm localTime = {};
+  localTime.tm_year = year - 1900;
+  localTime.tm_mon = static_cast<int>(month) - 1;
+  localTime.tm_mday = static_cast<int>(day);
+  localTime.tm_hour = 12;
+  localTime.tm_min = 0;
+  localTime.tm_sec = 0;
+  localTime.tm_isdst = -1;
+
+  const time_t epoch = mktime(&localTime);
+  if (epoch < 0 || !isClockValid(static_cast<uint32_t>(epoch))) {
+    return false;
+  }
+
+  timeval tv{};
+  tv.tv_sec = epoch;
+  if (settimeofday(&tv, nullptr) != 0) {
+    return false;
+  }
+
+  syncedThisBoot = true;
+  if (epochSeconds) {
+    *epochSeconds = static_cast<uint32_t>(epoch);
+  }
+  return true;
+}
+
+bool TimeUtils::getTimestampForLocalDate(const int year, const unsigned month, const unsigned day,
+                                         uint32_t* epochSeconds) {
+  configureTimezone();
+
+  const unsigned daysInMonth = getDaysInMonth(year, month);
+  if (day < 1 || daysInMonth == 0 || day > daysInMonth) {
+    return false;
+  }
+
+  tm localTime = {};
+  localTime.tm_year = year - 1900;
+  localTime.tm_mon = static_cast<int>(month) - 1;
+  localTime.tm_mday = static_cast<int>(day);
+  localTime.tm_hour = 12;
+  localTime.tm_min = 0;
+  localTime.tm_sec = 0;
+  localTime.tm_isdst = -1;
+
+  const time_t epoch = mktime(&localTime);
+  if (epoch < 0 || !isClockValid(static_cast<uint32_t>(epoch))) {
+    return false;
+  }
+
+  if (epochSeconds) {
+    *epochSeconds = static_cast<uint32_t>(epoch);
+  }
+  return true;
 }
 
 uint32_t TimeUtils::getLocalDayOrdinal(const uint32_t epochSeconds) {

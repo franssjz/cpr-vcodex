@@ -2,6 +2,12 @@
 
 #include <HalPowerManager.h>
 
+#include <algorithm>
+
+#include "../CrossPointSettings.h"
+#include "../CrossPointState.h"
+#include "Activity.h"
+#include "OpdsServerStore.h"
 #include "apps/AppsActivity.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
@@ -11,9 +17,42 @@
 #include "home/HomeActivity.h"
 #include "home/RecentBooksActivity.h"
 #include "network/CrossPointWebServerActivity.h"
+#include "reader/KOReaderSyncActivity.h"
 #include "reader/ReaderActivity.h"
+#include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
+
+namespace {
+constexpr uint8_t AUTO_UI_REFRESH_DEBT_THRESHOLD = 4;
+constexpr uint8_t AUTO_UI_REFRESH_DEBT_MAX = 6;
+}  // namespace
+
+void ActivityManager::requestUiTransitionRefresh(const uint8_t previousWeight, const uint8_t nextWeight) {
+  if (SETTINGS.darkMode || renderer.isDarkMode()) {
+    autoUiRefreshDebt = 0;
+    return;
+  }
+
+  if (!SETTINGS.antiGhostingExperimental) {
+    autoUiRefreshDebt = 0;
+    return;
+  }
+
+  const uint8_t transitionWeight = std::max(previousWeight, nextWeight);
+  if (transitionWeight == 0) {
+    if (autoUiRefreshDebt > 0) {
+      --autoUiRefreshDebt;
+    }
+    return;
+  }
+
+  autoUiRefreshDebt = std::min<uint8_t>(AUTO_UI_REFRESH_DEBT_MAX, autoUiRefreshDebt + transitionWeight);
+  if (autoUiRefreshDebt >= AUTO_UI_REFRESH_DEBT_THRESHOLD) {
+    autoUiRefreshDebt = 0;
+    renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
+  }
+}
 
 void ActivityManager::begin() {
   xTaskCreate(&renderTaskTrampoline, "ActivityManagerRender",
@@ -70,6 +109,7 @@ void ActivityManager::loop() {
       }
 
       ActivityResult pendingResult = std::move(currentActivity->result);
+      const uint8_t previousWeight = currentActivity->getUiTransitionRefreshWeight();
 
       // Destroy the current activity
       exitActivity(lock);
@@ -77,6 +117,7 @@ void ActivityManager::loop() {
 
       if (stackActivities.empty()) {
         LOG_DBG("ACT", "No more activities on stack, going home");
+        deferredPreviousUiRefreshWeight = previousWeight;
         lock.unlock();  // goHome may acquire its own lock
         goHome();
         continue;  // Will launch goHome immediately
@@ -85,6 +126,7 @@ void ActivityManager::loop() {
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
         mappedInput.armConfirmReleaseGuard();
+        requestUiTransitionRefresh(previousWeight, currentActivity->getUiTransitionRefreshWeight());
         LOG_DBG("ACT", "Popped from activity stack, new size = %zu", stackActivities.size());
         // Handle result if necessary
         if (currentActivity->resultHandler) {
@@ -109,6 +151,11 @@ void ActivityManager::loop() {
     } else if (pendingActivity) {
       // Current activity has requested a new activity to be launched
       RenderLock lock;
+      uint8_t previousWeight = currentActivity ? currentActivity->getUiTransitionRefreshWeight()
+                                               : deferredPreviousUiRefreshWeight;
+      deferredPreviousUiRefreshWeight = 0;
+      const uint8_t nextWeight = pendingActivity ? pendingActivity->getUiTransitionRefreshWeight()
+                                                 : Activity::UI_TRANSITION_REFRESH_WEIGHT_NONE;
 
       if (pendingAction == PendingAction::Replace) {
         // Destroy the current activity
@@ -126,6 +173,7 @@ void ActivityManager::loop() {
       pendingAction = PendingAction::None;
       currentActivity = std::move(pendingActivity);
       mappedInput.armConfirmReleaseGuard();
+      requestUiTransitionRefresh(previousWeight, nextWeight);
 
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
@@ -137,10 +185,10 @@ void ActivityManager::loop() {
 
   if (requestedUpdate) {
     requestedUpdate = false;
-    // Coalesce multiple update requests into a single pending render.
-    // This reduces redundant e-ink refreshes during activity transitions.
+    // Using direct notification to signal the render task to update
+    // Increment counter so multiple rapid calls won't be lost
     if (renderTaskHandle) {
-      xTaskNotify(renderTaskHandle, 1, eSetBits);
+      xTaskNotify(renderTaskHandle, 1, eIncrement);
     }
   }
 }
@@ -158,12 +206,18 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
   if (currentActivity) {
     // Defer launch if we're currently in an activity, to avoid deleting the current activity
     // leading to the "delete this" problem
+    deferredPreviousUiRefreshWeight = 0;
     pendingActivity = std::move(newActivity);
     pendingAction = PendingAction::Replace;
   } else {
     // No current activity, safe to launch immediately
+    const uint8_t previousWeight = deferredPreviousUiRefreshWeight;
+    deferredPreviousUiRefreshWeight = 0;
+    const uint8_t nextWeight =
+        newActivity ? newActivity->getUiTransitionRefreshWeight() : Activity::UI_TRANSITION_REFRESH_WEIGHT_NONE;
     currentActivity = std::move(newActivity);
     mappedInput.armConfirmReleaseGuard();
+    requestUiTransitionRefresh(previousWeight, nextWeight);
     currentActivity->onEnter();
   }
 }
@@ -185,11 +239,29 @@ void ActivityManager::goToRecentBooks() {
 }
 
 void ActivityManager::goToBrowser() {
-  replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput));
+  const auto& servers = OPDS_STORE.getServers();
+  // Skip the server picker when there's only one server configured
+  if (servers.size() == 1) {
+    replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, servers[0]));
+  } else {
+    replaceActivity(std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true));
+  }
 }
 
 void ActivityManager::goToReader(std::string path) {
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
+}
+
+void ActivityManager::goToKOReaderSync() {
+  const auto& sync = APP_STATE.koReaderSyncSession;
+  if (!sync.active || sync.epubPath.empty()) {
+    LOG_ERR("ACT", "Cannot launch KOReader sync without an active EPUB handoff");
+    goHome();
+    return;
+  }
+  replaceActivity(std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, sync.epubPath, sync.spineIndex,
+                                                         sync.page, sync.totalPagesInSpine, sync.paragraphIndex,
+                                                         sync.hasParagraphIndex, sync.xhtmlSeekHint, sync.intent));
 }
 
 void ActivityManager::goToEpubBookmark(std::string path, const int spineIndex, const uint32_t page) {
@@ -237,10 +309,17 @@ bool ActivityManager::isReaderActivity() const { return currentActivity && curre
 
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }
 
+ScreenshotInfo ActivityManager::getScreenshotInfo() const {
+  if (currentActivity) {
+    return currentActivity->getScreenshotInfo();
+  }
+  return {};
+}
+
 void ActivityManager::requestUpdate(bool immediate) {
   if (immediate) {
     if (renderTaskHandle) {
-      xTaskNotify(renderTaskHandle, 1, eSetBits);
+      xTaskNotify(renderTaskHandle, 1, eIncrement);
     }
   } else {
     // Deferring the update until current loop is finished

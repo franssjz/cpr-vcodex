@@ -22,7 +22,7 @@ class BookmarksAppActivity final : public Activity {
 
   void refreshEntries();
   void openSelectedBook();
-  bool clearBookmarksForBook(const std::string& path, const std::string& bookId) const;
+  bool clearBookmarksForBook(const std::string& bookId) const;
   void confirmDeleteSelectedBook();
 
  public:

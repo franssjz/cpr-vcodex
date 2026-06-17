@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Browser tools and recommended utilities for CPR-vCodex and Xteink devices.">
+  <title>Tools - CPR-vCodex</title>
+  <link rel="stylesheet" href="assets/site.css">
+  <style>
+    :root {
+      color-scheme: light;
+      --accent: #B621B4;
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --surface-2: #f1f1f4;
+      --text: #111118;
+      --muted: #666672;
+      --line: #e5e5e8;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0f0f14;
+      --surface: #181820;
+      --surface-2: #22222b;
+      --text: #f4f4f6;
+      --muted: #aaa7b0;
+      --line: #30303a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, var(--surface) 0, var(--bg) 360px);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(960px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 44px 0 56px;
+    }
+
+    .hero {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 38px;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 720px;
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .section-title {
+      margin: 30px 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .tool-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .tool-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 18px;
+      box-shadow: 0 14px 34px rgba(17, 17, 24, 0.08);
+    }
+
+    .tool-card h2,
+    .tool-card h3 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .tool-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--accent);
+      color: #ffffff;
+      padding: 9px 14px;
+      font: inherit;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .button.secondary {
+      border-color: var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+    }
+
+    @media (max-width: 720px) {
+      .tool-card {
+        grid-template-columns: 1fr;
+      }
+
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-topbar">
+      <a class="site-brand" href="./" data-site-i18n="homeTitle">CPR-vCodex Tools</a>
+      <nav class="site-nav" aria-label="Tools">
+        <a href="./" data-site-i18n="navHome">Home</a>
+        <a href="./flash.html" data-site-i18n="navFlash">Auto Flash</a>
+        <a href="./tools.html" aria-current="page" data-site-i18n="navTools">Tools</a>
+        <a href="https://github.com/franssjz/cpr-vcodex" data-site-i18n="navGithub">GitHub</a>
+        <a href="https://ko-fi.com/franssjz" data-site-i18n="navSupport">Support</a>
+      </nav>
+      <div class="site-actions">
+        <button class="site-control icon-only" data-role="theme-toggle" type="button" aria-label="Dark mode" title="Dark mode"><span data-role="theme-icon"></span></button>
+        <select class="site-select" data-role="language-select" aria-label="Language"></select>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1 data-site-i18n="toolsTitle">Tools</h1>
+      <p class="lead" data-site-i18n="toolsSubtitle">Useful browser tools for CPR-vCodex plus external utilities that fit the Xteink workflow.</p>
+    </section>
+
+    <section class="tool-grid" aria-label="CPR-vCodex tools">
+      <article class="tool-card">
+        <div>
+          <h2 data-site-i18n="toolsStatsTitle">CPR-vCodex Reading Stats Editor</h2>
+          <p data-site-i18n="toolsStatsBody">Local editor for exported reading stats. No upload, no server.</p>
+        </div>
+        <a class="button" href="./reading-stats-editor/" data-site-i18n="toolsOpenEditor">Open editor</a>
+      </article>
+    </section>
+
+    <h2 class="section-title" data-site-i18n="toolsRecommendations">Recommendations</h2>
+    <section class="tool-grid" aria-label="Recommended tools">
+      <article class="tool-card">
+        <div>
+          <h3>epubkit.ink</h3>
+          <p data-site-i18n="toolsEpubkitBody">Best tool to optimize EPUB files for Xteink devices.</p>
+        </div>
+        <a class="button secondary" href="https://epubkit.ink/" target="_blank" rel="noopener noreferrer" data-site-i18n="toolsOpenEpubkit">Open epubkit.ink</a>
+      </article>
+
+      <article class="tool-card">
+        <div>
+          <h3>xtcjs.app</h3>
+          <p data-site-i18n="toolsXtcjsBody">Best tool to optimize CBZ/CBR comics and manga for Xteink devices.</p>
+        </div>
+        <a class="button secondary" href="https://xtcjs.app/" target="_blank" rel="noopener noreferrer" data-site-i18n="toolsOpenXtcjs">Open xtcjs.app</a>
+      </article>
+
+      <article class="tool-card">
+        <div>
+          <h3>wallpaperconverter.jakegreen.dev</h3>
+          <p data-site-i18n="toolsWallpaperConverterBody">Create your own adapted wallpapers.</p>
+        </div>
+        <a class="button secondary" href="https://wallpaperconverter.jakegreen.dev/" target="_blank" rel="noopener noreferrer" data-site-i18n="toolsOpenConverter">Open converter</a>
+      </article>
+
+      <article class="tool-card">
+        <div>
+          <h3>readme.club/wallpapers</h3>
+          <p data-site-i18n="toolsWallpaperCollectionBody">Collection of adapted wallpapers.</p>
+        </div>
+        <a class="button secondary" href="https://www.readme.club/wallpapers" target="_blank" rel="noopener noreferrer" data-site-i18n="toolsOpenCollection">Open collection</a>
+      </article>
+    </section>
+  </main>
+
+  <script src="assets/site.js"></script>
+</body>
+</html>

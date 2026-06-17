@@ -51,8 +51,22 @@ enum class CssFontStyle : uint8_t { Normal = 0, Italic = 1 };
 // Font weight options - CSS supports 100-900, we simplify to normal/bold
 enum class CssFontWeight : uint8_t { Normal = 0, Bold = 1 };
 
-// Text decoration options
-enum class CssTextDecoration : uint8_t { None = 0, Underline = 1 };
+// Text decoration options. Bitmask so underline and line-through can coexist.
+enum class CssTextDecoration : uint8_t { None = 0, Underline = 1, LineThrough = 2 };
+
+inline constexpr CssTextDecoration operator|(const CssTextDecoration lhs, const CssTextDecoration rhs) {
+  return static_cast<CssTextDecoration>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
+
+inline constexpr bool hasTextDecoration(const CssTextDecoration value, const CssTextDecoration flag) {
+  return (static_cast<uint8_t>(value) & static_cast<uint8_t>(flag)) != 0;
+}
+
+// Display options - only None and Block are relevant for e-ink rendering
+enum class CssDisplay : uint8_t { Block = 0, None = 1 };
+
+// Vertical alignment options for inline elements (e.g. superscript/subscript)
+enum class CssVerticalAlign : uint8_t { Baseline = 0, Super = 1, Sub = 2 };
 
 // Bitmask for tracking which properties have been explicitly set
 struct CssPropertyFlags {
@@ -71,6 +85,8 @@ struct CssPropertyFlags {
   uint16_t paddingRight : 1;
   uint16_t imageHeight : 1;
   uint16_t imageWidth : 1;
+  uint16_t display : 1;
+  uint16_t verticalAlign : 1;
 
   CssPropertyFlags()
       : textAlign(0),
@@ -87,19 +103,21 @@ struct CssPropertyFlags {
         paddingLeft(0),
         paddingRight(0),
         imageHeight(0),
-        imageWidth(0) {}
+        imageWidth(0),
+        display(0),
+        verticalAlign(0) {}
 
   [[nodiscard]] bool anySet() const {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
-           imageWidth;
+           imageWidth || display || verticalAlign;
   }
 
   void clearAll() {
     textAlign = fontStyle = fontWeight = textDecoration = textIndent = 0;
     marginTop = marginBottom = marginLeft = marginRight = 0;
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
-    imageHeight = imageWidth = 0;
+    imageHeight = imageWidth = display = verticalAlign = 0;
   }
 };
 
@@ -123,6 +141,8 @@ struct CssStyle {
   CssLength paddingRight;   // Padding right
   CssLength imageHeight;    // Height for img (e.g. 2em) – width derived from aspect ratio when only height set
   CssLength imageWidth;     // Width for img when both or only width set
+  CssDisplay display = CssDisplay::Block;                       // display property (Block or None)
+  CssVerticalAlign verticalAlign = CssVerticalAlign::Baseline;  // vertical-align (super/sub positioning)
 
   CssPropertyFlags defined;  // Tracks which properties were explicitly set
 
@@ -189,6 +209,14 @@ struct CssStyle {
       imageWidth = base.imageWidth;
       defined.imageWidth = 1;
     }
+    if (base.hasDisplay()) {
+      display = base.display;
+      defined.display = 1;
+    }
+    if (base.hasVerticalAlign()) {
+      verticalAlign = base.verticalAlign;
+      defined.verticalAlign = 1;
+    }
   }
 
   [[nodiscard]] bool hasTextAlign() const { return defined.textAlign; }
@@ -206,6 +234,8 @@ struct CssStyle {
   [[nodiscard]] bool hasPaddingRight() const { return defined.paddingRight; }
   [[nodiscard]] bool hasImageHeight() const { return defined.imageHeight; }
   [[nodiscard]] bool hasImageWidth() const { return defined.imageWidth; }
+  [[nodiscard]] bool hasDisplay() const { return defined.display; }
+  [[nodiscard]] bool hasVerticalAlign() const { return defined.verticalAlign; }
 
   void reset() {
     textAlign = CssTextAlign::Left;
@@ -216,6 +246,8 @@ struct CssStyle {
     marginTop = marginBottom = marginLeft = marginRight = CssLength{};
     paddingTop = paddingBottom = paddingLeft = paddingRight = CssLength{};
     imageHeight = imageWidth = CssLength{};
+    display = CssDisplay::Block;
+    verticalAlign = CssVerticalAlign::Baseline;
     defined.clearAll();
   }
 };
