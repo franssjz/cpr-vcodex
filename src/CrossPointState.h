@@ -63,6 +63,7 @@ class CrossPointState {
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
   uint32_t lastKnownValidTimestamp = 0;
+  uint32_t lastReadingStatsBackupDayOrdinal = 0;
   uint8_t syncDayReminderStartCount = 0;
   bool syncDayReminderLatched = false;
   KOReaderSyncSessionState koReaderSyncSession;

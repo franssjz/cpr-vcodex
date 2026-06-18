@@ -17,13 +17,13 @@
 
 #include <cstring>
 
+#include "AchievementsStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FavoritesStore.h"
 #include "FlashcardsStore.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
-#include "AchievementsStore.h"
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
@@ -84,24 +84,19 @@ EpdFontFamily bookerly18FontFamily(&bookerly18RegularFont, &bookerly18BoldFont, 
 // and bold italic falls back to bold to keep the family complete for EPUB styling.
 EpdFont lexend10RegularFont(&lexend_10_regular);
 EpdFont lexend10BoldFont(&lexend_10_bold);
-EpdFontFamily lexend10FontFamily(&lexend10RegularFont, &lexend10BoldFont, &lexend10RegularFont,
-                                 &lexend10BoldFont);
+EpdFontFamily lexend10FontFamily(&lexend10RegularFont, &lexend10BoldFont, &lexend10RegularFont, &lexend10BoldFont);
 EpdFont lexend12RegularFont(&lexend_12_regular);
 EpdFont lexend12BoldFont(&lexend_12_bold);
-EpdFontFamily lexend12FontFamily(&lexend12RegularFont, &lexend12BoldFont, &lexend12RegularFont,
-                                 &lexend12BoldFont);
+EpdFontFamily lexend12FontFamily(&lexend12RegularFont, &lexend12BoldFont, &lexend12RegularFont, &lexend12BoldFont);
 EpdFont lexend14RegularFont(&lexend_14_regular);
 EpdFont lexend14BoldFont(&lexend_14_bold);
-EpdFontFamily lexend14FontFamily(&lexend14RegularFont, &lexend14BoldFont, &lexend14RegularFont,
-                                 &lexend14BoldFont);
+EpdFontFamily lexend14FontFamily(&lexend14RegularFont, &lexend14BoldFont, &lexend14RegularFont, &lexend14BoldFont);
 EpdFont lexend16RegularFont(&lexend_16_regular);
 EpdFont lexend16BoldFont(&lexend_16_bold);
-EpdFontFamily lexend16FontFamily(&lexend16RegularFont, &lexend16BoldFont, &lexend16RegularFont,
-                                 &lexend16BoldFont);
+EpdFontFamily lexend16FontFamily(&lexend16RegularFont, &lexend16BoldFont, &lexend16RegularFont, &lexend16BoldFont);
 EpdFont lexend18RegularFont(&lexend_18_regular);
 EpdFont lexend18BoldFont(&lexend_18_bold);
-EpdFontFamily lexend18FontFamily(&lexend18RegularFont, &lexend18BoldFont, &lexend18RegularFont,
-                                 &lexend18BoldFont);
+EpdFontFamily lexend18FontFamily(&lexend18RegularFont, &lexend18BoldFont, &lexend18RegularFont, &lexend18BoldFont);
 
 EpdFont notosans10RegularFont(&notosans_10_regular);
 EpdFont notosans10BoldFont(&notosans_10_bold);
@@ -606,9 +601,12 @@ void setup() {
 
   if (skipReadingStatsLoad) {
     logSkip("Skipping reading stats load due to recovery mode");
+    READING_STATS.markLoadSkippedForRecovery();
   } else {
     BootRecovery::enterStage(BootRecovery::BootStage::ReadingStats);
-    READING_STATS.loadFromFile();
+    if (READING_STATS.loadFromFile()) {
+      READING_STATS.createDueAutoBackup();
+    }
   }
 
   if (skipRecentBooksLoad) {

@@ -272,6 +272,8 @@ constexpr StrId OPT_REMINDER_STARTS[] = {StrId::STR_STATE_OFF, StrId::STR_NUM_10
 constexpr StrId OPT_DATE_FORMAT[] = {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
                                      StrId::STR_DATE_FORMAT_YYYY_MM_DD};
 constexpr StrId OPT_DAILY_GOAL[] = {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45, StrId::STR_MIN_60};
+constexpr StrId OPT_STATS_AUTOBACKUP[] = {StrId::STR_STATE_OFF, StrId::STR_NUM_1, StrId::STR_NUM_7, StrId::STR_NUM_14,
+                                          StrId::STR_NUM_21};
 constexpr StrId OPT_STUDY_MODE[] = {StrId::STR_DUE, StrId::STR_SCHEDULED, StrId::STR_RANDOM_PRACTICE,
                                     StrId::STR_SEQUENTIAL};
 constexpr StrId OPT_SESSION_SIZE[] = {StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30, StrId::STR_NUM_50,
@@ -372,6 +374,8 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
              StrId::STR_APPS),
     WEB_ENUM(StrId::STR_DATE_FORMAT, dateFormat, OPT_DATE_FORMAT, "dateFormat", StrId::STR_APPS),
     WEB_ENUM(StrId::STR_DAILY_GOAL, dailyGoalTarget, OPT_DAILY_GOAL, "dailyGoalTarget", StrId::STR_APPS),
+    WEB_ENUM(StrId::STR_READING_STATS_AUTOBACKUP, readingStatsAutoBackup, OPT_STATS_AUTOBACKUP,
+             "readingStatsAutoBackup", StrId::STR_APPS),
     WEB_ENUM(StrId::STR_STUDY_MODE, flashcardStudyMode, OPT_STUDY_MODE, "flashcardStudyMode", StrId::STR_APPS),
     WEB_ENUM(StrId::STR_SESSION_SIZE, flashcardSessionSize, OPT_SESSION_SIZE, "flashcardSessionSize", StrId::STR_APPS),
     WEB_TOGGLE(StrId::STR_SHOW_AFTER_READING, showStatsAfterReading, "showStatsAfterReading", StrId::STR_APPS),
@@ -1221,8 +1225,7 @@ void CrossPointWebServer::handleDownload() const {
     uint8_t zeroWriteRetries = 0;
     while (writtenForChunk < static_cast<size_t>(bytesRead) && client.connected()) {
       esp_task_wdt_reset();
-      const size_t wrote =
-          client.write(buffer + writtenForChunk, static_cast<size_t>(bytesRead) - writtenForChunk);
+      const size_t wrote = client.write(buffer + writtenForChunk, static_cast<size_t>(bytesRead) - writtenForChunk);
       if (wrote == 0) {
         if (++zeroWriteRetries >= 5) {
           break;
@@ -1924,6 +1927,7 @@ void CrossPointWebServer::handlePostSettings() {
   int applied = 0;
   bool saveSettings = false;
   bool saveKOReader = false;
+  bool createInitialReadingStatsBackup = false;
 
   for (const auto& s : WEB_SETTINGS) {
     if (!isWebSettingVisible(s)) continue;
@@ -1943,9 +1947,15 @@ void CrossPointWebServer::handlePostSettings() {
         const int val = doc[s.key].as<int>();
         if (val >= 0 && val < static_cast<int>(s.optionCount)) {
           if (s.valuePtr) {
+            const uint8_t previousValue = SETTINGS.*(s.valuePtr);
             SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
             if (s.valuePtr == &CrossPointSettings::fontFamily) {
               SETTINGS.sdFontFamilyName[0] = '\0';
+            }
+            if (s.valuePtr == &CrossPointSettings::readingStatsAutoBackup &&
+                SETTINGS.readingStatsAutoBackup != previousValue &&
+                SETTINGS.getReadingStatsAutoBackupIntervalDays() > 0 && !READING_STATS.hasAutoBackups()) {
+              createInitialReadingStatsBackup = true;
             }
             saveSettings = true;
           } else if (s.dynamic == WebDynamicSetting::KoMatchMethod) {
@@ -1995,6 +2005,9 @@ void CrossPointWebServer::handlePostSettings() {
 
   if (saveSettings) {
     SETTINGS.saveToFile();
+    if (createInitialReadingStatsBackup) {
+      READING_STATS.ensureAutoBackupForEnabledSetting();
+    }
   }
   if (saveKOReader) {
     KOREADER_STORE.saveToFile();

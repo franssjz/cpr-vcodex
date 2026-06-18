@@ -13,6 +13,8 @@ class ReadingStatsActivity final : public Activity {
   void openSelectedEntry();
   void confirmRemoveSelectedBook();
   void guardBackReturn();
+  void showTransientPopup(const char* message, int progress = -1, unsigned long delayMs = 0);
+  void createDueAutoBackupWithFeedback();
 
  public:
   explicit ReadingStatsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

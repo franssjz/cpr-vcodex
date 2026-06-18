@@ -1,5 +1,6 @@
 #include "ReadingStatsActivity.h"
 
+#include <Arduino.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 
@@ -112,6 +113,7 @@ void ReadingStatsActivity::onEnter() {
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   waitForBackRelease = false;
   requestUpdate();
+  createDueAutoBackupWithFeedback();
 }
 
 void ReadingStatsActivity::onExit() {
@@ -224,27 +226,54 @@ void ReadingStatsActivity::confirmRemoveSelectedBook() {
 
   const ReadingBookStats selectedBook = books[bookIndex];
   const int currentSelection = selectedIndex;
-  startActivityForResult(
-      std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_STATS_ENTRY),
-                                             getBookTitle(selectedBook)),
-      [this, selectedBook, currentSelection](const ActivityResult& result) {
-        if (!result.isCancelled && READING_STATS.removeBook(selectedBook.path)) {
-          const int bookCount = static_cast<int>(READING_STATS.getBooks().size());
-          if (bookCount == 0) {
-            selectedIndex = 0;
-          } else if (currentSelection > bookCount) {
-            selectedIndex = bookCount;
-          } else {
-            selectedIndex = currentSelection;
-          }
-        }
+  startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, tr(STR_DELETE_STATS_ENTRY),
+                                                                getBookTitle(selectedBook)),
+                         [this, selectedBook, currentSelection](const ActivityResult& result) {
+                           if (!result.isCancelled && READING_STATS.removeBook(selectedBook.path)) {
+                             const int bookCount = static_cast<int>(READING_STATS.getBooks().size());
+                             if (bookCount == 0) {
+                               selectedIndex = 0;
+                             } else if (currentSelection > bookCount) {
+                               selectedIndex = bookCount;
+                             } else {
+                               selectedIndex = currentSelection;
+                             }
+                           }
 
-        guardBackReturn();
-        requestUpdate(true);
-      });
+                           guardBackReturn();
+                           requestUpdate(true);
+                         });
 }
 
 void ReadingStatsActivity::guardBackReturn() { waitForBackRelease = true; }
+
+void ReadingStatsActivity::showTransientPopup(const char* message, const int progress, const unsigned long delayMs) {
+  requestUpdateAndWait();
+
+  {
+    RenderLock lock(*this);
+    const Rect popupRect = GUI.drawPopup(renderer, message);
+    if (progress >= 0) {
+      GUI.fillPopupProgress(renderer, popupRect, progress);
+    }
+  }
+
+  if (delayMs > 0) {
+    delay(delayMs);
+  }
+}
+
+void ReadingStatsActivity::createDueAutoBackupWithFeedback() {
+  if (!READING_STATS.isAutoBackupDue()) {
+    return;
+  }
+
+  showTransientPopup(tr(STR_READING_STATS_BACKUP_RUNNING), 20, 120);
+  const bool backupReady = READING_STATS.createDueAutoBackup();
+  showTransientPopup(backupReady ? tr(STR_READING_STATS_BACKUP_DONE) : tr(STR_READING_STATS_BACKUP_PENDING),
+                     backupReady ? 100 : -1, backupReady ? 350 : 700);
+  requestUpdate(true);
+}
 
 void ReadingStatsActivity::render(RenderLock&&) {
   renderer.clearScreen();

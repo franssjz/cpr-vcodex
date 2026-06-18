@@ -16,6 +16,8 @@ class SyncDayActivity final : public Activity {
   void openManualDateSelection();
   void openTimeZoneSelection();
   void syncTime();
+  void showTransientPopup(const char* message, int progress = -1, unsigned long delayMs = 0);
+  void createDueReadingStatsBackupWithFeedback();
   bool isWifiConnected() const;
   std::string getStatusMessage() const;
 

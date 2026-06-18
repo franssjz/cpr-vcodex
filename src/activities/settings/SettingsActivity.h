@@ -30,6 +30,7 @@ enum class SettingAction {
   ResetReadingStats,
   ExportReadingStats,
   ImportReadingStats,
+  ClearReadingStatsBackups,
   ReadingHeatmap,
   ReadingProfile,
   Achievements,

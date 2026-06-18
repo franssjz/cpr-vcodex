@@ -9,6 +9,7 @@
 
 #include "CrossPointState.h"
 #include "ManualDateActivity.h"
+#include "ReadingStatsStore.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/settings/TimeZoneSelectActivity.h"
 #include "components/UITheme.h"
@@ -79,8 +80,9 @@ std::string getDateFormatLabel() {
 }
 
 std::string getWifiChoiceLabel() {
-  return SETTINGS.syncDayWifiChoice == CrossPointSettings::SYNC_DAY_WIFI_MANUAL ? std::string(tr(STR_MANUAL))
-                                                                                : std::string(tr(STR_REFRESH_MODE_AUTO));
+  return SETTINGS.syncDayWifiChoice == CrossPointSettings::SYNC_DAY_WIFI_MANUAL
+             ? std::string(tr(STR_MANUAL))
+             : std::string(tr(STR_REFRESH_MODE_AUTO));
 }
 
 std::string getNetworkStatusLabel() {
@@ -235,14 +237,19 @@ std::string SyncDayActivity::getStatusMessage() const {
 }
 
 void SyncDayActivity::openTimeZoneSelection() {
-  startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput), [this](const ActivityResult&) {
-    requestUpdate();
-  });
+  startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput),
+                         [this](const ActivityResult&) { requestUpdate(); });
 }
 
 void SyncDayActivity::openManualDateSelection() {
+  const uint32_t previousValidTimestamp = APP_STATE.lastKnownValidTimestamp;
   startActivityForResult(std::make_unique<ManualDateActivity>(renderer, mappedInput),
-                         [this](const ActivityResult&) { requestUpdate(); });
+                         [this, previousValidTimestamp](const ActivityResult&) {
+                           if (APP_STATE.lastKnownValidTimestamp != previousValidTimestamp) {
+                             createDueReadingStatsBackupWithFeedback();
+                           }
+                           requestUpdate();
+                         });
 }
 
 void SyncDayActivity::openWifiSelection(const bool allowAutoConnect) {
@@ -279,4 +286,35 @@ void SyncDayActivity::syncTime() {
   lastSyncSucceeded = effectiveSuccess;
   lastSyncFailed = !effectiveSuccess;
   requestUpdate(true);
+  if (effectiveSuccess) {
+    createDueReadingStatsBackupWithFeedback();
+    requestUpdate(true);
+  }
+}
+
+void SyncDayActivity::showTransientPopup(const char* message, const int progress, const unsigned long delayMs) {
+  requestUpdateAndWait();
+
+  {
+    RenderLock lock(*this);
+    const Rect popupRect = GUI.drawPopup(renderer, message);
+    if (progress >= 0) {
+      GUI.fillPopupProgress(renderer, popupRect, progress);
+    }
+  }
+
+  if (delayMs > 0) {
+    delay(delayMs);
+  }
+}
+
+void SyncDayActivity::createDueReadingStatsBackupWithFeedback() {
+  if (!READING_STATS.isAutoBackupDue()) {
+    return;
+  }
+
+  showTransientPopup(tr(STR_READING_STATS_BACKUP_RUNNING), 20, 120);
+  const bool backupReady = READING_STATS.createDueAutoBackup();
+  showTransientPopup(backupReady ? tr(STR_READING_STATS_BACKUP_DONE) : tr(STR_READING_STATS_BACKUP_PENDING),
+                     backupReady ? 100 : -1, backupReady ? 350 : 700);
 }

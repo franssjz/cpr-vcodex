@@ -8,14 +8,21 @@
 #include <esp_heap_caps.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <ctime>
 
 #include "CrossPointState.h"
 #include "util/BookIdentity.h"
+#include "util/CprVcodexLogs.h"
 #include "util/TimeUtils.h"
 
 namespace {
 constexpr char READING_STATS_FILE_JSON[] = "/.crosspoint/reading_stats.json";
+constexpr char READING_STATS_BACKUP_FILE_JSON[] = "/.crosspoint/reading_stats.json.bak";
+constexpr char READING_STATS_EXPORT_DIR[] = "/exports";
+constexpr char READING_STATS_BACKUP_EXPORT_PREFIX[] = "/exports/stats_backup_";
+constexpr char READING_STATS_BACKUP_EXPORT_FILE_PREFIX[] = "stats_backup_";
 constexpr unsigned long MAX_READING_GAP_MS = 30UL * 60UL * 1000UL;
 constexpr unsigned long SESSION_HEARTBEAT_MS = 60UL * 1000UL;
 constexpr unsigned long DEFERRED_SAVE_INTERVAL_MS = 30UL * 1000UL;
@@ -25,6 +32,203 @@ constexpr size_t MAX_SESSION_LOG_ENTRIES = 256;
 uint8_t clampPercent(const uint8_t percent) { return std::min<uint8_t>(percent, 100); }
 
 bool countsForStreak(const ReadingDayStats& day) { return day.readingMs >= getDailyReadingGoalMs(); }
+
+bool textWindowShowsReadingStatsData(const std::string& text) {
+  static constexpr const char* DATA_ARRAY_KEYS[] = {
+      "\"readingDays\":[",
+      "\"legacyReadingDays\":[",
+      "\"sessionLog\":[",
+      "\"books\":[",
+  };
+
+  for (const char* key : DATA_ARRAY_KEYS) {
+    size_t pos = 0;
+    while ((pos = text.find(key, pos)) != std::string::npos) {
+      size_t valuePos = pos + std::strlen(key);
+      while (valuePos < text.size() &&
+             (text[valuePos] == ' ' || text[valuePos] == '\n' || text[valuePos] == '\r' || text[valuePos] == '\t')) {
+        ++valuePos;
+      }
+      if (valuePos < text.size() && text[valuePos] != ']') {
+        return true;
+      }
+      pos = valuePos;
+    }
+  }
+  return false;
+}
+
+bool statsFileAppearsToHaveData(const char* path) {
+  if (!path || !Storage.exists(path)) {
+    return false;
+  }
+
+  HalFile file;
+  if (!Storage.openFileForRead("RST", path, file)) {
+    return false;
+  }
+
+  char buffer[256];
+  std::string window;
+  window.reserve(512);
+  while (true) {
+    const int readBytes = file.read(buffer, sizeof(buffer));
+    if (readBytes <= 0) {
+      break;
+    }
+    window.append(buffer, static_cast<size_t>(readBytes));
+    if (textWindowShowsReadingStatsData(window)) {
+      file.close();
+      return true;
+    }
+    if (window.size() > 512) {
+      window.erase(0, window.size() - 256);
+    }
+  }
+
+  file.close();
+  return false;
+}
+
+bool copyFileViaTemp(const char* moduleName, const char* sourcePath, const char* targetPath) {
+  if (!sourcePath || !targetPath || !Storage.exists(sourcePath)) {
+    return false;
+  }
+
+  const std::string tempPath = std::string(targetPath) + ".tmp";
+  if (Storage.exists(tempPath.c_str())) {
+    Storage.remove(tempPath.c_str());
+  }
+
+  HalFile source;
+  if (!Storage.openFileForRead(moduleName, sourcePath, source)) {
+    return false;
+  }
+
+  HalFile target;
+  if (!Storage.openFileForWrite(moduleName, tempPath.c_str(), target)) {
+    source.close();
+    return false;
+  }
+
+  char buffer[512];
+  bool ok = true;
+  while (true) {
+    const int readBytes = source.read(buffer, sizeof(buffer));
+    if (readBytes < 0) {
+      ok = false;
+      break;
+    }
+    if (readBytes == 0) {
+      break;
+    }
+    const size_t written = target.write(buffer, static_cast<size_t>(readBytes));
+    if (written != static_cast<size_t>(readBytes)) {
+      ok = false;
+      break;
+    }
+  }
+
+  target.flush();
+  target.close();
+  source.close();
+
+  if (!ok) {
+    Storage.remove(tempPath.c_str());
+    return false;
+  }
+
+  if (Storage.exists(targetPath) && !Storage.remove(targetPath)) {
+    Storage.remove(tempPath.c_str());
+    return false;
+  }
+
+  if (!Storage.rename(tempPath.c_str(), targetPath)) {
+    Storage.remove(tempPath.c_str());
+    return false;
+  }
+
+  return true;
+}
+
+std::string formatBackupDateFromDayOrdinal(const uint32_t dayOrdinal) {
+  int year = 0;
+  unsigned month = 0;
+  unsigned day = 0;
+  if (!TimeUtils::getDateFromDayOrdinal(dayOrdinal, year, month, day)) {
+    return "";
+  }
+
+  char buffer[16];
+  std::snprintf(buffer, sizeof(buffer), "%04d-%02u-%02u", year, month, day);
+  return std::string(buffer);
+}
+
+std::string getAutoBackupPathForDayOrdinal(const uint32_t dayOrdinal) {
+  const std::string dateText = formatBackupDateFromDayOrdinal(dayOrdinal);
+  return dateText.empty() ? std::string() : std::string(READING_STATS_BACKUP_EXPORT_PREFIX) + dateText;
+}
+
+bool autoBackupFileHasDataForDayOrdinal(const uint32_t dayOrdinal) {
+  const std::string backupPath = getAutoBackupPathForDayOrdinal(dayOrdinal);
+  return !backupPath.empty() && statsFileAppearsToHaveData(backupPath.c_str());
+}
+
+bool parseAutoBackupDayOrdinal(const char* name, uint32_t& dayOrdinal) {
+  if (!name || std::strncmp(name, READING_STATS_BACKUP_EXPORT_FILE_PREFIX,
+                            std::strlen(READING_STATS_BACKUP_EXPORT_FILE_PREFIX)) != 0) {
+    return false;
+  }
+
+  int year = 0;
+  unsigned month = 0;
+  unsigned day = 0;
+  int consumed = 0;
+  if (std::sscanf(name, "stats_backup_%4d-%2u-%2u%n", &year, &month, &day, &consumed) != 3 || name[consumed] != '\0') {
+    return false;
+  }
+
+  if (!TimeUtils::getTimestampForLocalDate(year, month, day, nullptr)) {
+    return false;
+  }
+
+  dayOrdinal = TimeUtils::getDayOrdinalForDate(year, month, day);
+  return dayOrdinal != 0;
+}
+
+uint32_t getLatestAutoBackupDayOrdinal() {
+  auto dir = Storage.open(READING_STATS_EXPORT_DIR);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) {
+      dir.close();
+    }
+    return 0;
+  }
+
+  uint32_t latestDayOrdinal = 0;
+  char name[256];
+  for (auto entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
+    if (entry.isDirectory()) {
+      entry.close();
+      continue;
+    }
+
+    entry.getName(name, sizeof(name));
+    entry.close();
+
+    uint32_t dayOrdinal = 0;
+    if (!parseAutoBackupDayOrdinal(name, dayOrdinal)) {
+      continue;
+    }
+
+    const std::string backupPath = std::string(READING_STATS_EXPORT_DIR) + "/" + name;
+    if (statsFileAppearsToHaveData(backupPath.c_str())) {
+      latestDayOrdinal = std::max(latestDayOrdinal, dayOrdinal);
+    }
+  }
+  dir.close();
+  return latestDayOrdinal;
+}
 
 std::string toLowerAscii(std::string value) {
   for (char& c : value) {
@@ -102,9 +306,9 @@ bool containsString(const std::vector<std::string>& values, const std::string& v
 }
 
 bool containsReadingDay(const std::vector<ReadingDayStats>& days, const uint32_t dayOrdinal) {
-  return dayOrdinal != 0 &&
-         std::any_of(days.begin(), days.end(),
-                     [dayOrdinal](const ReadingDayStats& day) { return day.dayOrdinal == dayOrdinal; });
+  return dayOrdinal != 0 && std::any_of(days.begin(), days.end(), [dayOrdinal](const ReadingDayStats& day) {
+           return day.dayOrdinal == dayOrdinal;
+         });
 }
 
 bool sessionHasBookIdentity(const ReadingSessionLogEntry& session) {
@@ -567,11 +771,83 @@ bool ReadingStatsStore::removeIgnoredBooks() {
   return books.size() != originalCount;
 }
 
+bool ReadingStatsStore::hasAnyStats() const {
+  return !books.empty() || !legacyReadingDays.empty() || !readingDays.empty() || !sessionLog.empty();
+}
+
 void ReadingStatsStore::invalidateSummaryCache() { summaryCache.valid = false; }
 
 void ReadingStatsStore::markDirty() {
   dirty = true;
   invalidateSummaryCache();
+}
+
+bool ReadingStatsStore::prepareInternalBackup() const {
+  if (internalBackupPrepared) {
+    return true;
+  }
+
+  if (!Storage.exists(READING_STATS_FILE_JSON)) {
+    internalBackupPrepared = true;
+    return true;
+  }
+
+  if (!statsFileAppearsToHaveData(READING_STATS_FILE_JSON)) {
+    internalBackupPrepared = true;
+    return true;
+  }
+
+  Storage.mkdir("/.crosspoint");
+  const bool copied = copyFileViaTemp("RST", READING_STATS_FILE_JSON, READING_STATS_BACKUP_FILE_JSON);
+  if (copied) {
+    LOG_DBG("RST", "Prepared reading stats backup");
+    internalBackupPrepared = true;
+  } else {
+    LOG_ERR("RST", "Failed to prepare reading stats backup");
+    CPR_VCODEX_LOG_EVENT("RST", "Failed to prepare reading stats backup");
+  }
+  return copied;
+}
+
+bool ReadingStatsStore::refreshInternalBackupFromMain() const {
+  const std::string tempPath = std::string(READING_STATS_BACKUP_FILE_JSON) + ".tmp";
+  if (Storage.exists(tempPath.c_str())) {
+    Storage.remove(tempPath.c_str());
+  }
+
+  if (!Storage.exists(READING_STATS_FILE_JSON) || !statsFileAppearsToHaveData(READING_STATS_FILE_JSON)) {
+    if (Storage.exists(READING_STATS_BACKUP_FILE_JSON)) {
+      Storage.remove(READING_STATS_BACKUP_FILE_JSON);
+    }
+    internalBackupPrepared = true;
+    return true;
+  }
+
+  Storage.mkdir("/.crosspoint");
+  const bool copied = copyFileViaTemp("RST", READING_STATS_FILE_JSON, READING_STATS_BACKUP_FILE_JSON);
+  if (copied) {
+    internalBackupPrepared = true;
+  }
+  return copied;
+}
+
+bool ReadingStatsStore::restoreInternalBackupToMain(const char* reason) const {
+  if (!statsFileAppearsToHaveData(READING_STATS_BACKUP_FILE_JSON)) {
+    return false;
+  }
+
+  const bool restored = copyFileViaTemp("RST", READING_STATS_BACKUP_FILE_JSON, READING_STATS_FILE_JSON);
+  if (restored) {
+    internalBackupPrepared = false;
+    std::string message = "Restored reading stats backup";
+    if (reason && reason[0] != '\0') {
+      message += " after ";
+      message += reason;
+    }
+    LOG_DBG("RST", "%s", message.c_str());
+    CPR_VCODEX_LOG_EVENT("RST", message);
+  }
+  return restored;
 }
 
 bool ReadingStatsStore::shouldSaveDeferred() const {
@@ -584,12 +860,181 @@ bool ReadingStatsStore::shouldSaveDeferred() const {
   return lastSaveMs == 0 || (millis() - lastSaveMs) >= DEFERRED_SAVE_INTERVAL_MS;
 }
 
+bool ReadingStatsStore::maybeCreateAutoBackup(const bool force) const {
+  const uint8_t intervalDays = SETTINGS.getReadingStatsAutoBackupIntervalDays();
+  if (intervalDays == 0 || !hasAnyStats()) {
+    return false;
+  }
+
+  const uint32_t referenceTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp());
+  if (!isClockValid(referenceTimestamp)) {
+    return false;
+  }
+
+  const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(referenceTimestamp);
+  if (dayOrdinal == 0) {
+    return false;
+  }
+
+  if (!force && !isAutoBackupDue()) {
+    return false;
+  }
+
+  const uint32_t latestBackupDay = getLatestAutoBackupDayOrdinal();
+  if (force && latestBackupDay != 0 && dayOrdinal < latestBackupDay) {
+    return false;
+  }
+
+  const std::string backupPath = getAutoBackupPathForDayOrdinal(dayOrdinal);
+  if (backupPath.empty()) {
+    return false;
+  }
+
+  Storage.mkdir(READING_STATS_EXPORT_DIR);
+  if (Storage.exists(backupPath.c_str())) {
+    Storage.remove(backupPath.c_str());
+  }
+
+  const bool saved = JsonSettingsIO::saveReadingStats(*this, backupPath.c_str());
+  if (saved) {
+    APP_STATE.lastReadingStatsBackupDayOrdinal = dayOrdinal;
+    APP_STATE.saveToFile();
+    LOG_DBG("RST", "Auto-backed up reading stats to %s", backupPath.c_str());
+  } else {
+    LOG_ERR("RST", "Failed to auto-back up reading stats to %s", backupPath.c_str());
+  }
+  return saved;
+}
+
+bool ReadingStatsStore::isAutoBackupDue() const {
+  const uint8_t intervalDays = SETTINGS.getReadingStatsAutoBackupIntervalDays();
+  if (intervalDays == 0 || !hasAnyStats()) {
+    return false;
+  }
+
+  const uint32_t referenceTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp());
+  if (!isClockValid(referenceTimestamp)) {
+    return false;
+  }
+
+  const uint32_t dayOrdinal = TimeUtils::getLocalDayOrdinal(referenceTimestamp);
+  if (dayOrdinal == 0) {
+    return false;
+  }
+
+  const uint32_t latestBackupDay = getLatestAutoBackupDayOrdinal();
+  if (latestBackupDay != 0) {
+    if (dayOrdinal <= latestBackupDay) {
+      return false;
+    }
+    return (dayOrdinal - latestBackupDay) >= intervalDays;
+  }
+
+  return true;
+}
+
+bool ReadingStatsStore::createDueAutoBackup() const {
+  if (!isAutoBackupDue()) {
+    return false;
+  }
+  return maybeCreateAutoBackup(true);
+}
+
+bool ReadingStatsStore::hasAutoBackups() const { return getLatestAutoBackupDayOrdinal() != 0; }
+
+bool ReadingStatsStore::ensureAutoBackupForEnabledSetting() const {
+  if (SETTINGS.getReadingStatsAutoBackupIntervalDays() == 0) {
+    return false;
+  }
+
+  const uint32_t referenceTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp());
+  uint32_t dayOrdinal = 0;
+  if (isClockValid(referenceTimestamp)) {
+    dayOrdinal = TimeUtils::getLocalDayOrdinal(referenceTimestamp);
+  }
+
+  if (dayOrdinal != 0 && APP_STATE.lastReadingStatsBackupDayOrdinal == dayOrdinal &&
+      autoBackupFileHasDataForDayOrdinal(dayOrdinal)) {
+    return true;
+  }
+
+  if (APP_STATE.lastReadingStatsBackupDayOrdinal != 0) {
+    APP_STATE.lastReadingStatsBackupDayOrdinal = 0;
+    APP_STATE.saveToFile();
+  }
+
+  return maybeCreateAutoBackup(true);
+}
+
+int ReadingStatsStore::clearAutoBackups() const {
+  auto dir = Storage.open(READING_STATS_EXPORT_DIR);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) {
+      dir.close();
+    }
+    if (APP_STATE.lastReadingStatsBackupDayOrdinal != 0) {
+      APP_STATE.lastReadingStatsBackupDayOrdinal = 0;
+      APP_STATE.saveToFile();
+    }
+    return 0;
+  }
+
+  int removedCount = 0;
+  char name[256];
+  for (auto entry = dir.openNextFile(); entry; entry = dir.openNextFile()) {
+    if (entry.isDirectory()) {
+      entry.close();
+      continue;
+    }
+
+    entry.getName(name, sizeof(name));
+    entry.close();
+    if (std::strncmp(name, READING_STATS_BACKUP_EXPORT_FILE_PREFIX,
+                     std::strlen(READING_STATS_BACKUP_EXPORT_FILE_PREFIX)) != 0) {
+      continue;
+    }
+
+    const std::string backupPath = std::string(READING_STATS_EXPORT_DIR) + "/" + name;
+    if (Storage.remove(backupPath.c_str())) {
+      ++removedCount;
+    }
+  }
+  dir.close();
+
+  if (APP_STATE.lastReadingStatsBackupDayOrdinal != 0) {
+    APP_STATE.lastReadingStatsBackupDayOrdinal = 0;
+    APP_STATE.saveToFile();
+  }
+
+  return removedCount;
+}
+
 bool ReadingStatsStore::persistToFile(const char* path) const {
+  if (persistenceSuspended && path != nullptr && std::strcmp(path, READING_STATS_FILE_JSON) == 0) {
+    if (!skippedSaveLogged) {
+      LOG_ERR("RST", "Skipping reading stats save because loading was skipped in recovery mode");
+      CPR_VCODEX_LOG_EVENT("RST", "Skipped reading stats save after recovery-mode load skip");
+      skippedSaveLogged = true;
+    }
+    lastSaveMs = millis();
+    return true;
+  }
+
   Storage.mkdir("/.crosspoint");
+  if (path != nullptr && std::strcmp(path, READING_STATS_FILE_JSON) == 0) {
+    prepareInternalBackup();
+  }
+
   const bool saved = JsonSettingsIO::saveReadingStats(*this, path);
   if (saved) {
     dirty = false;
     lastSaveMs = millis();
+    if (path != nullptr && std::strcmp(path, READING_STATS_FILE_JSON) == 0) {
+      if (!Storage.exists(READING_STATS_BACKUP_FILE_JSON) && hasAnyStats()) {
+        refreshInternalBackupFromMain();
+      }
+      maybeCreateAutoBackup(false);
+    }
   }
   return saved;
 }
@@ -817,9 +1262,9 @@ bool ReadingStatsStore::updateBookMetadata(const std::string& path, const std::s
   return changed;
 }
 
-bool ReadingStatsStore::updateBookPath(const std::string& oldKey, const std::string& newPath,
-                                       const std::string& title, const std::string& author,
-                                       const std::string& coverBmpPath, const std::string& bookId) {
+bool ReadingStatsStore::updateBookPath(const std::string& oldKey, const std::string& newPath, const std::string& title,
+                                       const std::string& author, const std::string& coverBmpPath,
+                                       const std::string& bookId) {
   const std::string normalizedNewPath = BookIdentity::normalizePath(newPath);
   if (normalizedNewPath.empty() || shouldIgnorePath(normalizedNewPath)) {
     return false;
@@ -882,19 +1327,20 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
   }
 
   const auto oldSessionLogSize = sessionLog.size();
-  sessionLog.erase(
-      std::remove_if(sessionLog.begin(), sessionLog.end(),
-                     [&](const ReadingSessionLogEntry& session) {
-                       if (sessionMatchesBook(session, removedBook)) {
-                         return true;
-                       }
-                       return !sessionHasBookIdentity(session) && containsReadingDay(removedReadingDays, session.dayOrdinal) &&
-                              !containsReadingDay(readingDays, session.dayOrdinal);
-                     }),
-      sessionLog.end());
+  sessionLog.erase(std::remove_if(sessionLog.begin(), sessionLog.end(),
+                                  [&](const ReadingSessionLogEntry& session) {
+                                    if (sessionMatchesBook(session, removedBook)) {
+                                      return true;
+                                    }
+                                    return !sessionHasBookIdentity(session) &&
+                                           containsReadingDay(removedReadingDays, session.dayOrdinal) &&
+                                           !containsReadingDay(readingDays, session.dayOrdinal);
+                                  }),
+                   sessionLog.end());
 
   if ((!removedBook.bookId.empty() && lastSessionSnapshot.bookId == removedBook.bookId) ||
-      lastSessionSnapshot.path == removedBook.path || containsString(removedBook.knownPaths, lastSessionSnapshot.path)) {
+      lastSessionSnapshot.path == removedBook.path ||
+      containsString(removedBook.knownPaths, lastSessionSnapshot.path)) {
     lastSessionSnapshot = {};
   }
 
@@ -1111,6 +1557,16 @@ uint32_t ReadingStatsStore::getDisplayTimestamp(bool* usedFallback) const {
 }
 
 void ReadingStatsStore::reset() {
+  persistenceSuspended = false;
+  skippedSaveLogged = false;
+  internalBackupPrepared = true;
+  const std::string backupTempPath = std::string(READING_STATS_BACKUP_FILE_JSON) + ".tmp";
+  if (Storage.exists(READING_STATS_BACKUP_FILE_JSON)) {
+    Storage.remove(READING_STATS_BACKUP_FILE_JSON);
+  }
+  if (Storage.exists(backupTempPath.c_str())) {
+    Storage.remove(backupTempPath.c_str());
+  }
   books.clear();
   legacyReadingDays.clear();
   readingDays.clear();
@@ -1138,6 +1594,9 @@ bool ReadingStatsStore::importFromFile(const std::string& path) {
     return false;
   }
 
+  persistenceSuspended = false;
+  skippedSaveLogged = false;
+  internalBackupPrepared = true;
   normalizeReadingDays(readingDays);
   normalizeBooks();
   activeSession = {};
@@ -1155,7 +1614,11 @@ bool ReadingStatsStore::importFromFile(const std::string& path) {
     APP_STATE.saveToFile();
   }
   markDirty();
-  return saveToFile();
+  const bool saved = saveToFile();
+  if (saved) {
+    refreshInternalBackupFromMain();
+  }
+  return saved;
 }
 
 bool ReadingStatsStore::saveToFile() const {
@@ -1177,11 +1640,19 @@ bool ReadingStatsStore::loadFromFile() {
   }
 
   if (!Storage.exists(READING_STATS_FILE_JSON)) {
+    restoreInternalBackupToMain("missing main file");
+  }
+
+  if (!Storage.exists(READING_STATS_FILE_JSON)) {
     return false;
   }
 
-  const bool loaded = JsonSettingsIO::loadReadingStatsFromFile(*this, READING_STATS_FILE_JSON);
-  if (loaded) {
+  auto loadMainFile = [this]() -> bool {
+    const bool loaded = JsonSettingsIO::loadReadingStatsFromFile(*this, READING_STATS_FILE_JSON);
+    if (!loaded) {
+      return false;
+    }
+
     const bool needsSave = dirty;
     normalizeReadingDays(readingDays);
     normalizeBooks();
@@ -1206,8 +1677,30 @@ bool ReadingStatsStore::loadFromFile() {
       dirty = false;
       lastSaveMs = millis();
     }
+    persistenceSuspended = false;
+    skippedSaveLogged = false;
+    prepareInternalBackup();
+    return true;
+  };
+
+  bool loaded = loadMainFile();
+  if (!loaded && restoreInternalBackupToMain("main load failure")) {
+    loaded = loadMainFile();
+  } else if (loaded && !hasAnyStats() && statsFileAppearsToHaveData(READING_STATS_BACKUP_FILE_JSON) &&
+             restoreInternalBackupToMain("empty main file")) {
+    loaded = loadMainFile();
   }
   return loaded;
+}
+
+void ReadingStatsStore::markLoadSkippedForRecovery() {
+  persistenceSuspended = true;
+  skippedSaveLogged = false;
+  internalBackupPrepared = false;
+  activeSession = {};
+  lastSessionSnapshot = {};
+  dirty = false;
+  invalidateSummaryCache();
 }
 
 bool ReadingStatsStore::releaseMemoryForNetwork() {

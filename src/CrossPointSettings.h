@@ -192,6 +192,14 @@ class CrossPointSettings {
     DAILY_GOAL_60_MIN = 3,
     DAILY_GOAL_TARGET_COUNT
   };
+  enum READING_STATS_AUTOBACKUP {
+    READING_STATS_AUTOBACKUP_OFF = 0,
+    READING_STATS_AUTOBACKUP_1_DAY = 1,
+    READING_STATS_AUTOBACKUP_7_DAYS = 2,
+    READING_STATS_AUTOBACKUP_14_DAYS = 3,
+    READING_STATS_AUTOBACKUP_21_DAYS = 4,
+    READING_STATS_AUTOBACKUP_COUNT
+  };
   enum FLASHCARD_STUDY_MODE {
     FLASHCARD_STUDY_DUE = 0,
     FLASHCARD_STUDY_SCHEDULED = 1,
@@ -314,6 +322,7 @@ class CrossPointSettings {
   uint8_t timeZonePreset = 0;
   uint8_t dateFormat = DATE_DD_MM_YYYY;
   uint8_t dailyGoalTarget = DAILY_GOAL_30_MIN;
+  uint8_t readingStatsAutoBackup = READING_STATS_AUTOBACKUP_7_DAYS;
   uint8_t flashcardStudyMode = FLASHCARD_STUDY_DUE;
   uint8_t flashcardSessionSize = FLASHCARD_SESSION_ALL;
   uint8_t showStatsAfterReading = 1;
@@ -418,6 +427,7 @@ class CrossPointSettings {
   float getReaderLineCompression() const;
   unsigned long getSleepTimeoutMs() const;
   uint64_t getDailyGoalMs() const;
+  uint8_t getReadingStatsAutoBackupIntervalDays() const;
   uint8_t getSyncDayReminderStartThreshold() const;
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;

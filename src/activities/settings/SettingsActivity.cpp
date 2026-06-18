@@ -202,6 +202,10 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
       SettingInfo::Action(StrId::STR_READING_STATS, SettingAction::ReadingStats),
       SettingInfo::Enum(StrId::STR_DAILY_GOAL, &CrossPointSettings::dailyGoalTarget,
                         {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45, StrId::STR_MIN_60}),
+      SettingInfo::Enum(
+          StrId::STR_READING_STATS_AUTOBACKUP, &CrossPointSettings::readingStatsAutoBackup,
+          {StrId::STR_STATE_OFF, StrId::STR_NUM_1, StrId::STR_NUM_7, StrId::STR_NUM_14, StrId::STR_NUM_21}),
+      SettingInfo::Action(StrId::STR_CLEAR_READING_STATS_BACKUPS, SettingAction::ClearReadingStatsBackups),
       SettingInfo::Toggle(StrId::STR_SHOW_AFTER_READING, &CrossPointSettings::showStatsAfterReading),
       SettingInfo::Toggle(StrId::STR_MOVE_COMPLETED_BOOKS, &CrossPointSettings::moveCompletedBooks),
       SettingInfo::Action(StrId::STR_RESET_READING_STATS, SettingAction::ResetReadingStats),
@@ -602,6 +606,7 @@ void SettingsActivity::toggleCurrentSetting() {
   }
 
   const auto& setting = *(*currentSettings)[selectedSetting];
+  const uint8_t previousReadingStatsAutoBackup = SETTINGS.readingStatsAutoBackup;
 
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     // Toggle the boolean value using the member pointer
@@ -718,6 +723,20 @@ void SettingsActivity::toggleCurrentSetting() {
               requestUpdate(true);
             });
         break;
+      case SettingAction::ClearReadingStatsBackups:
+        startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput,
+                                                                      tr(STR_CLEAR_READING_STATS_BACKUPS_CONFIRM), ""),
+                               [this](const ActivityResult& result) {
+                                 if (!result.isCancelled) {
+                                   showTransientPopup(tr(STR_CLEARING_READING_STATS_BACKUPS), 20, 120);
+                                   const int removedCount = READING_STATS.clearAutoBackups();
+                                   showTransientPopup(removedCount > 0 ? tr(STR_READING_STATS_BACKUPS_CLEARED)
+                                                                       : tr(STR_NO_READING_STATS_BACKUPS),
+                                                      removedCount > 0 ? 100 : -1, removedCount > 0 ? 350 : 700);
+                                 }
+                                 requestUpdate(true);
+                               });
+        break;
       case SettingAction::ReadingHeatmap:
         startActivityForResult(std::make_unique<ReadingHeatmapActivity>(renderer, mappedInput), resultHandler);
         break;
@@ -800,7 +819,19 @@ void SettingsActivity::toggleCurrentSetting() {
     requestUpdate(true);
   }
 
+  const bool createInitialReadingStatsBackup = setting.valuePtr == &CrossPointSettings::readingStatsAutoBackup &&
+                                               SETTINGS.readingStatsAutoBackup != previousReadingStatsAutoBackup &&
+                                               SETTINGS.getReadingStatsAutoBackupIntervalDays() > 0 &&
+                                               !READING_STATS.hasAutoBackups();
+
   SETTINGS.saveToFile();
+  if (createInitialReadingStatsBackup) {
+    showTransientPopup(tr(STR_READING_STATS_BACKUP_RUNNING), 20, 120);
+    const bool backupReady = READING_STATS.ensureAutoBackupForEnabledSetting();
+    showTransientPopup(backupReady ? tr(STR_READING_STATS_BACKUP_DONE) : tr(STR_READING_STATS_BACKUP_PENDING),
+                       backupReady ? 100 : -1, backupReady ? 350 : 700);
+    requestUpdate(true);
+  }
 }
 
 void SettingsActivity::renderAppSettingsList(const Rect& rect) const {

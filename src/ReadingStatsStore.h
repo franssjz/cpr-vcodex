@@ -94,6 +94,9 @@ class ReadingStatsStore {
   mutable SummaryCache summaryCache;
   mutable bool dirty = false;
   mutable unsigned long lastSaveMs = 0;
+  mutable bool persistenceSuspended = false;
+  mutable bool skippedSaveLogged = false;
+  mutable bool internalBackupPrepared = false;
 
   friend bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore&, const char*);
   friend bool JsonSettingsIO::loadReadingStats(ReadingStatsStore&, const char*);
@@ -122,10 +125,15 @@ class ReadingStatsStore {
   bool convertLegacyReadingDaysToUnassigned();
   void rebuildAggregatedReadingDays();
   bool removeIgnoredBooks();
+  bool hasAnyStats() const;
   void invalidateSummaryCache();
   void rebuildSummaryCache() const;
   bool shouldSaveDeferred() const;
   void markDirty();
+  bool prepareInternalBackup() const;
+  bool refreshInternalBackupFromMain() const;
+  bool restoreInternalBackupToMain(const char* reason) const;
+  bool maybeCreateAutoBackup(bool force) const;
   bool persistToFile(const char* path) const;
   static bool isClockValid(uint32_t epochSeconds);
 
@@ -175,7 +183,13 @@ class ReadingStatsStore {
   bool exportToFile(const std::string& path) const;
   bool importFromFile(const std::string& path);
   bool saveToFile() const;
+  bool isAutoBackupDue() const;
+  bool createDueAutoBackup() const;
+  bool hasAutoBackups() const;
+  bool ensureAutoBackupForEnabledSetting() const;
+  int clearAutoBackups() const;
   bool loadFromFile();
+  void markLoadSkippedForRecovery();
   bool releaseMemoryForNetwork();
   bool reloadAfterNetwork();
 };

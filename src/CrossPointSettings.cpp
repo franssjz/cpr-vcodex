@@ -329,6 +329,22 @@ uint64_t CrossPointSettings::getDailyGoalMs() const {
   }
 }
 
+uint8_t CrossPointSettings::getReadingStatsAutoBackupIntervalDays() const {
+  switch (readingStatsAutoBackup) {
+    case READING_STATS_AUTOBACKUP_1_DAY:
+      return 1;
+    case READING_STATS_AUTOBACKUP_7_DAYS:
+      return 7;
+    case READING_STATS_AUTOBACKUP_14_DAYS:
+      return 14;
+    case READING_STATS_AUTOBACKUP_21_DAYS:
+      return 21;
+    case READING_STATS_AUTOBACKUP_OFF:
+    default:
+      return 0;
+  }
+}
+
 uint8_t CrossPointSettings::getSyncDayReminderStartThreshold() const {
   switch (syncDayReminderStarts) {
     case SYNC_DAY_REMINDER_OFF:
