@@ -686,7 +686,22 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     const ReadingBookStats* stats = getRecentBookStats(book);
     const uint8_t progressPercent =
         stats != nullptr ? (stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100)) : 0;
-    const std::string progressText = std::to_string(progressPercent) + "%";
+    std::string progressText = std::to_string(progressPercent) + "%";
+    if (stats != nullptr && !stats->completed && stats->lastProgressPercent >= 5 &&
+        stats->totalReadingMs >= 600000ULL) {
+      const uint64_t estimatedTotalMs =
+          (stats->totalReadingMs * 100ULL + stats->lastProgressPercent - 1) / stats->lastProgressPercent;
+      if (estimatedTotalMs > stats->totalReadingMs) {
+        const uint64_t remainingMs =
+            ((estimatedTotalMs - stats->totalReadingMs + 300000ULL - 1) / 300000ULL) * 300000ULL;
+        const uint64_t totalMinutes = remainingMs / 60000ULL;
+        if (totalMinutes >= 60) {
+          progressText += " ~" + std::to_string(totalMinutes / 60ULL) + "h " + std::to_string(totalMinutes % 60ULL) + "m";
+        } else {
+          progressText += " ~" + std::to_string(totalMinutes) + "m";
+        }
+      }
+    }
     const std::string statsText =
         stats != nullptr
             ? ReadingStatsAnalytics::formatDurationHm(stats->totalReadingMs) + " | " + std::to_string(stats->sessions) + "x"
