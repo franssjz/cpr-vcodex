@@ -453,7 +453,6 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
   if (!hasCredentials()) return NO_CREDENTIALS;
 
   beginRequest("auth");
-  if (!checkHeapForTls()) return NETWORK_ERROR;
 
   ResponseBuffer buf;
   ResponseBuffer* activeBuf = effectiveResponseBuffer(&buf);
@@ -464,26 +463,47 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
     const EndpointProfile profile = profiles[profileIndex];
     const bool hasFallback = profileIndex + 1 < profileCount;
     const std::string url = buildEndpointUrl(profile, "/users/auth");
+    esp_err_t err = ESP_FAIL;
+    int httpCode = 0;
 
     LOG_DBG("KOSync", "Authenticating: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
             lastContigHeapAtFailure);
 
-    resetResponseBuffer(activeBuf);
-    esp_http_client_handle_t client = createClient(url.c_str(), &buf);
-    if (!client) {
-      lastEspError = ESP_ERR_NO_MEM;
-      return NETWORK_ERROR;
-    }
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      refreshHeapSnapshot();
+      logTlsAttemptPlan("auth", attempt);
+      if (!checkHeapForTls()) return NETWORK_ERROR;
 
-    const esp_err_t err = esp_http_client_perform(client);
-    const int httpCode = esp_http_client_get_status_code(client);
-    lastHttpCode = httpCode;
-    lastEspError = err;
-    if (!g_keepSessionOpen) {
-      esp_http_client_cleanup(client);
-    }
+      resetResponseBuffer(activeBuf);
+      esp_http_client_handle_t client = createClient(url.c_str(), &buf);
+      if (!client) {
+        lastEspError = ESP_ERR_NO_MEM;
+        return NETWORK_ERROR;
+      }
 
-    LOG_DBG("KOSync", "Auth response: %d (err: %s)", httpCode, esp_err_to_name(err));
+      logWifiSnapshot("WiFi before auth");
+      err = esp_http_client_perform(client);
+      httpCode = esp_http_client_get_status_code(client);
+      lastHttpCode = httpCode;
+      lastEspError = err;
+      if (!g_keepSessionOpen) {
+        esp_http_client_cleanup(client);
+      }
+
+      LOG_DBG("KOSync", "Auth %s -> %d (err: %s) [attempt %d]", url.c_str(), httpCode, esp_err_to_name(err),
+              attempt);
+      if (err == ESP_OK && (httpCode < 200 || httpCode >= 300)) {
+        rememberResponsePreview(activeBuf->data);
+      }
+
+      const bool retryable = (err == ESP_ERR_HTTP_CONNECT || err == ESP_ERR_HTTP_EAGAIN);
+      if (err == ESP_OK || !retryable || attempt == 3) break;
+
+      resetSessionClientForRetry();
+      LOG_ERR("KOSync", "auth failed attempt %d, retrying", attempt);
+      logWifiSnapshot("WiFi before auth retry");
+      delay(400 * attempt);
+    }
 
     if (err != ESP_OK) {
       if (hasFallback) {

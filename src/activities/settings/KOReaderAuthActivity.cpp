@@ -1,9 +1,13 @@
 #include "KOReaderAuthActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <SdCardFont.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
+#include <esp_system.h>
 
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncClient.h"
@@ -12,6 +16,40 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/TimeUtils.h"
+
+namespace {
+void logAuthMemSnapshot(const char* stage) {
+  const uint32_t freeHeap = esp_get_free_heap_size();
+  const uint32_t contigHeap = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
+  LOG_DBG("KOSync", "Auth mem[%s]: free=%lu contig=%lu", stage, freeHeap, contigHeap);
+}
+
+void trimMemoryBeforeAuthTls(const GfxRenderer& renderer) {
+  if (auto* cacheManager = renderer.getFontCacheManager()) {
+    cacheManager->clearCache();
+    cacheManager->resetStats();
+    LOG_DBG("KOSync", "Cleared font cache before auth TLS");
+  }
+
+  unsigned releasedSdFonts = 0;
+  for (const auto& entry : renderer.getSdCardFonts()) {
+    if (!entry.second) continue;
+    entry.second->releaseForLowMemory();
+    releasedSdFonts++;
+  }
+  if (releasedSdFonts > 0) {
+    LOG_DBG("KOSync", "Released %u SD font runtime cache(s) before auth TLS", releasedSdFonts);
+  }
+}
+
+void prepareMemoryBeforeAuthNetwork(const GfxRenderer& renderer, const char* stage) {
+  TimeUtils::stopNtp();
+  trimMemoryBeforeAuthTls(renderer);
+  delay(20);
+  logAuthMemSnapshot(stage);
+}
+}  // namespace
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
@@ -27,14 +65,25 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   {
     RenderLock lock(*this);
     state = AUTHENTICATING;
+    statusMessage = tr(STR_SYNCING_TIME);
+  }
+  requestUpdateAndWait();
+
+  const bool ntpSuccess = TimeUtils::syncTimeWithNtp(5000);
+  LOG_DBG("KOSync", "Auth NTP sync %s", ntpSuccess ? "ok" : "timeout");
+  TimeUtils::stopNtp();
+
+  {
+    RenderLock lock(*this);
     statusMessage = tr(STR_AUTHENTICATING);
   }
-  requestUpdate();
+  requestUpdateAndWait();
 
   performAuthentication();
 }
 
 void KOReaderAuthActivity::performAuthentication() {
+  prepareMemoryBeforeAuthNetwork(renderer, "before_authenticate");
   const auto result = KOReaderSyncClient::authenticate();
 
   {
@@ -51,6 +100,11 @@ void KOReaderAuthActivity::performAuthentication() {
     } else {
       state = FAILED;
       errorMessage = KOReaderSyncClient::errorString(result);
+      const char* detail = KOReaderSyncClient::lastFailureDetail();
+      if (detail && detail[0]) {
+        errorMessage += " - ";
+        errorMessage += detail;
+      }
     }
   }
   requestUpdate();
@@ -98,7 +152,10 @@ void KOReaderAuthActivity::render(RenderLock&&) {
     renderer.drawCenteredText(UI_10_FONT_ID, top + height + 10, tr(STR_SYNC_READY));
   } else if (state == FAILED) {
     renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_AUTH_FAILED), true, EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_10_FONT_ID, top + height + 10, errorMessage.c_str());
+    const auto lines = renderer.wrappedText(UI_10_FONT_ID, errorMessage.c_str(), pageWidth - 40, 4);
+    for (size_t i = 0; i < lines.size(); ++i) {
+      renderer.drawCenteredText(UI_10_FONT_ID, top + height + 10 + static_cast<int>(i) * height, lines[i].c_str());
+    }
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");

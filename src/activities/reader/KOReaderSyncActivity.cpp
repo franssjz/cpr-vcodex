@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <SdCardFont.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
@@ -37,6 +38,16 @@ void trimMemoryBeforeTls(const GfxRenderer& renderer) {
     cacheManager->clearCache();
     cacheManager->resetStats();
     LOG_DBG("KOSync", "Cleared font cache before TLS");
+  }
+
+  unsigned releasedSdFonts = 0;
+  for (const auto& entry : renderer.getSdCardFonts()) {
+    if (!entry.second) continue;
+    entry.second->releaseForLowMemory();
+    releasedSdFonts++;
+  }
+  if (releasedSdFonts > 0) {
+    LOG_DBG("KOSync", "Released %u SD font runtime cache(s) before TLS", releasedSdFonts);
   }
 }
 
