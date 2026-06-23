@@ -123,6 +123,41 @@ void XMLCALL ContentOpfParser::startElement(void* userData, const XML_Char* name
     return;
   }
 
+  if (self->state == IN_METADATA && strcmp(name, "dc:publisher") == 0) {
+    self->state = IN_BOOK_PUBLISHER;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:description") == 0) {
+    self->state = IN_BOOK_DESCRIPTION;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:date") == 0) {
+    self->state = IN_BOOK_DATE;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:identifier") == 0) {
+    self->state = IN_BOOK_IDENTIFIER;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:subject") == 0) {
+    self->state = IN_BOOK_SUBJECT;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:rights") == 0) {
+    self->state = IN_BOOK_RIGHTS;
+    return;
+  }
+
+  if (self->state == IN_METADATA && strcmp(name, "dc:contributor") == 0) {
+    self->state = IN_BOOK_CONTRIBUTOR;
+    return;
+  }
+
   if (self->state == IN_PACKAGE && (strcmp(name, "manifest") == 0 || strcmp(name, "opf:manifest") == 0)) {
     self->state = IN_MANIFEST;
     if (!Storage.openFileForWrite("COF", self->cachePath + itemCacheFile, self->tempItemStore)) {
@@ -351,6 +386,47 @@ void XMLCALL ContentOpfParser::characterData(void* userData, const XML_Char* s, 
     self->language.append(s, len);
     return;
   }
+
+  if (self->state == IN_BOOK_PUBLISHER) {
+    self->publisher.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_DESCRIPTION) {
+    self->description.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_DATE) {
+    self->publicationDate.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_IDENTIFIER) {
+    self->identifier.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_SUBJECT) {
+    if (!self->subject.empty()) {
+      self->subject.append(", ");  // Add separator for multiple subjects
+    }
+    self->subject.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_RIGHTS) {
+    self->rights.append(s, len);
+    return;
+  }
+
+  if (self->state == IN_BOOK_CONTRIBUTOR) {
+    if (!self->contributor.empty()) {
+      self->contributor.append(", ");  // Add separator for multiple contributors
+    }
+    self->contributor.append(s, len);
+    return;
+  }
 }
 
 void XMLCALL ContentOpfParser::endElement(void* userData, const XML_Char* name) {
@@ -386,6 +462,41 @@ void XMLCALL ContentOpfParser::endElement(void* userData, const XML_Char* name) 
   }
 
   if (self->state == IN_BOOK_LANGUAGE && strcmp(name, "dc:language") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_PUBLISHER && strcmp(name, "dc:publisher") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_DESCRIPTION && strcmp(name, "dc:description") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_DATE && strcmp(name, "dc:date") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_IDENTIFIER && strcmp(name, "dc:identifier") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_SUBJECT && strcmp(name, "dc:subject") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_RIGHTS && strcmp(name, "dc:rights") == 0) {
+    self->state = IN_METADATA;
+    return;
+  }
+
+  if (self->state == IN_BOOK_CONTRIBUTOR && strcmp(name, "dc:contributor") == 0) {
     self->state = IN_METADATA;
     return;
   }

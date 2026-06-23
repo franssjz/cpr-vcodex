@@ -110,6 +110,17 @@ void ReadingStatsActivity::onEnter() {
   Activity::onEnter();
   renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
   selectedIndex = READING_STATS.getBooks().empty() ? 0 : 1;
+
+  if (!selectedBookPath.empty()) {
+    const auto& books = READING_STATS.getBooks();
+    for (int i = 0; i < static_cast<int>(books.size()); ++i) {
+      if (books[i].path == selectedBookPath) {
+        selectedIndex = i + 1;
+        break;
+      }
+    }
+  }
+
   waitForConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   waitForBackRelease = false;
   requestUpdate();

@@ -35,8 +35,11 @@
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
+#include "activities/apps/ReadingStatsDetailActivity.h"
 #include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
+#include "activities/home/BookContextMenuActivity.h"
+#include "activities/home/BookMetadataActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
@@ -928,36 +931,98 @@ void HomeActivity::loop() {
         const RecentBook selectedBook = recentBooks[selectorIndex];
         const int currentSelection = selectorIndex;
         const bool deleteFromFavorites = homeUsesFavorites();
-        const StrId confirmationPrompt =
-            deleteFromFavorites ? StrId::STR_DELETE_FROM_FAVORITES : StrId::STR_DELETE_FROM_RECENTS;
+        const bool isEpub = FsHelpers::hasEpubExtension(selectedBook.path);
+        const bool isFavorite =
+            deleteFromFavorites || FAVORITES.isFavorite(selectedBook.path);
+
+        // Check reading status
+        const ReadingBookStats* stats = nullptr;
+        if (!selectedBook.bookId.empty()) {
+          stats = READING_STATS.findBook(selectedBook.bookId);
+        }
+        if (stats == nullptr) {
+          stats = READING_STATS.findBook(selectedBook.path);
+        }
+        const bool isCompleted = (stats != nullptr && stats->completed);
+
+        const std::string subtitle = !selectedBook.author.empty() ? selectedBook.author : selectedBook.path;
+
         startActivityForResult(
-            std::make_unique<ConfirmationActivity>(renderer, mappedInput, I18N.get(confirmationPrompt),
-                                                   getRecentBookConfirmationLabel(selectedBook)),
-            [this, selectedBook, currentSelection, deleteFromFavorites](const ActivityResult& result) {
+            std::make_unique<BookContextMenuActivity>(renderer, mappedInput,
+                                                      getRecentBookConfirmationLabel(selectedBook),
+                                                      isFavorite, isCompleted, isEpub),
+            [this, selectedBook, currentSelection, deleteFromFavorites, isCompleted](const ActivityResult& result) {
               if (isLyraCarouselTheme()) {
                 invalidateResidentCarouselFrame();
               }
 
               if (result.isCancelled) {
+                // Refresh home when returning from metadata view
+                if (isLyraCarouselTheme()) {
+                  lastCarouselBookIndex = currentSelection;
+                }
                 requestUpdate(true);
                 return;
               }
 
-              const bool removed = deleteFromFavorites ? FAVORITES.removeBook(selectedBook.path)
-                                                       : RECENT_BOOKS.removeBook(selectedBook.path);
-              if (removed) {
-                const auto& metrics = UITheme::getInstance().getMetrics();
-                reloadHomeBooks(metrics.homeRecentBooksCount);
-                if (recentBooks.empty()) {
-                  selectorIndex = 0;
-                } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
-                  selectorIndex = static_cast<int>(recentBooks.size()) - 1;
-                } else {
-                  selectorIndex = currentSelection;
+              const auto* menuResult = std::get_if<MenuResult>(&result.data);
+              if (!menuResult) {
+                requestUpdate(true);
+                return;
+              }
+
+              const int action = menuResult->action;
+              switch (action) {
+                case static_cast<int>(BookContextMenuActivity::MenuAction::REMOVE_FROM_RECENTS): {
+                  const bool removed = deleteFromFavorites
+                                           ? FAVORITES.removeBook(selectedBook.path)
+                                           : RECENT_BOOKS.removeBook(selectedBook.path);
+                  if (removed) {
+                    const auto& metrics = UITheme::getInstance().getMetrics();
+                    reloadHomeBooks(metrics.homeRecentBooksCount);
+                    if (recentBooks.empty()) {
+                      selectorIndex = 0;
+                    } else if (currentSelection >= static_cast<int>(recentBooks.size())) {
+                      selectorIndex = static_cast<int>(recentBooks.size()) - 1;
+                    } else {
+                      selectorIndex = currentSelection;
+                    }
+                    if (isLyraCarouselTheme()) {
+                      lastCarouselBookIndex = selectorIndex < static_cast<int>(recentBooks.size()) ? selectorIndex : 0;
+                      preRenderCarouselFrames();
+                    }
+                  }
+                  break;
                 }
-                if (isLyraCarouselTheme()) {
-                  lastCarouselBookIndex = selectorIndex < static_cast<int>(recentBooks.size()) ? selectorIndex : 0;
-                  preRenderCarouselFrames();
+                case static_cast<int>(BookContextMenuActivity::MenuAction::ADD_TO_FAVORITES): {
+                  FAVORITES.toggleBook(selectedBook.path);
+                  break;
+                }
+                case static_cast<int>(BookContextMenuActivity::MenuAction::VIEW_METADATA): {
+                  startActivityForResult(
+                      std::make_unique<BookMetadataActivity>(renderer, mappedInput, selectedBook.path),
+                      [this](const ActivityResult&) { requestFreshHomeRender(true); });
+                  return;
+                }
+                case static_cast<int>(BookContextMenuActivity::MenuAction::MARK_READ_UNREAD): {
+                  // Toggle completed status
+                  READING_STATS.updateProgress(0, !isCompleted);
+                  break;
+                }
+                case static_cast<int>(BookContextMenuActivity::MenuAction::OPEN_BOOK): {
+                  onSelectBook(selectedBook.path);
+                  return;
+                }
+                case static_cast<int>(BookContextMenuActivity::MenuAction::VIEW_STATS): {
+                  activityManager.replaceActivity(
+                      std::make_unique<ReadingStatsDetailActivity>(renderer, mappedInput, selectedBook.path));
+                  return;
+                }
+                case static_cast<int>(BookContextMenuActivity::MenuAction::DELETE_CACHE): {
+                  Epub epub(selectedBook.path, "/.crosspoint");
+                  epub.load(false, true);
+                  epub.clearCache();
+                  break;
                 }
               }
               requestUpdate(true);
