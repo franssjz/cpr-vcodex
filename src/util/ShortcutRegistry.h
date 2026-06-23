@@ -16,6 +16,7 @@ enum class ShortcutId {
   ReadingStats,
   ReadingHeatmap,
   ReadingProfile,
+  Library,
   Achievements,
   IfFound,
   RecentBooks,
@@ -39,8 +40,8 @@ struct ShortcutDefinition {
   uint8_t CrossPointSettings::* visiblePtr;
 };
 
-inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
-  static const std::array<ShortcutDefinition, 17> definitions = {
+inline const std::array<ShortcutDefinition, 18>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, 18> definitions = {
       ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
                          &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder,
                          &CrossPointSettings::browseFilesShortcutVisible},
@@ -61,6 +62,9 @@ inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
                          UIIcon::Library, &CrossPointSettings::readingProfileShortcut,
                          &CrossPointSettings::readingProfileShortcutOrder,
                          &CrossPointSettings::readingProfileShortcutVisible},
+      ShortcutDefinition{ShortcutId::Library, StrId::STR_MENU_LIBRARY, StrId::STR_LIBRARY_APP_DESC, UIIcon::Library,
+                         &CrossPointSettings::libraryShortcut, &CrossPointSettings::libraryShortcutOrder,
+                         &CrossPointSettings::libraryShortcutVisible},
       ShortcutDefinition{ShortcutId::Achievements, StrId::STR_ACHIEVEMENTS, StrId::STR_ACHIEVEMENTS_APP_DESC,
                          UIIcon::Trophy, &CrossPointSettings::achievementsShortcut,
                          &CrossPointSettings::achievementsShortcutOrder, &CrossPointSettings::achievementsShortcutVisible},

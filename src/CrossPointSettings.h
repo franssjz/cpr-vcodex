@@ -232,6 +232,8 @@ class CrossPointSettings {
   };
   enum SHORTCUT_LOCATION { SHORTCUT_HOME = 0, SHORTCUT_APPS = 1, SHORTCUT_LOCATION_COUNT };
   enum HOME_BOOK_SOURCE { HOME_BOOKS_RECENTS = 0, HOME_BOOKS_FAVORITES = 1, HOME_BOOK_SOURCE_COUNT };
+  enum LIBRARY_LAYOUT { LIBRARY_LAYOUT_4X4 = 0, LIBRARY_LAYOUT_3X3 = 1, LIBRARY_LAYOUT_2X2 = 2, LIBRARY_LAYOUT_COUNT };
+  enum LIBRARY_FILTER { LIBRARY_FILTER_ALL = 0, LIBRARY_FILTER_COUNT };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
 
   // Image rendering in EPUB reader
@@ -343,6 +345,8 @@ class CrossPointSettings {
   uint8_t readingStatsShortcutOrder = 5;
   uint8_t readingHeatmapShortcut = SHORTCUT_APPS;
   uint8_t readingHeatmapShortcutOrder = 6;
+  uint8_t libraryShortcut = SHORTCUT_APPS;
+  uint8_t libraryShortcutOrder = 7;
   uint8_t readingProfileShortcut = SHORTCUT_APPS;
   uint8_t readingProfileShortcutOrder = 7;
   uint8_t achievementsShortcut = SHORTCUT_APPS;
@@ -377,6 +381,7 @@ class CrossPointSettings {
   uint8_t readingStatsShortcutVisible = 1;
   uint8_t readingHeatmapShortcutVisible = 1;
   uint8_t readingProfileShortcutVisible = 1;
+  uint8_t libraryShortcutVisible = 1;
   uint8_t achievementsShortcutVisible = 1;
   uint8_t ifFoundShortcutVisible = 1;
   uint8_t readMeShortcutVisible = 1;
@@ -395,6 +400,8 @@ class CrossPointSettings {
   uint8_t embeddedStyle = 1;
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
+  uint8_t libraryLayout = LIBRARY_LAYOUT_4X4;
+  uint8_t libraryFilter = LIBRARY_FILTER_ALL;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
 

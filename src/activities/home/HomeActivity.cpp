@@ -34,6 +34,7 @@
 #include "activities/apps/IfFoundActivity.h"
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
+#include "activities/apps/LibraryActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "activities/apps/SleepAppActivity.h"
@@ -1063,6 +1064,9 @@ void HomeActivity::loop() {
         case ShortcutId::ReadingProfile:
           startActivityForResult(std::make_unique<ReadingProfileActivity>(renderer, mappedInput),
                                  [this](const ActivityResult&) { requestFreshHomeRender(true); });
+          break;
+        case ShortcutId::Library:
+          activityManager.goToLibrary();
           break;
         case ShortcutId::Achievements:
           startActivityForResult(std::make_unique<AchievementsActivity>(renderer, mappedInput),

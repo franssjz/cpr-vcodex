@@ -143,6 +143,11 @@ const std::vector<SettingInfo>& getSettingsList() {
                             "achievementsEnabled", StrId::STR_APPS),
         SettingInfo::Toggle(StrId::STR_ACHIEVEMENT_POPUPS, &CrossPointSettings::achievementPopups, "achievementPopups",
                             StrId::STR_APPS),
+        SettingInfo::Enum(StrId::STR_LIBRARY_LAYOUT, &CrossPointSettings::libraryLayout,
+                          {StrId::STR_LIBRARY_4X4, StrId::STR_LIBRARY_3X3, StrId::STR_LIBRARY_2X2},
+                          "libraryLayout", StrId::STR_APPS),
+        SettingInfo::Enum(StrId::STR_LIBRARY_FILTER, &CrossPointSettings::libraryFilter,
+                          {StrId::STR_ALL_BOOKS}, "libraryFilter", StrId::STR_APPS),
 
         // --- Shortcuts (web-only launcher placement) ---
         SettingInfo::Enum(StrId::STR_BROWSE_FILES, &CrossPointSettings::browseFilesShortcut,

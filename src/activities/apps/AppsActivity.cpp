@@ -193,6 +193,9 @@ void AppsActivity::openSelectedApp() {
     case ShortcutId::FileTransfer:
       activityManager.goToFileTransfer();
       return;
+    case ShortcutId::Library:
+      activityManager.goToLibrary();
+      return;
     case ShortcutId::ScreenClean:
       activity = std::make_unique<ScreenCleanActivity>(renderer, mappedInput);
       break;
