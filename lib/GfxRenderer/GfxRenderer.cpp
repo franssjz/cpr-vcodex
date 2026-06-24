@@ -5,6 +5,7 @@
 #include <Logging.h>
 #include <SdCardFont.h>
 #include <Utf8.h>
+#include <freertos/task.h>
 
 #include <algorithm>
 #include <climits>
@@ -99,6 +100,75 @@ void GfxRenderer::begin() {
   panelWidthBytes = display.getDisplayWidthBytes();
   frameBufferSize = display.getBufferSize();
   bwBufferChunks.assign((frameBufferSize + BW_BUFFER_CHUNK_SIZE - 1) / BW_BUFFER_CHUNK_SIZE, nullptr);
+  if (!bitmapScratchMutex_) {
+    bitmapScratchMutex_ = xSemaphoreCreateMutex();
+  }
+}
+
+GfxRenderer::BitmapScratchLock::BitmapScratchLock(const GfxRenderer& renderer) : renderer_(renderer) {
+  if (renderer_.bitmapScratchMutex_ == nullptr) {
+    LOG_ERR("GFX", "!! Bitmap scratch mutex is not initialized");
+    assert(false);
+    return;
+  }
+
+  const auto takeResult = xSemaphoreTake(renderer_.bitmapScratchMutex_, portMAX_DELAY);
+  if (takeResult != pdTRUE) {
+    LOG_ERR("GFX", "!! Failed to acquire bitmap scratch mutex");
+    assert(false);
+    return;
+  }
+  locked_ = true;
+}
+
+GfxRenderer::BitmapScratchLock::~BitmapScratchLock() {
+  if (!locked_) return;
+  xSemaphoreGive(renderer_.bitmapScratchMutex_);
+}
+
+void GfxRenderer::freeBitmapScratchBuffers() {
+  free(bitmapScratchOutputRow_);
+  bitmapScratchOutputRow_ = nullptr;
+  bitmapScratchOutputRowSize_ = 0;
+
+  free(bitmapScratchRowBytes_);
+  bitmapScratchRowBytes_ = nullptr;
+  bitmapScratchRowBytesSize_ = 0;
+}
+
+bool GfxRenderer::bitmapScratchLockHeldByCurrentTask() const {
+  if (bitmapScratchMutex_ == nullptr) return false;
+  return xSemaphoreGetMutexHolder(bitmapScratchMutex_) == xTaskGetCurrentTaskHandle();
+}
+
+bool GfxRenderer::ensureBitmapScratchBuffers(const size_t outputRowSize, const size_t rowBytesSize) const {
+  if (!bitmapScratchLockHeldByCurrentTask()) {
+    LOG_ERR("GFX", "!! Bitmap scratch buffers used without holding scratch mutex");
+    assert(false);
+    return false;
+  }
+
+  if (outputRowSize > bitmapScratchOutputRowSize_) {
+    auto* grownOutput = static_cast<uint8_t*>(realloc(bitmapScratchOutputRow_, outputRowSize));
+    if (!grownOutput) {
+      LOG_ERR("GFX", "!! Failed to grow BMP output row scratch buffer to %zu bytes", outputRowSize);
+      return false;
+    }
+    bitmapScratchOutputRow_ = grownOutput;
+    bitmapScratchOutputRowSize_ = outputRowSize;
+  }
+
+  if (rowBytesSize > bitmapScratchRowBytesSize_) {
+    auto* grownRowBytes = static_cast<uint8_t*>(realloc(bitmapScratchRowBytes_, rowBytesSize));
+    if (!grownRowBytes) {
+      LOG_ERR("GFX", "!! Failed to grow BMP row-bytes scratch buffer to %zu bytes", rowBytesSize);
+      return false;
+    }
+    bitmapScratchRowBytes_ = grownRowBytes;
+    bitmapScratchRowBytesSize_ = rowBytesSize;
+  }
+
+  return true;
 }
 
 bool GfxRenderer::isFontCacheScanning() const { return fontCacheManager_ && fontCacheManager_->isScanning(); }
@@ -245,6 +315,22 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
   const int left = glyph->left;
   const int top = glyph->top;
 
+  // Tiled-grayscale band culling: if this glyph's physical y-extent is entirely
+  // outside the active strip, skip it before the expensive bitmap decode.
+  if constexpr (rotation == TextRotation::Rotated90CW) {
+    const int ob = cursorX + fontData->ascender - top;
+    const int ib = cursorY - left;
+    if (!renderer.glyphIntersectsStrip(ob, ib - (width - 1), ob + height - 1, ib)) {
+      return;
+    }
+  } else {
+    const int gx0 = cursorX + left;
+    const int gy0 = cursorY - top;
+    if (!renderer.glyphIntersectsStrip(gx0, gy0, gx0 + width - 1, gy0 + height - 1)) {
+      return;
+    }
+  }
+
   const uint8_t* bitmap = renderer.getGlyphBitmap(fontData, glyph);
 
   if (bitmap != nullptr) {
@@ -358,14 +444,26 @@ void GfxRenderer::drawPixelRaw(const int x, const int y, const bool state) const
     return;
   }
 
+  // Tiled grayscale: redirect writes to the strip scratch and clip to the
+  // current band. Single predictable branch on the hot per-pixel path.
+  uint8_t* target = frameBuffer;
+  uint32_t rowY = static_cast<uint32_t>(phyY);
+  if (_stripActive) {
+    if (phyY < _stripY0 || phyY >= _stripY0 + _stripRows) {
+      return;
+    }
+    target = _stripBuf;
+    rowY = static_cast<uint32_t>(phyY - _stripY0);
+  }
+
   // Calculate byte position and bit position
-  const uint32_t byteIndex = static_cast<uint32_t>(phyY) * panelWidthBytes + (phyX / 8);
+  const uint32_t byteIndex = rowY * panelWidthBytes + (phyX / 8);
   const uint8_t bitPosition = 7 - (phyX % 8);  // MSB first
 
   if (state) {
-    frameBuffer[byteIndex] &= ~(1 << bitPosition);  // Clear bit
+    target[byteIndex] &= ~(1 << bitPosition);  // Clear bit
   } else {
-    frameBuffer[byteIndex] |= 1 << bitPosition;  // Set bit
+    target[byteIndex] |= 1 << bitPosition;  // Set bit
   }
 }
 
@@ -943,18 +1041,17 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
   }
   LOG_DBG("GFX", "Scaling by %f - %s", scale, isScaled ? "scaled" : "not scaled");
 
+  BitmapScratchLock scratchLock(*this);
+  if (!scratchLock.isLocked()) return;
+
   // Calculate output row size (2 bits per pixel, packed into bytes)
   // IMPORTANT: Use int, not uint8_t, to avoid overflow for images > 1020 pixels wide
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
-  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
-
-  if (!outputRow || !rowBytes) {
-    LOG_ERR("GFX", "!! Failed to allocate BMP row buffers");
-    free(outputRow);
-    free(rowBytes);
+  if (!ensureBitmapScratchBuffers(outputRowSize, bitmap.getRowBytes())) {
     return;
   }
+  auto* outputRow = bitmapScratchOutputRow_;
+  auto* rowBytes = bitmapScratchRowBytes_;
 
   for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
     // The BMP's (0, 0) is the bottom-left corner (if the height is positive, top-left if negative).
@@ -970,8 +1067,6 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
 
     if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
       LOG_ERR("GFX", "Failed to read row %d from bitmap", bmpY);
-      free(outputRow);
-      free(rowBytes);
       return;
     }
 
@@ -1013,8 +1108,6 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
     }
   }
 
-  free(outputRow);
-  free(rowBytes);
 }
 
 void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y, const int maxWidth,
@@ -1030,24 +1123,21 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
     isScaled = true;
   }
 
+  BitmapScratchLock scratchLock(*this);
+  if (!scratchLock.isLocked()) return;
+
   // For 1-bit BMP, output is still 2-bit packed (for consistency with readNextRow)
   const int outputRowSize = (bitmap.getWidth() + 3) / 4;
-  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
-  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
-
-  if (!outputRow || !rowBytes) {
-    LOG_ERR("GFX", "!! Failed to allocate 1-bit BMP row buffers");
-    free(outputRow);
-    free(rowBytes);
+  if (!ensureBitmapScratchBuffers(outputRowSize, bitmap.getRowBytes())) {
     return;
   }
+  auto* outputRow = bitmapScratchOutputRow_;
+  auto* rowBytes = bitmapScratchRowBytes_;
 
   for (int bmpY = 0; bmpY < bitmap.getHeight(); bmpY++) {
     // Read rows sequentially using readNextRow
     if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
       LOG_ERR("GFX", "Failed to read row %d from 1-bit bitmap", bmpY);
-      free(outputRow);
-      free(rowBytes);
       return;
     }
 
@@ -1082,8 +1172,6 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
     }
   }
 
-  free(outputRow);
-  free(rowBytes);
 }
 
 void GfxRenderer::fillPolygon(const int* xPoints, const int* yPoints, int numPoints, bool state) const {
@@ -1151,8 +1239,38 @@ static unsigned long start_ms = 0;
 
 void GfxRenderer::clearScreen(const uint8_t color) const {
   start_ms = millis();
+  if (_stripActive) {
+    memset(_stripBuf, color, static_cast<size_t>(panelWidthBytes) * _stripRows);
+    return;
+  }
   const uint8_t effectiveColor = (darkMode && renderMode == BW && color == 0xFF) ? 0x00 : color;
   display.clearScreen(effectiveColor);
+}
+
+void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const {
+  _stripBuf = scratch;
+  _stripY0 = stripY0;
+  _stripRows = stripRows;
+  _stripActive = true;
+}
+
+void GfxRenderer::endStripTarget() const {
+  _stripActive = false;
+  _stripBuf = nullptr;
+  _stripY0 = 0;
+  _stripRows = 0;
+}
+
+bool GfxRenderer::glyphIntersectsStrip(int x0, int y0, int x1, int y1) const {
+  if (!_stripActive) {
+    return true;
+  }
+  int ax, ay, bx, by;
+  rotateCoordinates(orientation, x0, y0, &ax, &ay, panelWidth, panelHeight);
+  rotateCoordinates(orientation, x1, y1, &bx, &by, panelWidth, panelHeight);
+  const int minY = ay < by ? ay : by;
+  const int maxY = ay > by ? ay : by;
+  return !(maxY < _stripY0 || minY >= _stripY0 + _stripRows);
 }
 
 void GfxRenderer::invertScreen() const {
@@ -1599,7 +1717,15 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
-void GfxRenderer::displayGrayBuffer() const { display.displayGrayBuffer(fadingFix); }
+void GfxRenderer::displayGrayBuffer(const bool turnOffScreen) const {
+  display.displayGrayBuffer(fadingFix || turnOffScreen);
+}
+
+void GfxRenderer::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const {
+  display.writeGrayscalePlaneStrip(lsbPlane, scratch, static_cast<uint16_t>(yStart), static_cast<uint16_t>(numRows));
+}
+
+bool GfxRenderer::supportsStripGrayscale() const { return display.supportsStripGrayscale(); }
 
 void GfxRenderer::freeBwBufferChunks() {
   for (auto& bwBufferChunk : bwBufferChunks) {

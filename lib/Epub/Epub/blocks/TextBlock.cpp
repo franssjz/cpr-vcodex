@@ -78,7 +78,7 @@ void TextBlock::recordFontUsage(FontCacheManager& fontCacheManager, const int fo
     const EpdFontFamily::Style style = wordStyles[i];
     fontCacheManager.recordText(words[i].c_str(), fontId, style);
     if (bionicReadingMode == BIONIC_READING_NORMAL && (style & EpdFontFamily::BOLD) == 0) {
-      fontCacheManager.recordStyle(fontId, static_cast<EpdFontFamily::Style>(style | EpdFontFamily::BOLD));
+      fontCacheManager.recordText(" ", fontId, static_cast<EpdFontFamily::Style>(style | EpdFontFamily::BOLD));
     }
   }
 }

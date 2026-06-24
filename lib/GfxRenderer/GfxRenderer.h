@@ -2,6 +2,8 @@
 
 #include <EpdFontFamily.h>
 #include <HalDisplay.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 class FontCacheManager;
 class SdCardFont;
@@ -57,10 +59,28 @@ class GfxRenderer {
   mutable bool nextRefreshOverridePending = false;
   mutable HalDisplay::RefreshMode nextRefreshOverride = HalDisplay::FAST_REFRESH;
 
+  // Tiled grayscale strip target. When active, drawPixel()/clearScreen()
+  // operate on a caller-owned scratch holding one horizontal band of physical
+  // rows [_stripY0, _stripY0 + _stripRows) instead of the shared framebuffer.
+  mutable uint8_t* _stripBuf = nullptr;
+  mutable int _stripY0 = 0;
+  mutable int _stripRows = 0;
+  mutable bool _stripActive = false;
+
   // Mutable because drawText() is const but needs to delegate scan-mode
   // recording to the (non-const) FontCacheManager. Same pragmatic compromise
   // as before, concentrated in a single pointer instead of four fields.
   mutable FontCacheManager* fontCacheManager_ = nullptr;
+
+  // Shared bitmap row scratch buffers (pooled to avoid per-draw malloc/free).
+  mutable SemaphoreHandle_t bitmapScratchMutex_ = nullptr;
+  mutable uint8_t* bitmapScratchOutputRow_ = nullptr;
+  mutable size_t bitmapScratchOutputRowSize_ = 0;
+  mutable uint8_t* bitmapScratchRowBytes_ = nullptr;
+  mutable size_t bitmapScratchRowBytesSize_ = 0;
+  bool bitmapScratchLockHeldByCurrentTask() const;
+  bool ensureBitmapScratchBuffers(size_t outputRowSize, size_t rowBytesSize) const;
+  void freeBitmapScratchBuffers();
 
   void renderChar(const EpdFontFamily& fontFamily, uint32_t cp, int* x, int* y, bool pixelState,
                   EpdFontFamily::Style style) const;
@@ -74,7 +94,23 @@ class GfxRenderer {
  public:
   explicit GfxRenderer(HalDisplay& halDisplay)
       : display(halDisplay), renderMode(BW), orientation(Portrait), fadingFix(false), darkMode(false) {}
-  ~GfxRenderer() { freeBwBufferChunks(); }
+  ~GfxRenderer() {
+    freeBwBufferChunks();
+    freeBitmapScratchBuffers();
+  }
+
+  class BitmapScratchLock {
+   public:
+    explicit BitmapScratchLock(const GfxRenderer& renderer);
+    ~BitmapScratchLock();
+    bool isLocked() const { return locked_; }
+    BitmapScratchLock(const BitmapScratchLock&) = delete;
+    BitmapScratchLock& operator=(const BitmapScratchLock&) = delete;
+
+   private:
+    const GfxRenderer& renderer_;
+    bool locked_ = false;
+  };
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
   static constexpr int VIEWABLE_MARGIN_RIGHT = 3;
@@ -128,6 +164,14 @@ class GfxRenderer {
   void invertScreen() const;
   void clearScreen(uint8_t color = 0xFF) const;
   void getOrientedViewableTRBL(int* outTop, int* outRight, int* outBottom, int* outLeft) const;
+
+  // Tiled grayscale strip targeting
+  void beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const;
+  void endStripTarget() const;
+  bool glyphIntersectsStrip(int x0, int y0, int x1, int y1) const;
+  uint8_t* getWriteTarget() const { return _stripActive ? _stripBuf : frameBuffer; }
+  int getWriteOriginY() const { return _stripActive ? _stripY0 : 0; }
+  int getWriteRows() const { return _stripActive ? _stripRows : panelHeight; }
 
   // Drawing
   void drawPixel(int x, int y, bool state = true) const;
@@ -189,7 +233,9 @@ class GfxRenderer {
   RenderMode getRenderMode() const { return renderMode; }
   void copyGrayscaleLsbBuffers() const;
   void copyGrayscaleMsbBuffers() const;
-  void displayGrayBuffer() const;
+  void displayGrayBuffer(bool turnOffScreen = false) const;
+  void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const;
+  bool supportsStripGrayscale() const;
   bool storeBwBuffer();    // Returns true if buffer was stored successfully
   void restoreBwBuffer();  // Restore and free the stored buffer
   void cleanupGrayscaleWithFrameBuffer() const;

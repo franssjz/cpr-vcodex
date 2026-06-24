@@ -10,8 +10,10 @@
 #include <Logging.h>
 #include <MemoryBudget.h>
 
+#include <algorithm>
 #include <iterator>
 #include <limits>
+#include <memory>
 
 #include "AchievementsStore.h"
 #include "BookmarksActivity.h"
@@ -55,6 +57,67 @@ int clampPercent(int percent) {
     return 100;
   }
   return percent;
+}
+
+struct TiledGrayscaleTimings {
+  unsigned long grayLsb = 0;
+  unsigned long grayMsb = 0;
+  unsigned long grayDisplay = 0;
+  unsigned long cleanup = 0;
+};
+
+// Stream grayscale planes to the EPD controller in 80-row bands instead of
+// storing+restoring a full 48KB BW backup.  Uses only ~8KB scratch, never
+// touches the live BW framebuffer, and culls glyphs outside each band for
+// speed.  Returns false (without side-effects) when the strip path is
+// unavailable or the scratch allocation fails; the caller should fall back to
+// the legacy full-frame approach.
+bool runTiledGrayscalePass(GfxRenderer& renderer, const Page& page, const int fontId, const int marginLeft,
+                           const int marginTop, const uint8_t bionicReading, const bool needsTextGrayscale,
+                           const bool needsImageGrayscale, TiledGrayscaleTimings& timings) {
+  if ((!needsTextGrayscale && !needsImageGrayscale) || !renderer.supportsStripGrayscale()) {
+    return false;
+  }
+
+  constexpr int STRIP_ROWS = 80;
+  const int displayHeight = renderer.getDisplayHeight();
+  const int displayWidthBytes = renderer.getDisplayWidthBytes();
+  auto scratch =
+      std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[static_cast<size_t>(displayWidthBytes) * STRIP_ROWS]);
+  if (!scratch) {
+    LOG_ERR("ERS", "OOM: grayscale strip scratch (%d bytes); falling back to full-frame",
+            displayWidthBytes * STRIP_ROWS);
+    return false;
+  }
+
+  const auto renderPlane = [&](const GfxRenderer::RenderMode mode, const bool lsbPlane) {
+    renderer.setRenderMode(mode);
+    for (int y = 0; y < displayHeight; y += STRIP_ROWS) {
+      const int rows = std::min(STRIP_ROWS, displayHeight - y);
+      renderer.beginStripTarget(scratch.get(), y, rows);
+      renderer.clearScreen(0x00);
+      if (needsTextGrayscale) {
+        page.render(renderer, fontId, marginLeft, marginTop, bionicReading);
+      } else {
+        page.renderImages(renderer, marginLeft, marginTop);
+      }
+      renderer.endStripTarget();
+      renderer.writeGrayscalePlaneStrip(lsbPlane, scratch.get(), y, rows);
+    }
+  };
+
+  renderPlane(GfxRenderer::GRAYSCALE_LSB, true);
+  timings.grayLsb = millis();
+
+  renderPlane(GfxRenderer::GRAYSCALE_MSB, false);
+  timings.grayMsb = millis();
+
+  renderer.setRenderMode(GfxRenderer::BW);
+  renderer.displayGrayBuffer();
+  timings.grayDisplay = millis();
+  renderer.cleanupGrayscaleWithFrameBuffer();
+  timings.cleanup = millis();
+  return true;
 }
 
 std::string getStatsChapterTitle(Epub& epub, const int spineIndex) {
@@ -1515,64 +1578,85 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
 
   const bool needsGrayscale = enableTextAA || enableImageGrayscaleOnly;
 
-  // Save BW buffer to reset framebuffer and controller state after grayscale data sync.
-  const auto bwStoreHeapBefore = MemoryBudget::snapshot();
-  const bool storedBwBuffer = needsGrayscale && renderer.storeBwBuffer();
-  const auto bwStoreHeapAfter = MemoryBudget::snapshot();
-  const auto tBwStore = millis();
-  if (needsGrayscale && !storedBwBuffer) {
-    LOG_ERR("ERS", "Skipping grayscale enhancement: failed to store BW backup (free=%u maxAlloc=%u before=%u/%u)",
-            bwStoreHeapAfter.freeHeap, bwStoreHeapAfter.maxAllocHeap, bwStoreHeapBefore.freeHeap,
-            bwStoreHeapBefore.maxAllocHeap);
+  // Grayscale rendering: try the tiled strip path first (8KB scratch, no BW
+  // backup needed), then fall back to the legacy full-frame path if it fails.
+  bool grayscaleDone = false;
+  if (needsGrayscale) {
+    TiledGrayscaleTimings tiledTimings;
+    const auto tGrayStart = millis();
+    grayscaleDone = runTiledGrayscalePass(renderer, *page, SETTINGS.getReaderFontId(), orientedMarginLeft,
+                                          orientedMarginTop, SETTINGS.bionicReading, enableTextAA,
+                                          enableImageGrayscaleOnly, tiledTimings);
+    if (grayscaleDone) {
+      fcm->logStats("gray-tiled");
+      const auto tEnd = millis();
+      LOG_DBG("ERS",
+              "Page render: prewarm=%lums bw_render=%lums display=%lums "
+              "gray_lsb=%lums gray_msb=%lums gray_display=%lums gray_cleanup=%lums total=%lums (tiled)",
+              tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tiledTimings.grayLsb - tGrayStart,
+              tiledTimings.grayMsb - tiledTimings.grayLsb, tiledTimings.grayDisplay - tiledTimings.grayMsb,
+              tiledTimings.cleanup - tiledTimings.grayDisplay, tEnd - t0);
+    }
   }
 
-  // grayscale rendering
-  // TODO: Only do this if font supports it
-  if (needsGrayscale && storedBwBuffer) {
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
-    if (enableImageGrayscaleOnly) {
-      page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
+  // Legacy full-frame grayscale fallback: store 48KB BW → clear → render LSB →
+  // copy → clear → render MSB → copy → display → restore BW.
+  if (needsGrayscale && !grayscaleDone) {
+    const auto bwStoreHeapBefore = MemoryBudget::snapshot();
+    const bool storedBwBuffer = renderer.storeBwBuffer();
+    const auto bwStoreHeapAfter = MemoryBudget::snapshot();
+    const auto tBwStore = millis();
+    if (!storedBwBuffer) {
+      LOG_ERR("ERS", "Skipping grayscale enhancement: failed to store BW backup (free=%u maxAlloc=%u before=%u/%u)",
+              bwStoreHeapAfter.freeHeap, bwStoreHeapAfter.maxAllocHeap, bwStoreHeapBefore.freeHeap,
+              bwStoreHeapBefore.maxAllocHeap);
     } else {
-      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
+      renderer.clearScreen(0x00);
+      renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+      if (enableImageGrayscaleOnly) {
+        page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
+      } else {
+        page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop,
+                     SETTINGS.bionicReading);
+      }
+      renderStatusBar();
+      renderer.copyGrayscaleLsbBuffers();
+      const auto tGrayLsb = millis();
+
+      renderer.clearScreen(0x00);
+      renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
+      if (enableImageGrayscaleOnly) {
+        page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
+      } else {
+        page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop,
+                     SETTINGS.bionicReading);
+      }
+      renderStatusBar();
+      renderer.copyGrayscaleMsbBuffers();
+      const auto tGrayMsb = millis();
+
+      renderer.displayGrayBuffer();
+      const auto tGrayDisplay = millis();
+      renderer.setRenderMode(GfxRenderer::BW);
+      fcm->logStats("gray");
+
+      renderer.restoreBwBuffer();
+      const auto tBwRestore = millis();
+
+      const auto tEnd = millis();
+      LOG_DBG("ERS",
+              "Page render: prewarm=%lums bw_render=%lums display=%lums bw_store=%lums "
+              "gray_lsb=%lums gray_msb=%lums gray_display=%lums bw_restore=%lums total=%lums (full-frame)",
+              tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tBwStore - tDisplay, tGrayLsb - tBwStore,
+              tGrayMsb - tGrayLsb, tGrayDisplay - tGrayMsb, tBwRestore - tGrayDisplay, tEnd - t0);
+      grayscaleDone = true;
     }
-    renderStatusBar();
-    renderer.copyGrayscaleLsbBuffers();
-    const auto tGrayLsb = millis();
+  }
 
-    // Render and copy to MSB buffer
-    renderer.clearScreen(0x00);
-    renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-    if (enableImageGrayscaleOnly) {
-      page->renderImages(renderer, orientedMarginLeft, orientedMarginTop);
-    } else {
-      page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
-    }
-    renderStatusBar();
-    renderer.copyGrayscaleMsbBuffers();
-    const auto tGrayMsb = millis();
-
-    // display grayscale part
-    renderer.displayGrayBuffer();
-    const auto tGrayDisplay = millis();
-    renderer.setRenderMode(GfxRenderer::BW);
-    fcm->logStats("gray");
-
-    // restore the bw data
-    renderer.restoreBwBuffer();
-    const auto tBwRestore = millis();
-
+  if (!grayscaleDone) {
     const auto tEnd = millis();
-    LOG_DBG("ERS",
-            "Page render: prewarm=%lums bw_render=%lums display=%lums bw_store=%lums "
-            "gray_lsb=%lums gray_msb=%lums gray_display=%lums bw_restore=%lums total=%lums",
-            tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tBwStore - tDisplay, tGrayLsb - tBwStore,
-            tGrayMsb - tGrayLsb, tGrayDisplay - tGrayMsb, tBwRestore - tGrayDisplay, tEnd - t0);
-  } else {
-    const auto tEnd = millis();
-    LOG_DBG("ERS", "Page render: prewarm=%lums bw_render=%lums display=%lums bw_store=%lums grayscale=%s total=%lums",
-            tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tBwStore - tDisplay,
-            needsGrayscale ? "skipped" : "off", tEnd - t0);
+    LOG_DBG("ERS", "Page render: prewarm=%lums bw_render=%lums display=%lums grayscale=%s total=%lums", tPrewarm - t0,
+            tBwRender - tPrewarm, tDisplay - tBwRender, needsGrayscale ? "skipped" : "off", tEnd - t0);
   }
 }
 

@@ -17,6 +17,10 @@ struct DirectPixelWriter {
   GfxRenderer::RenderMode mode;
   bool darkMode;
   uint16_t displayWidthBytes;  // Runtime framebuffer stride (X4: 100, X3: 99)
+  // Active write target: for tiled grayscale, fb is the band scratch, originY is
+  // the band's top physical row, and clipRows is the band height.
+  int originY;
+  int clipRows;
 
   // Orientation is collapsed into a linear transform:
   //   phyX = phyXBase + x * phyXStepX + y * phyXStepY
@@ -29,7 +33,9 @@ struct DirectPixelWriter {
   int rowPhyXBase, rowPhyYBase;
 
   void init(GfxRenderer& renderer) {
-    fb = renderer.getFrameBuffer();
+    fb = renderer.getWriteTarget();
+    originY = renderer.getWriteOriginY();
+    clipRows = renderer.getWriteRows();
     mode = renderer.getRenderMode();
     darkMode = renderer.isDarkMode();
     displayWidthBytes = renderer.getDisplayWidthBytes();
@@ -93,14 +99,34 @@ struct DirectPixelWriter {
     rowPhyYBase = phyYBase + logicalY * phyYStepY;
   }
 
-  // For the current row (set via beginRow), narrow [colStart, colEnd) to the
-  // active output band. CPR-vCodex renders grayscale against a full framebuffer,
-  // so every column remains active here. Upstream tiled renderers override this
-  // with a narrower range.
   inline void bandColRange(int xBase, int width, int& colStart, int& colEnd) const {
-    (void)xBase;
     colStart = 0;
     colEnd = width;
+
+    const int bandMin = originY;
+    const int bandMax = originY + clipRows - 1;
+    if (phyYStepX == 0) {
+      if (rowPhyYBase < bandMin || rowPhyYBase > bandMax) {
+        colEnd = 0;
+      }
+      return;
+    }
+
+    int minCol;
+    int maxCol;
+    if (phyYStepX > 0) {
+      minCol = bandMin - rowPhyYBase - xBase;
+      maxCol = bandMax - rowPhyYBase - xBase;
+    } else {
+      minCol = rowPhyYBase - bandMax - xBase;
+      maxCol = rowPhyYBase - bandMin - xBase;
+    }
+
+    if (minCol > colStart) colStart = minCol;
+    if (maxCol + 1 < colEnd) colEnd = maxCol + 1;
+    if (colStart < 0) colStart = 0;
+    if (colEnd > width) colEnd = width;
+    if (colStart > colEnd) colStart = colEnd;
   }
 
   // Write a single 2-bit dithered pixel value to the framebuffer.
@@ -132,7 +158,12 @@ struct DirectPixelWriter {
     const int phyX = rowPhyXBase + logicalX * phyXStepX;
     const int phyY = rowPhyYBase + logicalX * phyYStepX;
 
-    const uint16_t byteIndex = phyY * displayWidthBytes + (phyX >> 3);
+    // Band-local row. The unsigned compare drops both off-band pixels (strip
+    // mode) and any out-of-frame row (full-frame mode) in one branch.
+    const int sy = phyY - originY;
+    if (static_cast<unsigned>(sy) >= static_cast<unsigned>(clipRows)) return;
+
+    const uint16_t byteIndex = static_cast<uint16_t>(sy * displayWidthBytes + (phyX >> 3));
     const uint8_t bitMask = 1 << (7 - (phyX & 7));
 
     if (state) {
