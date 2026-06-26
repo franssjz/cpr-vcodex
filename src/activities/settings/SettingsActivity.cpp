@@ -214,6 +214,44 @@ const std::vector<SettingInfo>& getDeviceOnlyAppSettings() {
       SettingInfo::Enum(StrId::STR_LIBRARY_FILTER, &CrossPointSettings::libraryFilter,
                         {StrId::STR_ALL_BOOKS, StrId::STR_FAVOURITES, StrId::STR_LATEST_READ}),
       SettingInfo::String(StrId::STR_LIBRARY_ROOT_DIR, SETTINGS.libraryRootDir, sizeof(SETTINGS.libraryRootDir)),
+      SettingInfo::Section(StrId::STR_SCREENSAVER),
+      SettingInfo::String(StrId::STR_SCREENSAVER_DIRECTORY, SETTINGS.screenSaverDirectory, sizeof(SETTINGS.screenSaverDirectory)),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_ORDER, &CrossPointSettings::screenSaverOrder,
+                        {StrId::STR_SHUFFLE, StrId::STR_SEQUENTIAL}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_INTERVAL, &CrossPointSettings::screenSaverInterval,
+                        {StrId::STR_SCREENSAVER_INTERVAL_1M, StrId::STR_SCREENSAVER_INTERVAL_5M,
+                         StrId::STR_SCREENSAVER_INTERVAL_15M, StrId::STR_SCREENSAVER_INTERVAL_30M,
+                         StrId::STR_SCREENSAVER_INTERVAL_1H, StrId::STR_SCREENSAVER_INTERVAL_2H,
+                         StrId::STR_SCREENSAVER_INTERVAL_4H, StrId::STR_SCREENSAVER_INTERVAL_8H}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_WAKE_BUTTON, &CrossPointSettings::screenSaverWakeButton,
+                        {StrId::STR_SCREENSAVER_WAKE_ANY, StrId::STR_SCREENSAVER_WAKE_BACK,
+                         StrId::STR_SCREENSAVER_WAKE_CONFIRM, StrId::STR_SCREENSAVER_WAKE_LEFT,
+                         StrId::STR_SCREENSAVER_WAKE_RIGHT, StrId::STR_SCREENSAVER_WAKE_UP,
+                         StrId::STR_SCREENSAVER_WAKE_DOWN, StrId::STR_SCREENSAVER_WAKE_POWER,
+                         StrId::STR_SCREENSAVER_WAKE_PAGE_BACK, StrId::STR_SCREENSAVER_WAKE_PAGE_FORWARD}),
+      SettingInfo::Section(StrId::STR_SCREENSAVER_TEXT_SECTION),
+      SettingInfo::String(StrId::STR_SCREENSAVER_TEXT, SETTINGS.screenSaverText, sizeof(SETTINGS.screenSaverText)),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_FONT_SIZE_OPT, &CrossPointSettings::screenSaverFontSize,
+                        {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_TEXT_POSITION_OPT, &CrossPointSettings::screenSaverTextPosition,
+                        {StrId::STR_SCREENSAVER_TEXT_POS_TOP_LEFT, StrId::STR_SCREENSAVER_TEXT_POS_TOP_RIGHT,
+                         StrId::STR_SCREENSAVER_TEXT_POS_BOTTOM_LEFT, StrId::STR_SCREENSAVER_TEXT_POS_BOTTOM_RIGHT,
+                         StrId::STR_SCREENSAVER_TEXT_POS_CENTER, StrId::STR_SCREENSAVER_TEXT_POS_RANDOM}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_TEXT_STYLE_OPT, &CrossPointSettings::screenSaverTextStyle,
+                        {StrId::STR_SCREENSAVER_TEXT_WHITE, StrId::STR_SCREENSAVER_TEXT_BLACK,
+                         StrId::STR_SCREENSAVER_TEXT_WHITE_OUTLINED, StrId::STR_SCREENSAVER_TEXT_BLACK_OUTLINED}),
+      SettingInfo::Toggle(StrId::STR_SCREENSAVER_SHOW_PANEL, &CrossPointSettings::screenSaverShowPanel),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_PANEL_COLOR, &CrossPointSettings::screenSaverPanelColor,
+                        {StrId::STR_DARK, StrId::STR_LIGHT}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_PANEL_OPACITY, &CrossPointSettings::screenSaverPanelOpacity,
+                        {StrId::STR_SCREENSAVER_OPACITY_25, StrId::STR_SCREENSAVER_OPACITY_50,
+                         StrId::STR_SCREENSAVER_OPACITY_75, StrId::STR_SCREENSAVER_OPACITY_100}),
+      SettingInfo::Enum(StrId::STR_SCREENSAVER_MIN_BATTERY, &CrossPointSettings::screenSaverMinBattery,
+                        {StrId::STR_SCREENSAVER_BAT_10, StrId::STR_SCREENSAVER_BAT_20,
+                         StrId::STR_SCREENSAVER_BAT_30, StrId::STR_SCREENSAVER_BAT_40,
+                         StrId::STR_SCREENSAVER_BAT_50, StrId::STR_SCREENSAVER_BAT_60,
+                         StrId::STR_SCREENSAVER_BAT_70, StrId::STR_SCREENSAVER_BAT_80,
+                         StrId::STR_SCREENSAVER_BAT_90}),
       SettingInfo::Section(StrId::STR_FLASHCARDS),
       SettingInfo::Action(StrId::STR_FLASHCARDS, SettingAction::Flashcards),
       SettingInfo::Enum(StrId::STR_STUDY_MODE, &CrossPointSettings::flashcardStudyMode,
@@ -559,8 +597,10 @@ void SettingsActivity::toggleCurrentSetting() {
   const uint8_t previousReadingStatsAutoBackup = SETTINGS.readingStatsAutoBackup;
 
   if (setting.type == SettingType::STRING && setting.stringOffset != 0) {
-    // Open keyboard to edit the string value
-    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput),
+    // Open keyboard to edit the string value, pre-filled with current content
+    const char* strPtr = (const char*)&SETTINGS + setting.stringOffset;
+    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput,
+                            std::string(I18N.get(setting.nameId)), std::string(strPtr)),
                            [this, setting](const ActivityResult& result) {
                              if (!result.isCancelled) {
                                const auto* kbResult = std::get_if<KeyboardResult>(&result.data);

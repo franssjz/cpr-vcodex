@@ -394,6 +394,20 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadString("libraryRootDir", s.libraryRootDir, sizeof(s.libraryRootDir));
   s.libraryLastCleanupDay = doc["libraryLastCleanupDay"] | static_cast<uint8_t>(0);
 
+  loadString("screenSaverDirectory", s.screenSaverDirectory, sizeof(s.screenSaverDirectory));
+  loadEnum("screenSaverOrder", s.screenSaverOrder, CrossPointSettings::SCREENSAVER_ORDER_COUNT);
+  loadEnum("screenSaverInterval", s.screenSaverInterval, CrossPointSettings::SCREENSAVER_INTERVAL_COUNT);
+  loadEnum("screenSaverWakeButton", s.screenSaverWakeButton, CrossPointSettings::SCREENSAVER_WAKE_BUTTON_COUNT);
+
+  loadString("screenSaverText", s.screenSaverText, sizeof(s.screenSaverText));
+  loadEnum("screenSaverFontSize", s.screenSaverFontSize, CrossPointSettings::SCREENSAVER_FONT_SIZE_COUNT);
+  loadEnum("screenSaverTextPosition", s.screenSaverTextPosition, CrossPointSettings::SCREENSAVER_TEXT_POSITION_COUNT);
+  loadEnum("screenSaverTextStyle", s.screenSaverTextStyle, CrossPointSettings::SCREENSAVER_TEXT_STYLE_COUNT);
+  loadToggle("screenSaverShowPanel", s.screenSaverShowPanel);
+  loadEnum("screenSaverPanelColor", s.screenSaverPanelColor, static_cast<uint8_t>(2));
+  loadEnum("screenSaverPanelOpacity", s.screenSaverPanelOpacity, static_cast<uint8_t>(4));
+  loadEnum("screenSaverMinBattery", s.screenSaverMinBattery, static_cast<uint8_t>(9));
+
   loadString("opdsServerUrl", s.opdsServerUrl, sizeof(s.opdsServerUrl));
   loadString("opdsUsername", s.opdsUsername, sizeof(s.opdsUsername));
   loadEnum("opdsFilenameFormat", s.opdsFilenameFormat, CrossPointSettings::OPDS_FILENAME_FORMAT_COUNT);
@@ -759,6 +773,30 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     }
   }
   doc["libraryLastCleanupDay"] = s.libraryLastCleanupDay;
+
+  {
+    const std::string ssDir(s.screenSaverDirectory);
+    if (!ssDir.empty()) {
+      doc["screenSaverDirectory"] = ssDir;
+    }
+  }
+  doc["screenSaverOrder"] = s.screenSaverOrder;
+  doc["screenSaverInterval"] = s.screenSaverInterval;
+  doc["screenSaverWakeButton"] = s.screenSaverWakeButton;
+
+  {
+    const std::string ssText(s.screenSaverText);
+    if (!ssText.empty()) {
+      doc["screenSaverText"] = ssText;
+    }
+  }
+  doc["screenSaverFontSize"] = s.screenSaverFontSize;
+  doc["screenSaverTextPosition"] = s.screenSaverTextPosition;
+  doc["screenSaverTextStyle"] = s.screenSaverTextStyle;
+  doc["screenSaverShowPanel"] = s.screenSaverShowPanel;
+  doc["screenSaverPanelColor"] = s.screenSaverPanelColor;
+  doc["screenSaverPanelOpacity"] = s.screenSaverPanelOpacity;
+  doc["screenSaverMinBattery"] = s.screenSaverMinBattery;
 
   doc["displayDay"] = s.displayDay;
   doc["syncDayWifiChoice"] = s.syncDayWifiChoice;

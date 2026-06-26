@@ -28,6 +28,7 @@ enum class ShortcutId {
   ScreenClean,
   Sleep,
   OpdsBrowser,
+  ScreenSaver,
 };
 
 struct ShortcutDefinition {
@@ -40,8 +41,8 @@ struct ShortcutDefinition {
   uint8_t CrossPointSettings::* visiblePtr;
 };
 
-inline const std::array<ShortcutDefinition, 18>& getShortcutDefinitions() {
-  static const std::array<ShortcutDefinition, 18> definitions = {
+inline const std::array<ShortcutDefinition, 19>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, 19> definitions = {
       ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
                          &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder,
                          &CrossPointSettings::browseFilesShortcutVisible},
@@ -99,6 +100,10 @@ inline const std::array<ShortcutDefinition, 18>& getShortcutDefinitions() {
       ShortcutDefinition{ShortcutId::OpdsBrowser, StrId::STR_OPDS_BROWSER, StrId::STR_NONE_OPT, UIIcon::Library,
                          &CrossPointSettings::opdsBrowserShortcut, &CrossPointSettings::opdsBrowserShortcutOrder,
                          &CrossPointSettings::opdsBrowserShortcutVisible},
+      ShortcutDefinition{ShortcutId::ScreenSaver, StrId::STR_SCREENSAVER, StrId::STR_SCREENSAVER_APP_DESC,
+                         UIIcon::Image, &CrossPointSettings::screenSaverShortcut,
+                         &CrossPointSettings::screenSaverShortcutOrder,
+                         &CrossPointSettings::screenSaverShortcutVisible},
   };
 
   return definitions;
