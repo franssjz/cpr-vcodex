@@ -55,30 +55,29 @@ void drawRibbonBadge(GfxRenderer& r, int cx, int cy, int cw, int ch,
   fillTopRightTri(r, rx - 1, ry - 1, leg + 2, false);  // inner white
   fillTopRightTri(r, rx,     ry,     leg,     true);   // core black
 
-  // Small icon in upper-left of triangle (near the corner of the cover)
-  // Symbol centered in the upper-left portion of the triangle, sized to stay
-  // well within the visible filled area.
-  const int symSz = std::max(6, leg * 15 / 100);
-  const int symX = rx + leg * 20 / 100 - symSz / 2;
-  const int symY = ry + leg * 15 / 100 - symSz / 2;
+  // Center the symbol on the triangle's centroid (leg/3 in from the corner)
+  // so it sits inside the filled area and looks balanced at any ribbon size.
+  const int symCx = cx + cw - leg / 3;
+  const int symCy = cy + leg / 3;
+  const int symSz = std::max(8, leg * 22 / 100);
+  const int symX = symCx - symSz / 2;
+  const int symY = symCy - symSz / 2;
 
   if (completed) {
-    // ✓ Checkmark — compact
-    r.drawLine(symX,           symY + symSz / 2, symX + symSz / 3, symY + symSz,     2, false);
-    r.drawLine(symX + symSz / 3, symY + symSz,  symX + symSz,     symY,               2, false);
+    // ✓ Checkmark centered on the centroid
+    r.drawLine(symCx - 5, symCy,     symCx - 1, symCy + 4, 2, false);
+    r.drawLine(symCx - 1, symCy + 4, symCx + 6, symCy - 4, 2, false);
   } else if (favorite) {
     // ♥ Heart icon — scaled to fit
     const uint8_t* icon = ::HeartIcon;
-    if (icon && symSz >= 6) r.drawIconInverted(icon, symX, symY, symSz, symSz);
+    if (icon && symSz >= 8) r.drawIconInverted(icon, symX, symY, symSz, symSz);
   } else if (opened) {
     // • Small dot
     const int dotR = std::max(1, symSz / 4);
-    const int dx = symX + symSz / 2;
-    const int dy = symY + symSz / 2;
     for (int y2 = -dotR; y2 <= dotR; ++y2)
       for (int x2 = -dotR; x2 <= dotR; ++x2)
         if (x2 * x2 + y2 * y2 <= dotR * dotR + dotR)
-          r.drawLine(dx + x2, dy + y2, dx + x2, dy + y2, 1, false);
+          r.drawLine(symCx + x2, symCy + y2, symCx + x2, symCy + y2, 1, false);
   }
 }
 
@@ -393,7 +392,7 @@ void LibraryActivity::loop() {
 
         startActivityForResult(
             std::make_unique<BookContextMenuActivity>(renderer, mappedInput, title, isFav, isCompleted, isEpub, true),
-            [this, idx, path, isEpub](const ActivityResult& result) {
+            [this, idx, path, isEpub, title](const ActivityResult& result) {
               if (result.isCancelled) { requestUpdate(); return; }
               const auto* menuResult = std::get_if<MenuResult>(&result.data);
               if (!menuResult) { requestUpdate(); return; }
@@ -412,7 +411,11 @@ void LibraryActivity::loop() {
                 case BookContextMenuActivity::MenuAction::MARK_READ_UNREAD: {
                   const auto* s = READING_STATS.findBook(path);
                   const bool wasCompleted = s && s->completed;
-                  READING_STATS.updateProgress(wasCompleted ? 0 : 100, !wasCompleted);
+                  READING_STATS.beginSession(path, title,
+                                             entries_[idx].title.empty() ? "" : entries_[idx].title,
+                                             entries_[idx].coverPath.empty() ? "" : entries_[idx].coverPath,
+                                             wasCompleted ? 0 : 100);
+                  READING_STATS.endSession();
                   requestUpdate();
                   return;
                 }

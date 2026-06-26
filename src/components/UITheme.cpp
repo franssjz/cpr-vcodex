@@ -10,6 +10,7 @@
 #include "RecentBooksStore.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
 #include "components/themes/lyra/LyraCustomTheme.h"
+#include "components/themes/lyra/LyraMarcoand75Theme.h"
 #include "components/themes/lyra/LyraTheme.h"
 
 namespace {
@@ -39,6 +40,11 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Lyra Carousel theme");
       currentTheme = std::make_unique<LyraCarouselTheme>();
       currentMetrics = &LyraCarouselMetrics::values;
+      break;
+    case CrossPointSettings::UI_THEME::LYRA_MARCOAND75:
+      LOG_DBG("UI", "Using Lyra Marcoand75 theme");
+      currentTheme = std::make_unique<LyraMarcoand75Theme>();
+      currentMetrics = &LyraMarcoand75Metrics::values;
       break;
     case CrossPointSettings::UI_THEME::LYRA_CUSTOM:
     default:

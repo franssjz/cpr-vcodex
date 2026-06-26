@@ -44,6 +44,7 @@
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
+#include "components/themes/lyra/LyraMarcoand75Theme.h"
 #include "fontIds.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ShortcutRegistry.h"
@@ -53,7 +54,14 @@ namespace {
 constexpr unsigned long RECENT_BOOK_LONG_PRESS_MS = 1000;
 constexpr int DEFAULT_HOME_SHORTCUT_PAGE_SIZE = 4;
 constexpr int LYRA_HOME_SHORTCUT_PAGE_SIZE = 5;
-constexpr const char* CAROUSEL_FRAME_CACHE_DIR = "/.crosspoint/home-carousel-cache";
+constexpr const char* CAROUSEL_FRAME_CACHE_DIR_LYRA = "/.crosspoint/home-carousel-cache";
+constexpr const char* CAROUSEL_FRAME_CACHE_DIR_MARCOAND75 = "/.crosspoint/marcoand75-cache";
+
+const char* getCarouselFrameCacheDir() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_MARCOAND75
+             ? CAROUSEL_FRAME_CACHE_DIR_MARCOAND75
+             : CAROUSEL_FRAME_CACHE_DIR_LYRA;
+}
 constexpr uint32_t FNV1A_OFFSET = 2166136261UL;
 constexpr uint32_t FNV1A_PRIME = 16777619UL;
 
@@ -258,7 +266,9 @@ bool showHomeShortcutAccessory(const HomeShortcutEntry& entry) {
 }
 
 bool isLyraCarouselTheme() {
-  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
+  auto theme = static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme);
+  return theme == CrossPointSettings::UI_THEME::LYRA_CAROUSEL ||
+         theme == CrossPointSettings::UI_THEME::LYRA_MARCOAND75;
 }
 
 int wrapBookIndex(int index, int bookCount) {
@@ -287,9 +297,19 @@ uint32_t fnv1aU32(uint32_t hash, const uint32_t value) {
   return fnv1aByte(hash, static_cast<uint8_t>((value >> 24) & 0xFF));
 }
 
+// Theme-aware helpers for cover dimensions
+int getCarouselCenterCoverW() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_MARCOAND75
+             ? LyraMarcoand75Theme::kCenterCoverW
+             : LyraCarouselTheme::kCenterCoverW;
+}
+int getCarouselCenterCoverH() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_MARCOAND75
+             ? LyraMarcoand75Theme::kCenterCoverH
+             : LyraCarouselTheme::kCenterCoverH;
+}
 std::string getCarouselCenterThumbPath(const RecentBook& book) {
-  return UITheme::getCoverThumbPath(book.coverBmpPath, LyraCarouselTheme::kCenterCoverW,
-                                    LyraCarouselTheme::kCenterCoverH);
+  return UITheme::getCoverThumbPath(book.coverBmpPath, getCarouselCenterCoverW(), getCarouselCenterCoverH());
 }
 
 std::string getCarouselLegacyThumbPath(const RecentBook& book) {
@@ -359,7 +379,8 @@ uint32_t getCarouselFrameHash(const std::vector<RecentBook>& books, const int ce
 
 std::string getCarouselFrameCachePathFromHash(const uint32_t hash) {
   char filename[96];
-  std::snprintf(filename, sizeof(filename), "%s/%08lx.bin", CAROUSEL_FRAME_CACHE_DIR, static_cast<unsigned long>(hash));
+  std::snprintf(filename, sizeof(filename), "%s/%08lx.bin", getCarouselFrameCacheDir(),
+                static_cast<unsigned long>(hash));
   return filename;
 }
 
@@ -510,7 +531,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
           book.coverBmpPath = epub.getThumbBmpPath();
           const bool success =
               isLyraCarouselTheme()
-                  ? epub.generateThumbBmp(LyraCarouselTheme::kCenterCoverW, LyraCarouselTheme::kCenterCoverH) &&
+                  ? epub.generateThumbBmp(getCarouselCenterCoverW(), getCarouselCenterCoverH()) &&
                         isValidBmpFile(getCarouselCenterThumbPath(book))
                   : epub.generateThumbBmp(coverHeight) && isValidHomeCoverPath(book.coverBmpPath, coverHeight);
           if (!success && !isLyraCarouselTheme()) {
@@ -535,7 +556,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
           book.coverBmpPath = xtc.getThumbBmpPath();
           const bool success =
               isLyraCarouselTheme()
-                  ? xtc.generateThumbBmp(LyraCarouselTheme::kCenterCoverW, LyraCarouselTheme::kCenterCoverH) &&
+                  ? xtc.generateThumbBmp(getCarouselCenterCoverW(), getCarouselCenterCoverH()) &&
                         isValidBmpFile(getCarouselCenterThumbPath(book))
                   : xtc.generateThumbBmp(coverHeight) && isValidHomeCoverPath(book.coverBmpPath, coverHeight);
           if (!success && !isLyraCarouselTheme()) {
@@ -723,7 +744,7 @@ bool HomeActivity::saveCarouselFrameToStorage(int bookIndex) {
   const std::string cachePath = getCarouselFrameCachePathFromHash(getCachedCarouselFrameHash(safeBookIndex));
 
   Storage.mkdir("/.crosspoint");
-  Storage.mkdir(CAROUSEL_FRAME_CACHE_DIR);
+  Storage.mkdir(getCarouselFrameCacheDir());
 
   FsFile file;
   if (!Storage.openFileForWrite("HCR", cachePath, file)) {
@@ -762,7 +783,11 @@ bool HomeActivity::renderCarouselFrame(int bookIndex) {
   // selectorIndex so inCarouselRow=false and the frame is stored with a thin
   // outline; drawCarouselBorder() overlays the thick selection border at
   // display time only when the carousel row is actually active.
-  LyraCarouselTheme::setPreRenderIndex(safeBookIndex);
+  if (static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_MARCOAND75) {
+    LyraMarcoand75Theme::setPreRenderIndex(safeBookIndex);
+  } else {
+    LyraCarouselTheme::setPreRenderIndex(safeBookIndex);
+  }
   GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                           recentBooks, bookCount, localCoverRendered, localCoverBufferStored, localBufferRestored,
                           [] { return false; });
@@ -1006,8 +1031,11 @@ void HomeActivity::loop() {
                   return;
                 }
                 case static_cast<int>(BookContextMenuActivity::MenuAction::MARK_READ_UNREAD): {
-                  // Toggle completed status
-                  READING_STATS.updateProgress(0, !isCompleted);
+                  // Toggle completed status — beginSession creates the book entry if missing
+                  READING_STATS.beginSession(selectedBook.path, selectedBook.title,
+                                             selectedBook.author, selectedBook.coverBmpPath,
+                                             isCompleted ? 0 : 100);
+                  READING_STATS.endSession();
                   break;
                 }
                 case static_cast<int>(BookContextMenuActivity::MenuAction::OPEN_BOOK): {
@@ -1026,18 +1054,19 @@ void HomeActivity::loop() {
                   break;
                 }
                 case static_cast<int>(BookContextMenuActivity::MenuAction::CLEAR_THEME_CACHE): {
-                  // Delete all *.bin files in /.crosspoint/home-carousel-cache/
+                  // Delete all *.bin files in the active theme cache directory
                   invalidateResidentCarouselFrame();
                   invalidateCarouselFrameHash();
-                  Storage.mkdir(CAROUSEL_FRAME_CACHE_DIR);
-                  auto d = Storage.open(CAROUSEL_FRAME_CACHE_DIR);
+                  const char* cacheDir = getCarouselFrameCacheDir();
+                  Storage.mkdir(cacheDir);
+                  auto d = Storage.open(cacheDir);
                   if (d && d.isDirectory()) {
                     d.rewindDirectory();
                     char nb[96];
                     for (auto f = d.openNextFile(); f; f = d.openNextFile()) {
                       f.getName(nb, sizeof(nb));
                       if (!f.isDirectory()) {
-                        std::string full = std::string(CAROUSEL_FRAME_CACHE_DIR) + "/" + nb;
+                        std::string full = std::string(cacheDir) + "/" + nb;
                         f.close();
                         Storage.remove(full.c_str());
                       } else {
