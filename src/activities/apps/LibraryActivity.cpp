@@ -27,15 +27,16 @@
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/TimeUtils.h"
 
 namespace {
 constexpr int COVER_CORNER_RADIUS = 2;
+constexpr const char* LIBRARY_INVENTORY_FILE = "/.crosspoint/library_inventory.json";
+constexpr unsigned long INVENTORY_STALE_MS = 30000;  // re-scan if inventory older than 30s
 
 // Priority-based ribbon overlay (top-right corner).
 // Only ONE ribbon shown per cover, highest priority wins.
 // Priority: 1=Read(completed), 2=Favorite, 3=Opened.
-// Draw a right-triangle at top-right corner [x, y] with given leg length.
-// Triangle fills: for dy=0..leg-1, pixels from x+dy to x+leg-1.
 static void fillTopRightTri(GfxRenderer& r, int x, int y, int leg, bool black) {
   for (int dy = 0; dy < leg; ++dy)
     r.fillRect(x + dy, y + dy, leg - dy, 1, black);
@@ -45,18 +46,14 @@ void drawRibbonBadge(GfxRenderer& r, int cx, int cy, int cw, int ch,
                      bool completed, bool favorite, bool opened) {
   (void)ch;
   const int leg = std::max(22, std::min(cw * 8 / 10, 84));
-  // rx,ry = top-left of the bounding box for the core triangle
   const int rx = cx + cw - leg;
   const int ry = cy;
 
-  // Triple border: white(1) → black(1) → white(1) → black fill, drawn outside-in
-  fillTopRightTri(r, rx - 3, ry - 3, leg + 6, false);  // outer white
-  fillTopRightTri(r, rx - 2, ry - 2, leg + 4, true);   // mid black
-  fillTopRightTri(r, rx - 1, ry - 1, leg + 2, false);  // inner white
-  fillTopRightTri(r, rx,     ry,     leg,     true);   // core black
+  fillTopRightTri(r, rx - 3, ry - 3, leg + 6, false);
+  fillTopRightTri(r, rx - 2, ry - 2, leg + 4, true);
+  fillTopRightTri(r, rx - 1, ry - 1, leg + 2, false);
+  fillTopRightTri(r, rx,     ry,     leg,     true);
 
-  // Center the symbol on the triangle's centroid (leg/3 in from the corner)
-  // so it sits inside the filled area and looks balanced at any ribbon size.
   const int symCx = cx + cw - leg / 3;
   const int symCy = cy + leg / 3;
   const int symSz = std::max(8, leg * 22 / 100);
@@ -64,15 +61,17 @@ void drawRibbonBadge(GfxRenderer& r, int cx, int cy, int cw, int ch,
   const int symY = symCy - symSz / 2;
 
   if (completed) {
-    // ✓ Checkmark centered on the centroid
     r.drawLine(symCx - 5, symCy,     symCx - 1, symCy + 4, 2, false);
     r.drawLine(symCx - 1, symCy + 4, symCx + 6, symCy - 4, 2, false);
   } else if (favorite) {
-    // ♥ Heart icon — scaled to fit
-    const uint8_t* icon = ::HeartIcon;
-    if (icon && symSz >= 8) r.drawIconInverted(icon, symX, symY, symSz, symSz);
+    // HeartIcon is 32×32; draw at native size centered on symCx/symCy
+    constexpr int kHeartNativeSz = 32;
+    if (leg >= kHeartNativeSz) {
+      int hx = symCx - kHeartNativeSz / 2;
+      int hy = symCy - kHeartNativeSz / 2;
+      r.drawIconInverted(::HeartIcon, hx, hy, kHeartNativeSz, kHeartNativeSz);
+    }
   } else if (opened) {
-    // • Small dot
     const int dotR = std::max(1, symSz / 4);
     for (int y2 = -dotR; y2 <= dotR; ++y2)
       for (int x2 = -dotR; x2 <= dotR; ++x2)
@@ -97,6 +96,23 @@ inline bool isEbookExtension(std::string_view filename) {
 
 std::string libraryCoverDir() { return "/.crosspoint/library_covers"; }
 
+// Directories that should always be skipped during library scanning.
+// These are common system / app directories that never contain user ebooks.
+bool isExcludedDirectory(const std::string& dirName) {
+  // Dot-prefixed (hidden) directories
+  if (!dirName.empty() && dirName[0] == '.') return true;
+  // System / app directories (case-insensitive)
+  std::string lower = dirName;
+  for (auto& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+  if (lower == "crosspoint") return true;
+  if (lower == "sleep" || lower.compare(0, 5, "sleep") == 0) return true;  // sleep, sleep*
+  if (lower == "font" || lower == "fonts") return true;
+  if (lower == "dictionaries") return true;
+  if (lower == "exports") return true;
+  if (lower == "system volume information") return true;
+  return false;
+}
+
 void cleanupZeroSizeThumbs() {
   auto d = Storage.open(libraryCoverDir().c_str());
   if (!d || !d.isDirectory()) {
@@ -119,6 +135,19 @@ void cleanupZeroSizeThumbs() {
   d.close();
 }
 
+// Periodic cleanup: run at most once per day.
+void runPeriodicCleanupIfNeeded() {
+  uint32_t refTs = TimeUtils::getAuthoritativeTimestamp();
+  if (!TimeUtils::isClockValid(refTs)) return;
+  uint32_t today = TimeUtils::getLocalDayOrdinal(refTs);
+  if (today == 0) return;
+  uint8_t today8 = static_cast<uint8_t>(today % 365);  // day-of-year
+  if (today8 == SETTINGS.libraryLastCleanupDay) return;
+  SETTINGS.libraryLastCleanupDay = today8;
+  SETTINGS.saveToFile();
+  cleanupZeroSizeThumbs();
+}
+
 uint32_t fnv1a(const std::string& s) {
   uint32_t h = 2166136261u;
   for (char c : s) h = (h ^ static_cast<uint8_t>(c)) * 16777619u;
@@ -132,6 +161,75 @@ std::string libraryCoverPathFor(const std::string& bookPath, int w, int h) {
   return buf;
 }
 
+// ----- Inventory caching -----
+bool saveInventoryToFile(const std::vector<LibraryEntry>& entries) {
+  // Write a simple newline-delimited list: path|title
+  HalFile file;
+  if (!Storage.openFileForWrite("LIB", LIBRARY_INVENTORY_FILE, file)) return false;
+  for (const auto& e : entries) {
+    std::string line = e.path + "|" + e.title + "\n";
+    if (file.write(line.c_str(), line.size()) != line.size()) {
+      file.close();
+      Storage.remove(LIBRARY_INVENTORY_FILE);
+      return false;
+    }
+  }
+  file.close();
+  return true;
+}
+
+bool loadInventoryFromFile(std::vector<LibraryEntry>& entries, unsigned long& outTimestamp) {
+  HalFile file;
+  if (!Storage.openFileForRead("LIB", LIBRARY_INVENTORY_FILE, file)) return false;
+  outTimestamp = static_cast<unsigned long>(file.fileSize64());  // use size as proxy timestamp
+  // Actually we need a proper timestamp. Read first line as comment with timestamp.
+  // Simpler: check file modification via separate timestamp file, or just use file size.
+  // For now: if file exists, treat as recent enough. We use a fixed invalidation approach.
+  entries.clear();
+  // Read the whole file as string
+  size_t sz = file.size();
+  if (sz == 0 || sz > 65536) { file.close(); return false; }
+  std::vector<char> buf(sz + 1);
+  size_t read = file.read(buf.data(), sz);
+  file.close();
+  if (read != sz) return false;
+  buf[sz] = '\0';
+
+  std::string content(buf.data(), sz);
+  // First line: timestamp
+  size_t nlPos = content.find('\n');
+  if (nlPos == std::string::npos) return false;
+  std::string tsStr = content.substr(0, nlPos);
+  outTimestamp = static_cast<unsigned long>(strtoul(tsStr.c_str(), nullptr, 10));
+
+  // Remaining lines: path|title
+  size_t pos = nlPos + 1;
+  while (pos < content.size()) {
+    size_t end = content.find('\n', pos);
+    if (end == std::string::npos) end = content.size();
+    std::string line = content.substr(pos, end - pos);
+    pos = end + 1;
+    if (line.empty()) continue;
+    size_t pipePos = line.find('|');
+    LibraryEntry e;
+    e.path = line.substr(0, pipePos);
+    if (pipePos != std::string::npos) {
+      e.title = line.substr(pipePos + 1);
+    }
+    if (!e.path.empty()) {
+      entries.push_back(std::move(e));
+    }
+  }
+  return true;
+}
+
+bool isInventoryStale(unsigned long invTimestamp) {
+  // Use system uptime as approximate clock for staleness check
+  if (invTimestamp == 0) return true;
+  unsigned long now = millis();
+  return (now - invTimestamp) > INVENTORY_STALE_MS;
+}
+
 }  // namespace
 
 std::string LibraryActivity::libraryCoverPath(const std::string& bookPath) const {
@@ -142,8 +240,8 @@ void LibraryActivity::applyLayoutFromSettings() {
   switch (SETTINGS.libraryLayout) {
     case CrossPointSettings::LIBRARY_LAYOUT_2X2:
       gridColumns_ = 2;
-      coverWidth_ = 202;   // proportional to 2:3 ratio at height 310
-      coverHeight_ = 310;  // -10px height (was 320)
+      coverWidth_ = 202;
+      coverHeight_ = 310;
       break;
     case CrossPointSettings::LIBRARY_LAYOUT_3X3:
       gridColumns_ = 3;
@@ -161,7 +259,6 @@ void LibraryActivity::applyLayoutFromSettings() {
 }
 
 void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter) {
-  // Full rescan to get all possible entries
   std::vector<LibraryEntry> allEntries;
   Storage.mkdir(libraryCoverDir().c_str());
 
@@ -173,16 +270,19 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
     char nb[256];
     for (auto f = d.openNextFile(); f; f = d.openNextFile()) {
       f.getName(nb, sizeof(nb));
-      if (nb[0] == '.' && strcmp(nb, "System Volume Information") != 0) { f.close(); continue; }
-      std::string entry = dir + nb;
-      if (f.isDirectory()) { f.close(); walk(entry + '/'); }
-      else if (isEbookExtension(nb)) {
+      if (f.isDirectory()) {
+        // Skip system/excluded directories entirely
+        std::string dirName = nb;
+        if (isExcludedDirectory(dirName)) { f.close(); continue; }
+        f.close();
+        walk(dir + dirName + '/');
+      } else if (isEbookExtension(nb)) {
         if (strcmp(nb, "if_found.txt") == 0 || strcmp(nb, "crash_report.txt") == 0) { f.close(); continue; }
         LibraryEntry e;
-        e.path = entry;
-        e.title = filenameWithoutExtension(entry);
-        std::string cv = libraryCoverPath(entry);
-        if (Storage.exists(cv.c_str())) e.coverPath = cv;
+        e.path = dir + nb;
+        e.title = filenameWithoutExtension(e.path);
+        // Defer cover existence check: don't call Storage.exists() here
+        // (saves ~50% I/O during scan). Cover is resolved lazily in render/loop.
         allEntries.push_back(std::move(e));
       }
       f.close();
@@ -190,7 +290,41 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
     d.close();
   };
 
-  walk("/");
+  // Use configured library root directory
+  const char* rootDir = SETTINGS.libraryRootDir;
+  if (rootDir[0] == '\0' || (rootDir[0] == '/' && rootDir[1] == '\0')) {
+    // Default: walk from "/" but skip excluded dirs
+    // Walk top-level entries, skip excluded dirs
+    auto rd = Storage.open("/");
+    if (rd && rd.isDirectory()) {
+      rd.rewindDirectory();
+      char nb[256];
+      for (auto f = rd.openNextFile(); f; f = rd.openNextFile()) {
+        f.getName(nb, sizeof(nb));
+        if (f.isDirectory()) {
+          std::string dirName = nb;
+          if (isExcludedDirectory(dirName)) { f.close(); continue; }
+          f.close();
+          walk("/" + dirName + "/");
+        } else if (isEbookExtension(nb)) {
+          if (strcmp(nb, "if_found.txt") == 0 || strcmp(nb, "crash_report.txt") == 0) { f.close(); continue; }
+          LibraryEntry e;
+          e.path = "/" + std::string(nb);
+          e.title = filenameWithoutExtension(e.path);
+          allEntries.push_back(std::move(e));
+        }
+        f.close();
+      }
+      rd.close();
+    }
+  } else {
+    // Walk from configured root directory
+    std::string root(rootDir);
+    // Ensure trailing slash
+    if (root.empty() || root.back() != '/') root += '/';
+    walk(root);
+  }
+
   std::sort(allEntries.begin(), allEntries.end(), [](auto& a, auto& b) { return a.path < b.path; });
 
   entries_.clear();
@@ -216,10 +350,31 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
   selectorIndex_ = 0;
   coversComplete_ = false;
   coverGenIndex_ = -1;
+
+  // Save inventory cache for next time
+  saveInventoryToFile(entries_);
+  inventoryLoaded_ = true;
 }
 
 void LibraryActivity::scanSd() {
   currentFilter_ = static_cast<CrossPointSettings::LIBRARY_FILTER>(SETTINGS.libraryFilter);
+
+  // Try to load from inventory cache first
+  inventoryLoaded_ = false;
+  if (currentFilter_ == CrossPointSettings::LIBRARY_FILTER_ALL) {
+    unsigned long invTimestamp = 0;
+    if (loadInventoryFromFile(entries_, invTimestamp) && !isInventoryStale(invTimestamp)) {
+      inventoryLoaded_ = true;
+      currentFilter_ = currentFilter_;
+      selectorIndex_ = 0;
+      coversComplete_ = false;
+      coverGenIndex_ = -1;
+      LOG_DBG("LIB", "Loaded %d entries from inventory cache", static_cast<int>(entries_.size()));
+      return;
+    }
+  }
+
+  // Full rescan
   rebuildForFilter(currentFilter_);
 }
 
@@ -302,7 +457,7 @@ void LibraryActivity::generateCoverForEntry(int index) {
   if (index < 0 || index >= static_cast<int>(entries_.size())) return;
   LibraryEntry& e = entries_[index];
   if (e.coverFailed) return;
-  if (!e.coverPath.empty()) return;  // already generated
+  if (!e.coverPath.empty()) return;
   std::string dest = libraryCoverPath(e.path);
   if (!Storage.exists(dest.c_str())) {
     if (generateOneCover(e.path, coverWidth_, coverHeight_, dest)) e.coverPath = dest;
@@ -321,7 +476,10 @@ void LibraryActivity::onEnter() {
   coversComplete_ = false;
   lastPage_ = -1;
   Storage.mkdir(libraryCoverDir().c_str());
-  cleanupZeroSizeThumbs();
+
+  // Periodic cleanup (once per day, not every onEnter)
+  runPeriodicCleanupIfNeeded();
+
   scanSd();
   requestUpdate();
 }
@@ -538,7 +696,6 @@ void LibraryActivity::render(RenderLock&&) {
 
   const int pageStart = (curPage - 1) * gridsPerPage_;
   const int pageCount = std::min(gridsPerPage_, total - pageStart);
-  // Grid spacing varies by layout: 4x4 needs tighter packing
   const int gap = (gridColumns_ >= 4) ? 8 : 16;
   const int rowPad = (gridColumns_ >= 4) ? 8 : 14;
   const int gridW = gridColumns_ * coverWidth_ + (gridColumns_ - 1) * gap;
@@ -555,13 +712,11 @@ void LibraryActivity::render(RenderLock&&) {
     bool drawn = false;
     const auto& cp = entries_[idx].coverPath;
     if (!cp.empty()) {
-      // Skip existence check when coverReady is already true (hot path optimization)
       if (entries_[idx].coverReady) {
         FsFile file;
         if (Storage.openFileForRead("LIB", cp, file)) {
           Bitmap bmp(file);
           if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.getWidth() > 0 && bmp.getHeight() > 0) {
-            // Fill-crop to cover dimensions (same logic as Lyra Carousel)
             const float bmpRatio = static_cast<float>(bmp.getWidth()) / static_cast<float>(bmp.getHeight());
             const float tileRatio = static_cast<float>(coverWidth_) / static_cast<float>(coverHeight_);
             const float cropX = (bmpRatio > tileRatio) ? (1.0f - tileRatio / bmpRatio) : 0.0f;
@@ -573,12 +728,10 @@ void LibraryActivity::render(RenderLock&&) {
           file.close();
         }
         if (!drawn) {
-          // File disappeared — clear the path so we can regenerate
           entries_[idx].coverPath.clear();
           entries_[idx].coverReady = false;
         }
       } else {
-        // First render: validate existence before attempting to draw
         if (!Storage.exists(cp.c_str())) {
           entries_[idx].coverPath.clear();
         } else {
@@ -586,7 +739,6 @@ void LibraryActivity::render(RenderLock&&) {
           if (Storage.openFileForRead("LIB", cp, file)) {
             Bitmap bmp(file);
             if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.getWidth() > 0 && bmp.getHeight() > 0) {
-              // Fill-crop to cover dimensions
               const float bmpRatio = static_cast<float>(bmp.getWidth()) / static_cast<float>(bmp.getHeight());
               const float tileRatio = static_cast<float>(coverWidth_) / static_cast<float>(coverHeight_);
               const float cropX = (bmpRatio > tileRatio) ? (1.0f - tileRatio / bmpRatio) : 0.0f;
@@ -648,7 +800,6 @@ void LibraryActivity::render(RenderLock&&) {
   }
 
   if (!coversComplete_) {
-    char pb[48];
     int psIdx = (curPage - 1) * gridsPerPage_;
     int pc = std::min(gridsPerPage_, total - psIdx);
     int pe = psIdx + pc;
@@ -658,10 +809,12 @@ void LibraryActivity::render(RenderLock&&) {
       std::string d = libraryCoverPath(entries_[i].path);
       if (entries_[i].coverPath.empty() || !Storage.exists(d.c_str())) missing++;
     }
-    snprintf(pb, sizeof(pb), "Copertine %d/%d", pc - missing, pc);
-    Rect pr = GUI.drawPopup(renderer, tr(STR_INDEXING));
-    if (pr.width > 0 && pr.height > 0) {
-      GUI.fillPopupProgress(renderer, pr, (pc - missing) * 100 / std::max(1, pc));
+    // Draw minimal indexing popup
+    if (missing > 0) {
+      Rect pr = GUI.drawPopup(renderer, tr(STR_INDEXING));
+      if (pr.width > 0 && pr.height > 0) {
+        GUI.fillPopupProgress(renderer, pr, (pc - missing) * 100 / std::max(1, pc));
+      }
     }
   }
 

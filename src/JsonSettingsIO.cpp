@@ -391,6 +391,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadToggle("showHiddenFiles", s.showHiddenFiles);
   loadEnum("libraryLayout", s.libraryLayout, CrossPointSettings::LIBRARY_LAYOUT_COUNT);
   loadEnum("libraryFilter", s.libraryFilter, CrossPointSettings::LIBRARY_FILTER_COUNT);
+  loadString("libraryRootDir", s.libraryRootDir, sizeof(s.libraryRootDir));
+  s.libraryLastCleanupDay = doc["libraryLastCleanupDay"] | static_cast<uint8_t>(0);
 
   loadString("opdsServerUrl", s.opdsServerUrl, sizeof(s.opdsServerUrl));
   loadString("opdsUsername", s.opdsUsername, sizeof(s.opdsUsername));
@@ -750,6 +752,13 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["showHiddenFiles"] = s.showHiddenFiles;
   doc["libraryLayout"] = s.libraryLayout;
   doc["libraryFilter"] = s.libraryFilter;
+  {
+    const std::string rootDir(s.libraryRootDir);
+    if (!rootDir.empty() && rootDir != "/") {
+      doc["libraryRootDir"] = rootDir;
+    }
+  }
+  doc["libraryLastCleanupDay"] = s.libraryLastCleanupDay;
 
   doc["displayDay"] = s.displayDay;
   doc["syncDayWifiChoice"] = s.syncDayWifiChoice;

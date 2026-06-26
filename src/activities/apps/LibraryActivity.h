@@ -22,6 +22,7 @@ class LibraryActivity final : public Activity {
   int coverGenIndex_ = -1;
   bool coversComplete_ = false;
   int lastPage_ = -1;  // track page changes to avoid unnecessary cover resets
+  bool inventoryLoaded_ = false;  // true if inventory was loaded from cache (no full rescan needed)
   mutable int lastRenderedPage_ = -1;  // avoid re-opening BMPs when page unchanged
   mutable bool lastCoversComplete_ = false;
   mutable std::vector<bool> coverDrawn_;  // per-entry flag: true if drawn this frame

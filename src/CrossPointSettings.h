@@ -407,6 +407,8 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   uint8_t libraryLayout = LIBRARY_LAYOUT_3X3;
   uint8_t libraryFilter = LIBRARY_FILTER_ALL;
+  char libraryRootDir[128] = "/";
+  uint8_t libraryLastCleanupDay = 0;  // day-of-year of last zero-size thumb cleanup
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
 
