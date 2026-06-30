@@ -5,11 +5,13 @@
 
 #include "../Activity.h"
 #include "CrossPointSettings.h"
+#include "components/LibraryPopupOverlay.h"
 #include "util/ButtonNavigator.h"
 
 struct LibraryEntry {
   std::string path;
   std::string title;
+  std::string author;
   std::string coverPath;
   bool coverFailed = false;
   bool coverReady = false;
@@ -21,27 +23,47 @@ class LibraryActivity final : public Activity {
   std::vector<LibraryEntry> entries_;
   int coverGenIndex_ = -1;
   bool coversComplete_ = false;
-  int lastPage_ = -1;  // track page changes to avoid unnecessary cover resets
-  bool inventoryLoaded_ = false;  // true if inventory was loaded from cache (no full rescan needed)
-  mutable int lastRenderedPage_ = -1;  // avoid re-opening BMPs when page unchanged
+  int lastPage_ = -1;
+  bool inventoryLoaded_ = false;
+  mutable int lastRenderedPage_ = -1;
   mutable bool lastCoversComplete_ = false;
-  mutable std::vector<bool> coverDrawn_;  // per-entry flag: true if drawn this frame
+  mutable std::vector<bool> coverDrawn_;
 
   int coverWidth_ = 100;
   int coverHeight_ = 150;
   int gridColumns_ = 4;
   int gridsPerPage_ = 16;
   CrossPointSettings::LIBRARY_FILTER currentFilter_ = CrossPointSettings::LIBRARY_FILTER_ALL;
+  CrossPointSettings::LIBRARY_SORT currentSort_ = CrossPointSettings::LIBRARY_SORT_TITLE_ASC;
+  std::string currentSearchText_;
+
+  // Popup state
+  enum class PopupMode { None, Sort, Filter };
+  PopupMode popupMode_ = PopupMode::None;
+  LibraryPopupOverlay popupOverlay_;
+
+  // Long-press tracking for Up/Down
+  bool upHeld_ = false;
+  bool upLongTriggered_ = false;
+  bool downHeld_ = false;
+  bool downLongTriggered_ = false;
+  static constexpr unsigned long kLongPressMs = 1000;
 
   void applyLayoutFromSettings();
   void scanSd();
-  void generateCoverForEntry(int index);
-  bool generateOneCover(const std::string& bookPath, int coverW, int coverH, const std::string& destFile);
-  std::string libraryCoverPath(const std::string& bookPath) const;
+  void applyFilterAndSort();
+  void generatePageCovers();
+  std::string generateOneCover(const std::string& bookPath, int coverW, int coverH);
   void deleteLibraryCovers(const std::string& bookPath);
   void deletePageCovers();
   void deleteAllLibraryCovers();
   void rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter);
+
+  void openSortPopup();
+  void openFilterPopup();
+  void closePopup();
+  void selectPopupItem();
+  void beginTextSearch();
 
  public:
   explicit LibraryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)

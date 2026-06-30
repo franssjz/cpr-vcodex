@@ -166,7 +166,9 @@ void drawSegmentProgressBar(const GfxRenderer& r, int x, int y, int filled, int 
 }
 
 uint8_t getBookProgress(const RecentBook& b) {
-  const ReadingBookStats* s = b.bookId.empty() ? READING_STATS.findBook(b.path) : READING_STATS.findBook(b.bookId);
+  const ReadingBookStats* s = nullptr;
+  if (!b.bookId.empty()) s = READING_STATS.findBook(b.bookId);
+  if (!s) s = READING_STATS.findBook(b.path);
   return s ? std::min<uint8_t>(s->lastProgressPercent, 100) : 0;
 }
 

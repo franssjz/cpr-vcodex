@@ -393,6 +393,12 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("libraryFilter", s.libraryFilter, CrossPointSettings::LIBRARY_FILTER_COUNT);
   loadString("libraryRootDir", s.libraryRootDir, sizeof(s.libraryRootDir));
   s.libraryLastCleanupDay = doc["libraryLastCleanupDay"] | static_cast<uint8_t>(0);
+  loadEnum("librarySort", s.librarySort, CrossPointSettings::LIBRARY_SORT_COUNT);
+  {
+    const std::string searchText = doc["librarySearchText"] | std::string("");
+    strncpy(s.librarySearchText, searchText.c_str(), sizeof(s.librarySearchText) - 1);
+    s.librarySearchText[sizeof(s.librarySearchText) - 1] = '\0';
+  }
 
   loadString("screenSaverDirectory", s.screenSaverDirectory, sizeof(s.screenSaverDirectory));
   loadEnum("screenSaverOrder", s.screenSaverOrder, CrossPointSettings::SCREENSAVER_ORDER_COUNT);
@@ -776,6 +782,13 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
     }
   }
   doc["libraryLastCleanupDay"] = s.libraryLastCleanupDay;
+  doc["librarySort"] = s.librarySort;
+  {
+    const std::string searchText(s.librarySearchText);
+    if (!searchText.empty()) {
+      doc["librarySearchText"] = searchText;
+    }
+  }
 
   {
     const std::string ssDir(s.screenSaverDirectory);

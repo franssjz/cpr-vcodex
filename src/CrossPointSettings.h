@@ -239,6 +239,15 @@ class CrossPointSettings {
     LIBRARY_FILTER_LATEST_READ = 2,
     LIBRARY_FILTER_COUNT
   };
+  enum LIBRARY_SORT {
+    LIBRARY_SORT_TITLE_ASC = 0,
+    LIBRARY_SORT_TITLE_DESC = 1,
+    LIBRARY_SORT_AUTHOR_ASC = 2,
+    LIBRARY_SORT_AUTHOR_DESC = 3,
+    LIBRARY_SORT_RECENT = 4,
+    LIBRARY_SORT_PROGRESS = 5,
+    LIBRARY_SORT_COUNT
+  };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
   enum SCREENSAVER_ORDER { SCREENSAVER_SHUFFLE = 0, SCREENSAVER_SEQUENTIAL = 1, SCREENSAVER_ORDER_COUNT };
   enum SCREENSAVER_INTERVAL {
@@ -454,6 +463,8 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   uint8_t libraryLayout = LIBRARY_LAYOUT_3X3;
   uint8_t libraryFilter = LIBRARY_FILTER_ALL;
+  uint8_t librarySort = LIBRARY_SORT_TITLE_ASC;
+  char librarySearchText[64] = "";
   char libraryRootDir[128] = "/";
   uint8_t libraryLastCleanupDay = 0;  // day-of-year of last zero-size thumb cleanup
   // Image rendering mode in EPUB reader
