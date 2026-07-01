@@ -303,6 +303,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("sleepScreenCoverMode", s.sleepScreenCoverMode, CrossPointSettings::SLEEP_SCREEN_COVER_MODE_COUNT);
   loadEnum("sleepScreenCoverFilter", s.sleepScreenCoverFilter, CrossPointSettings::SLEEP_SCREEN_COVER_FILTER_COUNT);
   loadToggle("cleanSleepRefresh", s.cleanSleepRefresh);
+  loadToggle("cycleScreensaverOnTap", s.cycleScreensaverOnTap);
   loadEnum("hideBatteryPercentage", s.hideBatteryPercentage, CrossPointSettings::HIDE_BATTERY_PERCENTAGE_COUNT);
   loadEnum("refreshFrequency", s.refreshFrequency, CrossPointSettings::REFRESH_FREQUENCY_COUNT);
   {
@@ -388,6 +389,30 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   loadEnum("sleepTimeout", s.sleepTimeout, CrossPointSettings::SLEEP_TIMEOUT_COUNT);
   loadToggle("showHiddenFiles", s.showHiddenFiles);
+  loadEnum("libraryLayout", s.libraryLayout, CrossPointSettings::LIBRARY_LAYOUT_COUNT);
+  loadEnum("libraryFilter", s.libraryFilter, CrossPointSettings::LIBRARY_FILTER_COUNT);
+  loadString("libraryRootDir", s.libraryRootDir, sizeof(s.libraryRootDir));
+  s.libraryLastCleanupDay = doc["libraryLastCleanupDay"] | static_cast<uint8_t>(0);
+  loadEnum("librarySort", s.librarySort, CrossPointSettings::LIBRARY_SORT_COUNT);
+  {
+    const std::string searchText = doc["librarySearchText"] | std::string("");
+    strncpy(s.librarySearchText, searchText.c_str(), sizeof(s.librarySearchText) - 1);
+    s.librarySearchText[sizeof(s.librarySearchText) - 1] = '\0';
+  }
+
+  loadString("screenSaverDirectory", s.screenSaverDirectory, sizeof(s.screenSaverDirectory));
+  loadEnum("screenSaverOrder", s.screenSaverOrder, CrossPointSettings::SCREENSAVER_ORDER_COUNT);
+  loadEnum("screenSaverInterval", s.screenSaverInterval, CrossPointSettings::SCREENSAVER_INTERVAL_COUNT);
+  loadEnum("screenSaverWakeButton", s.screenSaverWakeButton, CrossPointSettings::SCREENSAVER_WAKE_BUTTON_COUNT);
+
+  loadString("screenSaverText", s.screenSaverText, sizeof(s.screenSaverText));
+  loadEnum("screenSaverFontSize", s.screenSaverFontSize, CrossPointSettings::SCREENSAVER_FONT_SIZE_COUNT);
+  loadEnum("screenSaverTextPosition", s.screenSaverTextPosition, CrossPointSettings::SCREENSAVER_TEXT_POSITION_COUNT);
+  loadEnum("screenSaverTextStyle", s.screenSaverTextStyle, CrossPointSettings::SCREENSAVER_TEXT_STYLE_COUNT);
+  loadToggle("screenSaverShowPanel", s.screenSaverShowPanel);
+  loadEnum("screenSaverPanelColor", s.screenSaverPanelColor, static_cast<uint8_t>(2));
+  loadEnum("screenSaverPanelOpacity", s.screenSaverPanelOpacity, static_cast<uint8_t>(4));
+  loadEnum("screenSaverMinBattery", s.screenSaverMinBattery, static_cast<uint8_t>(9));
 
   loadString("opdsServerUrl", s.opdsServerUrl, sizeof(s.opdsServerUrl));
   loadString("opdsUsername", s.opdsUsername, sizeof(s.opdsUsername));
@@ -489,6 +514,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       clamp(doc["readingProfileShortcut"] | s.readingProfileShortcut, shortcutLocationCount, s.readingProfileShortcut);
   s.readingProfileShortcutOrder = clamp(doc["readingProfileShortcutOrder"] | s.readingProfileShortcutOrder,
                                         shortcutOrderCount, s.readingProfileShortcutOrder);
+  s.libraryShortcut = clamp(doc["libraryShortcut"] | s.libraryShortcut, shortcutLocationCount, s.libraryShortcut);
+  s.libraryShortcutOrder = clamp(doc["libraryShortcutOrder"] | s.libraryShortcutOrder, shortcutOrderCount, s.libraryShortcutOrder);
   s.achievementsShortcut =
       clamp(doc["achievementsShortcut"] | s.achievementsShortcut, shortcutLocationCount, s.achievementsShortcut);
   s.achievementsShortcutOrder = clamp(doc["achievementsShortcutOrder"] | s.achievementsShortcutOrder,
@@ -549,6 +576,11 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
                                           static_cast<uint8_t>(2), s.readingHeatmapShortcutVisible);
   s.readingProfileShortcutVisible = clamp(doc["readingProfileShortcutVisible"] | s.readingProfileShortcutVisible,
                                           static_cast<uint8_t>(2), s.readingProfileShortcutVisible);
+  s.libraryShortcutVisible = clamp(doc["libraryShortcutVisible"] | s.libraryShortcutVisible,
+                                   static_cast<uint8_t>(2), s.libraryShortcutVisible);
+  s.screenSaverShortcut = clamp(doc["screenSaverShortcut"] | s.screenSaverShortcut, shortcutLocationCount, s.screenSaverShortcut);
+  s.screenSaverShortcutOrder = clamp(doc["screenSaverShortcutOrder"] | s.screenSaverShortcutOrder, shortcutOrderCount, s.screenSaverShortcutOrder);
+  s.screenSaverShortcutVisible = clamp(doc["screenSaverShortcutVisible"] | s.screenSaverShortcutVisible, static_cast<uint8_t>(2), s.screenSaverShortcutVisible);
   s.achievementsShortcutVisible = clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible,
                                         static_cast<uint8_t>(2), s.achievementsShortcutVisible);
   s.ifFoundShortcutVisible = clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
@@ -701,6 +733,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["sleepScreenCoverMode"] = s.sleepScreenCoverMode;
   doc["sleepScreenCoverFilter"] = s.sleepScreenCoverFilter;
   doc["cleanSleepRefresh"] = s.cleanSleepRefresh;
+  doc["cycleScreensaverOnTap"] = s.cycleScreensaverOnTap;
   doc["hideBatteryPercentage"] = s.hideBatteryPercentage;
   doc["refreshFrequency"] = s.refreshFrequency;
   doc["uiTheme"] = s.uiTheme;
@@ -740,6 +773,46 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
 
   doc["sleepTimeout"] = s.sleepTimeout;
   doc["showHiddenFiles"] = s.showHiddenFiles;
+  doc["libraryLayout"] = s.libraryLayout;
+  doc["libraryFilter"] = s.libraryFilter;
+  {
+    const std::string rootDir(s.libraryRootDir);
+    if (!rootDir.empty() && rootDir != "/") {
+      doc["libraryRootDir"] = rootDir;
+    }
+  }
+  doc["libraryLastCleanupDay"] = s.libraryLastCleanupDay;
+  doc["librarySort"] = s.librarySort;
+  {
+    const std::string searchText(s.librarySearchText);
+    if (!searchText.empty()) {
+      doc["librarySearchText"] = searchText;
+    }
+  }
+
+  {
+    const std::string ssDir(s.screenSaverDirectory);
+    if (!ssDir.empty()) {
+      doc["screenSaverDirectory"] = ssDir;
+    }
+  }
+  doc["screenSaverOrder"] = s.screenSaverOrder;
+  doc["screenSaverInterval"] = s.screenSaverInterval;
+  doc["screenSaverWakeButton"] = s.screenSaverWakeButton;
+
+  {
+    const std::string ssText(s.screenSaverText);
+    if (!ssText.empty()) {
+      doc["screenSaverText"] = ssText;
+    }
+  }
+  doc["screenSaverFontSize"] = s.screenSaverFontSize;
+  doc["screenSaverTextPosition"] = s.screenSaverTextPosition;
+  doc["screenSaverTextStyle"] = s.screenSaverTextStyle;
+  doc["screenSaverShowPanel"] = s.screenSaverShowPanel;
+  doc["screenSaverPanelColor"] = s.screenSaverPanelColor;
+  doc["screenSaverPanelOpacity"] = s.screenSaverPanelOpacity;
+  doc["screenSaverMinBattery"] = s.screenSaverMinBattery;
 
   doc["displayDay"] = s.displayDay;
   doc["syncDayWifiChoice"] = s.syncDayWifiChoice;
@@ -793,6 +866,8 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["readingHeatmapShortcutOrder"] = s.readingHeatmapShortcutOrder;
   doc["readingProfileShortcut"] = s.readingProfileShortcut;
   doc["readingProfileShortcutOrder"] = s.readingProfileShortcutOrder;
+  doc["libraryShortcut"] = s.libraryShortcut;
+  doc["libraryShortcutOrder"] = s.libraryShortcutOrder;
   doc["achievementsShortcut"] = s.achievementsShortcut;
   doc["achievementsShortcutOrder"] = s.achievementsShortcutOrder;
   doc["ifFoundShortcut"] = s.ifFoundShortcut;
@@ -823,6 +898,10 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["readingStatsShortcutVisible"] = s.readingStatsShortcutVisible;
   doc["readingHeatmapShortcutVisible"] = s.readingHeatmapShortcutVisible;
   doc["readingProfileShortcutVisible"] = s.readingProfileShortcutVisible;
+  doc["libraryShortcutVisible"] = s.libraryShortcutVisible;
+  doc["screenSaverShortcut"] = s.screenSaverShortcut;
+  doc["screenSaverShortcutOrder"] = s.screenSaverShortcutOrder;
+  doc["screenSaverShortcutVisible"] = s.screenSaverShortcutVisible;
   doc["achievementsShortcutVisible"] = s.achievementsShortcutVisible;
   doc["ifFoundShortcutVisible"] = s.ifFoundShortcutVisible;
   doc["readMeShortcutVisible"] = s.readMeShortcutVisible;

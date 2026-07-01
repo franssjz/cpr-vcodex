@@ -16,6 +16,7 @@ enum class ShortcutId {
   ReadingStats,
   ReadingHeatmap,
   ReadingProfile,
+  Library,
   Achievements,
   IfFound,
   RecentBooks,
@@ -27,6 +28,7 @@ enum class ShortcutId {
   ScreenClean,
   Sleep,
   OpdsBrowser,
+  ScreenSaver,
 };
 
 struct ShortcutDefinition {
@@ -39,8 +41,8 @@ struct ShortcutDefinition {
   uint8_t CrossPointSettings::* visiblePtr;
 };
 
-inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
-  static const std::array<ShortcutDefinition, 17> definitions = {
+inline const std::array<ShortcutDefinition, 19>& getShortcutDefinitions() {
+  static const std::array<ShortcutDefinition, 19> definitions = {
       ShortcutDefinition{ShortcutId::BrowseFiles, StrId::STR_BROWSE_FILES, StrId::STR_NONE_OPT, UIIcon::Folder,
                          &CrossPointSettings::browseFilesShortcut, &CrossPointSettings::browseFilesShortcutOrder,
                          &CrossPointSettings::browseFilesShortcutVisible},
@@ -54,13 +56,16 @@ inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
                          UIIcon::Book, &CrossPointSettings::readingStatsShortcut,
                          &CrossPointSettings::readingStatsShortcutOrder, &CrossPointSettings::readingStatsShortcutVisible},
       ShortcutDefinition{ShortcutId::ReadingHeatmap, StrId::STR_READING_HEATMAP, StrId::STR_READING_HEATMAP_DESC,
-                         UIIcon::Library, &CrossPointSettings::readingHeatmapShortcut,
+                         UIIcon::Heatmap, &CrossPointSettings::readingHeatmapShortcut,
                          &CrossPointSettings::readingHeatmapShortcutOrder,
                          &CrossPointSettings::readingHeatmapShortcutVisible},
       ShortcutDefinition{ShortcutId::ReadingProfile, StrId::STR_READING_PROFILE, StrId::STR_READING_PROFILE_DESC,
                          UIIcon::Library, &CrossPointSettings::readingProfileShortcut,
                          &CrossPointSettings::readingProfileShortcutOrder,
                          &CrossPointSettings::readingProfileShortcutVisible},
+      ShortcutDefinition{ShortcutId::Library, StrId::STR_MENU_LIBRARY, StrId::STR_LIBRARY_APP_DESC, UIIcon::Bookshelf,
+                         &CrossPointSettings::libraryShortcut, &CrossPointSettings::libraryShortcutOrder,
+                         &CrossPointSettings::libraryShortcutVisible},
       ShortcutDefinition{ShortcutId::Achievements, StrId::STR_ACHIEVEMENTS, StrId::STR_ACHIEVEMENTS_APP_DESC,
                          UIIcon::Trophy, &CrossPointSettings::achievementsShortcut,
                          &CrossPointSettings::achievementsShortcutOrder, &CrossPointSettings::achievementsShortcutVisible},
@@ -86,15 +91,19 @@ inline const std::array<ShortcutDefinition, 17>& getShortcutDefinitions() {
                          UIIcon::Transfer, &CrossPointSettings::fileTransferShortcut,
                          &CrossPointSettings::fileTransferShortcutOrder, &CrossPointSettings::fileTransferShortcutVisible},
       ShortcutDefinition{ShortcutId::ScreenClean, StrId::STR_SCREEN_CLEAN, StrId::STR_SCREEN_CLEAN_APP_DESC,
-                         UIIcon::Image, &CrossPointSettings::screenCleanShortcut,
+                         UIIcon::CleanMonitor, &CrossPointSettings::screenCleanShortcut,
                          &CrossPointSettings::screenCleanShortcutOrder,
                          &CrossPointSettings::screenCleanShortcutVisible},
-      ShortcutDefinition{ShortcutId::Sleep, StrId::STR_SLEEP, StrId::STR_SLEEP_APP_DESC, UIIcon::Folder,
+      ShortcutDefinition{ShortcutId::Sleep, StrId::STR_SLEEP, StrId::STR_SLEEP_APP_DESC, UIIcon::SleepMode,
                          &CrossPointSettings::sleepShortcut, &CrossPointSettings::sleepShortcutOrder,
                          &CrossPointSettings::sleepShortcutVisible},
       ShortcutDefinition{ShortcutId::OpdsBrowser, StrId::STR_OPDS_BROWSER, StrId::STR_NONE_OPT, UIIcon::Library,
                          &CrossPointSettings::opdsBrowserShortcut, &CrossPointSettings::opdsBrowserShortcutOrder,
                          &CrossPointSettings::opdsBrowserShortcutVisible},
+      ShortcutDefinition{ShortcutId::ScreenSaver, StrId::STR_SCREENSAVER, StrId::STR_SCREENSAVER_APP_DESC,
+                         UIIcon::ScreenSaver, &CrossPointSettings::screenSaverShortcut,
+                         &CrossPointSettings::screenSaverShortcutOrder,
+                         &CrossPointSettings::screenSaverShortcutVisible},
   };
 
   return definitions;

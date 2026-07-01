@@ -182,7 +182,7 @@ class CrossPointSettings {
   };
 
   // UI Theme
-  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, UI_THEME_COUNT };
+  enum UI_THEME { LYRA = 0, LYRA_CUSTOM = 1, LYRA_CAROUSEL = 2, LYRA_MARCOAND75 = 3, UI_THEME_COUNT };
   enum DATE_FORMAT { DATE_DD_MM_YYYY = 0, DATE_MM_DD_YYYY = 1, DATE_YYYY_MM_DD = 2, DATE_FORMAT_COUNT };
   enum SYNC_DAY_WIFI_CHOICE { SYNC_DAY_WIFI_AUTO = 0, SYNC_DAY_WIFI_MANUAL = 1, SYNC_DAY_WIFI_CHOICE_COUNT };
   enum DAILY_GOAL_TARGET {
@@ -232,7 +232,70 @@ class CrossPointSettings {
   };
   enum SHORTCUT_LOCATION { SHORTCUT_HOME = 0, SHORTCUT_APPS = 1, SHORTCUT_LOCATION_COUNT };
   enum HOME_BOOK_SOURCE { HOME_BOOKS_RECENTS = 0, HOME_BOOKS_FAVORITES = 1, HOME_BOOK_SOURCE_COUNT };
+  enum LIBRARY_LAYOUT { LIBRARY_LAYOUT_4X4 = 0, LIBRARY_LAYOUT_3X3 = 1, LIBRARY_LAYOUT_2X2 = 2, LIBRARY_LAYOUT_COUNT };
+  enum LIBRARY_FILTER {
+    LIBRARY_FILTER_ALL = 0,
+    LIBRARY_FILTER_FAVOURITES = 1,
+    LIBRARY_FILTER_LATEST_READ = 2,
+    LIBRARY_FILTER_COUNT
+  };
+  enum LIBRARY_SORT {
+    LIBRARY_SORT_TITLE_ASC = 0,
+    LIBRARY_SORT_TITLE_DESC = 1,
+    LIBRARY_SORT_AUTHOR_ASC = 2,
+    LIBRARY_SORT_AUTHOR_DESC = 3,
+    LIBRARY_SORT_RECENT = 4,
+    LIBRARY_SORT_PROGRESS = 5,
+    LIBRARY_SORT_COUNT
+  };
   enum SLEEP_IMAGE_ORDER { SLEEP_IMAGE_SHUFFLE = 0, SLEEP_IMAGE_SEQUENTIAL = 1, SLEEP_IMAGE_ORDER_COUNT };
+  enum SCREENSAVER_ORDER { SCREENSAVER_SHUFFLE = 0, SCREENSAVER_SEQUENTIAL = 1, SCREENSAVER_ORDER_COUNT };
+  enum SCREENSAVER_INTERVAL {
+    SCREENSAVER_1_MIN = 0,
+    SCREENSAVER_5_MIN = 1,
+    SCREENSAVER_15_MIN = 2,
+    SCREENSAVER_30_MIN = 3,
+    SCREENSAVER_1_HOUR = 4,
+    SCREENSAVER_2_HOURS = 5,
+    SCREENSAVER_4_HOURS = 6,
+    SCREENSAVER_8_HOURS = 7,
+    SCREENSAVER_INTERVAL_COUNT
+  };
+  enum SCREENSAVER_WAKE_BUTTON {
+    SCREENSAVER_WAKE_ANY = 0,
+    SCREENSAVER_WAKE_BACK = 1,
+    SCREENSAVER_WAKE_CONFIRM = 2,
+    SCREENSAVER_WAKE_LEFT = 3,
+    SCREENSAVER_WAKE_RIGHT = 4,
+    SCREENSAVER_WAKE_UP = 5,
+    SCREENSAVER_WAKE_DOWN = 6,
+    SCREENSAVER_WAKE_POWER = 7,
+    SCREENSAVER_WAKE_PAGE_BACK = 8,
+    SCREENSAVER_WAKE_PAGE_FORWARD = 9,
+    SCREENSAVER_WAKE_BUTTON_COUNT
+  };
+  enum SCREENSAVER_FONT_SIZE {
+    SCREENSAVER_FONT_SMALL = 0,
+    SCREENSAVER_FONT_MEDIUM = 1,
+    SCREENSAVER_FONT_LARGE = 2,
+    SCREENSAVER_FONT_SIZE_COUNT
+  };
+  enum SCREENSAVER_TEXT_POSITION {
+    SCREENSAVER_TEXT_POS_TOP_LEFT = 0,
+    SCREENSAVER_TEXT_POS_TOP_RIGHT = 1,
+    SCREENSAVER_TEXT_POS_BOTTOM_LEFT = 2,
+    SCREENSAVER_TEXT_POS_BOTTOM_RIGHT = 3,
+    SCREENSAVER_TEXT_POS_CENTER = 4,
+    SCREENSAVER_TEXT_POS_RANDOM = 5,
+    SCREENSAVER_TEXT_POSITION_COUNT
+  };
+  enum SCREENSAVER_TEXT_STYLE {
+    SCREENSAVER_TEXT_WHITE = 0,
+    SCREENSAVER_TEXT_BLACK = 1,
+    SCREENSAVER_TEXT_WHITE_OUTLINED_BLACK = 2,
+    SCREENSAVER_TEXT_BLACK_OUTLINED_WHITE = 3,
+    SCREENSAVER_TEXT_STYLE_COUNT
+  };
 
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
@@ -245,6 +308,8 @@ class CrossPointSettings {
   uint8_t sleepScreenCoverFilter = NO_FILTER;
   // Use a full clean refresh when drawing the sleep screen
   uint8_t cleanSleepRefresh = 1;
+  // Cycle sleep screensaver on brief power-button tap during deep sleep (off by default)
+  uint8_t cycleScreensaverOnTap = 1;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
@@ -341,6 +406,8 @@ class CrossPointSettings {
   uint8_t readingStatsShortcutOrder = 5;
   uint8_t readingHeatmapShortcut = SHORTCUT_APPS;
   uint8_t readingHeatmapShortcutOrder = 6;
+  uint8_t libraryShortcut = SHORTCUT_APPS;
+  uint8_t libraryShortcutOrder = 7;
   uint8_t readingProfileShortcut = SHORTCUT_APPS;
   uint8_t readingProfileShortcutOrder = 7;
   uint8_t achievementsShortcut = SHORTCUT_APPS;
@@ -375,6 +442,7 @@ class CrossPointSettings {
   uint8_t readingStatsShortcutVisible = 1;
   uint8_t readingHeatmapShortcutVisible = 1;
   uint8_t readingProfileShortcutVisible = 1;
+  uint8_t libraryShortcutVisible = 1;
   uint8_t achievementsShortcutVisible = 1;
   uint8_t ifFoundShortcutVisible = 1;
   uint8_t readMeShortcutVisible = 1;
@@ -393,8 +461,31 @@ class CrossPointSettings {
   uint8_t embeddedStyle = 1;
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
+  uint8_t libraryLayout = LIBRARY_LAYOUT_3X3;
+  uint8_t libraryFilter = LIBRARY_FILTER_ALL;
+  uint8_t librarySort = LIBRARY_SORT_TITLE_ASC;
+  char librarySearchText[64] = "";
+  char libraryRootDir[128] = "/";
+  uint8_t libraryLastCleanupDay = 0;  // day-of-year of last zero-size thumb cleanup
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
+  // ScreenSaver settings
+  char screenSaverDirectory[128] = "";
+  uint8_t screenSaverOrder = SCREENSAVER_SHUFFLE;
+  uint8_t screenSaverInterval = SCREENSAVER_30_MIN;
+  uint8_t screenSaverWakeButton = SCREENSAVER_WAKE_ANY;
+  uint8_t screenSaverShortcut = SHORTCUT_APPS;
+  uint8_t screenSaverShortcutOrder = 20;
+  uint8_t screenSaverShortcutVisible = 1;
+  // ScreenSaver text overlay
+  char screenSaverText[128] = "";
+  uint8_t screenSaverFontSize = SCREENSAVER_FONT_SMALL;
+  uint8_t screenSaverTextPosition = SCREENSAVER_TEXT_POS_BOTTOM_RIGHT;
+  uint8_t screenSaverTextStyle = SCREENSAVER_TEXT_WHITE_OUTLINED_BLACK;
+  uint8_t screenSaverShowPanel = 0;
+  uint8_t screenSaverPanelColor = 0;   // 0=black, 1=white
+  uint8_t screenSaverPanelOpacity = 3; // 0=none, 1=25%, 2=50%, 3=75%
+  uint8_t screenSaverMinBattery = 0;   // 0=10%, 1=20%, 2=30%, ..., 8=90%
 
   ~CrossPointSettings() = default;
 

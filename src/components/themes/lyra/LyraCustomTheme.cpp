@@ -32,6 +32,15 @@ uint8_t getBookProgressPercent(const RecentBook& recentBook) {
   return 0;
 }
 
+const ReadingBookStats* getBookStats(const RecentBook& recentBook) {
+  if (!recentBook.bookId.empty()) {
+    if (const ReadingBookStats* stats = READING_STATS.findBook(recentBook.bookId)) {
+      return stats;
+    }
+  }
+  return READING_STATS.findBook(recentBook.path);
+}
+
 void drawMiniProgressBar(GfxRenderer& renderer, const Rect& rect, const uint8_t progressPercent) {
   renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
   const int fillWidth = std::max(0, (rect.width - 4) * std::min<int>(progressPercent, 100) / 100);
@@ -106,7 +115,23 @@ void LyraCustomTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, cons
       const int titleLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
       const int titleBlockHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
       const uint8_t progressPercent = getBookProgressPercent(recentBooks[i]);
-      const std::string progressText = std::to_string(progressPercent) + "%";
+      std::string progressText = std::to_string(progressPercent) + "%";
+      const ReadingBookStats* stats = getBookStats(recentBooks[i]);
+      if (stats != nullptr && !stats->completed && stats->lastProgressPercent >= 5 &&
+          stats->totalReadingMs >= 600000ULL) {
+        const uint64_t estimatedTotalMs =
+            (stats->totalReadingMs * 100ULL + stats->lastProgressPercent - 1) / stats->lastProgressPercent;
+        if (estimatedTotalMs > stats->totalReadingMs) {
+          const uint64_t remainingMs =
+              ((estimatedTotalMs - stats->totalReadingMs + 300000ULL - 1) / 300000ULL) * 300000ULL;
+          const uint64_t totalMinutes = remainingMs / 60000ULL;
+          if (totalMinutes >= 60) {
+            progressText += " ~" + std::to_string(totalMinutes / 60ULL) + "h " + std::to_string(totalMinutes % 60ULL) + "m";
+          } else {
+            progressText += " ~" + std::to_string(totalMinutes) + "m";
+          }
+        }
+      }
       const int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
       const int progressRowHeight = std::max(titleLineHeight, PROGRESS_BAR_HEIGHT);
       const int bottomBlockHeight =
