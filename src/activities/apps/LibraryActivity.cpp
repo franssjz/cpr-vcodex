@@ -23,6 +23,7 @@
 #include "MappedInputManager.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
+#include "components/icons/cover.h"
 #include "components/icons/heart.h"
 #include "components/LibraryPopupOverlay.h"
 #include "util/CoverRibbonBaker.h"
@@ -163,29 +164,20 @@ bool isInventoryStale(unsigned long invTimestamp) {
   return (now - invTimestamp) > INVENTORY_STALE_MS;
 }
 
-bool matchesSearchText(const std::string& text, const std::string& search) {
-  if (search.empty()) return true;
-  auto it = std::search(
-      text.begin(), text.end(),
-      search.begin(), search.end(),
-      [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) ==
-                                  std::tolower(static_cast<unsigned char>(b)); });
-  return it != text.end();
-}
-
 }  // namespace
 
 void LibraryActivity::applyLayoutFromSettings() {
   switch (SETTINGS.libraryLayout) {
     case CrossPointSettings::LIBRARY_LAYOUT_2X2:
-      gridColumns_ = 2; coverWidth_ = 202; coverHeight_ = 310; break;
+      gridColumns_ = 2; coverWidth_ = 202; coverHeight_ = 306; gap_ = 13; break;
     case CrossPointSettings::LIBRARY_LAYOUT_3X3:
-      gridColumns_ = 3; coverWidth_ = 130; coverHeight_ = 190; break;
+      gridColumns_ = 3; coverWidth_ = 130; coverHeight_ = 190; gap_ = 13; break;
     case CrossPointSettings::LIBRARY_LAYOUT_4X4:
     default:
-      gridColumns_ = 4; coverWidth_ = 100; coverHeight_ = 150; break;
+      gridColumns_ = 4; coverWidth_ = 100; coverHeight_ = 150; gap_ = 7; break;
   }
   gridsPerPage_ = gridColumns_ * gridColumns_;
+  rowPad_ = (gridColumns_ >= 4) ? 8 : 14;
 }
 
 void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter) {
@@ -248,7 +240,7 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
 
   saveInventoryToFile(newEntries);
 
-  entries_.clear();
+  unfilteredEntries_.clear();
   for (auto& e : newEntries) {
     bool include = false;
     switch (filter) {
@@ -262,7 +254,7 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
         break;
       }
     }
-    if (include) entries_.push_back(std::move(e));
+    if (include) unfilteredEntries_.push_back(std::move(e));
   }
 
   currentFilter_ = filter;
@@ -271,6 +263,36 @@ void LibraryActivity::rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter
 }
 
 void LibraryActivity::applyFilterAndSort() {
+  std::string searchLower = currentSearchText_;
+  for (auto& c : searchLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+  entries_.clear();
+  if (searchLower.empty()) {
+    entries_ = unfilteredEntries_;
+  } else {
+    for (const auto& e : unfilteredEntries_) {
+      std::string titleLower = e.title;
+      for (auto& c : titleLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      if (titleLower.find(searchLower) != std::string::npos) {
+        entries_.push_back(e);
+        continue;
+      }
+      if (!e.author.empty()) {
+        std::string authorLower = e.author;
+        for (auto& c : authorLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        if (authorLower.find(searchLower) != std::string::npos) {
+          entries_.push_back(e);
+          continue;
+        }
+      }
+      std::string pathLower = e.path;
+      for (auto& c : pathLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      if (pathLower.find(searchLower) != std::string::npos) {
+        entries_.push_back(e);
+      }
+    }
+  }
+
   auto compareEntries = [this](const LibraryEntry& a, const LibraryEntry& b) -> bool {
     switch (currentSort_) {
       case CrossPointSettings::LIBRARY_SORT_TITLE_ASC: {
@@ -333,6 +355,7 @@ void LibraryActivity::applyFilterAndSort() {
   selectorIndex_ = 0;
   coversComplete_ = false;
   coverGenIndex_ = -1;
+  forceRender_ = true;
 }
 
 void LibraryActivity::scanSd() {
@@ -345,7 +368,7 @@ void LibraryActivity::scanSd() {
     std::vector<LibraryEntry> cachedEntries;
     if (loadInventoryFromFile(cachedEntries, invTimestamp) && !isInventoryStale(invTimestamp)) {
       inventoryLoaded_ = true;
-      entries_ = std::move(cachedEntries);
+      unfilteredEntries_ = std::move(cachedEntries);
       applyFilterAndSort();
       LOG_DBG("LIB", "Loaded %d entries from inventory cache", static_cast<int>(entries_.size()));
       return;
@@ -354,9 +377,6 @@ void LibraryActivity::scanSd() {
   rebuildForFilter(currentFilter_);
 }
 
-// Generate cover thumb directly into parser cache — same approach as carousel.
-// Uses load(false,true) first (fast, existing cache), falls back to load(true,true).
-// Returns the resolved BMP path, or empty string on failure.
 std::string LibraryActivity::generateOneCover(const std::string& bookPath, int coverW, int coverH) {
   std::string fname = bookPath;
   size_t slash = fname.find_last_of('/');
@@ -364,7 +384,6 @@ std::string LibraryActivity::generateOneCover(const std::string& bookPath, int c
 
   if (FsHelpers::hasEpubExtension(fname)) {
     Epub epub(bookPath, "/.crosspoint");
-    // Fast path: try existing cache first (books already opened have it)
     if (!epub.load(false, true) && !epub.load(true, true)) return {};
     if (!epub.generateThumbBmp(coverW, coverH)) return {};
     std::string path = epub.getThumbBmpPath(coverW, coverH);
@@ -386,26 +405,6 @@ std::string LibraryActivity::generateOneCover(const std::string& bookPath, int c
     return path;
   }
   return {};
-}
-
-// Generate all missing covers for the current page in one batch.
-// Called from loop() only once per page.
-void LibraryActivity::generatePageCovers() {
-  int pageStart = (selectorIndex_ / gridsPerPage_) * gridsPerPage_;
-  int pageCount = std::min(gridsPerPage_, static_cast<int>(entries_.size()) - pageStart);
-  for (int i = 0; i < pageCount; ++i) {
-    int idx = pageStart + i;
-    LibraryEntry& e = entries_[idx];
-    if (e.coverFailed || !e.coverPath.empty()) continue;
-    std::string path = generateOneCover(e.path, coverWidth_, coverHeight_);
-    if (!path.empty()) {
-      e.coverPath = path;
-      CoverRibbonBaker::bakeIntoFile(path, e.path);
-    } else {
-      e.coverFailed = true;
-    }
-  }
-  coversComplete_ = true;
 }
 
 // ---- Popup Methods ----
@@ -514,7 +513,7 @@ void LibraryActivity::selectPopupItem() {
       currentSearchText_.clear();
       SETTINGS.librarySearchText[0] = '\0';
       SETTINGS.saveToFile();
-      rebuildForFilter(currentFilter_);
+      applyFilterAndSort();
     }
   }
   closePopup();
@@ -542,6 +541,7 @@ void LibraryActivity::onEnter() {
   Activity::onEnter();
   applyLayoutFromSettings();
   selectorIndex_ = 0; coverGenIndex_ = -1; coversComplete_ = false; lastPage_ = -1;
+  lastRenderedPage_ = -1; forceRender_ = true;
   popupMode_ = PopupMode::None;
   upHeld_ = false; upLongTriggered_ = false;
   downHeld_ = false; downLongTriggered_ = false;
@@ -552,6 +552,7 @@ void LibraryActivity::onEnter() {
 void LibraryActivity::onExit() {
   Activity::onExit();
   entries_.clear();
+  unfilteredEntries_.clear();
 }
 
 void LibraryActivity::loop() {
@@ -578,12 +579,33 @@ void LibraryActivity::loop() {
 
   const int total = static_cast<int>(entries_.size());
 
-  // ---- Cover Generation: batch-generate all page covers on first entry ----
+  // ---- Cover Generation: generate one cover per loop for visible progress ----
   if (!coversComplete_ && total > 0) {
-    generatePageCovers();
+    const int pageStart = (selectorIndex_ / gridsPerPage_) * gridsPerPage_;
+    const int pageCount = std::min(gridsPerPage_, total - pageStart);
+    if (coverGenIndex_ < 0) coverGenIndex_ = 0;
+    const int idx = pageStart + coverGenIndex_;
+    LibraryEntry& e = entries_[idx];
+    if (!e.coverFailed && e.coverPath.empty()) {
+      std::string path = generateOneCover(e.path, coverWidth_, coverHeight_);
+      if (!path.empty()) {
+        e.coverPath = path;
+        CoverRibbonBaker::bakeIntoFile(path, e.path);
+      } else {
+        e.coverFailed = true;
+      }
+    }
+    coverGenIndex_++;
+    if (coverGenIndex_ >= pageCount) {
+      coversComplete_ = true;
+      coverGenIndex_ = -1;
+    }
+    forceRender_ = true;
     requestUpdate();
     return;
   }
+
+  if (total <= 0) return;
 
   // ---- Confirm: short press opens book, long press opens context menu ----
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -652,7 +674,6 @@ void LibraryActivity::loop() {
     }
     return;
   }
-  if (total <= 0) return;
 
   // ---- Long-press detection for Up (Sort) and Down (Filter) ----
   if (mappedInput.isPressed(MappedInputManager::Button::Up)) {
@@ -672,20 +693,19 @@ void LibraryActivity::loop() {
     }
   }
 
-  // ---- Up short release = navigate up ----
+  // ---- Up short release = move up one row, or go to previous page last book ----
   if (mappedInput.wasReleased(MappedInputManager::Button::Up)) {
     if (upHeld_ && !upLongTriggered_) {
       int ps = (selectorIndex_ / gridsPerPage_) * gridsPerPage_;
       int r = (selectorIndex_ - ps) / gridColumns_;
-      int c = selectorIndex_ % gridColumns_;
       if (r == 0) {
-        int prev = ps - gridsPerPage_; if (prev < 0) prev = ((total + gridsPerPage_ - 1) / gridsPerPage_ - 1) * gridsPerPage_;
-        int items = std::min(gridsPerPage_, total - prev);
-        int rows = items / gridColumns_;
-        int lc = items - rows * gridColumns_;
-        int tc = (c >= lc && lc > 0) ? lc - 1 : c;
-        selectorIndex_ = prev + (rows - 1) * gridColumns_ + tc;
-      } else { selectorIndex_ -= gridColumns_; }
+        int prev = ps - gridsPerPage_;
+        if (prev < 0) prev = ((total + gridsPerPage_ - 1) / gridsPerPage_ - 1) * gridsPerPage_;
+        int prevItems = std::min(gridsPerPage_, total - prev);
+        selectorIndex_ = prev + prevItems - 1;
+      } else {
+        selectorIndex_ -= gridColumns_;
+      }
       int curPage = selectorIndex_ / gridsPerPage_;
       if (curPage != lastPage_) { coversComplete_ = false; lastPage_ = curPage; }
       requestUpdate();
@@ -693,20 +713,21 @@ void LibraryActivity::loop() {
     upHeld_ = false; upLongTriggered_ = false;
   }
 
-  // ---- Down short release = navigate down ----
+  // ---- Down short release = move down one row, or go to next page first book ----
   if (mappedInput.wasReleased(MappedInputManager::Button::Down)) {
     if (downHeld_ && !downLongTriggered_) {
       int ps = (selectorIndex_ / gridsPerPage_) * gridsPerPage_;
-      int items = std::min(gridsPerPage_, total - ps);
-      int rows = items / gridColumns_;
+      int pageItems = std::min(gridsPerPage_, total - ps);
+      int rows = pageItems / gridColumns_;
       int r = (selectorIndex_ - ps) / gridColumns_;
-      int c = selectorIndex_ % gridColumns_;
-      int nr = ps + (r + 1) * gridColumns_ + c;
-      if (r >= rows - 1 || nr >= total) {
-        int ns = ps + gridsPerPage_; if (ns >= total) ns = 0;
-        int ni = ns + c; if (ni >= total) ni = ns;
-        selectorIndex_ = ni;
-      } else { selectorIndex_ = nr; }
+      int nr = selectorIndex_ + gridColumns_;
+      if (r >= rows - 1 || nr >= total || nr >= ps + pageItems) {
+        int ns = ps + gridsPerPage_;
+        if (ns >= total) ns = 0;
+        selectorIndex_ = ns;
+      } else {
+        selectorIndex_ = nr;
+      }
       int curPage = selectorIndex_ / gridsPerPage_;
       if (curPage != lastPage_) { coversComplete_ = false; lastPage_ = curPage; }
       requestUpdate();
@@ -714,6 +735,7 @@ void LibraryActivity::loop() {
     downHeld_ = false; downLongTriggered_ = false;
   }
 
+  // ---- Left/Right: sequential wrapping ----
   bool moved = false;
   if (mappedInput.wasReleased(MappedInputManager::Button::Left)) {
     selectorIndex_ = (selectorIndex_ > 0) ? selectorIndex_ - 1 : total - 1; moved = true;
@@ -729,13 +751,23 @@ void LibraryActivity::loop() {
 }
 
 void LibraryActivity::render(RenderLock&&) {
+  const int total = static_cast<int>(entries_.size());
+  const int curPageRaw = total > 0 ? selectorIndex_ / gridsPerPage_ : 0;
+  // Skip render only when nothing changed: same page, same selector, covers complete, no popup, no force.
+  if (!forceRender_ && popupMode_ == PopupMode::None && coversComplete_ &&
+      curPageRaw == lastRenderedPage_ && selectorIndex_ == lastRenderedSelectorIndex_) {
+    return;
+  }
+  forceRender_ = false;
+  lastRenderedPage_ = curPageRaw;
+  lastRenderedSelectorIndex_ = selectorIndex_;
+
   renderer.clearScreen();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const int total = static_cast<int>(entries_.size());
   const int totalPages = total > 0 ? (total + gridsPerPage_ - 1) / gridsPerPage_ : 0;
-  const int curPage = total > 0 ? selectorIndex_ / gridsPerPage_ + 1 : 0;
+  const int curPage = total > 0 ? curPageRaw + 1 : 0;
 
   char hdrBuf[32] = {};
   if (total > 0) snprintf(hdrBuf, sizeof(hdrBuf), "%d/%d", curPage, totalPages);
@@ -791,60 +823,58 @@ void LibraryActivity::render(RenderLock&&) {
 
   const int pageStart = (curPage - 1) * gridsPerPage_;
   const int pageCount = std::min(gridsPerPage_, total - pageStart);
-  const int gap = (gridColumns_ >= 4) ? 8 : 16;
-  const int rowPad = (gridColumns_ >= 4) ? 8 : 14;
+  const int gap = gap_;
+  const int rowPad = rowPad_;
   const int gridW = gridColumns_ * coverWidth_ + (gridColumns_ - 1) * gap;
   const int x0 = (pageWidth - gridW) / 2;
   const int rowH = coverHeight_ + rowPad;
 
-  int missingCovers = 0;
   for (int i = 0; i < pageCount; ++i) {
     const int idx = pageStart + i;
+    const auto& cp = entries_[idx].coverPath;
+    const bool hasCover = !entries_[idx].coverFailed && !cp.empty();
     const int col = i % gridColumns_;
     const int row = i / gridColumns_;
     const int x = x0 + col * (coverWidth_ + gap);
     const int y = contentTop + row * rowH;
     bool drawn = false;
-    bool isFailed = entries_[idx].coverFailed;
-    const auto& cp = entries_[idx].coverPath;
-    if (!isFailed && !cp.empty()) {
-      if (!entries_[idx].coverReady && !Storage.exists(cp.c_str())) {
-        entries_[idx].coverPath.clear();
-      } else {
-        FsFile file;
-        if (Storage.openFileForRead("LIB", cp, file)) {
-          Bitmap bmp(file);
-          if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.getWidth() > 0 && bmp.getHeight() > 0) {
-            const float bmpRatio = static_cast<float>(bmp.getWidth()) / static_cast<float>(bmp.getHeight());
-            const float tileRatio = static_cast<float>(coverWidth_) / static_cast<float>(coverHeight_);
-            const float cropX = (bmpRatio > tileRatio) ? (1.0f - tileRatio / bmpRatio) : 0.0f;
-            const float cropY = (bmpRatio < tileRatio) ? (1.0f - bmpRatio / tileRatio) : 0.0f;
-            renderer.fillRoundedRect(x, y, coverWidth_, coverHeight_, COVER_CORNER_RADIUS, Color::White);
-            renderer.drawBitmap(bmp, x, y, coverWidth_, coverHeight_, cropX, cropY);
-            drawn = true;
-            entries_[idx].coverReady = true;
-          }
-          file.close();
+    if (hasCover) {
+      FsFile file;
+      if (Storage.openFileForRead("LIB", cp, file)) {
+        Bitmap bmp(file);
+        if (bmp.parseHeaders() == BmpReaderError::Ok && bmp.getWidth() > 0 && bmp.getHeight() > 0) {
+          const float bmpRatio = static_cast<float>(bmp.getWidth()) / static_cast<float>(bmp.getHeight());
+          const float tileRatio = static_cast<float>(coverWidth_) / static_cast<float>(coverHeight_);
+          const float cropX = (bmpRatio > tileRatio) ? (1.0f - tileRatio / bmpRatio) : 0.0f;
+          const float cropY = (bmpRatio < tileRatio) ? (1.0f - bmpRatio / tileRatio) : 0.0f;
+          renderer.fillRoundedRect(x, y, coverWidth_, coverHeight_, COVER_CORNER_RADIUS, Color::White);
+          renderer.drawBitmap(bmp, x, y, coverWidth_, coverHeight_, cropX, cropY);
+          drawn = true;
         }
-        if (!drawn) { entries_[idx].coverPath.clear(); entries_[idx].coverReady = false; }
+        file.close();
       }
     }
     if (!drawn) {
-      renderer.fillRoundedRect(x, y, coverWidth_, coverHeight_, COVER_CORNER_RADIUS, Color::White);
       renderer.drawRoundedRect(x, y, coverWidth_, coverHeight_, 1, COVER_CORNER_RADIUS, true);
+      renderer.fillRoundedRect(x, y + coverHeight_ / 3, coverWidth_, 2 * coverHeight_ / 3 + 1,
+                               COVER_CORNER_RADIUS, false, false, true, true, Color::Black);
+      const int iconSize = std::min(32, std::min(coverWidth_ - 4, coverHeight_ / 3 - 4));
+      const int iconX = x + (coverWidth_ - iconSize) / 2;
+      const int iconY = y + std::max(4, (coverHeight_ / 3 - iconSize) / 2);
+      renderer.drawIcon(::CoverIcon, iconX, iconY, iconSize, iconSize);
       std::string t = entries_[idx].title;
       if (t.empty()) t = filenameWithoutExtension(entries_[idx].path);
-      constexpr int P = 6;
-      auto lines = renderer.wrappedText(SMALL_FONT_ID, t.c_str(), coverWidth_ - 2 * P, 5, EpdFontFamily::BOLD);
+      constexpr int P = 4;
+      const int textAreaH = 2 * coverHeight_ / 3 - 8;
+      auto lines = renderer.wrappedText(SMALL_FONT_ID, t.c_str(), coverWidth_ - 2 * P, 3, EpdFontFamily::BOLD);
       int lh = renderer.getLineHeight(SMALL_FONT_ID);
-      int ty = y + (coverHeight_ - static_cast<int>(lines.size()) * lh) / 2;
+      int ty = y + coverHeight_ / 3 + (textAreaH - static_cast<int>(lines.size()) * lh) / 2;
       for (auto& ln : lines) {
         int tw = renderer.getTextWidth(SMALL_FONT_ID, ln.c_str(), EpdFontFamily::BOLD);
-        renderer.drawText(SMALL_FONT_ID, x + (coverWidth_ - tw) / 2, ty, ln.c_str(), true, EpdFontFamily::BOLD);
+        renderer.drawText(SMALL_FONT_ID, x + (coverWidth_ - tw) / 2, ty, ln.c_str(), false, EpdFontFamily::BOLD);
         ty += lh;
       }
     }
-    if (!drawn && !isFailed) missingCovers++;
     if (drawn) {
       const auto* rbStats = READING_STATS.findBook(entries_[idx].path);
       const bool isComplete = rbStats && rbStats->completed;
@@ -870,9 +900,18 @@ void LibraryActivity::render(RenderLock&&) {
     }
   }
 
-  if (!coversComplete_ && missingCovers > 0) {
+  if (!coversComplete_) {
+    const int pageStart = (curPage - 1) * gridsPerPage_;
+    const int pageCount = std::min(gridsPerPage_, total - pageStart);
+    int readyCount = 0;
+    for (int i = 0; i < pageCount; ++i) {
+      const auto& e = entries_[pageStart + i];
+      if (!e.coverPath.empty() || e.coverFailed) readyCount++;
+    }
     Rect pr = GUI.drawPopup(renderer, tr(STR_INDEXING));
-    if (pr.width > 0 && pr.height > 0) GUI.fillPopupProgress(renderer, pr, (pageCount - missingCovers) * 100 / std::max(1, pageCount));
+    if (pr.width > 0 && pr.height > 0) {
+      GUI.fillPopupProgress(renderer, pr, readyCount * 100 / std::max(1, pageCount));
+    }
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
@@ -884,15 +923,19 @@ void LibraryActivity::render(RenderLock&&) {
 }
 
 void LibraryActivity::deleteLibraryCovers(const std::string& bookPath) {
-  for (auto& e : entries_) {
-    if (e.path == bookPath) {
-      if (!e.coverPath.empty() && Storage.exists(e.coverPath.c_str())) {
-        Storage.remove(e.coverPath.c_str());
+  auto clearCover = [&](std::vector<LibraryEntry>& vec) {
+    for (auto& e : vec) {
+      if (e.path == bookPath) {
+        if (!e.coverPath.empty() && Storage.exists(e.coverPath.c_str())) {
+          Storage.remove(e.coverPath.c_str());
+        }
+        e.coverPath.clear(); e.coverFailed = false;
+        break;
       }
-      e.coverPath.clear(); e.coverReady = false; e.coverFailed = false;
-      break;
     }
-  }
+  };
+  clearCover(entries_);
+  clearCover(unfilteredEntries_);
 }
 
 void LibraryActivity::deletePageCovers() {
@@ -902,15 +945,19 @@ void LibraryActivity::deletePageCovers() {
     if (!entries_[i].coverPath.empty() && Storage.exists(entries_[i].coverPath.c_str())) {
       Storage.remove(entries_[i].coverPath.c_str());
     }
-    entries_[i].coverPath.clear(); entries_[i].coverReady = false; entries_[i].coverFailed = false;
+    entries_[i].coverPath.clear(); entries_[i].coverFailed = false;
   }
 }
 
 void LibraryActivity::deleteAllLibraryCovers() {
-  for (auto& e : entries_) {
-    if (!e.coverPath.empty() && Storage.exists(e.coverPath.c_str())) {
-      Storage.remove(e.coverPath.c_str());
+  auto clearAll = [](std::vector<LibraryEntry>& vec) {
+    for (auto& e : vec) {
+      if (!e.coverPath.empty() && Storage.exists(e.coverPath.c_str())) {
+        Storage.remove(e.coverPath.c_str());
+      }
+      e.coverPath.clear(); e.coverFailed = false;
     }
-    e.coverPath.clear(); e.coverReady = false; e.coverFailed = false;
-  }
+  };
+  clearAll(entries_);
+  clearAll(unfilteredEntries_);
 }

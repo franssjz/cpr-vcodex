@@ -14,25 +14,27 @@ struct LibraryEntry {
   std::string author;
   std::string coverPath;
   bool coverFailed = false;
-  bool coverReady = false;
 };
 
 class LibraryActivity final : public Activity {
  private:
   int selectorIndex_ = 0;
   std::vector<LibraryEntry> entries_;
+  std::vector<LibraryEntry> unfilteredEntries_;
   int coverGenIndex_ = -1;
   bool coversComplete_ = false;
   int lastPage_ = -1;
   bool inventoryLoaded_ = false;
   mutable int lastRenderedPage_ = -1;
-  mutable bool lastCoversComplete_ = false;
-  mutable std::vector<bool> coverDrawn_;
+  mutable int lastRenderedSelectorIndex_ = -1;
+  mutable bool forceRender_ = true;
 
   int coverWidth_ = 100;
   int coverHeight_ = 150;
   int gridColumns_ = 4;
   int gridsPerPage_ = 16;
+  int gap_ = 7;
+  int rowPad_ = 8;
   CrossPointSettings::LIBRARY_FILTER currentFilter_ = CrossPointSettings::LIBRARY_FILTER_ALL;
   CrossPointSettings::LIBRARY_SORT currentSort_ = CrossPointSettings::LIBRARY_SORT_TITLE_ASC;
   std::string currentSearchText_;
@@ -52,9 +54,9 @@ class LibraryActivity final : public Activity {
   void applyLayoutFromSettings();
   void scanSd();
   void applyFilterAndSort();
-  void generatePageCovers();
   std::string generateOneCover(const std::string& bookPath, int coverW, int coverH);
   void deleteLibraryCovers(const std::string& bookPath);
+  void resetPageCovers();
   void deletePageCovers();
   void deleteAllLibraryCovers();
   void rebuildForFilter(CrossPointSettings::LIBRARY_FILTER filter);
