@@ -79,20 +79,12 @@ class ChapterHtmlSlimParser {
   bool lowMemoryAbort = false;
   bool attemptedTextLayoutFontCacheRelease = false;
 
-  struct CachedImageDimensions {
-    std::string resolvedPath;
-    ImageDimensions dimensions = {0, 0};
-  };
-
-  struct CachedImagePath {
-    std::string resolvedPath;
-    int16_t displayWidth = 0;
-    int16_t displayHeight = 0;
-    std::string cachePath;
-  };
-
-  std::vector<CachedImageDimensions> imageDimensionsCache;
-  std::vector<CachedImagePath> imagePathCache;
+  std::string lastImageDimensionsPath;
+  ImageDimensions lastImageDimensions = {0, 0};
+  bool hasLastImageDimensions = false;
+  std::string lastRenderedImagePath;
+  uint16_t lastRenderedImageCount = 0;
+  uint32_t lastLongParseServiceMs = 0;
 
   // Style tracking (replaces depth-based approach)
   struct StyleStackEntry {
@@ -171,8 +163,8 @@ class ChapterHtmlSlimParser {
   bool isReferencedAnchor(const std::string& anchor) const;
   bool shouldRecordAnchor(const char* elementName, const std::string& anchor) const;
   bool readImageDimensions(const std::string& resolvedPath, ImageDimensions& dims);
-  std::string getReusableImageCachePath(const std::string& resolvedPath, const std::string& ext, int displayWidth,
-                                        int displayHeight);
+  bool shouldSuppressRepeatedImage(const std::string& resolvedPath);
+  void serviceLongParse(const char* stage);
   void startNewTextBlock(const BlockStyle& blockStyle);
   void flushPendingAnchor();
   void flushPartWordBuffer();

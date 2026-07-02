@@ -27,8 +27,8 @@ constexpr size_t MIN_SIZE_FOR_POPUP = 10 * 1024;  // 10KB
 constexpr size_t PARSE_BUFFER_SIZE = 1024;
 constexpr size_t MAX_ANCHORS_PER_CHAPTER = 1024;
 constexpr size_t MAX_REFERENCED_ANCHORS_PER_CHAPTER = 1024;
-constexpr size_t MAX_IMAGE_DIMENSION_CACHE_ENTRIES = 24;
-constexpr size_t MAX_IMAGE_PATH_CACHE_ENTRIES = 64;
+constexpr uint16_t MAX_REPEATED_IMAGE_RENDERS_PER_CHAPTER = 16;
+constexpr uint32_t LONG_PARSE_SERVICE_INTERVAL_MS = 50;
 constexpr uint32_t MIN_FREE_HEAP_FOR_TEXT_LAYOUT = 44 * 1024;
 constexpr uint32_t MIN_MAX_ALLOC_FOR_TEXT_LAYOUT = 32 * 1024;
 constexpr uint32_t MIN_FREE_HEAP_FOR_TABLE_BUFFERING = 64 * 1024;
@@ -332,11 +332,9 @@ bool ChapterHtmlSlimParser::shouldRecordAnchor(const char* elementName, const st
 }
 
 bool ChapterHtmlSlimParser::readImageDimensions(const std::string& resolvedPath, ImageDimensions& dims) {
-  for (const auto& cached : imageDimensionsCache) {
-    if (cached.resolvedPath == resolvedPath) {
-      dims = cached.dimensions;
-      return true;
-    }
+  if (hasLastImageDimensions && lastImageDimensionsPath == resolvedPath) {
+    dims = lastImageDimensions;
+    return true;
   }
 
   auto* imagePrefix = static_cast<uint8_t*>(malloc(IMAGE_DIMENSION_PREFIX_BYTES));
@@ -347,28 +345,41 @@ bool ChapterHtmlSlimParser::readImageDimensions(const std::string& resolvedPath,
       parseImageDimensionsFromPrefix(imagePrefix, imagePrefixSize, dims);
   free(imagePrefix);
 
-  if (dimensionsRead && imageDimensionsCache.size() < MAX_IMAGE_DIMENSION_CACHE_ENTRIES) {
-    imageDimensionsCache.push_back({resolvedPath, dims});
+  if (dimensionsRead) {
+    lastImageDimensionsPath = resolvedPath;
+    lastImageDimensions = dims;
+    hasLastImageDimensions = true;
   }
 
   return dimensionsRead;
 }
 
-std::string ChapterHtmlSlimParser::getReusableImageCachePath(const std::string& resolvedPath, const std::string& ext,
-                                                             const int displayWidth, const int displayHeight) {
-  for (const auto& cached : imagePathCache) {
-    if (cached.resolvedPath == resolvedPath && cached.displayWidth == displayWidth &&
-        cached.displayHeight == displayHeight) {
-      return cached.cachePath;
+bool ChapterHtmlSlimParser::shouldSuppressRepeatedImage(const std::string& resolvedPath) {
+  if (lastRenderedImagePath == resolvedPath) {
+    if (lastRenderedImageCount < UINT16_MAX) {
+      lastRenderedImageCount++;
     }
+  } else {
+    lastRenderedImagePath = resolvedPath;
+    lastRenderedImageCount = 1;
   }
 
-  std::string cachedImagePath = imageBasePath + std::to_string(imageCounter++) + ext;
-  if (imagePathCache.size() < MAX_IMAGE_PATH_CACHE_ENTRIES && displayWidth > 0 && displayHeight > 0) {
-    imagePathCache.push_back({resolvedPath, static_cast<int16_t>(displayWidth), static_cast<int16_t>(displayHeight),
-                              cachedImagePath});
+  if (lastRenderedImageCount == MAX_REPEATED_IMAGE_RENDERS_PER_CHAPTER + 1) {
+    LOG_DBG("EHP", "Suppressing repeated chapter image after %u uses: %s",
+            MAX_REPEATED_IMAGE_RENDERS_PER_CHAPTER, resolvedPath.c_str());
   }
-  return cachedImagePath;
+
+  return lastRenderedImageCount > MAX_REPEATED_IMAGE_RENDERS_PER_CHAPTER;
+}
+
+void ChapterHtmlSlimParser::serviceLongParse(const char* stage) {
+  (void)stage;
+  const uint32_t now = millis();
+  if (lastLongParseServiceMs != 0 && now - lastLongParseServiceMs < LONG_PARSE_SERVICE_INTERVAL_MS) {
+    return;
+  }
+  lastLongParseServiceMs = now;
+  delay(1);
 }
 
 void ChapterHtmlSlimParser::collectReferencedAnchors() {
@@ -384,6 +395,7 @@ void ChapterHtmlSlimParser::collectReferencedAnchors() {
   char buffer[PARSE_BUFFER_SIZE + 1] = {};
 
   while (file.available() > 0 && referencedAnchors.size() < MAX_REFERENCED_ANCHORS_PER_CHAPTER) {
+    serviceLongParse("anchor scan");
     const size_t len = file.read(buffer, PARSE_BUFFER_SIZE);
     if (len == 0) break;
 
@@ -575,6 +587,7 @@ void ChapterHtmlSlimParser::emitPage(const uint32_t xhtmlByteOffset) {
   }
   completePageFn(std::move(currentPage), {xhtmlByteOffset, xpathParagraphIndex, xpathListItemIndex});
   completedPageCount++;
+  serviceLongParse("page emit");
 }
 
 void ChapterHtmlSlimParser::emitBufferedTableAsParagraphs(BufferedTable& table) {
@@ -1180,6 +1193,12 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
             std::string resolvedPath = FsHelpers::normalisePath(FsHelpers::decodeUriEscapes(self->contentBase + src));
 
             if (ImageDecoderFactory::isFormatSupported(resolvedPath)) {
+              if (self->shouldSuppressRepeatedImage(resolvedPath)) {
+                self->skipUntilDepth = self->depth;
+                self->depth += 1;
+                return;
+              }
+
               std::string ext;
               size_t extPos = resolvedPath.rfind('.');
               if (extPos != std::string::npos) {
@@ -1333,8 +1352,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                 // Apply top margin from container block
                 self->currentPageNextY += imageMarginTop;
 
-                const std::string cachedImagePath =
-                    self->getReusableImageCachePath(resolvedPath, ext, displayWidth, displayHeight);
+                const std::string cachedImagePath = self->imageBasePath + std::to_string(self->imageCounter++) + ext;
 
                 // Create ImageBlock and add to page
                 auto imageBlock = std::shared_ptr<ImageBlock>(new (std::nothrow) ImageBlock(
@@ -1732,6 +1750,10 @@ void XMLCALL ChapterHtmlSlimParser::characterData(void* userData, const XML_Char
   }
 
   for (int i = 0; i < len; i++) {
+    if ((i & 0xFF) == 0) {
+      self->serviceLongParse("character data");
+    }
+
     if (isWhitespace(s[i])) {
       // Currently looking at whitespace, if there's anything in the partWordBuffer, flush it
       if (self->partWordBufferIndex > 0) {
@@ -2021,6 +2043,7 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
 }
 
 bool ChapterHtmlSlimParser::parseAndBuildPages() {
+  lastLongParseServiceMs = 0;
   collectReferencedAnchors();
 
   // Initialize block style stack with a root entry representing "no ancestor block elements".
@@ -2106,6 +2129,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
       return false;
     }
 
+    serviceLongParse("parse buffer");
+
     if (lowMemoryAbort) {
       const auto heap = MemoryBudget::snapshot();
       LOG_ERR("EHP", "Aborting parse because of low heap (free=%u, maxAlloc=%u)", heap.freeHeap, heap.maxAllocHeap);
@@ -2142,6 +2167,8 @@ bool ChapterHtmlSlimParser::parseAndBuildPages() {
 }
 
 void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
+  serviceLongParse("line layout");
+
   if (shouldAbortForLowMemory("line layout")) {
     return;
   }
@@ -2184,6 +2211,8 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line) {
 }
 
 void ChapterHtmlSlimParser::makePages() {
+  serviceLongParse("text layout");
+
   if (shouldAbortForLowMemory("text layout")) {
     return;
   }
