@@ -101,10 +101,13 @@ class KOReaderSyncActivity final : public Activity {
   // Timestamp when completion state was entered (for auto-close)
   unsigned long uploadCompleteTime = 0;
   bool closeRequested = false;
+  bool networkMemoryReleasePending = false;
 
   void onWifiSelectionComplete(bool success);
   void performSync();
   void performUpload();
+  void prepareNetworkMemory(const char* stage);
+  void restoreNetworkMemory(const char* stage);
   void closeCancelled();
   void resumeReader(KOReaderSyncOutcomeState outcome, const SyncResult* appliedResult = nullptr);
   void returnAfterAutoPush();

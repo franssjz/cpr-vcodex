@@ -1,13 +1,9 @@
 #include "KOReaderAuthActivity.h"
 
-#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
-#include <SdCardFont.h>
 #include <WiFi.h>
-#include <esp_heap_caps.h>
-#include <esp_system.h>
 
 #include "KOReaderCredentialStore.h"
 #include "KOReaderSyncClient.h"
@@ -16,38 +12,16 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/NetworkMemory.h"
 #include "util/TimeUtils.h"
 
 namespace {
-void logAuthMemSnapshot(const char* stage) {
-  const uint32_t freeHeap = esp_get_free_heap_size();
-  const uint32_t contigHeap = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
-  LOG_DBG("KOSync", "Auth mem[%s]: free=%lu contig=%lu", stage, freeHeap, contigHeap);
+void prepareMemoryBeforeAuthNetwork(GfxRenderer& renderer, const char* stage) {
+  NetworkMemory::prepareBeforeNetwork(renderer, "KOSync", stage);
 }
 
-void trimMemoryBeforeAuthTls(const GfxRenderer& renderer) {
-  if (auto* cacheManager = renderer.getFontCacheManager()) {
-    cacheManager->clearCache();
-    cacheManager->resetStats();
-    LOG_DBG("KOSync", "Cleared font cache before auth TLS");
-  }
-
-  unsigned releasedSdFonts = 0;
-  for (const auto& entry : renderer.getSdCardFonts()) {
-    if (!entry.second) continue;
-    entry.second->releaseForLowMemory();
-    releasedSdFonts++;
-  }
-  if (releasedSdFonts > 0) {
-    LOG_DBG("KOSync", "Released %u SD font runtime cache(s) before auth TLS", releasedSdFonts);
-  }
-}
-
-void prepareMemoryBeforeAuthNetwork(const GfxRenderer& renderer, const char* stage) {
-  TimeUtils::stopNtp();
-  trimMemoryBeforeAuthTls(renderer);
-  delay(20);
-  logAuthMemSnapshot(stage);
+void restoreMemoryAfterAuthNetwork(GfxRenderer& renderer, const char* stage) {
+  NetworkMemory::restoreAfterNetwork(renderer, "KOSync", stage);
 }
 }  // namespace
 
@@ -85,6 +59,7 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
 void KOReaderAuthActivity::performAuthentication() {
   prepareMemoryBeforeAuthNetwork(renderer, "before_authenticate");
   const auto result = KOReaderSyncClient::authenticate();
+  restoreMemoryAfterAuthNetwork(renderer, "after_authenticate_restore");
 
   {
     RenderLock lock(*this);

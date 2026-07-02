@@ -22,6 +22,10 @@ class SdCardFontSystem {
   /// Also re-discovers if the registry has been marked dirty (e.g. by web upload).
   void ensureLoaded(GfxRenderer& renderer);
 
+  /// Drop SD-font runtime state before TLS/network operations. ensureLoaded()
+  /// re-discovers and reloads the configured font when normal reading resumes.
+  bool releaseForNetwork(GfxRenderer& renderer);
+
   /// Resolve an SD card font ID from family name + fontSize enum.
   /// Returns 0 if not found. Used by CrossPointSettings::getReaderFontId().
   int resolveFontId(const char* familyName, uint8_t fontSizeEnum) const;
@@ -40,7 +44,9 @@ class SdCardFontSystem {
   /// Used by the web UI so uploaded/deleted fonts appear in the list
   /// without waiting for the reader activity to run ensureLoaded().
   void refreshIfDirty() {
-    if (registryDirty_.exchange(false, std::memory_order_acquire)) {
+    const bool registryWasDirty = registryDirty_.exchange(false, std::memory_order_acquire);
+    const bool registryWasReleased = registryReleasedForNetwork_.exchange(false, std::memory_order_acquire);
+    if (registryWasDirty || registryWasReleased) {
       registry_.discover();
     }
   }
@@ -49,4 +55,5 @@ class SdCardFontSystem {
   SdCardFontRegistry registry_;
   SdCardFontManager manager_;
   std::atomic<bool> registryDirty_{false};
+  std::atomic<bool> registryReleasedForNetwork_{false};
 };

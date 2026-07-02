@@ -15,6 +15,7 @@
 #include "CrossPointState.h"
 #include "AchievementsStore.h"
 #include "MappedInputManager.h"
+#include "ProgressFile.h"
 #include "ReadingStatsStore.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
@@ -793,22 +794,18 @@ void TxtReaderActivity::saveProgress() const {
       totalPages > 0 ? static_cast<uint8_t>(std::min(100, ((currentPage + 1) * 100) / totalPages)) : 0;
   READING_STATS.updateProgress(progressPercent, totalPages > 0 && currentPage + 1 >= totalPages, "", progressPercent);
 
-  FsFile f;
   std::string progressPath = getStableProgressPath(stableBookId);
   if (!progressPath.empty()) {
     BookIdentity::ensureStableDataDir(stableBookId);
   } else {
     progressPath = getLegacyProgressPath(*txt);
   }
-  if (Storage.openFileForWrite("TRS", progressPath, f)) {
-    uint8_t data[4];
-    data[0] = currentPage & 0xFF;
-    data[1] = (currentPage >> 8) & 0xFF;
-    data[2] = 0;
-    data[3] = 0;
-    f.write(data, 4);
-    f.close();
-  }
+  uint8_t data[4];
+  data[0] = currentPage & 0xFF;
+  data[1] = (currentPage >> 8) & 0xFF;
+  data[2] = 0;
+  data[3] = 0;
+  ProgressFile::writeAtomicPath("TRS", progressPath, data, sizeof(data));
 }
 
 void TxtReaderActivity::loadProgress() {

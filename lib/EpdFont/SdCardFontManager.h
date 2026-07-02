@@ -24,6 +24,7 @@ class SdCardFontManager {
 
   // Unload everything, unregister from renderer.
   void unloadAll(GfxRenderer& renderer);
+  bool hasLoadedFont() const { return !loaded_.empty(); }
 
   // Look up the font ID for the loaded family. Returns 0 if nothing loaded
   // or familyName doesn't match.

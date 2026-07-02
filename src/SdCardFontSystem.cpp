@@ -13,6 +13,7 @@ static uint8_t fontSizeEnumFromSettings() {
 
 void SdCardFontSystem::begin(GfxRenderer& renderer) {
   registry_.discover();
+  registryReleasedForNetwork_.store(false, std::memory_order_release);
 
   // Register this system as the SD font ID resolver in settings.
   // Uses a static trampoline since CrossPointSettings stores a plain function pointer.
@@ -46,8 +47,9 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
   // when the wanted family/size still maps to the same point size — the file
   // contents on disk may have changed (e.g. user re-uploaded a new build).
   const bool registryWasDirty = registryDirty_.exchange(false, std::memory_order_acquire);
-  if (registryWasDirty) {
-    LOG_DBG("SDFS", "Registry dirty — re-discovering fonts");
+  const bool registryWasReleased = registryReleasedForNetwork_.exchange(false, std::memory_order_acquire);
+  if (registryWasDirty || registryWasReleased) {
+    LOG_DBG("SDFS", "Re-discovering SD fonts%s", registryWasReleased ? " after network release" : "");
     registry_.discover();
   }
 
@@ -78,9 +80,10 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     uint8_t idx = sizeEnum;
     if (idx >= sizes.size()) idx = sizes.size() - 1;
     uint8_t wantedPt = sizes.empty() ? 0 : sizes[idx];
-    if (!registryWasDirty && wantedPt == manager_.currentPointSize()) return;
+    if (!registryWasDirty && !registryWasReleased && wantedPt == manager_.currentPointSize()) return;
+    const char* reason = registryWasDirty ? " [registry dirty]" : (registryWasReleased ? " [network restore]" : "");
     LOG_DBG("SDFS", "Reloading %s: size %u -> %u (enum %u)%s", wantedFamily, manager_.currentPointSize(), wantedPt,
-            sizeEnum, registryWasDirty ? " [registry dirty]" : "");
+            sizeEnum, reason);
   }
 
   if (!currentFamily.empty()) {
@@ -99,6 +102,18 @@ void SdCardFontSystem::ensureLoaded(GfxRenderer& renderer) {
     LOG_DBG("SDFS", "SD font family not found: %s (clearing)", wantedFamily);
     SETTINGS.sdFontFamilyName[0] = '\0';
   }
+}
+
+bool SdCardFontSystem::releaseForNetwork(GfxRenderer& renderer) {
+  const bool hadLoadedFont = manager_.hasLoadedFont();
+  if (hadLoadedFont) {
+    LOG_DBG("SDFS", "Unloading SD font family before network: %s", manager_.currentFamilyName().c_str());
+    manager_.unloadAll(renderer);
+  }
+
+  registry_.releaseMemory();
+  registryReleasedForNetwork_.store(true, std::memory_order_release);
+  return hadLoadedFont;
 }
 
 int SdCardFontSystem::resolveFontId(const char* familyName, uint8_t /*fontSizeEnum*/) const {

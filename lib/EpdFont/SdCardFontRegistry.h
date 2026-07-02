@@ -42,6 +42,7 @@ class SdCardFontRegistry {
 
   // Scan SD card, populate families_. Returns true if any families found.
   bool discover();
+  void releaseMemory();
 
   const std::vector<SdCardFontFamilyInfo>& getFamilies() const { return families_; }
   const SdCardFontFamilyInfo* findFamily(const std::string& name) const;

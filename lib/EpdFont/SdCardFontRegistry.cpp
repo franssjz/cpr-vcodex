@@ -195,6 +195,11 @@ bool SdCardFontRegistry::discover() {
   return !families_.empty();
 }
 
+void SdCardFontRegistry::releaseMemory() {
+  std::vector<SdCardFontFamilyInfo>().swap(families_);
+  LOG_DBG("SDREG", "Released SD font registry memory");
+}
+
 const char* SdCardFontRegistry::findFamilyRoot(const char* familyName) {
   if (!familyName || !*familyName) return nullptr;
   char path[160];

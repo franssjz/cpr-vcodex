@@ -609,8 +609,10 @@ void GfxRenderer::drawRoundedRect(const int x, const int y, const int width, con
 }
 
 void GfxRenderer::fillRect(const int x, const int y, const int width, const int height, const bool state) const {
-  for (int fillY = y; fillY < y + height; fillY++) {
-    drawLine(x, fillY, x + width - 1, fillY, state);
+  if (state) {
+    fillRectImpl<Color::Black>(x, y, width, height);
+  } else {
+    fillRectImpl<Color::White>(x, y, width, height);
   }
 }
 
@@ -654,37 +656,183 @@ void GfxRenderer::drawPixelDither<Color::ExtraDarkGray>(const int x, const int y
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
-  if (color == Color::Clear) {
-  } else if (color == Color::Black) {
-    fillRect(x, y, width, height, true);
-  } else if (color == Color::White) {
-    fillRect(x, y, width, height, false);
-  } else if (color == Color::LightGray) {
-    for (int fillY = y; fillY < y + height; fillY++) {
-      for (int fillX = x; fillX < x + width; fillX++) {
-        drawPixelDither<Color::LightGray>(fillX, fillY);
+  switch (color) {
+    case Color::Clear:
+      break;
+    case Color::Black:
+      fillRectImpl<Color::Black>(x, y, width, height);
+      break;
+    case Color::White:
+      fillRectImpl<Color::White>(x, y, width, height);
+      break;
+    case Color::LightGray:
+      fillRectImpl<Color::LightGray>(x, y, width, height);
+      break;
+    case Color::MediumGray:
+      fillRectImpl<Color::MediumGray>(x, y, width, height);
+      break;
+    case Color::DarkGray:
+      fillRectImpl<Color::DarkGray>(x, y, width, height);
+      break;
+    case Color::ExtraDarkGray:
+      fillRectImpl<Color::ExtraDarkGray>(x, y, width, height);
+      break;
+  }
+}
+
+template <Color color>
+void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const int height) const {
+  if constexpr (color == Color::Clear) return;
+  if (width <= 0 || height <= 0) return;
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
+
+  const int screenWidth = getScreenWidth();
+  const int screenHeight = getScreenHeight();
+  const int logicalX0 = std::max(0, x);
+  const int logicalY0 = std::max(0, y);
+  const int logicalX1 = std::min(screenWidth, x + width);
+  const int logicalY1 = std::min(screenHeight, y + height);
+  if (logicalX0 >= logicalX1 || logicalY0 >= logicalY1) return;
+
+  int cornerAX = 0;
+  int cornerAY = 0;
+  int cornerBX = 0;
+  int cornerBY = 0;
+  rotateCoordinates(orientation, logicalX0, logicalY0, &cornerAX, &cornerAY, panelWidth, panelHeight);
+  rotateCoordinates(orientation, logicalX1 - 1, logicalY1 - 1, &cornerBX, &cornerBY, panelWidth, panelHeight);
+
+  const int physicalX0 = std::min(cornerAX, cornerBX);
+  const int physicalX1 = std::max(cornerAX, cornerBX);
+  const int physicalY0 = std::min(cornerAY, cornerBY);
+  const int physicalY1 = std::max(cornerAY, cornerBY);
+  if (physicalX0 < 0 || physicalX1 >= panelWidth || physicalY0 < 0 || physicalY1 >= panelHeight) return;
+
+  const int byteStart = physicalX0 >> 3;
+  const int byteEnd = physicalX1 >> 3;
+  const uint8_t headMask = static_cast<uint8_t>(0xFFu >> (physicalX0 & 7));
+  const uint8_t tailMask = static_cast<uint8_t>(0xFFu << (7 - (physicalX1 & 7)));
+  const uint32_t panelStride = panelWidthBytes;
+  const bool invertForDarkMode = darkMode && renderMode == BW;
+
+  if constexpr (color == Color::Black || color == Color::White) {
+    const bool fillBlack = invertForDarkMode ? color == Color::White : color == Color::Black;
+    const uint8_t fillByte = fillBlack ? 0x00u : 0xFFu;
+    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+      uint8_t* row = frameBuffer + static_cast<uint32_t>(physicalY) * panelStride;
+      if (byteStart == byteEnd) {
+        const uint8_t mask = headMask & tailMask;
+        if (fillBlack) {
+          row[byteStart] &= static_cast<uint8_t>(~mask);
+        } else {
+          row[byteStart] |= mask;
+        }
+      } else if (fillBlack) {
+        row[byteStart] &= static_cast<uint8_t>(~headMask);
+        if (byteEnd > byteStart + 1) {
+          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+        }
+        row[byteEnd] &= static_cast<uint8_t>(~tailMask);
+      } else {
+        row[byteStart] |= headMask;
+        if (byteEnd > byteStart + 1) {
+          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+        }
+        row[byteEnd] |= tailMask;
       }
     }
-  } else if (color == Color::MediumGray) {
-    for (int fillY = y; fillY < y + height; fillY++) {
-      for (int fillX = x; fillX < x + width; fillX++) {
-        drawPixelDither<Color::MediumGray>(fillX, fillY);
-      }
+  } else {
+    static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+
+    int logicalDeltaXPerPhysicalX = 0;
+    int logicalDeltaYPerPhysicalX = 0;
+    switch (orientation) {
+      case Portrait:
+        logicalDeltaXPerPhysicalX = 0;
+        logicalDeltaYPerPhysicalX = 1;
+        break;
+      case PortraitInverted:
+        logicalDeltaXPerPhysicalX = 0;
+        logicalDeltaYPerPhysicalX = -1;
+        break;
+      case LandscapeClockwise:
+        logicalDeltaXPerPhysicalX = -1;
+        logicalDeltaYPerPhysicalX = 0;
+        break;
+      case LandscapeCounterClockwise:
+        logicalDeltaXPerPhysicalX = 1;
+        logicalDeltaYPerPhysicalX = 0;
+        break;
     }
-  } else if (color == Color::DarkGray) {
-    for (int fillY = y; fillY < y + height; fillY++) {
-      for (int fillX = x; fillX < x + width; fillX++) {
-        drawPixelDither<Color::DarkGray>(fillX, fillY);
+
+    uint8_t blackMasks[4] = {};
+    for (int parityIndex = 0; parityIndex < 4; ++parityIndex) {
+      const int samplePhysicalY = physicalY0 + parityIndex;
+      int logicalXBase = 0;
+      int logicalYBase = 0;
+      switch (orientation) {
+        case Portrait:
+          logicalXBase = panelHeight - 1 - samplePhysicalY;
+          logicalYBase = byteStart * 8;
+          break;
+        case PortraitInverted:
+          logicalXBase = samplePhysicalY;
+          logicalYBase = panelWidth - 1 - byteStart * 8;
+          break;
+        case LandscapeClockwise:
+          logicalXBase = panelWidth - 1 - byteStart * 8;
+          logicalYBase = panelHeight - 1 - samplePhysicalY;
+          break;
+        case LandscapeCounterClockwise:
+          logicalXBase = byteStart * 8;
+          logicalYBase = samplePhysicalY;
+          break;
       }
+
+      uint8_t mask = 0;
+      for (int bit = 0; bit < 8; ++bit) {
+        const int logicalX = logicalXBase + bit * logicalDeltaXPerPhysicalX;
+        const int logicalY = logicalYBase + bit * logicalDeltaYPerPhysicalX;
+        bool isBlack = false;
+        if constexpr (color == Color::LightGray) {
+          isBlack = ((logicalX & 1) == 0) && ((logicalY & 1) == 0);
+        } else if constexpr (color == Color::DarkGray) {
+          isBlack = (((logicalX + logicalY) & 1) == 0);
+        } else {
+          isBlack = BAYER_4X4[logicalY & 3][logicalX & 3] < static_cast<uint8_t>(color);
+        }
+        if (invertForDarkMode) {
+          isBlack = !isBlack;
+        }
+        if (isBlack) {
+          mask |= static_cast<uint8_t>(1u << (7 - bit));
+        }
+      }
+      blackMasks[samplePhysicalY & 3] = mask;
     }
-  } else if (color == Color::ExtraDarkGray) {
-    for (int fillY = y; fillY < y + height; fillY++) {
-      for (int fillX = x; fillX < x + width; fillX++) {
-        drawPixelDither<Color::ExtraDarkGray>(fillX, fillY);
+
+    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+      const uint8_t whiteMask = static_cast<uint8_t>(~blackMasks[physicalY & 3]);
+      uint8_t* row = frameBuffer + static_cast<uint32_t>(physicalY) * panelStride;
+      if (byteStart == byteEnd) {
+        const uint8_t rectMask = headMask & tailMask;
+        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
+      } else {
+        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
+        if (byteEnd > byteStart + 1) {
+          memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+        }
+        row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
       }
     }
   }
 }
+
+template void GfxRenderer::fillRectImpl<Color::Black>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::White>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::LightGray>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::MediumGray>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::DarkGray>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::ExtraDarkGray>(int, int, int, int) const;
 
 template <Color color>
 void GfxRenderer::fillArc(const int maxRadius, const int cx, const int cy, const int xDir, const int yDir) const {

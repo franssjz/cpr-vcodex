@@ -16,6 +16,7 @@
 #include "CrossPointState.h"
 #include "AchievementsStore.h"
 #include "MappedInputManager.h"
+#include "ProgressFile.h"
 #include "ReadingStatsStore.h"
 #include "RecentBooksStore.h"
 #include "ReaderUtils.h"
@@ -525,22 +526,18 @@ void XtcReaderActivity::saveProgress() const {
   READING_STATS.updateProgress(xtc->calculateProgress(currentPage), currentPage + 1 >= xtc->getPageCount(),
                                getChapterTitleForStats(*xtc, currentPage), getChapterProgressForStats(*xtc, currentPage));
 
-  FsFile f;
   std::string progressPath = getStableProgressPath(stableBookId);
   if (!progressPath.empty()) {
     BookIdentity::ensureStableDataDir(stableBookId);
   } else {
     progressPath = getLegacyProgressPath(*xtc);
   }
-  if (Storage.openFileForWrite("XTR", progressPath, f)) {
-    uint8_t data[4];
-    data[0] = currentPage & 0xFF;
-    data[1] = (currentPage >> 8) & 0xFF;
-    data[2] = (currentPage >> 16) & 0xFF;
-    data[3] = (currentPage >> 24) & 0xFF;
-    f.write(data, 4);
-    f.close();
-  }
+  uint8_t data[4];
+  data[0] = currentPage & 0xFF;
+  data[1] = (currentPage >> 8) & 0xFF;
+  data[2] = (currentPage >> 16) & 0xFF;
+  data[3] = (currentPage >> 24) & 0xFF;
+  ProgressFile::writeAtomicPath("XTR", progressPath, data, sizeof(data));
 }
 
 void XtcReaderActivity::loadProgress() {

@@ -69,6 +69,8 @@ class GfxRenderer {
   template <Color color>
   void drawPixelDither(int x, int y) const;
   template <Color color>
+  void fillRectImpl(int x, int y, int width, int height) const;
+  template <Color color>
   void fillArc(int maxRadius, int cx, int cy, int xDir, int yDir) const;
 
  public:

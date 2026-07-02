@@ -1788,6 +1788,7 @@ bool ReadingStatsStore::releaseMemoryForNetwork() {
   if (activeSession.active) {
     endSession();
   }
+  const ReadingSessionSnapshot preservedLastSessionSnapshot = lastSessionSnapshot;
 
   if (dirty && !saveToFile()) {
     LOG_ERR("RST", "Failed to save reading stats before network memory release");
@@ -1804,7 +1805,7 @@ bool ReadingStatsStore::releaseMemoryForNetwork() {
   sessionLog.shrink_to_fit();
 
   activeSession = {};
-  lastSessionSnapshot = {};
+  lastSessionSnapshot = preservedLastSessionSnapshot;
   sessionSerialCounter = 0;
   invalidateSummaryCache();
   dirty = false;
@@ -1820,9 +1821,12 @@ bool ReadingStatsStore::reloadAfterNetwork() {
     return true;
   }
 
+  const ReadingSessionSnapshot preservedLastSessionSnapshot = lastSessionSnapshot;
   const bool loaded = loadFromFile();
   if (!loaded) {
     LOG_ERR("RST", "Failed to reload reading stats after network operation");
+  } else if (preservedLastSessionSnapshot.valid) {
+    lastSessionSnapshot = preservedLastSessionSnapshot;
   }
   return loaded;
 }
