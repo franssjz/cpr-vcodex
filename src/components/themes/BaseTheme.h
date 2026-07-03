@@ -84,7 +84,20 @@ enum UIIcon {
   Trophy,
   Wifi,
   Hotspot,
-  Heart
+  Heart,
+  ScreenSaver,
+  Bookshelf,
+  SleepMode,
+  CleanMonitor,
+  Heatmap,
+  FlashcardQuiz,
+  ReadingProfile,
+  LostDevice,
+  OpdsBrowser,
+  Dictionary,
+  GoalsMedal,
+  ReadingStatsIcon,
+  RecentBooks
 };
 enum class KeyboardKeyType { Normal, Shift, Mode, Space, Del, Ok, Disabled };
 

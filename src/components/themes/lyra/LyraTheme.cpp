@@ -28,6 +28,19 @@
 #include "components/icons/image24.h"
 #include "components/icons/library.h"
 #include "components/icons/recent.h"
+#include "components/icons/screensaver.h"
+#include "components/icons/goalsmedal.h"
+#include "components/icons/readingstats.h"
+#include "components/icons/recentbooks.h"
+#include "components/icons/heatmap.h"
+#include "components/icons/cleanmonitor.h"
+#include "components/icons/sleep.h"
+#include "components/icons/bookshelf.h"
+#include "components/icons/flashcardquiz.h"
+#include "components/icons/readingprofile.h"
+#include "components/icons/lostdevice.h"
+#include "components/icons/opdsbrowser.h"
+#include "components/icons/dictionary.h"
 #include "components/icons/settings.h"
 #include "components/icons/settings2.h"
 #include "components/icons/text.h"
@@ -165,6 +178,32 @@ const uint8_t* iconForName(UIIcon icon, int size) {
         return Trophy24Icon;
       case UIIcon::Heart:
         return Heart24Icon;
+      case UIIcon::ScreenSaver:
+        return ScreenSaverIcon;
+      case UIIcon::Bookshelf:
+        return BookshelfIcon32;
+      case UIIcon::SleepMode:
+        return SleepModeIcon32;
+      case UIIcon::CleanMonitor:
+        return CleanMonitorIcon32;
+      case UIIcon::Heatmap:
+        return HeatmapReadingIcon32;
+      case UIIcon::FlashcardQuiz:
+        return FlashcardQuizIcon32;
+      case UIIcon::ReadingProfile:
+        return ReadingProfileIcon32;
+      case UIIcon::LostDevice:
+        return LostDeviceIcon32;
+      case UIIcon::OpdsBrowser:
+        return OPDSBrowserIcon32;
+      case UIIcon::Dictionary:
+        return DictionaryIcon32;
+      case UIIcon::GoalsMedal:
+        return GoalsMedalIcon32;
+      case UIIcon::ReadingStatsIcon:
+        return ReadingStatsIcon32;
+      case UIIcon::RecentBooks:
+        return RecentBooksIcon32;
       default:
         return nullptr;
     }
@@ -196,6 +235,32 @@ const uint8_t* iconForName(UIIcon icon, int size) {
         return HotspotIcon;
       case UIIcon::Heart:
         return HeartIcon;
+      case UIIcon::ScreenSaver:
+        return ScreenSaverIcon;
+      case UIIcon::Bookshelf:
+        return BookshelfIcon32;
+      case UIIcon::SleepMode:
+        return SleepModeIcon32;
+      case UIIcon::CleanMonitor:
+        return CleanMonitorIcon32;
+      case UIIcon::Heatmap:
+        return HeatmapReadingIcon32;
+      case UIIcon::FlashcardQuiz:
+        return FlashcardQuizIcon32;
+      case UIIcon::ReadingProfile:
+        return ReadingProfileIcon32;
+      case UIIcon::LostDevice:
+        return LostDeviceIcon32;
+      case UIIcon::OpdsBrowser:
+        return OPDSBrowserIcon32;
+      case UIIcon::Dictionary:
+        return DictionaryIcon32;
+      case UIIcon::GoalsMedal:
+        return GoalsMedalIcon32;
+      case UIIcon::ReadingStatsIcon:
+        return ReadingStatsIcon32;
+      case UIIcon::RecentBooks:
+        return RecentBooksIcon32;
       default:
         return nullptr;
     }
@@ -686,7 +751,22 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     const ReadingBookStats* stats = getRecentBookStats(book);
     const uint8_t progressPercent =
         stats != nullptr ? (stats->completed ? 100 : std::min<uint8_t>(stats->lastProgressPercent, 100)) : 0;
-    const std::string progressText = std::to_string(progressPercent) + "%";
+    std::string progressText = std::to_string(progressPercent) + "%";
+    if (stats != nullptr && !stats->completed && stats->lastProgressPercent >= 5 &&
+        stats->totalReadingMs >= 600000ULL) {
+      const uint64_t estimatedTotalMs =
+          (stats->totalReadingMs * 100ULL + stats->lastProgressPercent - 1) / stats->lastProgressPercent;
+      if (estimatedTotalMs > stats->totalReadingMs) {
+        const uint64_t remainingMs =
+            ((estimatedTotalMs - stats->totalReadingMs + 300000ULL - 1) / 300000ULL) * 300000ULL;
+        const uint64_t totalMinutes = remainingMs / 60000ULL;
+        if (totalMinutes >= 60) {
+          progressText += " ~" + std::to_string(totalMinutes / 60ULL) + "h " + std::to_string(totalMinutes % 60ULL) + "m";
+        } else {
+          progressText += " ~" + std::to_string(totalMinutes) + "m";
+        }
+      }
+    }
     const std::string statsText =
         stats != nullptr
             ? ReadingStatsAnalytics::formatDurationHm(stats->totalReadingMs) + " | " + std::to_string(stats->sessions) + "x"

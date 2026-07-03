@@ -9,7 +9,7 @@
 #include "FsHelpers.h"
 
 namespace {
-constexpr uint8_t BOOK_CACHE_VERSION = 7;
+constexpr uint8_t BOOK_CACHE_VERSION = 8;
 constexpr char bookBinFile[] = "/book.bin";
 constexpr char tmpSpineBinFile[] = "/spine.bin.tmp";
 constexpr char tmpTocBinFile[] = "/toc.bin.tmp";
@@ -122,7 +122,10 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
       sizeof(BOOK_CACHE_VERSION) + /* LUT Offset */ sizeof(uint32_t) + sizeof(spineCount) + sizeof(tocCount);
   const uint32_t metadataSize = metadata.title.size() + metadata.author.size() + metadata.language.size() +
                                 metadata.coverItemHref.size() + metadata.textReferenceHref.size() +
-                                sizeof(uint32_t) * 5;
+                                metadata.publisher.size() + metadata.description.size() +
+                                metadata.publicationDate.size() + metadata.identifier.size() +
+                                metadata.subject.size() + metadata.rights.size() +
+                                sizeof(uint32_t) * 11;
   const uint32_t lutSize = sizeof(uint32_t) * spineCount + sizeof(uint32_t) * tocCount;
   const uint32_t lutOffset = headerASize + metadataSize;
 
@@ -135,6 +138,12 @@ bool BookMetadataCache::buildBookBin(const std::string& epubPath, const BookMeta
   serialization::writeString(bookFile, metadata.title);
   serialization::writeString(bookFile, metadata.author);
   serialization::writeString(bookFile, metadata.language);
+  serialization::writeString(bookFile, metadata.publisher);
+  serialization::writeString(bookFile, metadata.description);
+  serialization::writeString(bookFile, metadata.publicationDate);
+  serialization::writeString(bookFile, metadata.identifier);
+  serialization::writeString(bookFile, metadata.subject);
+  serialization::writeString(bookFile, metadata.rights);
   serialization::writeString(bookFile, metadata.coverItemHref);
   serialization::writeString(bookFile, metadata.textReferenceHref);
 
@@ -392,6 +401,12 @@ bool BookMetadataCache::load() {
   serialization::readString(bookFile, coreMetadata.title);
   serialization::readString(bookFile, coreMetadata.author);
   serialization::readString(bookFile, coreMetadata.language);
+  serialization::readString(bookFile, coreMetadata.publisher);
+  serialization::readString(bookFile, coreMetadata.description);
+  serialization::readString(bookFile, coreMetadata.publicationDate);
+  serialization::readString(bookFile, coreMetadata.identifier);
+  serialization::readString(bookFile, coreMetadata.subject);
+  serialization::readString(bookFile, coreMetadata.rights);
   serialization::readString(bookFile, coreMetadata.coverItemHref);
   serialization::readString(bookFile, coreMetadata.textReferenceHref);
 

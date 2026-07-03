@@ -15,6 +15,7 @@
 #include "ReadingProfileActivity.h"
 #include "ReadingStatsActivity.h"
 #include "ScreenCleanActivity.h"
+#include "ScreenSaverActivity.h"
 #include "SleepAppActivity.h"
 #include "SyncDayActivity.h"
 #include "components/UITheme.h"
@@ -193,11 +194,17 @@ void AppsActivity::openSelectedApp() {
     case ShortcutId::FileTransfer:
       activityManager.goToFileTransfer();
       return;
+    case ShortcutId::Library:
+      activityManager.goToLibrary();
+      return;
     case ShortcutId::ScreenClean:
       activity = std::make_unique<ScreenCleanActivity>(renderer, mappedInput);
       break;
     case ShortcutId::Sleep:
       activity = std::make_unique<SleepAppActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::ScreenSaver:
+      activity = std::make_unique<ScreenSaverActivity>(renderer, mappedInput);
       break;
     case ShortcutId::OpdsBrowser:
       activityManager.goToBrowser();

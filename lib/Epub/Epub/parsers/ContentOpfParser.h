@@ -18,6 +18,13 @@ class ContentOpfParser final : public Print {
     IN_BOOK_TITLE,
     IN_BOOK_AUTHOR,
     IN_BOOK_LANGUAGE,
+    IN_BOOK_PUBLISHER,
+    IN_BOOK_DESCRIPTION,
+    IN_BOOK_DATE,
+    IN_BOOK_IDENTIFIER,
+    IN_BOOK_SUBJECT,
+    IN_BOOK_RIGHTS,
+    IN_BOOK_CONTRIBUTOR,
     IN_MANIFEST,
     IN_SPINE,
     IN_GUIDE,
@@ -61,6 +68,13 @@ class ContentOpfParser final : public Print {
   std::string title;
   std::string author;
   std::string language;
+  std::string publisher;
+  std::string description;
+  std::string publicationDate;
+  std::string identifier;
+  std::string subject;
+  std::string rights;
+  std::string contributor;
   std::string tocNcxPath;
   std::string tocNavPath;  // EPUB 3 nav document path
   std::string coverItemHref;

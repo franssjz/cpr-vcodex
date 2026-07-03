@@ -64,6 +64,7 @@ class RecentBooksStore {
 
   bool loadFromFile();
   RecentBook getDataFromBook(std::string path) const;
+  const RecentBook* findBook(const std::string& path) const;
 
  private:
   int findBookIndex(const std::string& path, const std::string& bookId) const;

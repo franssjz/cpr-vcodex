@@ -12,6 +12,12 @@ class BookMetadataCache {
     std::string title;
     std::string author;
     std::string language;
+    std::string publisher;
+    std::string description;
+    std::string publicationDate;
+    std::string identifier;
+    std::string subject;
+    std::string rights;
     std::string coverItemHref;
     std::string textReferenceHref;
   };

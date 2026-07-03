@@ -24,6 +24,19 @@
 #include "components/icons/library.h"
 #include "components/icons/recent.h"
 #include "components/icons/settings.h"
+#include "components/icons/screensaver.h"
+#include "components/icons/goalsmedal.h"
+#include "components/icons/readingstats.h"
+#include "components/icons/recentbooks.h"
+#include "components/icons/heatmap.h"
+#include "components/icons/cleanmonitor.h"
+#include "components/icons/sleep.h"
+#include "components/icons/bookshelf.h"
+#include "components/icons/flashcardquiz.h"
+#include "components/icons/readingprofile.h"
+#include "components/icons/lostdevice.h"
+#include "components/icons/opdsbrowser.h"
+#include "components/icons/dictionary.h"
 #include "components/icons/settings2.h"
 #include "components/icons/text24.h"
 #include "components/icons/trophy.h"
@@ -70,6 +83,32 @@ const uint8_t* iconForName(UIIcon icon, int size) {
         return Trophy24Icon;
       case UIIcon::Heart:
         return Heart24Icon;
+      case UIIcon::ScreenSaver:
+        return ScreenSaverIcon;
+      case UIIcon::Bookshelf:
+        return BookshelfIcon32;
+      case UIIcon::SleepMode:
+        return SleepModeIcon32;
+      case UIIcon::CleanMonitor:
+        return CleanMonitorIcon32;
+      case UIIcon::Heatmap:
+        return HeatmapReadingIcon32;
+      case UIIcon::FlashcardQuiz:
+        return FlashcardQuizIcon32;
+      case UIIcon::ReadingProfile:
+        return ReadingProfileIcon32;
+      case UIIcon::LostDevice:
+        return LostDeviceIcon32;
+      case UIIcon::OpdsBrowser:
+        return OPDSBrowserIcon32;
+      case UIIcon::Dictionary:
+        return DictionaryIcon32;
+      case UIIcon::GoalsMedal:
+        return GoalsMedalIcon32;
+      case UIIcon::ReadingStatsIcon:
+        return ReadingStatsIcon32;
+      case UIIcon::RecentBooks:
+        return RecentBooksIcon32;
       default:
         return nullptr;
     }
@@ -99,6 +138,32 @@ const uint8_t* iconForName(UIIcon icon, int size) {
         return HotspotIcon;
       case UIIcon::Heart:
         return HeartIcon;
+      case UIIcon::ScreenSaver:
+        return ScreenSaverIcon;
+      case UIIcon::Bookshelf:
+        return BookshelfIcon32;
+      case UIIcon::SleepMode:
+        return SleepModeIcon32;
+      case UIIcon::CleanMonitor:
+        return CleanMonitorIcon32;
+      case UIIcon::Heatmap:
+        return HeatmapReadingIcon32;
+      case UIIcon::FlashcardQuiz:
+        return FlashcardQuizIcon32;
+      case UIIcon::ReadingProfile:
+        return ReadingProfileIcon32;
+      case UIIcon::LostDevice:
+        return LostDeviceIcon32;
+      case UIIcon::OpdsBrowser:
+        return OPDSBrowserIcon32;
+      case UIIcon::Dictionary:
+        return DictionaryIcon32;
+      case UIIcon::GoalsMedal:
+        return GoalsMedalIcon32;
+      case UIIcon::ReadingStatsIcon:
+        return ReadingStatsIcon32;
+      case UIIcon::RecentBooks:
+        return RecentBooksIcon32;
       default:
         return nullptr;
     }
@@ -128,10 +193,56 @@ uint8_t getBookProgressPercent(const RecentBook& recentBook) {
   return std::min<uint8_t>(stats->lastProgressPercent, 100);
 }
 
+constexpr uint64_t MIN_ESTIMATE_READING_MS = 10ULL * 60ULL * 1000ULL;
+constexpr uint8_t MIN_ESTIMATE_PROGRESS_PERCENT = 5;
+constexpr uint64_t ESTIMATE_ROUNDING_MS = 5ULL * 60ULL * 1000ULL;
+
+std::string getEstimatedTimeLeftText(const ReadingBookStats& stats) {
+  if (stats.completed || stats.lastProgressPercent >= 100) {
+    return "";
+  }
+
+  if (stats.totalReadingMs < MIN_ESTIMATE_READING_MS ||
+      stats.lastProgressPercent < MIN_ESTIMATE_PROGRESS_PERCENT) {
+    return "";
+  }
+
+  const uint64_t estimatedTotalMs =
+      (stats.totalReadingMs * 100ULL + stats.lastProgressPercent - 1) / stats.lastProgressPercent;
+  if (estimatedTotalMs <= stats.totalReadingMs) {
+    return "";
+  }
+
+  const uint64_t remainingMs =
+      ((estimatedTotalMs - stats.totalReadingMs + ESTIMATE_ROUNDING_MS - 1) / ESTIMATE_ROUNDING_MS) * ESTIMATE_ROUNDING_MS;
+  const uint64_t totalMinutes = remainingMs / 60000ULL;
+  const uint64_t hours = totalMinutes / 60ULL;
+  const uint64_t minutes = totalMinutes % 60ULL;
+  if (hours == 0) {
+    return "~" + std::to_string(minutes) + "m";
+  }
+  return "~" + std::to_string(hours) + "h " + std::to_string(minutes) + "m";
+}
+
 void drawProgressBadge(GfxRenderer& renderer, const RecentBook& book, const int coverX, const int coverY,
                        const int coverW, const int coverH) {
-  const std::string progressText = std::to_string(getBookProgressPercent(book)) + "%";
-  const int textW = renderer.getTextWidth(SMALL_FONT_ID, progressText.c_str(), EpdFontFamily::BOLD);
+  // Build combined string: "35%" or "35% ~2h 15m"
+  std::string badgeText = std::to_string(getBookProgressPercent(book)) + "%";
+  const ReadingBookStats* stats = nullptr;
+  if (!book.bookId.empty()) {
+    stats = READING_STATS.findBook(book.bookId);
+  }
+  if (stats == nullptr) {
+    stats = READING_STATS.findBook(book.path);
+  }
+  if (stats != nullptr) {
+    const std::string timeLeftText = getEstimatedTimeLeftText(*stats);
+    if (!timeLeftText.empty()) {
+      badgeText += " " + timeLeftText;
+    }
+  }
+
+  const int textW = renderer.getTextWidth(SMALL_FONT_ID, badgeText.c_str(), EpdFontFamily::BOLD);
   const int textH = renderer.getLineHeight(SMALL_FONT_ID);
   const int badgeW = textW + 2 * kProgressBadgePadX;
   const int badgeH = textH + 2 * kProgressBadgePadY;
@@ -140,7 +251,7 @@ void drawProgressBadge(GfxRenderer& renderer, const RecentBook& book, const int 
 
   renderer.fillRoundedRect(badgeX, badgeY, badgeW, badgeH, kProgressBadgeRadius, Color::Black);
   renderer.drawText(SMALL_FONT_ID, badgeX + kProgressBadgePadX, badgeY + kProgressBadgePadY - 1,
-                    progressText.c_str(), false, EpdFontFamily::BOLD);
+                    badgeText.c_str(), false, EpdFontFamily::BOLD);
 }
 }  // namespace
 
@@ -225,7 +336,6 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     renderer.fillRect(centerX - kCenterOutlineW, centerTileY - kCenterOutlineW, kCenterCoverW + 2 * kCenterOutlineW,
                       kCenterCoverH + 2 * kCenterOutlineW, false);
     drawCover(centerIdx, centerX, centerTileY, kCenterCoverW, kCenterCoverH);
-    drawProgressBadge(renderer, recentBooks[centerIdx], centerX, centerTileY, kCenterCoverW, kCenterCoverH);
 
     const int dotsY = centerTileY + kCenterCoverH + 8;
     const int totalDotsW = bookCount * kDotSize + (bookCount - 1) * kDotGap;
@@ -254,6 +364,11 @@ void LyraCarouselTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect,
     coverBufferStored = storeCoverBuffer();
     coverRendered = coverBufferStored;
   }
+
+  // drawProgressBadge must be OUTSIDE the cover-render block so it is
+  // redrawn every frame (including after buffer restore) to show both
+  // the progress percentage and estimated time remaining.
+  drawProgressBadge(renderer, recentBooks[centerIdx], centerX, centerTileY, kCenterCoverW, kCenterCoverH);
 
   const int outlineW = inCarouselRow ? kSelectionLineW : kThinOutlineW;
   renderer.drawRoundedRect(centerX, centerTileY, kCenterCoverW, kCenterCoverH, outlineW, kCornerRadius, true);
