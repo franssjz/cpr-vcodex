@@ -19,7 +19,8 @@ class SleepActivity final : public Activity {
   void renderReadingDashboardSleepScreen() const;
   void renderCoverStatsSleepScreen(bool footerOnly = false) const;
   void renderCustomStatsSleepScreen(bool footerOnly = false) const;
-  void renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath = "") const;
+  void renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath = "",
+                               uint32_t sourceFileSize = 0) const;
   bool renderPngSleepScreen(const std::string& sourcePath) const;
   void renderBlankSleepScreen() const;
   bool resolveLastBookCoverPath(std::string& coverBmpPath) const;

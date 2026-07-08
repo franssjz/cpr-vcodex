@@ -29,8 +29,12 @@
 
 namespace {
 bool canUseSleepCache(const Bitmap& bitmap) {
-  return !(bitmap.hasGreyscale() &&
-           SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
+  return !bitmap.hasGreyscale() ||
+         SETTINGS.sleepScreenCoverFilter != CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
+}
+
+bool wantsGreyscaleSleepCache() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
 }
 
 bool usesCustomSleepImages() {
@@ -57,6 +61,25 @@ void displaySleepGrayscaleBase(const GfxRenderer& renderer) {
     return;
   }
   renderer.displayGrayscaleBase(mode);
+}
+
+bool tryDisplayCachedSleepScreen(const GfxRenderer& renderer, const std::string& sourcePath) {
+  auto& mutableRenderer = const_cast<GfxRenderer&>(renderer);
+  if (wantsGreyscaleSleepCache()) {
+    if (SleepScreenCache::loadGreyscale(mutableRenderer, sourcePath)) {
+      displaySleepGrayscaleBase(renderer);
+      renderer.displayGrayBuffer();
+      mutableRenderer.setRenderMode(GfxRenderer::BW);
+      return true;
+    }
+    return false;
+  }
+
+  if (SleepScreenCache::load(mutableRenderer, sourcePath)) {
+    displaySleepBuffer(renderer);
+    return true;
+  }
+  return false;
 }
 
 template <typename RenderFn>
@@ -598,7 +621,15 @@ bool drawPngSleepBackground(const GfxRenderer& renderer, const std::string& sour
 
 bool renderBitmapStatsSleepScreen(GfxRenderer& renderer, const std::string& sourcePath, const Rect& statsPanel,
                                   const ReadingBookStats* book, const bool footerOnly) {
-  if (SleepScreenCache::load(renderer, sourcePath)) {
+  if (wantsGreyscaleSleepCache()) {
+    if (SleepScreenCache::loadGreyscale(renderer, sourcePath)) {
+      drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
+      displaySleepGrayscaleBase(renderer);
+      renderer.displayGrayBuffer();
+      renderer.setRenderMode(GfxRenderer::BW);
+      return true;
+    }
+  } else if (SleepScreenCache::load(renderer, sourcePath)) {
     drawCoverStatsPanel(renderer, statsPanel, book, footerOnly);
     displaySleepBuffer(renderer);
     return true;
@@ -713,17 +744,17 @@ void SleepActivity::renderCustomSleepScreen() const {
       }
     } else {
       GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-      FsFile file;
-      if (SleepScreenCache::load(renderer, selected.path)) {
-        displaySleepBuffer(renderer);
+      if (tryDisplayCachedSleepScreen(renderer, selected.path)) {
         return;
       }
+      FsFile file;
       if (Storage.openFileForRead("SLP", selected.path, file)) {
         LOG_DBG("SLP", "Loading sleep image: %s", selected.path.c_str());
+        const uint32_t sourceFileSize = file.fileSize();
         delay(100);
         Bitmap bitmap(file, true);
         if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-          renderBitmapSleepScreen(bitmap, selected.path);
+          renderBitmapSleepScreen(bitmap, selected.path, sourceFileSize);
           file.close();
           return;
         }
@@ -735,15 +766,15 @@ void SleepActivity::renderCustomSleepScreen() const {
   FsFile file;
   if (Storage.openFileForRead("SLP", "/sleep.bmp", file)) {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+    const uint32_t sourceFileSize = file.fileSize();
     Bitmap bitmap(file, true);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Loading: /sleep.bmp");
-      if (SleepScreenCache::load(renderer, "/sleep.bmp")) {
-        displaySleepBuffer(renderer);
+      if (tryDisplayCachedSleepScreen(renderer, "/sleep.bmp")) {
         file.close();
         return;
       }
-      renderBitmapSleepScreen(bitmap, "/sleep.bmp");
+      renderBitmapSleepScreen(bitmap, "/sleep.bmp", sourceFileSize);
       file.close();
       return;
     }
@@ -782,7 +813,8 @@ void SleepActivity::renderDefaultSleepScreen() const {
   displaySleepBuffer(renderer);
 }
 
-void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath) const {
+void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::string& sourcePath,
+                                            const uint32_t sourceFileSize) const {
   int x, y;
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -825,10 +857,26 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
   const bool hasGreyscale = bitmap.hasGreyscale() &&
                             SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
 
-  SleepGreyStripBatch greyStrips;
+  SleepGreyStripBatch memoryStrips;
+  SleepGreyscaleStreamWriter streamWriter;
+  ISleepGreyStripSink* stripSink = nullptr;
+  if (hasGreyscale) {
+    if (!sourcePath.empty() &&
+        streamWriter.begin(sourcePath, sourceFileSize, display.getBufferSize(), renderer.getDisplayWidthBytes(),
+                           renderer.getDisplayHeight())) {
+      stripSink = &streamWriter;
+    } else if (sourcePath.empty()) {
+      stripSink = &memoryStrips;
+    }
+  }
+
   const bool greyscaleOnce =
-      hasGreyscale && renderer.drawGreyscaleBitmapForSleep(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, greyStrips);
+      hasGreyscale && stripSink != nullptr &&
+      renderer.drawGreyscaleBitmapForSleep(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, *stripSink);
   if (!greyscaleOnce) {
+    if (streamWriter.isActive()) {
+      streamWriter.abort();
+    }
     renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
   }
 
@@ -836,14 +884,18 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
     renderer.invertScreen();
   }
 
-  if (!sourcePath.empty() && canUseSleepCache(bitmap)) {
-    SleepScreenCache::save(renderer, sourcePath);
+  if (!sourcePath.empty()) {
+    if (streamWriter.isActive() && greyscaleOnce) {
+      streamWriter.commitBw(renderer.getFrameBuffer(), display.getBufferSize());
+    } else if (canUseSleepCache(bitmap)) {
+      SleepScreenCache::save(renderer, sourcePath);
+    }
   }
 
   if (hasGreyscale) {
-    if (greyscaleOnce) {
+    if (greyscaleOnce && stripSink != nullptr) {
       displaySleepGrayscaleBase(renderer);
-      greyStrips.flush(renderer);
+      stripSink->flushToDisplay(renderer);
       renderer.displayGrayBuffer();
       renderer.setRenderMode(GfxRenderer::BW);
     } else {
@@ -938,16 +990,17 @@ void SleepActivity::renderCoverSleepScreen() const {
     return (this->*renderNoCoverSleepScreen)();
   }
 
-  FsFile file;
-  if (SleepScreenCache::load(renderer, coverBmpPath)) {
-    displaySleepBuffer(renderer);
+  if (tryDisplayCachedSleepScreen(renderer, coverBmpPath)) {
     return;
   }
+
+  FsFile file;
   if (Storage.openFileForRead("SLP", coverBmpPath, file)) {
+    const uint32_t sourceFileSize = file.fileSize();
     Bitmap bitmap(file);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
-      renderBitmapSleepScreen(bitmap, coverBmpPath);
+      renderBitmapSleepScreen(bitmap, coverBmpPath, sourceFileSize);
       file.close();
       return;
     }
