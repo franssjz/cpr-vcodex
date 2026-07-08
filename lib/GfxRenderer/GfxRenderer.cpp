@@ -1123,18 +1123,7 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
     return;
   }
 
-  for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
-    // The BMP's (0, 0) is the bottom-left corner (if the height is positive, top-left if negative).
-    // Screen's (0, 0) is the top-left corner.
-    int screenY = -cropPixY + (bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY);
-    if (isScaled) {
-      screenY = std::floor(screenY * scale);
-    }
-    screenY += y;  // the offset should not be scaled
-    if (screenY >= getScreenHeight()) {
-      break;
-    }
-
+  for (int bmpY = 0; bmpY < bitmap.getHeight(); bmpY++) {
     if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
       LOG_ERR("GFX", "Failed to read row %d from bitmap", bmpY);
       free(outputRow);
@@ -1142,12 +1131,18 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
       return;
     }
 
-    if (screenY < 0) {
+    const int rowFromTop = bitmap.isTopDown() ? bmpY : (bitmap.getHeight() - 1 - bmpY);
+    const int cropRowEnd = bitmap.getHeight() - cropPixY;
+    if (rowFromTop < cropPixY || rowFromTop >= cropRowEnd) {
       continue;
     }
 
-    if (bmpY < cropPixY) {
-      // Skip the row if it's outside the crop area
+    int screenY = rowFromTop - cropPixY;
+    if (isScaled) {
+      screenY = std::floor(static_cast<float>(screenY) * scale);
+    }
+    screenY += y;  // the offset should not be scaled
+    if (screenY < 0 || screenY >= getScreenHeight()) {
       continue;
     }
 
@@ -1400,16 +1395,7 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
       }
     }
   } else {
-    for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
-      int screenY = -cropPixY + (bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY);
-      if (isScaled) {
-        screenY = std::floor(screenY * scale);
-      }
-      screenY += y;
-      if (screenY >= getScreenHeight()) {
-        break;
-      }
-
+    for (int bmpY = 0; bmpY < bitmap.getHeight(); bmpY++) {
       if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
         LOG_ERR("GFX", "Failed to read row %d from sleep greyscale bitmap", bmpY);
         free(outputRow);
@@ -1417,7 +1403,18 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
         return false;
       }
 
-      if (screenY < 0 || bmpY < cropPixY) {
+      const int rowFromTop = bitmap.isTopDown() ? bmpY : (bitmap.getHeight() - 1 - bmpY);
+      const int cropRowEnd = bitmap.getHeight() - cropPixY;
+      if (rowFromTop < cropPixY || rowFromTop >= cropRowEnd) {
+        continue;
+      }
+
+      int screenY = rowFromTop - cropPixY;
+      if (isScaled) {
+        screenY = std::floor(static_cast<float>(screenY) * scale);
+      }
+      screenY += y;
+      if (screenY < 0 || screenY >= getScreenHeight()) {
         continue;
       }
 
