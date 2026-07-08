@@ -15,24 +15,22 @@
 #include "FontCacheManager.h"
 
 namespace {
-
-std::vector<uint8_t> invertMonochromeBitmap(const uint8_t* bitmap, size_t size) {
-  std::vector<uint8_t> inverted(size);
-  for (size_t i = 0; i < size; ++i) {
-    inverted[i] = static_cast<uint8_t>(~bitmap[i]);
+  std::vector<uint8_t> invertMonochromeBitmap(const uint8_t* bitmap, size_t size) {
+    std::vector<uint8_t> inverted(size);
+    for (size_t i = 0; i < size; ++i) {
+      inverted[i] = static_cast<uint8_t>(~bitmap[i]);
+    }
+    return inverted;
   }
-  return inverted;
-}
 
-/**
- * Resolves the requested style to the best available style in the given SD card font.
- * Falls back gracefully when the font lacks the requested variant.
- */
-uint8_t resolveSdCardStyle(const SdCardFont& font, const EpdFontFamily::Style style) {
-  return font.resolveStyle(static_cast<uint8_t>(style));
+  /**
+  * Resolves the requested style to the best available style in the given SD card font.
+  * Falls back gracefully when the font lacks the requested variant.
+  */
+  uint8_t resolveSdCardStyle(const SdCardFont& font, const EpdFontFamily::Style style) {
+    return font.resolveStyle(static_cast<uint8_t>(style));
+  }
 }
-
-}  // namespace
 
 const uint8_t* GfxRenderer::getGlyphBitmap(const EpdFontData* fontData, const EpdGlyph* glyph) const {
   if (fontData->groups != nullptr) {
@@ -1314,6 +1312,38 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
     return true;
   };
 
+  const auto emitSleepGreyPixel = [&](const int screenX, const int screenY, const uint8_t val) -> bool {
+    if (darkMode) {
+      drawPixelRaw(screenX, screenY, val < 3);
+    } else if (val < 3) {
+      drawPixelRaw(screenX, screenY, true);
+    }
+
+    int phyX = 0;
+    int phyY = 0;
+    rotateCoordinates(orientation, screenX, screenY, &phyX, &phyY, panelWidth, panelHeight);
+    if (phyX < 0 || phyX >= static_cast<int>(panelWidth) || phyY < 0 || phyY >= displayHeight) {
+      return true;
+    }
+
+    const int stripIdx = phyY / STRIP_ROWS;
+    if (!flushThroughStrip(stripIdx)) {
+      return false;
+    }
+    const int localRow = phyY - buildingStripIdx * STRIP_ROWS;
+    if (localRow < 0 || localRow >= STRIP_ROWS) {
+      return true;
+    }
+
+    if (val == 1) {
+      setPlaneStripPixel(lsbStrip, panelWidthBytes, localRow, phyX, true);
+    }
+    if (val == 1 || val == 2) {
+      setPlaneStripPixel(msbStrip, panelWidthBytes, localRow, phyX, true);
+    }
+    return true;
+  };
+
   if (bitmap.rewindToData() != BmpReaderError::Ok) {
     LOG_ERR("GFX", "Failed to rewind sleep greyscale bitmap");
     free(outputRow);
@@ -1321,71 +1351,93 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
     return false;
   }
 
-  for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
-    int screenY = -cropPixY + (bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY);
-    if (isScaled) {
-      screenY = std::floor(screenY * scale);
-    }
-    screenY += y;
-    if (screenY >= getScreenHeight()) {
-      break;
-    }
-
-    if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
-      LOG_ERR("GFX", "Failed to read row %d from sleep greyscale bitmap", bmpY);
+  if (isScaled && bitmap.isTopDown()) {
+    const int croppedBmpW = bitmap.getWidth() - 2 * cropPixX;
+    const int croppedBmpH = bitmap.getHeight() - cropPixY;
+    if (croppedBmpW <= 0 || croppedBmpH <= 0) {
       free(outputRow);
       free(rowBytes);
       return false;
     }
 
-    if (screenY < 0 || bmpY < cropPixY) {
-      continue;
-    }
-
-    for (int bmpX = cropPixX; bmpX < bitmap.getWidth() - cropPixX; bmpX++) {
-      int screenX = bmpX - cropPixX;
-      if (isScaled) {
-        screenX = std::floor(screenX * scale);
-      }
-      screenX += x;
-      if (screenX >= getScreenWidth()) {
+    const int maxDrawRow = std::min(getScreenHeight() - y, static_cast<int>(std::floor(croppedBmpH * scale)) + 1);
+    int nextFileRow = 0;
+    for (int outRow = 0; outRow < maxDrawRow; outRow++) {
+      const int screenY = y + outRow;
+      const int srcCroppedRow = static_cast<int>(std::floor(static_cast<float>(outRow) / scale));
+      if (srcCroppedRow >= croppedBmpH) {
         break;
       }
-      if (screenX < 0) {
-        continue;
+
+      const int fileRow = cropPixY + srcCroppedRow;
+      while (nextFileRow <= fileRow) {
+        if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
+          LOG_ERR("GFX", "Failed to read row %d from sleep greyscale bitmap", nextFileRow);
+          free(outputRow);
+          free(rowBytes);
+          return false;
+        }
+        nextFileRow++;
       }
 
-      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const int maxDrawCol = std::min(getScreenWidth() - x, static_cast<int>(std::floor(croppedBmpW * scale)) + 1);
+      for (int outCol = 0; outCol < maxDrawCol; outCol++) {
+        const int screenX = x + outCol;
+        const int srcCroppedCol = static_cast<int>(std::floor(static_cast<float>(outCol) / scale));
+        if (srcCroppedCol >= croppedBmpW) {
+          break;
+        }
 
-      if (darkMode) {
-        drawPixelRaw(screenX, screenY, val < 3);
-      } else if (val < 3) {
-        drawPixelRaw(screenX, screenY, true);
+        const int bmpX = cropPixX + srcCroppedCol;
+        const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+        if (!emitSleepGreyPixel(screenX, screenY, val)) {
+          free(outputRow);
+          free(rowBytes);
+          return false;
+        }
+      }
+    }
+  } else {
+    for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
+      int screenY = -cropPixY + (bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY);
+      if (isScaled) {
+        screenY = std::floor(screenY * scale);
+      }
+      screenY += y;
+      if (screenY >= getScreenHeight()) {
+        break;
       }
 
-      int phyX = 0;
-      int phyY = 0;
-      rotateCoordinates(orientation, screenX, screenY, &phyX, &phyY, panelWidth, panelHeight);
-      if (phyX < 0 || phyX >= static_cast<int>(panelWidth) || phyY < 0 || phyY >= displayHeight) {
-        continue;
-      }
-
-      const int stripIdx = phyY / STRIP_ROWS;
-      if (!flushThroughStrip(stripIdx)) {
+      if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
+        LOG_ERR("GFX", "Failed to read row %d from sleep greyscale bitmap", bmpY);
         free(outputRow);
         free(rowBytes);
         return false;
       }
-      const int localRow = phyY - buildingStripIdx * STRIP_ROWS;
-      if (localRow < 0 || localRow >= STRIP_ROWS) {
+
+      if (screenY < 0 || bmpY < cropPixY) {
         continue;
       }
 
-      if (val == 1) {
-        setPlaneStripPixel(lsbStrip, panelWidthBytes, localRow, phyX, true);
-      }
-      if (val == 1 || val == 2) {
-        setPlaneStripPixel(msbStrip, panelWidthBytes, localRow, phyX, true);
+      for (int bmpX = cropPixX; bmpX < bitmap.getWidth() - cropPixX; bmpX++) {
+        int screenX = bmpX - cropPixX;
+        if (isScaled) {
+          screenX = std::floor(screenX * scale);
+        }
+        screenX += x;
+        if (screenX >= getScreenWidth()) {
+          break;
+        }
+        if (screenX < 0) {
+          continue;
+        }
+
+        const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+        if (!emitSleepGreyPixel(screenX, screenY, val)) {
+          free(outputRow);
+          free(rowBytes);
+          return false;
+        }
       }
     }
   }
