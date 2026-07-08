@@ -11,7 +11,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -826,7 +825,12 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
   const bool hasGreyscale = bitmap.hasGreyscale() &&
                             SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
 
-  renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+  SleepGreyStripBatch greyStrips;
+  const bool greyscaleOnce =
+      hasGreyscale && renderer.drawGreyscaleBitmapForSleep(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, greyStrips);
+  if (!greyscaleOnce) {
+    renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+  }
 
   if (SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
     renderer.invertScreen();
@@ -837,10 +841,17 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
   }
 
   if (hasGreyscale) {
-    renderSleepGrayscaleOverlay(renderer, [&]() {
-      bitmap.rewindToData();
-      renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
-    });
+    if (greyscaleOnce) {
+      displaySleepGrayscaleBase(renderer);
+      greyStrips.flush(renderer);
+      renderer.displayGrayBuffer();
+      renderer.setRenderMode(GfxRenderer::BW);
+    } else {
+      renderSleepGrayscaleOverlay(renderer, [&]() {
+        bitmap.rewindToData();
+        renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+      });
+    }
   } else {
     displaySleepBuffer(renderer);
   }

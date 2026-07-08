@@ -8,6 +8,8 @@ class SdCardFont;
 
 #include <cstring>
 #include <map>
+#include <memory>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,30 @@ enum Color : uint8_t {
   DarkGray = 0x0A,
   ExtraDarkGray = 0x0D,
   Black = 0x10
+};
+
+class GfxRenderer;
+
+// Deferred grey plane strips for sleep rendering. Populated during a single BMP read,
+// then flushed after displaySleepGrayscaleBase so stale UI grey state is not composited in.
+class SleepGreyStripBatch {
+ public:
+  bool empty() const { return strips_.empty(); }
+
+  bool appendStrip(int yStart, int numRows, size_t stripBytes, const uint8_t* lsb, const uint8_t* msb);
+
+  void flush(const GfxRenderer& renderer) const;
+
+ private:
+  struct Strip {
+    int yStart = 0;
+    int numRows = 0;
+    size_t bytes = 0;
+    std::unique_ptr<uint8_t[]> lsb;
+    std::unique_ptr<uint8_t[]> msb;
+  };
+
+  std::vector<Strip> strips_;
 };
 
 class GfxRenderer {
@@ -169,6 +195,10 @@ class GfxRenderer {
   void drawIconInverted(const uint8_t bitmap[], int x, int y, int width, int height) const;
   void drawBitmap(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX = 0,
                   float cropY = 0) const;
+  // One SD read pass: composes the BW framebuffer and records grey LSB/MSB strips in greyStrips.
+  // Caller must displaySleepGrayscaleBase, greyStrips.flush(), then displayGrayBuffer.
+  bool drawGreyscaleBitmapForSleep(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight, float cropX,
+                                   float cropY, SleepGreyStripBatch& greyStrips) const;
   void drawBitmap1Bit(const Bitmap& bitmap, int x, int y, int maxWidth, int maxHeight) const;
   void fillPolygon(const int* xPoints, const int* yPoints, int numPoints, bool state = true) const;
 

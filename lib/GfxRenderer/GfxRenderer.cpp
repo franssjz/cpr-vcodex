@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <cassert>
 #include <climits>
+#include <memory>
+#include <new>
 
 #include "FontCacheManager.h"
 
@@ -1181,6 +1183,229 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
 
   free(outputRow);
   free(rowBytes);
+}
+
+namespace {
+  void setPlaneStripPixel(uint8_t* strip, const uint32_t widthBytes, const int localRow, const int phyX,
+                          const bool markBlack) {
+    if (localRow < 0) {
+      return;
+    }
+    const uint32_t byteIndex = static_cast<uint32_t>(localRow) * widthBytes + static_cast<uint32_t>(phyX / 8);
+    const uint8_t bitPosition = static_cast<uint8_t>(7 - (phyX % 8));
+    if (markBlack) {
+      strip[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
+    }
+  }
+}
+
+bool SleepGreyStripBatch::appendStrip(const int yStart, const int numRows, const size_t stripBytes, const uint8_t* lsb,
+                                      const uint8_t* msb) {
+  if (numRows <= 0 || stripBytes == 0 || lsb == nullptr || msb == nullptr) {
+    return false;
+  }
+
+  auto lsbCopy = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes]);
+  auto msbCopy = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes]);
+  if (!lsbCopy || !msbCopy) {
+    return false;
+  }
+
+  memcpy(lsbCopy.get(), lsb, stripBytes);
+  memcpy(msbCopy.get(), msb, stripBytes);
+  strips_.push_back(Strip{yStart, numRows, stripBytes, std::move(lsbCopy), std::move(msbCopy)});
+  return true;
+}
+
+void SleepGreyStripBatch::flush(const GfxRenderer& renderer) const {
+  for (const Strip& strip : strips_) {
+    renderer.writeGrayscalePlaneStrip(true, strip.lsb.get(), strip.yStart, strip.numRows);
+    renderer.writeGrayscalePlaneStrip(false, strip.msb.get(), strip.yStart, strip.numRows);
+  }
+}
+
+bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x, const int y, const int maxWidth,
+                                              const int maxHeight, const float cropX, const float cropY,
+                                              SleepGreyStripBatch& greyStrips) const {
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) {
+    return false;
+  }
+  if (bitmap.is1Bit() || !bitmap.hasGreyscale() || !supportsStripGrayscale()) {
+    return false;
+  }
+
+  constexpr int STRIP_ROWS = 80;
+  const int displayHeight = static_cast<int>(panelHeight);
+  const int displayWidthBytes = static_cast<int>(panelWidthBytes);
+  const size_t stripBytes = static_cast<size_t>(displayWidthBytes) * STRIP_ROWS;
+  const int lastStripIdx = (displayHeight - 1) / STRIP_ROWS;
+
+  auto scratch = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes * 2]);
+  if (!scratch) {
+    LOG_ERR("GFX", "OOM: sleep greyscale strip scratch (%zu bytes)", stripBytes * 2);
+    return false;
+  }
+
+  uint8_t* lsbStrip = scratch.get();
+  uint8_t* msbStrip = scratch.get() + stripBytes;
+
+  float scale = 1.0f;
+  bool isScaled = false;
+  const int cropPixX = std::floor(bitmap.getWidth() * cropX / 2.0f);
+  const int cropPixY = std::floor(bitmap.getHeight() * cropY / 2.0f);
+
+  const float croppedWidth = (1.0f - cropX) * static_cast<float>(bitmap.getWidth());
+  const float croppedHeight = (1.0f - cropY) * static_cast<float>(bitmap.getHeight());
+  bool hasTargetBounds = false;
+  float fitScale = 1.0f;
+
+  if (maxWidth > 0 && croppedWidth > 0.0f) {
+    fitScale = static_cast<float>(maxWidth) / croppedWidth;
+    hasTargetBounds = true;
+  }
+  if (maxHeight > 0 && croppedHeight > 0.0f) {
+    const float heightScale = static_cast<float>(maxHeight) / croppedHeight;
+    fitScale = hasTargetBounds ? std::min(fitScale, heightScale) : heightScale;
+    hasTargetBounds = true;
+  }
+  if (hasTargetBounds && fitScale < 1.0f) {
+    scale = fitScale;
+    isScaled = true;
+  }
+
+  const int outputRowSize = (bitmap.getWidth() + 3) / 4;
+  auto* outputRow = static_cast<uint8_t*>(malloc(outputRowSize));
+  auto* rowBytes = static_cast<uint8_t*>(malloc(bitmap.getRowBytes()));
+  if (!outputRow || !rowBytes) {
+    LOG_ERR("GFX", "!! Failed to allocate BMP row buffers for sleep greyscale");
+    free(outputRow);
+    free(rowBytes);
+    return false;
+  }
+
+  int buildingStripIdx = 0;
+  memset(lsbStrip, 0, stripBytes);
+  memset(msbStrip, 0, stripBytes);
+
+  const auto flushStrip = [&](const int stripIdx) -> bool {
+    if (stripIdx < 0 || stripIdx > lastStripIdx) {
+      return true;
+    }
+    const int yStart = stripIdx * STRIP_ROWS;
+    const int rows = std::min(STRIP_ROWS, displayHeight - yStart);
+    if (rows <= 0) {
+      return true;
+    }
+    const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
+    return greyStrips.appendStrip(yStart, rows, activeStripBytes, lsbStrip, msbStrip);
+  };
+
+  const auto flushThroughStrip = [&](const int targetStripIdx) -> bool {
+    while (buildingStripIdx < targetStripIdx) {
+      if (!flushStrip(buildingStripIdx)) {
+        return false;
+      }
+      buildingStripIdx++;
+      if (buildingStripIdx <= lastStripIdx) {
+        memset(lsbStrip, 0, stripBytes);
+        memset(msbStrip, 0, stripBytes);
+      }
+    }
+    return true;
+  };
+
+  if (bitmap.rewindToData() != BmpReaderError::Ok) {
+    LOG_ERR("GFX", "Failed to rewind sleep greyscale bitmap");
+    free(outputRow);
+    free(rowBytes);
+    return false;
+  }
+
+  for (int bmpY = 0; bmpY < (bitmap.getHeight() - cropPixY); bmpY++) {
+    int screenY = -cropPixY + (bitmap.isTopDown() ? bmpY : bitmap.getHeight() - 1 - bmpY);
+    if (isScaled) {
+      screenY = std::floor(screenY * scale);
+    }
+    screenY += y;
+    if (screenY >= getScreenHeight()) {
+      break;
+    }
+
+    if (bitmap.readNextRow(outputRow, rowBytes) != BmpReaderError::Ok) {
+      LOG_ERR("GFX", "Failed to read row %d from sleep greyscale bitmap", bmpY);
+      free(outputRow);
+      free(rowBytes);
+      return false;
+    }
+
+    if (screenY < 0 || bmpY < cropPixY) {
+      continue;
+    }
+
+    for (int bmpX = cropPixX; bmpX < bitmap.getWidth() - cropPixX; bmpX++) {
+      int screenX = bmpX - cropPixX;
+      if (isScaled) {
+        screenX = std::floor(screenX * scale);
+      }
+      screenX += x;
+      if (screenX >= getScreenWidth()) {
+        break;
+      }
+      if (screenX < 0) {
+        continue;
+      }
+
+      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+
+      if (darkMode) {
+        drawPixelRaw(screenX, screenY, val < 3);
+      } else if (val < 3) {
+        drawPixelRaw(screenX, screenY, true);
+      }
+
+      int phyX = 0;
+      int phyY = 0;
+      rotateCoordinates(orientation, screenX, screenY, &phyX, &phyY, panelWidth, panelHeight);
+      if (phyX < 0 || phyX >= static_cast<int>(panelWidth) || phyY < 0 || phyY >= displayHeight) {
+        continue;
+      }
+
+      const int stripIdx = phyY / STRIP_ROWS;
+      if (!flushThroughStrip(stripIdx)) {
+        free(outputRow);
+        free(rowBytes);
+        return false;
+      }
+      const int localRow = phyY - buildingStripIdx * STRIP_ROWS;
+      if (localRow < 0 || localRow >= STRIP_ROWS) {
+        continue;
+      }
+
+      if (val == 1) {
+        setPlaneStripPixel(lsbStrip, panelWidthBytes, localRow, phyX, true);
+      }
+      if (val == 1 || val == 2) {
+        setPlaneStripPixel(msbStrip, panelWidthBytes, localRow, phyX, true);
+      }
+    }
+  }
+
+  while (buildingStripIdx <= lastStripIdx) {
+    if (!flushStrip(buildingStripIdx)) {
+      free(outputRow);
+      free(rowBytes);
+      return false;
+    }
+    buildingStripIdx++;
+    if (buildingStripIdx <= lastStripIdx) {
+      memset(lsbStrip, 0, stripBytes);
+      memset(msbStrip, 0, stripBytes);
+    }
+  }
+
+  free(outputRow);
+  free(rowBytes);
+  return true;
 }
 
 void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y, const int maxWidth,
