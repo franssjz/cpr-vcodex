@@ -1982,8 +1982,12 @@ bool EpubReaderActivity::renderFactoryGrayPage(Page& page, const int orientedMar
   renderer.clearScreen();
   renderer.displayBuffer(HalDisplay::HALF_REFRESH);
 
+  // The factory pass is absolute: it replaces the whole screen from the GRAY2
+  // planes, so everything drawn in the BW base — including highlights — must
+  // be re-rendered here or it disappears.
   const auto renderFn = [&]() {
     page.render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
+    drawTextHighlights(page, orientedMarginTop, orientedMarginLeft);
     renderStatusBar();
   };
 
