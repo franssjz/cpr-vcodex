@@ -4,6 +4,7 @@
 #include <HalClock.h>
 #include <I18n.h>
 
+#include <cstdio>
 #include <memory>
 
 #include "ClockSyncActivity.h"
@@ -84,8 +85,11 @@ int clockCycleIndex(const uint8_t mode) {
 const char* previewChapterTimeEstimate() {
   switch (SETTINGS.statusBarChapterProgress) {
     case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
-    case CrossPointSettings::CHAPTER_PROGRESS_TIME:
-      return "15m";
+    case CrossPointSettings::CHAPTER_PROGRESS_TIME: {
+      static char buf[12];
+      snprintf(buf, sizeof(buf), "15%s", tr(STR_ETA_UNIT_MINUTE));
+      return buf;
+    }
     default:
       return nullptr;
   }

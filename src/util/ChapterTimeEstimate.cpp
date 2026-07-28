@@ -1,5 +1,9 @@
 #include "util/ChapterTimeEstimate.h"
 
+#include <CrossPointSettings.h>
+#include <I18n.h>
+#include <ReadingStatsStore.h>
+
 #include <cstdio>
 
 namespace ChapterTimeEstimate {
@@ -9,17 +13,12 @@ constexpr uint64_t MS_PER_HOUR = 60ULL * MS_PER_MINUTE;
 constexpr uint64_t MS_PER_DAY = 24ULL * MS_PER_HOUR;
 constexpr uint64_t MS_PER_YEAR = 365ULL * MS_PER_DAY;
 
-bool formatRoundedUnit(const uint64_t value, const char unit, char* buf, const size_t bufSize) {
-  const int written = snprintf(buf, bufSize, "%llu%c", static_cast<unsigned long long>(value), unit);
-  return written > 0 && static_cast<size_t>(written) < bufSize;
-}
-
-uint64_t roundedUnits(const uint64_t totalMs, const uint64_t unitMs) {
-  uint64_t value = (totalMs + unitMs / 2) / unitMs;
-  if (value == 0) {
-    value = 1;
+bool formatRoundedUnit(const uint64_t value, const char* unit, char* buf, const size_t bufSize) {
+  if (!unit || unit[0] == '\0') {
+    return false;
   }
-  return value;
+  const int written = snprintf(buf, bufSize, "%llu%s", static_cast<unsigned long long>(value), unit);
+  return written > 0 && static_cast<size_t>(written) < bufSize;
 }
 }  // namespace
 
@@ -28,20 +27,36 @@ bool formatCompactDuration(const uint64_t totalMs, char* buf, const size_t bufSi
     return false;
   }
 
-  // Pick the unit from the rounded display value so 60m becomes 1h (not "60m").
-  const uint64_t minutes = roundedUnits(totalMs, MS_PER_MINUTE);
+  // Cascade on rounded smaller units so 60m → 1h and 24h → 1d (never "60m" / "24h").
+  uint64_t minutes = (totalMs + MS_PER_MINUTE / 2) / MS_PER_MINUTE;
+  if (minutes == 0) {
+    minutes = 1;
+  }
   if (minutes < 60) {
-    return formatRoundedUnit(minutes, 'm', buf, bufSize);
+    return formatRoundedUnit(minutes, tr(STR_ETA_UNIT_MINUTE), buf, bufSize);
   }
-  const uint64_t hours = roundedUnits(totalMs, MS_PER_HOUR);
+
+  uint64_t hours = (minutes + 30) / 60;
+  if (hours == 0) {
+    hours = 1;
+  }
   if (hours < 24) {
-    return formatRoundedUnit(hours, 'h', buf, bufSize);
+    return formatRoundedUnit(hours, tr(STR_ETA_UNIT_HOUR), buf, bufSize);
   }
-  const uint64_t days = roundedUnits(totalMs, MS_PER_DAY);
+
+  uint64_t days = (hours + 12) / 24;
+  if (days == 0) {
+    days = 1;
+  }
   if (days < 365) {
-    return formatRoundedUnit(days, 'd', buf, bufSize);
+    return formatRoundedUnit(days, tr(STR_ETA_UNIT_DAY), buf, bufSize);
   }
-  return formatRoundedUnit(roundedUnits(totalMs, MS_PER_YEAR), 'y', buf, bufSize);
+
+  uint64_t years = (days + 182) / 365;
+  if (years == 0) {
+    years = 1;
+  }
+  return formatRoundedUnit(years, tr(STR_ETA_UNIT_YEAR), buf, bufSize);
 }
 
 bool formatRemainingFromRate(const uint32_t remainingWords, const double wordsPerMs, char* buf,
@@ -54,6 +69,34 @@ bool formatRemainingFromRate(const uint32_t remainingWords, const double wordsPe
     return false;
   }
   return formatCompactDuration(static_cast<uint64_t>(ms), buf, bufSize);
+}
+
+bool statusBarWantsChapterTime() {
+  return SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+         SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME;
+}
+
+bool tryFillStatusBarChapterEta(const uint32_t remainingWords, char* buf, const size_t bufSize,
+                                const char** outEstimate) {
+  if (!outEstimate || !statusBarWantsChapterTime()) {
+    return false;
+  }
+  if (!formatRemainingFromRate(remainingWords, READING_STATS.getEffectiveWordsPerMs(), buf, bufSize)) {
+    return false;
+  }
+  *outEstimate = buf;
+  return true;
+}
+
+uint32_t dwellCreditMs(const unsigned long dwellMs, const bool sameAsLastCredit) {
+  if (dwellMs < MIN_DWELL_MS) {
+    return 0;
+  }
+  if (sameAsLastCredit && dwellMs < REREAD_MIN_MS) {
+    return 0;
+  }
+  const unsigned long capped = dwellMs > MAX_DWELL_MS ? MAX_DWELL_MS : dwellMs;
+  return static_cast<uint32_t>(capped);
 }
 
 }  // namespace ChapterTimeEstimate

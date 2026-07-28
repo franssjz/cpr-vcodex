@@ -32,7 +32,7 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 5;          // v5: per-page word counts for chapter ETA
+constexpr uint8_t CACHE_VERSION = 6;          // v6: CJK/Thai-aware per-page word counts for chapter ETA
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -416,8 +416,7 @@ void TxtReaderActivity::toggleTemporaryStatusBar() {
   pageOffsets.clear();
   pageWordCounts.clear();
   currentPageLines.clear();
-  pageEnteredPage = -1;
-  pageEnteredMs = 0;
+  clearPageDwell();
   pendingForceFullRefresh = true;
   requestUpdate();
 }
@@ -544,18 +543,49 @@ void TxtReaderActivity::buildPageIndex() {
 uint16_t TxtReaderActivity::countWordsInLines(const std::vector<TextLine>& lines) {
   uint32_t words = 0;
   for (const auto& line : lines) {
-    bool inWord = false;
-    for (const unsigned char c : line.text) {
-      const bool isSpace = c <= ' ' || c == 0xA0;
-      if (!isSpace && !inWord) {
+    const unsigned char* p = reinterpret_cast<const unsigned char*>(line.text.data());
+    const unsigned char* end = p + line.text.size();
+    bool inSpaceWord = false;
+    while (p < end) {
+      const uint32_t cp = utf8NextCodepoint(&p);
+      if (cp == 0) {
+        break;
+      }
+      const bool isSpace = cp <= 0x20 || cp == 0xA0 || cp == 0x3000;
+      if (isSpace) {
+        inSpaceWord = false;
+        continue;
+      }
+      // CJK / kana / hangul / Thai: each letter is a reading unit (no spaces).
+      const bool perCharWord =
+          utf8IsCjkBreakable(cp) || (cp >= 0x0E01 && cp <= 0x0E3A) || (cp >= 0x0E40 && cp <= 0x0E4E);
+      // Skip CJK punctuation / fullwidth forms that utf8IsCjkBreakable includes.
+      const bool cjkPunctOrFullwidth =
+          (cp >= 0x3000 && cp <= 0x303F) || (cp >= 0xFE30 && cp <= 0xFE4F) || (cp >= 0xFF01 && cp <= 0xFF60);
+      if (perCharWord && !cjkPunctOrFullwidth) {
         ++words;
-        inWord = true;
-      } else if (isSpace) {
-        inWord = false;
+        inSpaceWord = false;
+      } else if (!cjkPunctOrFullwidth && !inSpaceWord) {
+        ++words;
+        inSpaceWord = true;
       }
     }
   }
   return words > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words);
+}
+
+void TxtReaderActivity::clearPageDwell() {
+  pageEnteredPage = -1;
+  pageEnteredMs = 0;
+}
+
+void TxtReaderActivity::restartPageDwell() {
+  if (currentPage < 0) {
+    clearPageDwell();
+    return;
+  }
+  pageEnteredPage = currentPage;
+  pageEnteredMs = millis();
 }
 
 void TxtReaderActivity::notePageEnteredIfChanged() {
@@ -574,15 +604,10 @@ void TxtReaderActivity::maybeCreditPageWords(const int page) {
     return;
   }
 
-  constexpr unsigned long WORD_CREDIT_MIN_DWELL_MS = 1500UL;
-  constexpr unsigned long WORD_CREDIT_REREAD_MIN_MS = 8000UL;
-  constexpr unsigned long WORD_CREDIT_MAX_DWELL_MS = 30UL * 60UL * 1000UL;
-
   const unsigned long dwellMs = millis() - pageEnteredMs;
-  if (dwellMs < WORD_CREDIT_MIN_DWELL_MS) {
-    return;
-  }
-  if (page == lastWordsCreditedPage && dwellMs < WORD_CREDIT_REREAD_MIN_MS) {
+  const bool sameAsLastCredit = page == lastWordsCreditedPage;
+  const uint32_t associatedMs = ChapterTimeEstimate::dwellCreditMs(dwellMs, sameAsLastCredit);
+  if (associatedMs == 0) {
     return;
   }
 
@@ -590,14 +615,12 @@ void TxtReaderActivity::maybeCreditPageWords(const int page) {
   if (page < static_cast<int>(pageWordCounts.size())) {
     words = pageWordCounts[page];
   }
-  lastWordsCreditedPage = page;
   if (words == 0) {
     return;
   }
 
-  const uint32_t associatedMs = static_cast<uint32_t>(
-      dwellMs > WORD_CREDIT_MAX_DWELL_MS ? WORD_CREDIT_MAX_DWELL_MS : dwellMs);
   READING_STATS.noteWordsRead(words, associatedMs);
+  lastWordsCreditedPage = page;
 }
 
 uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
@@ -882,17 +905,8 @@ void TxtReaderActivity::renderStatusBar() const {
 
   char chapterTimeBuf[12] = {};
   const char* chapterTimeEstimate = nullptr;
-  if (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
-      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME) {
-    const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-    if (wordsPerMs > 0.0) {
-      const uint32_t remainingWords = estimateRemainingWords(currentPage);
-      if (ChapterTimeEstimate::formatRemainingFromRate(remainingWords, wordsPerMs, chapterTimeBuf,
-                                                       sizeof(chapterTimeBuf))) {
-        chapterTimeEstimate = chapterTimeBuf;
-      }
-    }
-  }
+  ChapterTimeEstimate::tryFillStatusBarChapterEta(estimateRemainingWords(currentPage), chapterTimeBuf,
+                                                  sizeof(chapterTimeBuf), &chapterTimeEstimate);
 
   GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, true, chapterTimeEstimate);
 }

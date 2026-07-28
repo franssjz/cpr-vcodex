@@ -69,6 +69,8 @@ class TxtReaderActivity final : public Activity {
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
   void notePageEnteredIfChanged();
+  void clearPageDwell();
+  void restartPageDwell();
   void maybeCreditPageWords(int page);
   uint32_t estimateRemainingWords(int fromPage) const;
   std::string moveCompletedBookIfEnabled();

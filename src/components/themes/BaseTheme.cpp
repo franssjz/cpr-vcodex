@@ -846,13 +846,18 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   auto textY = screenHeight - UITheme::getInstance().getStatusBarHeight() - orientedMarginBottom - paddingBottom - 4;
   int progressTextWidth = 0;
 
-  const bool showChapterPages = SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES ||
-                                SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
+  const bool wantChapterTime =
+      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME;
+  const bool haveChapterTime =
+      wantChapterTime && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  // TIME-only with no rate yet would otherwise leave an empty right cluster; show pages until ETA is ready.
+  const bool showChapterPages =
+      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES ||
+      SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+      (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME && !haveChapterTime);
   const bool showBookPercent = SETTINGS.statusBarBookProgressPercentage;
-  const bool showChapterTime =
-      (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
-       SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME) &&
-      chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  const bool showChapterTime = haveChapterTime;
 
   if (showBookPercent || showChapterPages || showChapterTime) {
     // Right aligned text for progress counter
@@ -948,7 +953,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     const int clockReserveRight = clockOnRight && clockTextWidth > 0 ? (clockTextWidth + 10) : 0;
     // Wider progress clusters (pages+time+%) need less decorative title padding so the
     // title can still truncate cleanly instead of colliding with the right cluster.
-    const int titleSidePad = (showChapterTime && showChapterPages && showBookPercent) ? 12 : 30;
+    const int titleSidePad = showChapterTime ? 12 : 30;
     const int titleMarginLeft = batteryAreaWidth + clockReserveLeft + titleSidePad;
     const int titleMarginRight = progressTextWidth + clockReserveRight + titleSidePad;
 

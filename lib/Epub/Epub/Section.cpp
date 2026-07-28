@@ -211,6 +211,12 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
       for (uint16_t i = 0; i < pageCount; ++i) {
         serialization::readPod(file, pageWordCounts_[i]);
       }
+    } else {
+      file.close();
+      LOG_ERR("SCT", "Deserialization failed: missing page word counts");
+      clearCache();
+      pageCount = 0;
+      return false;
     }
   }
 
@@ -1038,6 +1044,7 @@ uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
 
   // Extrapolate unbuilt pages using the same estimatedTotalPages() the status-bar
   // page denominator uses (partial watermark / rebuild EMA), so pages and time agree.
+  // Remaining includes fromPage: the reader is still on that page, so its words are unread.
   const uint16_t estimatedTotal = estimatedTotalPages();
   if (knownWords > 0 && estimatedTotal > availablePages && availablePages > 0) {
     const uint64_t unbuiltPages = static_cast<uint64_t>(estimatedTotal - availablePages);

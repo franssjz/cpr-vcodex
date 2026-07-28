@@ -154,7 +154,7 @@ class ReadingStatsStore {
                     uint8_t chapterProgressPercent = 0);
   void noteActivity();
   // Credit words finished on a page together with the dwell time spent on that page.
-  // Both are persisted immediately so ETA rate survives crashes before endSession.
+  // Samples are marked dirty immediately; deferred save runs when the interval is due.
   void noteWordsRead(uint32_t words, uint32_t associatedMs);
   void tickActiveSession();
   void resumeSession();
