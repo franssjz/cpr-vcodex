@@ -115,44 +115,29 @@ void PageDwell::clear() {
   id1 = -1;
 }
 
-void PageDwell::restart(const int a, const int b, const unsigned long nowMs) {
+void PageDwell::noteEntered(const int a, const int b, const unsigned long nowMs, const bool forceRestart) {
+  if (a < 0) {
+    clear();
+    return;
+  }
+  if (!forceRestart && a == id0 && b == id1 && enteredMs != 0) {
+    return;
+  }
   id0 = a;
   id1 = b;
   enteredMs = nowMs;
 }
 
-void PageDwell::noteEnteredIfChanged(const int a, const int b, const unsigned long nowMs) {
-  if (a == id0 && b == id1 && enteredMs != 0) {
-    return;
-  }
-  restart(a, b, nowMs);
-}
-
-uint32_t PageDwell::creditMs(const int a, const int b, const unsigned long nowMs) const {
-  if (a != id0 || b != id1 || enteredMs == 0) {
-    return 0;
-  }
-  // millis() wrap (~49.7d): treat as no credit rather than a huge unsigned delta.
-  if (nowMs < enteredMs) {
-    return 0;
-  }
-  return dwellCreditMs(nowMs - enteredMs, a == lastCredited0 && b == lastCredited1);
-}
-
-void PageDwell::markCredited(const int a, const int b) {
-  lastCredited0 = a;
-  lastCredited1 = b;
-}
-
 uint32_t PageDwell::takeCredit(const int a, const int b, const uint32_t words, const unsigned long nowMs) {
-  if (words == 0) {
+  if (words == 0 || a != id0 || b != id1 || enteredMs == 0 || nowMs < enteredMs) {
     return 0;
   }
-  const uint32_t associatedMs = creditMs(a, b, nowMs);
+  const uint32_t associatedMs = dwellCreditMs(nowMs - enteredMs, a == lastCredited0 && b == lastCredited1);
   if (associatedMs == 0) {
     return 0;
   }
-  markCredited(a, b);
+  lastCredited0 = a;
+  lastCredited1 = b;
   return associatedMs;
 }
 

@@ -40,14 +40,11 @@ struct PageDwell {
   int lastCredited1 = -1;
 
   void clear();
-  void restart(int a, int b, unsigned long nowMs);
-  void noteEnteredIfChanged(int a, int b, unsigned long nowMs);
+  // a < 0 clears. forceRestart always resets the dwell clock; otherwise no-op
+  // when already tracking (a, b).
+  void noteEntered(int a, int b, unsigned long nowMs, bool forceRestart = false);
   // If dwell qualifies and words > 0, marks credited and returns associated ms.
   uint32_t takeCredit(int a, int b, uint32_t words, unsigned long nowMs);
-
- private:
-  uint32_t creditMs(int a, int b, unsigned long nowMs) const;
-  void markCredited(int a, int b);
 };
 
 }  // namespace ChapterTimeEstimate

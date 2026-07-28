@@ -389,14 +389,14 @@ void TxtReaderActivity::loop() {
     READING_STATS.noteActivity();
     // Backward turns never credit; re-reads credit later if the reader lingers.
     currentPage--;
-    pageDwell.noteEnteredIfChanged(currentPage, 0, millis());
+    pageDwell.noteEntered(currentPage, 0, millis());
     requestUpdate();
   } else if (nextTriggered) {
     if (currentPage < totalPages - 1) {
       READING_STATS.noteActivity();
       maybeCreditPageWords(currentPage);
       currentPage++;
-      pageDwell.noteEnteredIfChanged(currentPage, 0, millis());
+      pageDwell.noteEntered(currentPage, 0, millis());
       requestUpdate();
     } else {
       READING_STATS.noteActivity();
@@ -594,11 +594,7 @@ uint32_t TxtReaderActivity::estimateRemainingWords(const int fromPage) const {
 
 void TxtReaderActivity::resumeAfterSubactivity() {
   READING_STATS.resumeSession();
-  if (currentPage < 0) {
-    pageDwell.clear();
-  } else {
-    pageDwell.restart(currentPage, 0, millis());
-  }
+  pageDwell.noteEntered(currentPage, 0, millis(), true);
 }
 
 void TxtReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
@@ -859,7 +855,7 @@ void TxtReaderActivity::renderPage() {
   // BW rendering
   renderLines();
   if (currentPage >= 0) {
-    pageDwell.noteEnteredIfChanged(currentPage, 0, millis());
+    pageDwell.noteEntered(currentPage, 0, millis());
   }
   renderStatusBar();
 

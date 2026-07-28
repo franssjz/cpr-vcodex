@@ -433,11 +433,8 @@ void EpubReaderActivity::loop() {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
         mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       automaticPageTurnActive = false;
-      if (section && section->currentPage >= 0) {
-        pageDwell.restart(currentSpineIndex, section->currentPage, millis());
-      } else {
-        pageDwell.clear();
-      }
+      pageDwell.noteEntered(section && section->currentPage >= 0 ? currentSpineIndex : -1,
+                            section ? section->currentPage : 0, millis(), true);
       // updates chapter title space to indicate page turn disabled
       requestUpdate();
       return;
@@ -1215,11 +1212,8 @@ void EpubReaderActivity::applyOrientation(const uint8_t orientation) {
 void EpubReaderActivity::toggleAutoPageTurn(const uint8_t selectedPageTurnOption) {
   if (selectedPageTurnOption == 0 || selectedPageTurnOption >= std::size(PAGE_TURN_RATES)) {
     automaticPageTurnActive = false;
-    if (!section || section->currentPage < 0) {
-      pageDwell.clear();
-    } else {
-      pageDwell.restart(currentSpineIndex, section->currentPage, millis());
-    }
+    pageDwell.noteEntered(section && section->currentPage >= 0 ? currentSpineIndex : -1,
+                          section ? section->currentPage : 0, millis(), true);
     return;
   }
 
@@ -1308,11 +1302,8 @@ void EpubReaderActivity::markCurrentBookAsFinished() {
 
 void EpubReaderActivity::resumeAfterSubactivity() {
   READING_STATS.resumeSession();
-  if (!section || section->currentPage < 0) {
-    pageDwell.clear();
-  } else {
-    pageDwell.restart(currentSpineIndex, section->currentPage, millis());
-  }
+  pageDwell.noteEntered(section && section->currentPage >= 0 ? currentSpineIndex : -1,
+                        section ? section->currentPage : 0, millis(), true);
 }
 
 void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
@@ -1395,11 +1386,8 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
     sessionProgressTouched = true;
   }
   lastPageTurnTime = millis();
-  if (section && section->currentPage >= 0) {
-    pageDwell.noteEnteredIfChanged(currentSpineIndex, section->currentPage, millis());
-  } else {
-    pageDwell.clear();
-  }
+  pageDwell.noteEntered(section && section->currentPage >= 0 ? currentSpineIndex : -1,
+                        section ? section->currentPage : 0, millis());
   requestUpdate();
 }
 
@@ -1677,9 +1665,7 @@ void EpubReaderActivity::render(RenderLock&& lock) {
   }
   {
     const int page = section ? section->currentPage : -1;
-    if (page >= 0) {
-      pageDwell.noteEnteredIfChanged(currentSpineIndex, page, millis());
-    }
+    pageDwell.noteEntered(page >= 0 ? currentSpineIndex : -1, page, millis());
   }
   // Menus, screenshots and overlays can request a render without moving the
   // reader. Avoid several FAT operations for the same six-byte position file.
