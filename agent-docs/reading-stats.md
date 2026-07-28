@@ -32,17 +32,19 @@ metrics.
 ## Chapter time remaining (status bar)
 
 - Rate is live-session only (`getEffectiveWordsPerMs`): no active session ⇒ no ETA.
-- EPUB credits use `TextBlock::wordCount()` / `Page::countWords()`; TXT uses
-  `utf8CountLayoutWords` on plain line text — rates are not bit-identical across formats.
-- Per-page word caches store `uint16` (saturate) for EPUB sections and TXT `index.bin`.
-- EPUB keeps per-chapter word counts in RAM (~2 B × pages); TXT keeps them on disk only.
+- EPUB credits use `TextBlock::wordCount()` / `Page::countWords()` with a per-section
+  word LUT for exact remaining.
+- TXT uses whitespace word totals + pro-rata remaining / average words-per-page
+  credits (no per-page word table in RAM or `index.bin`).
+- Per-page word caches store `uint16` (saturate) for EPUB sections only.
+- EPUB keeps per-chapter word counts in RAM (~2 B × pages); TXT keeps only
+  `totalBookWords`.
 - `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
   locales fall back to English.
 - The Pages+Time setting label is composed via `formatChapterProgressLabel`
   (`STR_PAGES + '+' + STR_TIME`); always use that helper for enum display.
 - XTC has no word ETA (bitmap pages, no status-bar chapter-time slot).
-- TXT caches remaining words in RAM between paints; EPUB keeps a running
-  `knownPageWordsTotal_` for ETA extrapolation.
+- EPUB keeps a running `knownPageWordsTotal_` for ETA extrapolation.
 
 ## Design Rules
 

@@ -34,14 +34,9 @@ class TxtReaderActivity final : public Activity {
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
-  // Book-wide word total. Per-page counts live only in the index cache on disk
-  // (not in RAM) so large TXT files stay within ESP32-C3 heap limits.
+  // Book-wide word total for pro-rata remaining / average words-per-page credits.
+  // Avoids a per-page word table in RAM or on disk (ESP32-C3 heap + simpler cache).
   uint32_t totalBookWords = 0;
-  // Byte offset of the per-page word table inside index.bin after a successful load/save.
-  uint32_t wordCountsFileOffset = 0;
-  // Remaining words from currentPage inclusive; refreshed from disk when invalid.
-  uint32_t cachedRemainingWords = 0;
-  bool cachedRemainingValid = false;
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -70,12 +65,9 @@ class TxtReaderActivity final : public Activity {
   bool loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset);
   void buildPageIndex();
   bool loadPageIndexCache();
-  void savePageIndexCache(const std::vector<uint16_t>& pageWords);
-  bool readCachedPageWordCount(int page, uint16_t& outWords) const;
-  bool sumRemainingWordsFromCache(int fromPage, uint32_t& outRemaining) const;
-  void invalidateRemainingWordsCache();
-  void ensureRemainingWordsCache();
+  void savePageIndexCache();
   uint32_t estimateRemainingWords(int fromPage) const;
+  uint32_t averageWordsPerPage() const;
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
