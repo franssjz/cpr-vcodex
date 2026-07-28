@@ -409,7 +409,7 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
         const uint32_t words = page ? page->countWords() : 0;
         const uint16_t wordCount = words > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words);
         ctxPtr->lut.push_back({this->onPageComplete(std::move(page)), syncEntry.xhtmlByteOffset,
-                               syncEntry.paragraphIndex, syncEntry.listItemIndex, wordCount});
+                               syncEntry.paragraphIndex, syncEntry.listItemIndex});
         if (pageWordCounts_.size() < ctxPtr->lut.size()) {
           pageWordCounts_.resize(ctxPtr->lut.size());
         }
@@ -582,8 +582,9 @@ bool Section::commitBuildFile(const uint8_t version, const uint32_t bytesConsume
   }
 
   // Per-page word counts (v41+), immediately after the li LUT.
-  for (const auto& entry : build_->lut) {
-    serialization::writePod(file, entry.wordCount);
+  for (size_t i = 0; i < build_->lut.size(); ++i) {
+    const uint16_t wordCount = (i < pageWordCounts_.size()) ? pageWordCounts_[i] : 0;
+    serialization::writePod(file, wordCount);
   }
 
   if (asPartial) {
@@ -1020,9 +1021,6 @@ uint16_t Section::getPageWordCount(const uint16_t page) const {
   if (page < pageWordCounts_.size()) {
     return pageWordCounts_[page];
   }
-  if (build_ && page < build_->lut.size()) {
-    return build_->lut[page].wordCount;
-  }
   return 0;
 }
 
@@ -1038,21 +1036,13 @@ uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
     }
   }
 
-  // Still-building / partial chapters: extrapolate unbuilt content from HTML density.
-  uint32_t bytesConsumed = 0;
-  uint32_t totalBytes = 0;
-  if (build_) {
-    bytesConsumed = build_->bytesConsumed;
-    totalBytes = build_->totalBytes;
-  } else if (partial_) {
-    bytesConsumed = partialBytesConsumed_;
-    totalBytes = partialTotalBytes_;
-  }
-
-  if (knownWords > 0 && totalBytes > bytesConsumed && bytesConsumed > 0) {
-    const uint64_t unbuiltBytes = static_cast<uint64_t>(totalBytes - bytesConsumed);
+  // Extrapolate unbuilt pages using the same estimatedTotalPages() the status-bar
+  // page denominator uses (partial watermark / rebuild EMA), so pages and time agree.
+  const uint16_t estimatedTotal = estimatedTotalPages();
+  if (knownWords > 0 && estimatedTotal > availablePages && availablePages > 0) {
+    const uint64_t unbuiltPages = static_cast<uint64_t>(estimatedTotal - availablePages);
     const uint64_t unbuiltWords =
-        (static_cast<uint64_t>(knownWords) * unbuiltBytes) / static_cast<uint64_t>(bytesConsumed);
+        (static_cast<uint64_t>(knownWords) * unbuiltPages) / static_cast<uint64_t>(availablePages);
     if (unbuiltWords > 0 && unbuiltWords < static_cast<uint64_t>(UINT32_MAX)) {
       remaining += static_cast<uint32_t>(unbuiltWords);
     }

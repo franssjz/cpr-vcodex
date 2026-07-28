@@ -30,7 +30,6 @@ class Section {
     uint32_t xhtmlByteOffset;
     uint16_t paragraphIndex;
     uint16_t listItemIndex;
-    uint16_t wordCount;
   };
   // Held only while an incremental build is in progress (see startBuild). Carries the
   // live parser plus the strings it references (the parser stores them by reference)
