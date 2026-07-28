@@ -309,40 +309,35 @@ void migrateLegacyStatsShortcut(CrossPointSettings& settings, const JsonDocument
 void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::STATUS_BAR_MODE>(settings.statusBar)) {
     case CrossPointSettings::NONE:
-      settings.statusBarChapterPageCount = 0;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::NO_PROGRESS:
-      settings.statusBarChapterPageCount = 0;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::ONLY_BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::CHAPTER_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 0;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::CHAPTER_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -350,14 +345,26 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::FULL:
     default:
-      settings.statusBarChapterPageCount = 1;
-      settings.statusBarChapterTimeRemaining = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
   }
+}
+
+uint8_t migrateChapterProgressFromLegacyToggles(const uint8_t showPages, const uint8_t showTime) {
+  if (showPages && showTime) {
+    return CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
+  }
+  if (showTime) {
+    return CrossPointSettings::CHAPTER_PROGRESS_TIME;
+  }
+  if (showPages) {
+    return CrossPointSettings::CHAPTER_PROGRESS_PAGES;
+  }
+  return CrossPointSettings::CHAPTER_PROGRESS_HIDE;
 }
 
 namespace {
@@ -408,8 +415,14 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     dest[maxLen - 1] = '\0';
   };
 
-  if (doc["statusBarChapterPageCount"].isNull()) {
+  if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
+  } else if (doc["statusBarChapterProgress"].isNull()) {
+    // Migrate the short-lived dual-toggle settings into the combined enum.
+    const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
+    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
+    s.statusBarChapterProgress = migrateChapterProgressFromLegacyToggles(showPages, showTime);
+    if (needsResave) *needsResave = true;
   }
 
   loadEnum("sleepScreen", s.sleepScreen, CrossPointSettings::SLEEP_SCREEN_MODE_COUNT);
@@ -528,8 +541,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
   }
 
-  loadToggle("statusBarChapterPageCount", s.statusBarChapterPageCount);
-  loadToggle("statusBarChapterTimeRemaining", s.statusBarChapterTimeRemaining);
+  loadEnum("statusBarChapterProgress", s.statusBarChapterProgress,
+           CrossPointSettings::STATUS_BAR_CHAPTER_PROGRESS_COUNT);
   loadToggle("statusBarBookProgressPercentage", s.statusBarBookProgressPercentage);
   loadEnum("statusBarProgressBar", s.statusBarProgressBar, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_COUNT);
   loadEnum("statusBarProgressBarThickness", s.statusBarProgressBarThickness,
@@ -899,8 +912,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["koSyncAutoPullOnOpen"] = s.koSyncAutoPullOnOpen;
   doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
-  doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
-  doc["statusBarChapterTimeRemaining"] = s.statusBarChapterTimeRemaining;
+  doc["statusBarChapterProgress"] = s.statusBarChapterProgress;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
@@ -994,10 +1006,15 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
-  // Legacy migration: if statusBarChapterPageCount is absent this is a pre-refactor settings file.
-  // Populate s with migrated values now so the generic loop below picks them up as defaults and clamps them.
-  if (doc["statusBarChapterPageCount"].isNull()) {
+  // Legacy migration: if statusBarChapterProgress and statusBarChapterPageCount are absent
+  // this is a pre-refactor settings file. Populate s with migrated values now so the
+  // generic loop below picks them up as defaults and clamps them.
+  if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
+  } else if (doc["statusBarChapterProgress"].isNull()) {
+    const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
+    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
+    s.statusBarChapterProgress = migrateChapterProgressFromLegacyToggles(showPages, showTime);
   }
 
   for (const auto& info : getSettingsList()) {

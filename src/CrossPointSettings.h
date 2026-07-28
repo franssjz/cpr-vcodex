@@ -56,6 +56,13 @@ class CrossPointSettings {
     HIDE_PROGRESS = 2,
     STATUS_BAR_PROGRESS_BAR_COUNT
   };
+  enum STATUS_BAR_CHAPTER_PROGRESS {
+    CHAPTER_PROGRESS_PAGES = 0,
+    CHAPTER_PROGRESS_PAGES_TIME = 1,
+    CHAPTER_PROGRESS_TIME = 2,
+    CHAPTER_PROGRESS_HIDE = 3,
+    STATUS_BAR_CHAPTER_PROGRESS_COUNT
+  };
   enum STATUS_BAR_PROGRESS_BAR_THICKNESS {
     PROGRESS_BAR_THIN = 0,
     PROGRESS_BAR_NORMAL = 1,
@@ -261,8 +268,7 @@ class CrossPointSettings {
   uint8_t cleanSleepRefresh = 1;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
-  uint8_t statusBarChapterPageCount = 1;
-  uint8_t statusBarChapterTimeRemaining = 0;
+  uint8_t statusBarChapterProgress = CHAPTER_PROGRESS_PAGES;
   uint8_t statusBarBookProgressPercentage = 1;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;

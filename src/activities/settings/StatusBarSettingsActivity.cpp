@@ -17,8 +17,7 @@ namespace {
 // Menu items in their natural order. Clock entries are appended only when the
 // DS3231 RTC is present so X4 devices don't see them at all.
 enum MenuItem {
-  ITEM_CHAPTER_PAGE_COUNT = 0,
-  ITEM_CHAPTER_TIME_REMAINING,
+  ITEM_CHAPTER_PROGRESS = 0,
   ITEM_BOOK_PROGRESS_PERCENTAGE,
   ITEM_PROGRESS_BAR,
   ITEM_PROGRESS_BAR_THICKNESS,
@@ -35,8 +34,7 @@ constexpr int BASE_MENU_ITEMS = ITEM_CLOCK;  // Items shown on every device
 constexpr int FULL_MENU_ITEMS = ITEM_COUNT;  // Items shown when RTC is available
 
 const StrId menuNames[FULL_MENU_ITEMS] = {
-    StrId::STR_CHAPTER_PAGE_COUNT,
-    StrId::STR_CHAPTER_TIME_REMAINING_ESTIMATE,
+    StrId::STR_CHAPTER_PROGRESS,
     StrId::STR_BOOK_PROGRESS_PERCENTAGE,
     StrId::STR_PROGRESS_BAR,
     StrId::STR_PROGRESS_BAR_THICKNESS,
@@ -50,6 +48,10 @@ const StrId menuNames[FULL_MENU_ITEMS] = {
 
 constexpr int CLOCK_FORMAT_ITEMS = 2;
 const StrId clockFormatNames[CLOCK_FORMAT_ITEMS] = {StrId::STR_CLOCK_FORMAT_24H, StrId::STR_CLOCK_FORMAT_12H};
+
+constexpr int CHAPTER_PROGRESS_ITEMS = 4;
+const StrId chapterProgressNames[CHAPTER_PROGRESS_ITEMS] = {StrId::STR_PAGES, StrId::STR_PAGES_PLUS_TIME,
+                                                            StrId::STR_TIME, StrId::STR_HIDE};
 
 constexpr int PROGRESS_BAR_ITEMS = 3;
 const StrId progressBarNames[PROGRESS_BAR_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
@@ -79,6 +81,16 @@ int clockCycleIndex(const uint8_t mode) {
   return 0;
 }
 
+const char* previewChapterTimeEstimate() {
+  switch (SETTINGS.statusBarChapterProgress) {
+    case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
+    case CrossPointSettings::CHAPTER_PROGRESS_TIME:
+      return "15m";
+    default:
+      return nullptr;
+  }
+}
+
 const int verticalPreviewPadding = 50;
 const int verticalPreviewTextPadding = 40;
 }  // namespace
@@ -90,6 +102,10 @@ void StatusBarSettingsActivity::onEnter() {
   visibleItemCount = halClock.isAvailable() ? FULL_MENU_ITEMS : BASE_MENU_ITEMS;
 
   // Clamp statusBarProgressBar and statusBarTitle in case of corrupt/migrated data
+  if (SETTINGS.statusBarChapterProgress >= CHAPTER_PROGRESS_ITEMS) {
+    SETTINGS.statusBarChapterProgress = CrossPointSettings::STATUS_BAR_CHAPTER_PROGRESS::CHAPTER_PROGRESS_PAGES;
+  }
+
   if (SETTINGS.statusBarProgressBar >= PROGRESS_BAR_ITEMS) {
     SETTINGS.statusBarProgressBar = CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   }
@@ -155,11 +171,8 @@ void StatusBarSettingsActivity::loop() {
 
 void StatusBarSettingsActivity::handleSelection() {
   switch (selectedIndex) {
-    case ITEM_CHAPTER_PAGE_COUNT:
-      SETTINGS.statusBarChapterPageCount = (SETTINGS.statusBarChapterPageCount + 1) % 2;
-      break;
-    case ITEM_CHAPTER_TIME_REMAINING:
-      SETTINGS.statusBarChapterTimeRemaining = (SETTINGS.statusBarChapterTimeRemaining + 1) % 2;
+    case ITEM_CHAPTER_PROGRESS:
+      SETTINGS.statusBarChapterProgress = (SETTINGS.statusBarChapterProgress + 1) % CHAPTER_PROGRESS_ITEMS;
       break;
     case ITEM_BOOK_PROGRESS_PERCENTAGE:
       SETTINGS.statusBarBookProgressPercentage = (SETTINGS.statusBarBookProgressPercentage + 1) % 2;
@@ -219,10 +232,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
       [](int index) { return std::string(I18N.get(menuNames[index])); }, nullptr, nullptr,
       [](int index) -> std::string {
         switch (index) {
-          case ITEM_CHAPTER_PAGE_COUNT:
-            return SETTINGS.statusBarChapterPageCount ? tr(STR_SHOW) : tr(STR_HIDE);
-          case ITEM_CHAPTER_TIME_REMAINING:
-            return SETTINGS.statusBarChapterTimeRemaining ? tr(STR_SHOW) : tr(STR_HIDE);
+          case ITEM_CHAPTER_PROGRESS:
+            return I18N.get(chapterProgressNames[SETTINGS.statusBarChapterProgress]);
           case ITEM_BOOK_PROGRESS_PERCENTAGE:
             return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
           case ITEM_PROGRESS_BAR:
@@ -260,8 +271,7 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     title = tr(STR_EXAMPLE_CHAPTER);
   }
 
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false,
-                    SETTINGS.statusBarChapterTimeRemaining ? "15m" : nullptr);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false, previewChapterTimeEstimate());
 
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
                     renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() - verticalPreviewPadding -

@@ -1991,7 +1991,9 @@ void EpubReaderActivity::renderStatusBar() const {
 
   char chapterTimeBuf[12] = {};
   const char* chapterTimeEstimate = nullptr;
-  if (SETTINGS.statusBarChapterTimeRemaining && section->currentPage >= 0) {
+  if ((SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+       SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME) &&
+      section->currentPage >= 0) {
     const uint32_t remainingWords =
         section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage));
     const uint64_t remainingMs =

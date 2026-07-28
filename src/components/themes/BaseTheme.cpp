@@ -846,9 +846,13 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   auto textY = screenHeight - UITheme::getInstance().getStatusBarHeight() - orientedMarginBottom - paddingBottom - 4;
   int progressTextWidth = 0;
 
-  const bool showChapterPages = SETTINGS.statusBarChapterPageCount;
+  const bool showChapterPages = SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES ||
+                                SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
   const bool showBookPercent = SETTINGS.statusBarBookProgressPercentage;
-  const bool showChapterTime = chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
+  const bool showChapterTime =
+      (SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME ||
+       SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME) &&
+      chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
 
   if (showBookPercent || showChapterPages || showChapterTime) {
     // Right aligned text for progress counter
