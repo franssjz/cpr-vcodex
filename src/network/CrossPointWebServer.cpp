@@ -291,7 +291,8 @@ constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_
 constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
 constexpr StrId OPT_OPDS_FILENAME_FORMAT[] = {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR};
 constexpr StrId OPT_BOOK_CHAPTER_HIDE[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
-// Index 1 is CHAPTER_PROGRESS_PAGES_TIME — JSON options use formatChapterProgressLabel.
+// Length-only for WEB_ENUM: JSON option labels always use formatChapterProgressLabel
+// (Pages+Time is composed; these StrIds are never sent to the client).
 constexpr StrId OPT_CHAPTER_PROGRESS[] = {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE};
 constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
                                        StrId::STR_PROGRESS_BAR_THICK};
@@ -1917,7 +1918,7 @@ void CrossPointWebServer::handleGetSettings() const {
             if (CrossPointSettings::formatChapterProgressLabel(i, label, sizeof(label))) {
               sendJsonEscaped(server.get(), label);
             } else {
-              sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+              sendJsonEscaped(server.get(), "");
             }
           } else {
             sendJsonEscaped(server.get(), I18N.get(s.options[i]));

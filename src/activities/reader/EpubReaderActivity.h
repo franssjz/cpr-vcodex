@@ -126,8 +126,8 @@ class EpubReaderActivity final : public Activity {
   // noteActivity + clear dwell, then resumeSession + restart dwell on return.
   void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
   // Credit the current page's dwell sample while the reading session is still active.
-  void creditCurrentPageWords();
-  void maybeCreditPageWords(int spineIndex, int page);
+  void creditCurrentPage();
+  void maybeCreditPage(int spineIndex, int page);
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
   void cacheCurrentPageForOverlay(const std::shared_ptr<Page>& page, int marginLeft, int marginTop);

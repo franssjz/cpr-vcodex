@@ -227,8 +227,8 @@ const std::vector<SettingInfo>& getSettingsList() {
                           {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR}, "opdsFilenameFormat",
                           StrId::STR_KOREADER_SYNC),
         // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
-        // Index 1 is CHAPTER_PROGRESS_PAGES_TIME — display via formatChapterProgressLabel only
-        // (placeholder StrId here is never shown raw).
+        // Enum length only — UI labels always come from formatChapterProgressLabel
+        // (Pages+Time is composed; these StrIds are never shown raw).
         SettingInfo::Enum(StrId::STR_STATUS_BAR_CHAPTER_PROGRESS, &CrossPointSettings::statusBarChapterProgress,
                           {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE},
                           "statusBarChapterProgress", StrId::STR_CUSTOMISE_STATUS_BAR),

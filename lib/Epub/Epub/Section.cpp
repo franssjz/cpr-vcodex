@@ -22,8 +22,9 @@ namespace {
 //      first render).
 // v40: progressive/partial cache, with vCodex ruby blocks, paragraph/list
 // mapping and XHTML byte offsets retained.
-// v41: per-page word counts appended after the li LUT (chapter time-remaining estimates).
-constexpr uint8_t SECTION_FILE_VERSION = 42;
+// (A transient v41 word-count LUT was explored for chapter ETA then abandoned;
+// page-rate ETA needs no section format change, so the on-disk layout stays v40.)
+constexpr uint8_t SECTION_FILE_VERSION = 40;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -172,7 +173,7 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   serialization::readPod(file, pageCount);
 
-  // One seek for the li LUT offset — used by both the partial trailer and the word LUT.
+  // One seek for the li LUT offset (also locates the partial watermark trailer).
   uint32_t liLutOffset = 0;
   if (pageCount > 0 || filePartial) {
     file.seek(HEADER_SIZE - sizeof(uint32_t));

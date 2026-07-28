@@ -62,13 +62,13 @@ class TxtReaderActivity final : public Activity {
   bool loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset);
   void buildPageIndex();
   bool loadPageIndexCache();
-  void savePageIndexCache();
+  void savePageIndexCache() const;
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
-  void creditCurrentPageWords();
-  void maybeCreditPageWords(int page);
+  void creditCurrentPage();
+  void maybeCreditPage(int page);
   void resumeAfterSubactivity();
   void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
   std::string moveCompletedBookIfEnabled();
