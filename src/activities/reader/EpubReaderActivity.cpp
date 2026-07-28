@@ -1320,10 +1320,17 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   if (isForwardTurn) {
     // Credit words on the page being finished so chapter time estimates use a
     // word rate rather than page-turn rate (image/sparse pages count as 0).
+    // Only credit each (spine, page) once per reader session (high-water mark).
     if (oldPage >= 0) {
-      const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(oldPage));
-      if (words > 0) {
-        READING_STATS.noteWordsRead(words);
+      const bool isNewProgress = oldSpineIndex > wordsCreditedSpineIndex ||
+                                 (oldSpineIndex == wordsCreditedSpineIndex && oldPage > wordsCreditedPage);
+      if (isNewProgress) {
+        const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(oldPage));
+        if (words > 0) {
+          READING_STATS.noteWordsRead(words);
+        }
+        wordsCreditedSpineIndex = oldSpineIndex;
+        wordsCreditedPage = oldPage;
       }
     }
     if (section->currentPage < section->pageCount - 1 || section->isBuilding() || section->isPartial()) {

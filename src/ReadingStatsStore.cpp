@@ -1454,11 +1454,17 @@ void ReadingStatsStore::endSession() {
   if (countedSession) {
     book.sessions++;
     book.lastSessionMs = sessionMs;
-    book.totalWordsRead += activeSession.sessionWordsRead;
     const uint32_t sessionTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     if (isClockValid(sessionTimestamp)) {
       appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs, book);
     }
+    markDirty();
+  }
+
+  // Always persist words read for ETA rate, including short uncounted sessions,
+  // because noteActivity() already credits their reading time into totalReadingMs.
+  if (activeSession.sessionWordsRead > 0) {
+    book.totalWordsRead += activeSession.sessionWordsRead;
     markDirty();
   }
 

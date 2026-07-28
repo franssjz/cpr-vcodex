@@ -45,6 +45,9 @@ class EpubReaderActivity final : public Activity {
   int sessionStartSpineIndex = 0;
   int sessionStartPage = 0;
   bool sessionProgressTouched = false;
+  // High-water mark for word-rate credits so back/forward re-reads do not inflate ETA.
+  int wordsCreditedSpineIndex = -1;
+  int wordsCreditedPage = -1;
   std::shared_ptr<Page> currentOverlayPageCache;
   EndOfBookOptions endOfBookOptions;
   int currentOverlayPageSpineIndex = -1;
