@@ -278,12 +278,12 @@ inline bool formatCompactDuration(const uint64_t totalMs, char* buf, const size_
   return formatRoundedUnit(years, tr(STR_ETA_UNIT_YEAR));
 }
 
-inline bool formatRemainingFromRate(const uint32_t remainingWords, const double wordsPerMs, char* buf,
+inline bool formatRemainingFromRate(const uint32_t remainingPages, const double pagesPerMs, char* buf,
                                     const size_t bufSize) {
-  if (remainingWords == 0 || wordsPerMs <= 0.0) {
+  if (remainingPages == 0 || pagesPerMs <= 0.0) {
     return false;
   }
-  const double ms = static_cast<double>(remainingWords) / wordsPerMs;
+  const double ms = static_cast<double>(remainingPages) / pagesPerMs;
   if (ms <= 0.0 || ms >= static_cast<double>(UINT64_MAX)) {
     return false;
   }

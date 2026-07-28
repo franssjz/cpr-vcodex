@@ -522,8 +522,8 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
 
   primary.totalReadingMs += duplicate.totalReadingMs;
-  primary.totalWordsReadingMs += duplicate.totalWordsReadingMs;
-  primary.totalWordsRead += duplicate.totalWordsRead;
+  primary.totalPagesReadingMs += duplicate.totalPagesReadingMs;
+  primary.totalPagesRead += duplicate.totalPagesRead;
   primary.sessions += duplicate.sessions;
   primary.lastSessionMs = std::max(primary.lastSessionMs, duplicate.lastSessionMs);
   if (primary.firstReadAt == 0 || (duplicate.firstReadAt != 0 && duplicate.firstReadAt < primary.firstReadAt)) {
@@ -558,10 +558,9 @@ void ReadingStatsStore::normalizeBook(ReadingBookStats& book) {
   normalizeReadingDays(book.readingDays);
   book.lastProgressPercent = clampPercent(book.lastProgressPercent);
   book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
-  // Pre-pairing builds stored words against lifetime reading ms. Drop unpaired words so
-  // ETA rate cannot open on ~80 new words divided by hours of historical time.
-  if (book.totalWordsReadingMs == 0 && book.totalWordsRead > 0) {
-    book.totalWordsRead = 0;
+  // Drop unpaired page samples so ETA rate cannot open on pages without dwell ms.
+  if (book.totalPagesReadingMs == 0 && book.totalPagesRead > 0) {
+    book.totalPagesRead = 0;
   }
 }
 
@@ -1254,20 +1253,20 @@ void ReadingStatsStore::noteActivity() {
   }
 }
 
-void ReadingStatsStore::noteWordsRead(const uint32_t words, const uint32_t associatedMs) {
-  if (!activeSession.active || activeSession.bookIndex >= books.size() || words == 0 || associatedMs == 0) {
+void ReadingStatsStore::notePagesRead(const uint32_t pages, const uint32_t associatedMs) {
+  if (!activeSession.active || activeSession.bookIndex >= books.size() || pages == 0 || associatedMs == 0) {
     return;
   }
   auto& book = books[activeSession.bookIndex];
-  if (book.totalWordsRead > UINT64_MAX - words) {
-    book.totalWordsRead = UINT64_MAX;
+  if (book.totalPagesRead > UINT64_MAX - pages) {
+    book.totalPagesRead = UINT64_MAX;
   } else {
-    book.totalWordsRead += words;
+    book.totalPagesRead += pages;
   }
-  if (book.totalWordsReadingMs > UINT64_MAX - associatedMs) {
-    book.totalWordsReadingMs = UINT64_MAX;
+  if (book.totalPagesReadingMs > UINT64_MAX - associatedMs) {
+    book.totalPagesReadingMs = UINT64_MAX;
   } else {
-    book.totalWordsReadingMs += associatedMs;
+    book.totalPagesReadingMs += associatedMs;
   }
   markDirty();
   if (shouldSaveDeferred()) {
@@ -1494,8 +1493,8 @@ void ReadingStatsStore::endSession() {
   saveToFile();
 }
 
-double ReadingStatsStore::getEffectiveWordsPerMs() const {
-  constexpr uint64_t MIN_RATE_WORDS = 80;
+double ReadingStatsStore::getEffectivePagesPerMs() const {
+  constexpr uint64_t MIN_RATE_PAGES = 3;
   constexpr uint64_t MIN_RATE_MS = 60ULL * 1000ULL;
 
   // Live status-bar rate only: no active session ⇒ no ETA (rate is not a lifetime average).
@@ -1504,16 +1503,16 @@ double ReadingStatsStore::getEffectiveWordsPerMs() const {
   }
 
   const auto& book = books[activeSession.bookIndex];
-  // Only dwell ms paired with credited page words — never lifetime totalReadingMs.
-  if (book.totalWordsRead < MIN_RATE_WORDS || book.totalWordsReadingMs < MIN_RATE_MS) {
+  // Only dwell ms paired with credited pages — never lifetime totalReadingMs.
+  if (book.totalPagesRead < MIN_RATE_PAGES || book.totalPagesReadingMs < MIN_RATE_MS) {
     return 0.0;
   }
-  return static_cast<double>(book.totalWordsRead) / static_cast<double>(book.totalWordsReadingMs);
+  return static_cast<double>(book.totalPagesRead) / static_cast<double>(book.totalPagesReadingMs);
 }
 
 bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,
                                               const int32_t deltaMs) {
-  // Manual day corrections adjust lifetime reading time only — never word-rate ETA samples.
+  // Manual day corrections adjust lifetime reading time only — never page-rate ETA samples.
   if (dayOrdinal == 0 || deltaMs == 0) {
     return false;
   }

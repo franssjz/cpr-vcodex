@@ -37,9 +37,9 @@ struct PageDwell {
     enteredMs = nowMs;
   }
 
-  // If dwell qualifies and words > 0, marks credited and returns associated ms.
-  uint32_t takeCredit(const int a, const int b, const uint32_t words, const unsigned long nowMs) {
-    if (words == 0 || a != id0 || b != id1 || enteredMs == 0 || nowMs < enteredMs) {
+  // If dwell qualifies and pages > 0, marks credited and returns associated ms.
+  uint32_t takeCredit(const int a, const int b, const uint32_t pages, const unsigned long nowMs) {
+    if (pages == 0 || a != id0 || b != id1 || enteredMs == 0 || nowMs < enteredMs) {
       return 0;
     }
     const unsigned long dwellMs = nowMs - enteredMs;

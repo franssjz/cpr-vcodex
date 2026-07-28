@@ -1330,13 +1330,13 @@ void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int pa
     return;
   }
 
-  const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(page));
-  const uint32_t associatedMs = pageDwell.takeCredit(spineIndex, page, words, millis());
+  constexpr uint32_t kPages = 1;
+  const uint32_t associatedMs = pageDwell.takeCredit(spineIndex, page, kPages, millis());
   if (associatedMs == 0) {
     return;
   }
 
-  READING_STATS.noteWordsRead(words, associatedMs);
+  READING_STATS.notePagesRead(kPages, associatedMs);
 }
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
@@ -2030,13 +2030,17 @@ void EpubReaderActivity::renderStatusBar() const {
   char chapterTimeBuf[24] = {};
   const char* chapterTimeEstimate = nullptr;
   if (section->currentPage >= 0) {
-    const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-    // Skip remaining-words walk when rate is 0 or time is hidden.
-    if (SETTINGS.statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
-        ReaderUtils::formatRemainingFromRate(
-            section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)), wordsPerMs, chapterTimeBuf,
-            sizeof(chapterTimeBuf))) {
-      chapterTimeEstimate = chapterTimeBuf;
+    const double pagesPerMs = READING_STATS.getEffectivePagesPerMs();
+    if (SETTINGS.statusBarWantsChapterTime() && pagesPerMs > 0.0) {
+      const uint16_t estimatedTotal = section->estimatedTotalPages();
+      const int current = section->currentPage;
+      const uint32_t remainingPages =
+          (current >= 0 && estimatedTotal > static_cast<uint16_t>(current))
+              ? static_cast<uint32_t>(estimatedTotal - static_cast<uint16_t>(current))
+              : 0;
+      if (ReaderUtils::formatRemainingFromRate(remainingPages, pagesPerMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
+        chapterTimeEstimate = chapterTimeBuf;
+      }
     }
   }
 

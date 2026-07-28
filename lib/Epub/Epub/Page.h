@@ -120,7 +120,6 @@ class PageTableFragment final : public PageElement {
   PageElementTag getTag() const override { return TAG_PageTableFragment; }
   static std::unique_ptr<PageTableFragment> deserialize(FsFile& file);
   uint16_t getHeight() const;
-  uint32_t countWords() const;
   void recordFontUsage(FontCacheManager& fontCacheManager, int fontId, uint8_t bionicReadingMode = 0) const;
 };
 
@@ -148,9 +147,6 @@ class Page {
                                    uint8_t bionicReadingMode = 0) const;
   bool serialize(FsFile& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);
-
-  // Count laid-out text words (PageLine + table cells). Image-only / sparse pages return 0.
-  uint32_t countWords() const;
 
   // Check if page contains any images (used to force full refresh)
   bool hasImages() const {

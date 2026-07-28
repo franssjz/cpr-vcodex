@@ -62,20 +62,10 @@ class Section {
   // Its pages 0..partialPageCount_-1 are readable while a rebuild extends past them.
   bool partial_ = false;
   uint16_t partialPageCount_ = 0;
-  // Per-page word counts from the section cache / in-progress build. Empty until loaded.
-  // Each entry is uint16 (saturates at UINT16_MAX); matches TXT index.bin word table.
-  // Kept in RAM (~2 B × chapter pages) — acceptable vs TXT's disk-only table; chapters
-  // are much smaller than whole-book TXT indexes.
-  std::vector<uint16_t> pageWordCounts_;
-  // Sum of pageWordCounts_ (built/loaded pages only); avoids a second full walk in ETA.
-  uint32_t knownPageWordsTotal_ = 0;
   // Parse watermark from the partial's trailer, for estimating the total page count.
   uint32_t partialBytesConsumed_ = 0;
   uint32_t partialTotalBytes_ = 0;
   bool finalizeBuild();
-  // Keep pageWordCounts_ aligned with currently readable pages after pageCount is set.
-  void syncPageWordCountsToReadablePages();
-  void recomputeKnownPageWordsTotal();
   // Write the LUTs/anchor map (and, for a partial, the watermark trailer), patch the
   // header, stamp the version byte, and swap the tmp .bin over filePath.
   bool commitBuildFile(uint8_t version, uint32_t bytesConsumed, uint32_t totalBytes);
@@ -161,13 +151,4 @@ class Section {
 
   // XHTML byte boundary retained for KOReader's position mapper.
   std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
-
-  // Word count for a built/available page (0 if unknown / out of range).
-  // Stored as uint16 (saturates at UINT16_MAX) to match the section cache layout —
-  // same ceiling as TXT index.bin per-page words; pathological dense pages undercount.
-  uint16_t getPageWordCount(uint16_t page) const;
-  // Remaining chapter words from `fromPage` inclusive, including an estimate for
-  // still-unbuilt pages from mean words/built-page × estimated unbuilt page count
-  // (estimatedTotalPages uses the same page-count model as the status bar).
-  uint32_t estimateRemainingWords(uint16_t fromPage) const;
 };
