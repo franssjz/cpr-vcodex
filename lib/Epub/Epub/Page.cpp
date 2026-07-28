@@ -221,6 +221,20 @@ uint16_t PageTableFragment::getHeight() const {
   return total;
 }
 
+uint32_t PageTableFragment::countWords() const {
+  uint32_t words = 0;
+  for (const auto& row : rows) {
+    for (const auto& cell : row.cells) {
+      for (const auto& line : cell.lines) {
+        if (line) {
+          words += line->wordCount();
+        }
+      }
+    }
+  }
+  return words;
+}
+
 void PageTableFragment::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
                                const uint8_t bionicReadingMode) {
   if (columnCount == 0 || columnCount > MAX_TABLE_CELLS_PER_ROW || rows.empty() || width < 2) {
@@ -340,6 +354,22 @@ void PageTableFragment::recordFontUsage(FontCacheManager& fontCacheManager, cons
       }
     }
   }
+}
+
+uint32_t Page::countWords() const {
+  uint32_t words = 0;
+  for (const auto& element : elements) {
+    if (!element) continue;
+    if (element->getTag() == TAG_PageLine) {
+      const auto& line = static_cast<const PageLine&>(*element);
+      if (line.getBlock()) {
+        words += line.getBlock()->wordCount();
+      }
+    } else if (element->getTag() == TAG_PageTableFragment) {
+      words += static_cast<const PageTableFragment&>(*element).countWords();
+    }
+  }
+  return words;
 }
 
 void Page::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,

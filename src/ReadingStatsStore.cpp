@@ -522,6 +522,7 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
 
   primary.totalReadingMs += duplicate.totalReadingMs;
+  primary.totalWordsRead += duplicate.totalWordsRead;
   primary.sessions += duplicate.sessions;
   primary.lastSessionMs = std::max(primary.lastSessionMs, duplicate.lastSessionMs);
   if (primary.firstReadAt == 0 || (duplicate.firstReadAt != 0 && duplicate.firstReadAt < primary.firstReadAt)) {
@@ -1218,6 +1219,7 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   activeSession.bookIndex = 0;
   activeSession.lastInteractionMs = millis();
   activeSession.accumulatedMs = 0;
+  activeSession.sessionWordsRead = 0;
 
   markDirty();
 }
@@ -1245,6 +1247,13 @@ void ReadingStatsStore::noteActivity() {
   if (shouldSaveDeferred()) {
     saveToFile();
   }
+}
+
+void ReadingStatsStore::noteWordsRead(const uint32_t words) {
+  if (!activeSession.active || words == 0) {
+    return;
+  }
+  activeSession.sessionWordsRead += words;
 }
 
 void ReadingStatsStore::tickActiveSession() {
@@ -1445,6 +1454,7 @@ void ReadingStatsStore::endSession() {
   if (countedSession) {
     book.sessions++;
     book.lastSessionMs = sessionMs;
+    book.totalWordsRead += activeSession.sessionWordsRead;
     const uint32_t sessionTimestamp = getReferenceTimestamp(TimeUtils::getAuthoritativeTimestamp(), book.lastReadAt);
     if (isClockValid(sessionTimestamp)) {
       appendSessionLogEntry(TimeUtils::getLocalDayOrdinal(sessionTimestamp), sessionMs, book);
@@ -1464,6 +1474,36 @@ void ReadingStatsStore::endSession() {
 
   activeSession = {};
   saveToFile();
+}
+
+uint64_t ReadingStatsStore::getActiveSessionWordsRead() const {
+  return activeSession.active ? activeSession.sessionWordsRead : 0;
+}
+
+double ReadingStatsStore::getEffectiveWordsPerMs() const {
+  constexpr uint64_t MIN_RATE_WORDS = 80;
+  constexpr uint64_t MIN_RATE_MS = 60ULL * 1000ULL;
+
+  uint64_t words = 0;
+  uint64_t ms = 0;
+
+  if (activeSession.active && activeSession.bookIndex < books.size()) {
+    const auto& book = books[activeSession.bookIndex];
+    // totalReadingMs already includes credited session time; totalWordsRead does not yet.
+    words = book.totalWordsRead + activeSession.sessionWordsRead;
+    ms = book.totalReadingMs;
+  } else {
+    // Global fallback across all books when no session is active.
+    for (const auto& book : books) {
+      words += book.totalWordsRead;
+      ms += book.totalReadingMs;
+    }
+  }
+
+  if (words < MIN_RATE_WORDS || ms < MIN_RATE_MS) {
+    return 0.0;
+  }
+  return static_cast<double>(words) / static_cast<double>(ms);
 }
 
 bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,

@@ -18,6 +18,7 @@ namespace {
 // DS3231 RTC is present so X4 devices don't see them at all.
 enum MenuItem {
   ITEM_CHAPTER_PAGE_COUNT = 0,
+  ITEM_CHAPTER_TIME_REMAINING,
   ITEM_BOOK_PROGRESS_PERCENTAGE,
   ITEM_PROGRESS_BAR,
   ITEM_PROGRESS_BAR_THICKNESS,
@@ -35,6 +36,7 @@ constexpr int FULL_MENU_ITEMS = ITEM_COUNT;  // Items shown when RTC is availabl
 
 const StrId menuNames[FULL_MENU_ITEMS] = {
     StrId::STR_CHAPTER_PAGE_COUNT,
+    StrId::STR_CHAPTER_TIME_REMAINING_ESTIMATE,
     StrId::STR_BOOK_PROGRESS_PERCENTAGE,
     StrId::STR_PROGRESS_BAR,
     StrId::STR_PROGRESS_BAR_THICKNESS,
@@ -156,6 +158,9 @@ void StatusBarSettingsActivity::handleSelection() {
     case ITEM_CHAPTER_PAGE_COUNT:
       SETTINGS.statusBarChapterPageCount = (SETTINGS.statusBarChapterPageCount + 1) % 2;
       break;
+    case ITEM_CHAPTER_TIME_REMAINING:
+      SETTINGS.statusBarChapterTimeRemaining = (SETTINGS.statusBarChapterTimeRemaining + 1) % 2;
+      break;
     case ITEM_BOOK_PROGRESS_PERCENTAGE:
       SETTINGS.statusBarBookProgressPercentage = (SETTINGS.statusBarBookProgressPercentage + 1) % 2;
       break;
@@ -216,6 +221,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
         switch (index) {
           case ITEM_CHAPTER_PAGE_COUNT:
             return SETTINGS.statusBarChapterPageCount ? tr(STR_SHOW) : tr(STR_HIDE);
+          case ITEM_CHAPTER_TIME_REMAINING:
+            return SETTINGS.statusBarChapterTimeRemaining ? tr(STR_SHOW) : tr(STR_HIDE);
           case ITEM_BOOK_PROGRESS_PERCENTAGE:
             return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
           case ITEM_PROGRESS_BAR:
@@ -253,7 +260,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     title = tr(STR_EXAMPLE_CHAPTER);
   }
 
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false,
+                    SETTINGS.statusBarChapterTimeRemaining ? "15m" : nullptr);
 
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
                     renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() - verticalPreviewPadding -

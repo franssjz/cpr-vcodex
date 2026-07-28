@@ -22,7 +22,8 @@ namespace {
 //      first render).
 // v40: progressive/partial cache, with vCodex ruby blocks, paragraph/list
 // mapping and XHTML byte offsets retained.
-constexpr uint8_t SECTION_FILE_VERSION = 40;
+// v41: per-page word counts appended after the li LUT (chapter time-remaining estimates).
+constexpr uint8_t SECTION_FILE_VERSION = 41;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -173,11 +174,13 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   if (filePartial) {
     // A partial's pageCount is the watermark of a suspended build. Read the watermark
-    // trailer (appended after the li LUT) so estimatedTotalPages can extrapolate.
+    // trailer (appended after the li LUT + word-count table) so estimatedTotalPages can
+    // extrapolate.
     uint32_t liLutOffset = 0;
     file.seek(HEADER_SIZE - sizeof(uint32_t));
     serialization::readPod(file, liLutOffset);
-    const uint32_t trailerOffset = liLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
+    const uint32_t trailerOffset =
+        liLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t) * 2;  // li + words
     const bool trailerValid =
         pageCount > 0 && liLutOffset >= HEADER_SIZE && trailerOffset + 2 * sizeof(uint32_t) <= file.size();
     if (!trailerValid) {
@@ -192,6 +195,23 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
     serialization::readPod(file, partialTotalBytes_);
     partial_ = true;
     partialPageCount_ = pageCount;
+  }
+
+  // Load per-page word counts (v41+) from immediately after the li LUT.
+  pageWordCounts_.clear();
+  if (pageCount > 0) {
+    uint32_t liLutOffset = 0;
+    file.seek(HEADER_SIZE - sizeof(uint32_t));
+    serialization::readPod(file, liLutOffset);
+    const uint32_t wordLutOffset = liLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
+    const uint32_t wordLutEnd = wordLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
+    if (liLutOffset >= HEADER_SIZE && wordLutEnd <= file.size()) {
+      pageWordCounts_.resize(pageCount);
+      file.seek(wordLutOffset);
+      for (uint16_t i = 0; i < pageCount; ++i) {
+        serialization::readPod(file, pageWordCounts_[i]);
+      }
+    }
   }
 
   // Explicit close() required: member variable persists beyond function scope
@@ -241,6 +261,11 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
   // Pages from a loaded partial stay readable (from filePath) while this build writes
   // to the tmp .bin, so availability never drops below the partial's watermark.
   pageCount = partial_ ? partialPageCount_ : 0;
+  if (!partial_) {
+    pageWordCounts_.clear();
+  } else if (pageWordCounts_.size() > partialPageCount_) {
+    pageWordCounts_.resize(partialPageCount_);
+  }
 
   // Remove a stale tmp .bin from a crash-interrupted build; this build recreates it.
   {
@@ -381,8 +406,14 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
       spec.forceParagraphIndents, spec.paragraphAlignment, spec.viewportWidth, spec.viewportHeight,
       spec.hyphenationEnabled, spec.focusReadingEnabled,
       [this, ctxPtr](std::unique_ptr<Page> page, const ChapterHtmlSlimParser::ParagraphLutEntry syncEntry) {
+        const uint32_t words = page ? page->countWords() : 0;
+        const uint16_t wordCount = words > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(words);
         ctxPtr->lut.push_back({this->onPageComplete(std::move(page)), syncEntry.xhtmlByteOffset,
-                               syncEntry.paragraphIndex, syncEntry.listItemIndex});
+                               syncEntry.paragraphIndex, syncEntry.listItemIndex, wordCount});
+        if (pageWordCounts_.size() < ctxPtr->lut.size()) {
+          pageWordCounts_.resize(ctxPtr->lut.size());
+        }
+        pageWordCounts_[ctxPtr->lut.size() - 1] = wordCount;
       },
       spec.embeddedStyle, ctxPtr->contentBase, ctxPtr->imageBasePath, spec.imageRendering, std::move(tocAnchors),
       popupFn, ctxPtr->cssParser);
@@ -550,8 +581,13 @@ bool Section::commitBuildFile(const uint8_t version, const uint32_t bytesConsume
     serialization::writePod(file, entry.listItemIndex);
   }
 
+  // Per-page word counts (v41+), immediately after the li LUT.
+  for (const auto& entry : build_->lut) {
+    serialization::writePod(file, entry.wordCount);
+  }
+
   if (asPartial) {
-    // Watermark trailer, located on load as liLutOffset + pageCount * sizeof(uint16_t).
+    // Watermark trailer, located on load as liLutOffset + pageCount * sizeof(uint16_t) * 2.
     serialization::writePod(file, bytesConsumed);
     serialization::writePod(file, totalBytes);
   }
@@ -655,6 +691,11 @@ void Section::suspendBuild() {
   buildComplete_ = false;
   pageCount = partial_ ? partialPageCount_ : 0;
   builtPageCount_ = 0;
+  if (partial_ && pageWordCounts_.size() > pageCount) {
+    pageWordCounts_.resize(pageCount);
+  } else if (!partial_) {
+    pageWordCounts_.clear();
+  }
 }
 
 void Section::abandonBuild() {
@@ -680,6 +721,7 @@ void Section::abandonBuild() {
   partialPageCount_ = 0;
   pageCount = 0;
   builtPageCount_ = 0;
+  pageWordCounts_.clear();
 }
 
 std::unique_ptr<Page> Section::loadPageDuringBuild(const int page) {
@@ -972,4 +1014,50 @@ std::optional<uint16_t> Section::getPageForListItemIndex(const uint16_t liIndex)
   }
 
   return resultPage;
+}
+
+uint16_t Section::getPageWordCount(const uint16_t page) const {
+  if (page < pageWordCounts_.size()) {
+    return pageWordCounts_[page];
+  }
+  if (build_ && page < build_->lut.size()) {
+    return build_->lut[page].wordCount;
+  }
+  return 0;
+}
+
+uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
+  const uint16_t availablePages = pageCount;
+  uint32_t remaining = 0;
+  for (uint16_t page = fromPage; page < availablePages; ++page) {
+    remaining += getPageWordCount(page);
+  }
+
+  // Still-building / partial chapters: extrapolate unbuilt content from HTML density.
+  uint32_t bytesConsumed = 0;
+  uint32_t totalBytes = 0;
+  if (build_) {
+    bytesConsumed = build_->bytesConsumed;
+    totalBytes = build_->totalBytes;
+  } else if (partial_) {
+    bytesConsumed = partialBytesConsumed_;
+    totalBytes = partialTotalBytes_;
+  }
+
+  if (totalBytes > bytesConsumed && bytesConsumed > 0 && availablePages > 0) {
+    uint32_t knownWords = 0;
+    for (uint16_t page = 0; page < availablePages; ++page) {
+      knownWords += getPageWordCount(page);
+    }
+    if (knownWords > 0) {
+      const uint64_t unbuiltBytes = static_cast<uint64_t>(totalBytes - bytesConsumed);
+      const uint64_t unbuiltWords =
+          (static_cast<uint64_t>(knownWords) * unbuiltBytes) / static_cast<uint64_t>(bytesConsumed);
+      if (unbuiltWords > 0 && unbuiltWords < static_cast<uint64_t>(UINT32_MAX)) {
+        remaining += static_cast<uint32_t>(unbuiltWords);
+      }
+    }
+  }
+
+  return remaining;
 }

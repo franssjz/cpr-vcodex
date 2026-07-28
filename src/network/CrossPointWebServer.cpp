@@ -438,6 +438,8 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
 
     WEB_TOGGLE(StrId::STR_CHAPTER_PAGE_COUNT, statusBarChapterPageCount, "statusBarChapterPageCount",
                StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_TOGGLE(StrId::STR_CHAPTER_TIME_REMAINING_ESTIMATE, statusBarChapterTimeRemaining,
+               "statusBarChapterTimeRemaining", StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_TOGGLE(StrId::STR_BOOK_PROGRESS_PERCENTAGE, statusBarBookProgressPercentage, "statusBarBookProgressPercentage",
                StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_ENUM(StrId::STR_PROGRESS_BAR, statusBarProgressBar, OPT_BOOK_CHAPTER_HIDE, "statusBarProgressBar",

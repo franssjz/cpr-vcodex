@@ -30,6 +30,7 @@ class Section {
     uint32_t xhtmlByteOffset;
     uint16_t paragraphIndex;
     uint16_t listItemIndex;
+    uint16_t wordCount;
   };
   // Held only while an incremental build is in progress (see startBuild). Carries the
   // live parser plus the strings it references (the parser stores them by reference)
@@ -62,6 +63,8 @@ class Section {
   // Its pages 0..partialPageCount_-1 are readable while a rebuild extends past them.
   bool partial_ = false;
   uint16_t partialPageCount_ = 0;
+  // Per-page word counts from the section cache / in-progress build. Empty until loaded.
+  std::vector<uint16_t> pageWordCounts_;
   // Parse watermark from the partial's trailer, for estimating the total page count.
   uint32_t partialBytesConsumed_ = 0;
   uint32_t partialTotalBytes_ = 0;
@@ -151,4 +154,10 @@ class Section {
 
   // XHTML byte boundary retained for KOReader's position mapper.
   std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
+
+  // Word count for a built/available page (0 if unknown / out of range).
+  uint16_t getPageWordCount(uint16_t page) const;
+  // Remaining chapter words from `fromPage` inclusive, including an estimate for
+  // still-unbuilt pages based on HTML byte density (not page-turn rate).
+  uint32_t estimateRemainingWords(uint16_t fromPage) const;
 };

@@ -25,6 +25,7 @@ struct ReadingBookStats {
   std::string chapterTitle;
   std::vector<ReadingDayStats> readingDays;
   uint64_t totalReadingMs = 0;
+  uint64_t totalWordsRead = 0;
   uint32_t sessions = 0;
   uint32_t lastSessionMs = 0;
   uint32_t firstReadAt = 0;
@@ -83,6 +84,7 @@ class ReadingStatsStore {
     size_t bookIndex = 0;
     unsigned long lastInteractionMs = 0;
     uint64_t accumulatedMs = 0;
+    uint64_t sessionWordsRead = 0;
     uint8_t startProgressPercent = 0;
     bool startCompleted = false;
   };
@@ -150,11 +152,16 @@ class ReadingStatsStore {
                     const std::string& coverBmpPath, uint8_t progressPercent = 0, const std::string& chapterTitle = "",
                     uint8_t chapterProgressPercent = 0);
   void noteActivity();
+  void noteWordsRead(uint32_t words);
   void tickActiveSession();
   void resumeSession();
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
+  // Blended historical + current-session word reading rate (words per millisecond).
+  // Returns 0 when there is not enough sample data yet.
+  double getEffectiveWordsPerMs() const;
+  uint64_t getActiveSessionWordsRead() const;
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,

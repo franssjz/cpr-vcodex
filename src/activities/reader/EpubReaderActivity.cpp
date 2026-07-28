@@ -45,6 +45,7 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/CompletedBookMover.h"
 #include "util/ScreenshotUtil.h"
 
@@ -1317,6 +1318,14 @@ void EpubReaderActivity::pageTurn(bool isForwardTurn) {
   const int oldPage = section ? section->currentPage : nextPageNumber;
 
   if (isForwardTurn) {
+    // Credit words on the page being finished so chapter time estimates use a
+    // word rate rather than page-turn rate (image/sparse pages count as 0).
+    if (oldPage >= 0) {
+      const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(oldPage));
+      if (words > 0) {
+        READING_STATS.noteWordsRead(words);
+      }
+    }
     if (section->currentPage < section->pageCount - 1 || section->isBuilding() || section->isPartial()) {
       section->currentPage++;
     } else {
@@ -1980,7 +1989,19 @@ void EpubReaderActivity::renderStatusBar() const {
     title = epub->getTitle();
   }
 
-  GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset);
+  char chapterTimeBuf[12] = {};
+  const char* chapterTimeEstimate = nullptr;
+  if (SETTINGS.statusBarChapterTimeRemaining && section->currentPage >= 0) {
+    const uint32_t remainingWords =
+        section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage));
+    const uint64_t remainingMs =
+        ChapterTimeEstimate::estimateRemainingMs(remainingWords, READING_STATS.getEffectiveWordsPerMs());
+    if (ChapterTimeEstimate::formatCompactDuration(remainingMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
+      chapterTimeEstimate = chapterTimeBuf;
+    }
+  }
+
+  GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, true, chapterTimeEstimate);
 }
 
 void EpubReaderActivity::renderSectionLoadFailure() {
