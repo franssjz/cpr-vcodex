@@ -268,11 +268,7 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
   // Pages from a loaded partial stay readable (from filePath) while this build writes
   // to the tmp .bin, so availability never drops below the partial's watermark.
   pageCount = partial_ ? partialPageCount_ : 0;
-  if (!partial_) {
-    pageWordCounts_.clear();
-  } else if (pageWordCounts_.size() > partialPageCount_) {
-    pageWordCounts_.resize(partialPageCount_);
-  }
+  syncPageWordCountsToReadablePages();
 
   // Remove a stale tmp .bin from a crash-interrupted build; this build recreates it.
   {
@@ -699,10 +695,14 @@ void Section::suspendBuild() {
   buildComplete_ = false;
   pageCount = partial_ ? partialPageCount_ : 0;
   builtPageCount_ = 0;
-  if (partial_ && pageWordCounts_.size() > pageCount) {
-    pageWordCounts_.resize(pageCount);
-  } else if (!partial_) {
+  syncPageWordCountsToReadablePages();
+}
+
+void Section::syncPageWordCountsToReadablePages() {
+  if (!partial_) {
     pageWordCounts_.clear();
+  } else if (pageWordCounts_.size() > pageCount) {
+    pageWordCounts_.resize(pageCount);
   }
 }
 

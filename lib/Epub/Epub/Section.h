@@ -64,11 +64,15 @@ class Section {
   uint16_t partialPageCount_ = 0;
   // Per-page word counts from the section cache / in-progress build. Empty until loaded.
   // Each entry is uint16 (saturates at UINT16_MAX); matches TXT index.bin word table.
+  // Kept in RAM (~2 B × chapter pages) — acceptable vs TXT's disk-only table; chapters
+  // are much smaller than whole-book TXT indexes.
   std::vector<uint16_t> pageWordCounts_;
   // Parse watermark from the partial's trailer, for estimating the total page count.
   uint32_t partialBytesConsumed_ = 0;
   uint32_t partialTotalBytes_ = 0;
   bool finalizeBuild();
+  // Keep pageWordCounts_ aligned with currently readable pages after pageCount is set.
+  void syncPageWordCountsToReadablePages();
   // Write the LUTs/anchor map (and, for a partial, the watermark trailer), patch the
   // header, stamp the version byte, and swap the tmp .bin over filePath.
   bool commitBuildFile(uint8_t version, uint32_t bytesConsumed, uint32_t totalBytes);

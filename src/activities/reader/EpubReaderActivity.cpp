@@ -433,6 +433,11 @@ void EpubReaderActivity::loop() {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
         mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       automaticPageTurnActive = false;
+      if (section && section->currentPage >= 0) {
+        pageDwell.restart(currentSpineIndex, section->currentPage, millis());
+      } else {
+        pageDwell.clear();
+      }
       // updates chapter title space to indicate page turn disabled
       requestUpdate();
       return;
@@ -1323,11 +1328,7 @@ void EpubReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activ
 }
 
 void EpubReaderActivity::creditCurrentPageWords() {
-  if (automaticPageTurnActive) {
-    pageDwell.clear();
-    return;
-  }
-  if (section && section->currentPage >= 0) {
+  if (!automaticPageTurnActive && section && section->currentPage >= 0) {
     maybeCreditPageWords(currentSpineIndex, section->currentPage);
   }
   pageDwell.clear();
@@ -1339,8 +1340,7 @@ void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int pa
   }
 
   const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(page));
-  const uint32_t associatedMs =
-      ChapterTimeEstimate::takeDwellCreditMs(pageDwell, spineIndex, page, words, millis());
+  const uint32_t associatedMs = pageDwell.takeCredit(spineIndex, page, words, millis());
   if (associatedMs == 0) {
     return;
   }
@@ -2045,11 +2045,12 @@ void EpubReaderActivity::renderStatusBar() const {
   const char* chapterTimeEstimate = nullptr;
   if (section->currentPage >= 0) {
     const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-    // Skip remaining-words walk when rate is 0 (tryFill would no-op anyway).
-    if (wordsPerMs > 0.0) {
-      ChapterTimeEstimate::tryFillStatusBarChapterEta(
-          section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)), wordsPerMs, chapterTimeBuf,
-          sizeof(chapterTimeBuf), &chapterTimeEstimate);
+    // Skip remaining-words walk when rate is 0 or time is hidden.
+    if (ChapterTimeEstimate::statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
+        ChapterTimeEstimate::formatRemainingFromRate(
+            section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)), wordsPerMs, chapterTimeBuf,
+            sizeof(chapterTimeBuf))) {
+      chapterTimeEstimate = chapterTimeBuf;
     }
   }
 

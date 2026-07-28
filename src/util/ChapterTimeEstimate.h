@@ -21,10 +21,8 @@ bool formatRemainingFromRate(uint32_t remainingWords, double wordsPerMs, char* b
 // True when the status-bar chapter setting wants a time estimate shown.
 bool statusBarWantsChapterTime();
 
-// Fill buf with a chapter ETA when the status-bar setting requests time and a rate exists.
-// Returns true and sets *outEstimate to buf on success; otherwise false and *outEstimate unchanged.
-bool tryFillStatusBarChapterEta(uint32_t remainingWords, double wordsPerMs, char* buf, size_t bufSize,
-                                const char** outEstimate);
+// Compose "Pages+Time" from STR_PAGES + '+' + STR_TIME (no dedicated i18n key).
+bool formatPagesPlusTime(char* buf, size_t bufSize);
 
 // Shared page-dwell tracker for EPUB (spine+page) and TXT (page, id1 unused).
 // clear() resets the active dwell window only; lastCredited* is kept so re-reads
@@ -39,12 +37,12 @@ struct PageDwell {
   void clear();
   void restart(int a, int b, unsigned long nowMs);
   void noteEnteredIfChanged(int a, int b, unsigned long nowMs);
+  // If dwell qualifies and words > 0, marks credited and returns associated ms.
+  uint32_t takeCredit(int a, int b, uint32_t words, unsigned long nowMs);
+
+ private:
   uint32_t creditMs(int a, int b, unsigned long nowMs) const;
   void markCredited(int a, int b);
 };
-
-// If dwell qualifies and words > 0, marks the page credited and returns associated ms.
-// Caller should pass that ms to READING_STATS.noteWordsRead. Returns 0 to skip.
-uint32_t takeDwellCreditMs(PageDwell& dwell, int id0, int id1, uint32_t words, unsigned long nowMs);
 
 }  // namespace ChapterTimeEstimate

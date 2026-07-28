@@ -6,12 +6,14 @@
 
 #include <cstdio>
 #include <memory>
+#include <string>
 
 #include "ClockSyncActivity.h"
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -51,8 +53,6 @@ constexpr int CLOCK_FORMAT_ITEMS = 2;
 const StrId clockFormatNames[CLOCK_FORMAT_ITEMS] = {StrId::STR_CLOCK_FORMAT_24H, StrId::STR_CLOCK_FORMAT_12H};
 
 constexpr int CHAPTER_PROGRESS_ITEMS = 4;
-const StrId chapterProgressNames[CHAPTER_PROGRESS_ITEMS] = {StrId::STR_PAGES, StrId::STR_PAGES_PLUS_TIME,
-                                                            StrId::STR_TIME, StrId::STR_HIDE};
 
 constexpr int PROGRESS_BAR_ITEMS = 3;
 const StrId progressBarNames[PROGRESS_BAR_ITEMS] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
@@ -86,12 +86,32 @@ const char* previewChapterTimeEstimate() {
   switch (SETTINGS.statusBarChapterProgress) {
     case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
     case CrossPointSettings::CHAPTER_PROGRESS_TIME: {
-      static char buf[12];
+      // static: pointer must outlive this function; only consumed in the same
+      // render call stack by drawStatusBar. Sized like reader chapterTimeBuf.
+      static char buf[24];
       snprintf(buf, sizeof(buf), "15%s", tr(STR_ETA_UNIT_MINUTE));
       return buf;
     }
     default:
       return nullptr;
+  }
+}
+
+std::string chapterProgressLabel(const uint8_t mode) {
+  switch (mode) {
+    case CrossPointSettings::CHAPTER_PROGRESS_PAGES:
+      return tr(STR_PAGES);
+    case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME: {
+      char buf[64];
+      if (ChapterTimeEstimate::formatPagesPlusTime(buf, sizeof(buf))) {
+        return buf;
+      }
+      return tr(STR_PAGES);
+    }
+    case CrossPointSettings::CHAPTER_PROGRESS_TIME:
+      return tr(STR_TIME);
+    default:
+      return tr(STR_HIDE);
   }
 }
 
@@ -105,7 +125,7 @@ void StatusBarSettingsActivity::onEnter() {
   selectedIndex = 0;
   visibleItemCount = halClock.isAvailable() ? FULL_MENU_ITEMS : BASE_MENU_ITEMS;
 
-  // Clamp statusBarProgressBar and statusBarTitle in case of corrupt/migrated data
+  // Clamp enum settings in case of corrupt/migrated data
   if (SETTINGS.statusBarChapterProgress >= CHAPTER_PROGRESS_ITEMS) {
     SETTINGS.statusBarChapterProgress = CrossPointSettings::STATUS_BAR_CHAPTER_PROGRESS::CHAPTER_PROGRESS_PAGES;
   }
@@ -233,7 +253,7 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
       [](int index) -> std::string {
         switch (index) {
           case ITEM_CHAPTER_PROGRESS:
-            return I18N.get(chapterProgressNames[SETTINGS.statusBarChapterProgress]);
+            return chapterProgressLabel(SETTINGS.statusBarChapterProgress);
           case ITEM_BOOK_PROGRESS_PERCENTAGE:
             return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
           case ITEM_PROGRESS_BAR:

@@ -35,8 +35,12 @@ metrics.
 - EPUB credits use `TextBlock::wordCount()` / `Page::countWords()`; TXT uses
   `utf8CountLayoutWords` on plain line text — rates are not bit-identical across formats.
 - Per-page word caches store `uint16` (saturate) for EPUB sections and TXT `index.bin`.
+- EPUB keeps per-chapter word counts in RAM (~2 B × pages); TXT keeps them on disk only.
 - `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
   locales fall back to English.
+- The Pages+Time setting label is composed as `STR_PAGES + '+' + STR_TIME` (no
+  dedicated translation key).
+- XTC has no word ETA (bitmap pages, no status-bar chapter-time slot).
 
 ## Design Rules
 

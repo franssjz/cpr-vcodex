@@ -50,6 +50,7 @@
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/HeaderDateUtils.h"
 #include "util/ShortcutRegistry.h"
 #include "util/ShortcutUiMetadata.h"
@@ -345,6 +346,13 @@ std::string getSettingValueText(const SettingInfo& setting) {
       return "";
     }
     const uint8_t value = SETTINGS.*(setting.valuePtr);
+    if (setting.nameId == StrId::STR_STATUS_BAR_CHAPTER_PROGRESS &&
+        value == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME) {
+      char buf[64];
+      if (ChapterTimeEstimate::formatPagesPlusTime(buf, sizeof(buf))) {
+        return buf;
+      }
+    }
     const size_t safeIndex = std::min<size_t>(value, setting.enumValues.size() - 1);
     return I18N.get(setting.enumValues[safeIndex]);
   }

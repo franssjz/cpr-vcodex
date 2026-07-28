@@ -1259,8 +1259,16 @@ void ReadingStatsStore::noteWordsRead(const uint32_t words, const uint32_t assoc
     return;
   }
   auto& book = books[activeSession.bookIndex];
-  book.totalWordsRead += words;
-  book.totalWordsReadingMs += associatedMs;
+  if (book.totalWordsRead > UINT64_MAX - words) {
+    book.totalWordsRead = UINT64_MAX;
+  } else {
+    book.totalWordsRead += words;
+  }
+  if (book.totalWordsReadingMs > UINT64_MAX - associatedMs) {
+    book.totalWordsReadingMs = UINT64_MAX;
+  } else {
+    book.totalWordsReadingMs += associatedMs;
+  }
   markDirty();
   if (shouldSaveDeferred()) {
     saveToFile();

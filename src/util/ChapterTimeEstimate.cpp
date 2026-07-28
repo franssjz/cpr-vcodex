@@ -76,16 +76,12 @@ bool statusBarWantsChapterTime() {
          SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME;
 }
 
-bool tryFillStatusBarChapterEta(const uint32_t remainingWords, const double wordsPerMs, char* buf,
-                                const size_t bufSize, const char** outEstimate) {
-  if (!outEstimate || !statusBarWantsChapterTime()) {
+bool formatPagesPlusTime(char* buf, const size_t bufSize) {
+  if (!buf || bufSize == 0) {
     return false;
   }
-  if (!formatRemainingFromRate(remainingWords, wordsPerMs, buf, bufSize)) {
-    return false;
-  }
-  *outEstimate = buf;
-  return true;
+  const int written = snprintf(buf, bufSize, "%s+%s", tr(STR_PAGES), tr(STR_TIME));
+  return written > 0 && static_cast<size_t>(written) < bufSize;
 }
 
 void PageDwell::clear() {
@@ -111,6 +107,10 @@ uint32_t PageDwell::creditMs(const int a, const int b, const unsigned long nowMs
   if (a != id0 || b != id1 || enteredMs == 0) {
     return 0;
   }
+  // millis() wrap (~49.7d): treat as no credit rather than a huge unsigned delta.
+  if (nowMs < enteredMs) {
+    return 0;
+  }
   return dwellCreditMs(nowMs - enteredMs, a == lastCredited0 && b == lastCredited1);
 }
 
@@ -119,16 +119,15 @@ void PageDwell::markCredited(const int a, const int b) {
   lastCredited1 = b;
 }
 
-uint32_t takeDwellCreditMs(PageDwell& dwell, const int id0, const int id1, const uint32_t words,
-                           const unsigned long nowMs) {
+uint32_t PageDwell::takeCredit(const int a, const int b, const uint32_t words, const unsigned long nowMs) {
   if (words == 0) {
     return 0;
   }
-  const uint32_t associatedMs = dwell.creditMs(id0, id1, nowMs);
+  const uint32_t associatedMs = creditMs(a, b, nowMs);
   if (associatedMs == 0) {
     return 0;
   }
-  dwell.markCredited(id0, id1);
+  markCredited(a, b);
   return associatedMs;
 }
 

@@ -34,6 +34,7 @@
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "util/BookCacheUtils.h"
+#include "util/ChapterTimeEstimate.h"
 #include "util/IfFoundFile.h"
 #include "version.h"
 
@@ -291,8 +292,8 @@ constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_
 constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
 constexpr StrId OPT_OPDS_FILENAME_FORMAT[] = {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR};
 constexpr StrId OPT_BOOK_CHAPTER_HIDE[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
-constexpr StrId OPT_CHAPTER_PROGRESS[] = {StrId::STR_PAGES, StrId::STR_PAGES_PLUS_TIME, StrId::STR_TIME,
-                                          StrId::STR_HIDE};
+// Index 1 (Pages+Time) is composed at display time from STR_PAGES + '+' + STR_TIME.
+constexpr StrId OPT_CHAPTER_PROGRESS[] = {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE};
 constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
                                        StrId::STR_PROGRESS_BAR_THICK};
 constexpr StrId OPT_XTC_STATUS_BAR[] = {StrId::STR_HIDE, StrId::STR_BOTTOM, StrId::STR_TOP};
@@ -1912,7 +1913,17 @@ void CrossPointWebServer::handleGetSettings() const {
           } else {
             seenOption = true;
           }
-          sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+          if (s.key && strcmp(s.key, "statusBarChapterProgress") == 0 &&
+              i == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME) {
+            char pagesPlusTime[64];
+            if (ChapterTimeEstimate::formatPagesPlusTime(pagesPlusTime, sizeof(pagesPlusTime))) {
+              sendJsonEscaped(server.get(), pagesPlusTime);
+            } else {
+              sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+            }
+          } else {
+            sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+          }
         }
         server->sendContent("]", 1);
         break;
