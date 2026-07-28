@@ -1393,7 +1393,7 @@
         totalReadingMinutes: "Total reading minutes",
         totalWordsRead: "Words read (ETA samples)",
         wordsReadingMinutes: "Minutes paired with words (ETA)",
-        wordsRateHint: "ETA rate uses words ÷ paired minutes. Unpaired words are cleared on import. Recalculate from days only updates total reading minutes.",
+        wordsRateHint: "ETA rate uses words ÷ paired minutes (fractional minutes OK). Unpaired words are cleared on import when paired minutes are truly zero. Recalculate from days only updates total reading minutes.",
         lastSessionMinutes: "Last session minutes",
         bookProgress: "Book progress %",
         chapterProgress: "Chapter progress %",
@@ -1470,7 +1470,7 @@
         totalReadingMinutes: "Minutos totales de lectura",
         totalWordsRead: "Palabras leídas (muestras ETA)",
         wordsReadingMinutes: "Minutos emparejados con palabras (ETA)",
-        wordsRateHint: "La tasa ETA usa palabras ÷ minutos emparejados. Las palabras sin emparejar se borran al importar. Recalcular desde días solo actualiza los minutos totales de lectura.",
+        wordsRateHint: "La tasa ETA usa palabras ÷ minutos emparejados (se permiten fracciones). Las palabras sin emparejar se borran al importar si los minutos emparejados son realmente cero. Recalcular desde días solo actualiza los minutos totales de lectura.",
         lastSessionMinutes: "Minutos de la última sesión",
         bookProgress: "Progreso del libro %",
         chapterProgress: "Progreso del capítulo %",
@@ -3250,8 +3250,16 @@
       return Math.round(toUInt(ms) / MS_PER_MINUTE);
     }
 
+    // Fractional minutes for ETA paired-ms editing (avoids wiping sub-30s samples via round-to-0).
+    function msToExactMinutes(ms) {
+      const value = toUInt(ms) / MS_PER_MINUTE;
+      return Number(value.toFixed(4));
+    }
+
     function minutesToMs(minutes) {
-      return toUInt(minutes) * MS_PER_MINUTE;
+      const value = Number(minutes);
+      if (!Number.isFinite(value) || value <= 0) return 0;
+      return Math.round(value * MS_PER_MINUTE);
     }
 
     function formatDuration(ms) {
@@ -3851,7 +3859,7 @@
           ${textField("chapterTitle", t("chapterTitle"), book.chapterTitle)}
           ${numberField("totalReadingMinutes", t("totalReadingMinutes"), msToMinutes(book.totalReadingMs))}
           ${numberField("totalWordsRead", t("totalWordsRead"), book.totalWordsRead)}
-          ${numberField("wordsReadingMinutes", t("wordsReadingMinutes"), msToMinutes(book.totalWordsReadingMs))}
+          ${numberField("wordsReadingMinutes", t("wordsReadingMinutes"), msToExactMinutes(book.totalWordsReadingMs), "0.01")}
           <div class="field full"><p class="hint">${escapeHtml(t("wordsRateHint"))}</p></div>
           ${numberField("sessions", t("sessions"), book.sessions)}
           ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
@@ -4023,11 +4031,11 @@
       `;
     }
 
-    function numberField(id, label, currentValue) {
+    function numberField(id, label, currentValue, step = "1") {
       return `
         <div class="field">
           <label for="field-${id}">${label}</label>
-          <input id="field-${id}" type="number" min="0" step="1" value="${escapeAttr(currentValue)}">
+          <input id="field-${id}" type="number" min="0" step="${escapeAttr(step)}" value="${escapeAttr(currentValue)}">
         </div>
       `;
     }

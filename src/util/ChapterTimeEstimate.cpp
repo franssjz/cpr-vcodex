@@ -2,16 +2,12 @@
 
 #include <CrossPointSettings.h>
 #include <I18n.h>
-#include <ReadingStatsStore.h>
 
 #include <cstdio>
 
 namespace ChapterTimeEstimate {
 namespace {
 constexpr uint64_t MS_PER_MINUTE = 60ULL * 1000ULL;
-constexpr uint64_t MS_PER_HOUR = 60ULL * MS_PER_MINUTE;
-constexpr uint64_t MS_PER_DAY = 24ULL * MS_PER_HOUR;
-constexpr uint64_t MS_PER_YEAR = 365ULL * MS_PER_DAY;
 
 bool formatRoundedUnit(const uint64_t value, const char* unit, char* buf, const size_t bufSize) {
   if (!unit || unit[0] == '\0') {
@@ -36,26 +32,17 @@ bool formatCompactDuration(const uint64_t totalMs, char* buf, const size_t bufSi
     return formatRoundedUnit(minutes, tr(STR_ETA_UNIT_MINUTE), buf, bufSize);
   }
 
-  uint64_t hours = (minutes + 30) / 60;
-  if (hours == 0) {
-    hours = 1;
-  }
+  const uint64_t hours = (minutes + 30) / 60;  // minutes >= 60 ⇒ hours >= 1
   if (hours < 24) {
     return formatRoundedUnit(hours, tr(STR_ETA_UNIT_HOUR), buf, bufSize);
   }
 
-  uint64_t days = (hours + 12) / 24;
-  if (days == 0) {
-    days = 1;
-  }
+  const uint64_t days = (hours + 12) / 24;  // hours >= 24 ⇒ days >= 1
   if (days < 365) {
     return formatRoundedUnit(days, tr(STR_ETA_UNIT_DAY), buf, bufSize);
   }
 
-  uint64_t years = (days + 182) / 365;
-  if (years == 0) {
-    years = 1;
-  }
+  const uint64_t years = (days + 182) / 365;  // days >= 365 ⇒ years >= 1
   return formatRoundedUnit(years, tr(STR_ETA_UNIT_YEAR), buf, bufSize);
 }
 
@@ -76,12 +63,12 @@ bool statusBarWantsChapterTime() {
          SETTINGS.statusBarChapterProgress == CrossPointSettings::CHAPTER_PROGRESS_TIME;
 }
 
-bool tryFillStatusBarChapterEta(const uint32_t remainingWords, char* buf, const size_t bufSize,
-                                const char** outEstimate) {
+bool tryFillStatusBarChapterEta(const uint32_t remainingWords, const double wordsPerMs, char* buf,
+                                const size_t bufSize, const char** outEstimate) {
   if (!outEstimate || !statusBarWantsChapterTime()) {
     return false;
   }
-  if (!formatRemainingFromRate(remainingWords, READING_STATS.getEffectiveWordsPerMs(), buf, bufSize)) {
+  if (!formatRemainingFromRate(remainingWords, wordsPerMs, buf, bufSize)) {
     return false;
   }
   *outEstimate = buf;
@@ -97,6 +84,37 @@ uint32_t dwellCreditMs(const unsigned long dwellMs, const bool sameAsLastCredit)
   }
   const unsigned long capped = dwellMs > MAX_DWELL_MS ? MAX_DWELL_MS : dwellMs;
   return static_cast<uint32_t>(capped);
+}
+
+void PageDwell::clear() {
+  enteredMs = 0;
+  id0 = -1;
+  id1 = -1;
+}
+
+void PageDwell::restart(const int a, const int b, const unsigned long nowMs) {
+  id0 = a;
+  id1 = b;
+  enteredMs = nowMs;
+}
+
+void PageDwell::noteEnteredIfChanged(const int a, const int b, const unsigned long nowMs) {
+  if (a == id0 && b == id1 && enteredMs != 0) {
+    return;
+  }
+  restart(a, b, nowMs);
+}
+
+uint32_t PageDwell::creditMs(const int a, const int b, const unsigned long nowMs) const {
+  if (a != id0 || b != id1 || enteredMs == 0) {
+    return 0;
+  }
+  return dwellCreditMs(nowMs - enteredMs, a == lastCredited0 && b == lastCredited1);
+}
+
+void PageDwell::markCredited(const int a, const int b) {
+  lastCredited0 = a;
+  lastCredited1 = b;
 }
 
 }  // namespace ChapterTimeEstimate

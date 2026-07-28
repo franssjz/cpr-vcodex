@@ -178,3 +178,62 @@ void utf8TruncateChars(std::string& str, const size_t numChars) {
     utf8RemoveLastChar(str);
   }
 }
+
+uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
+  if (!data || len == 0) {
+    return 0;
+  }
+
+  uint32_t words = 0;
+  size_t runBytes = 0;
+
+  auto flushRun = [&]() {
+    if (runBytes == 0) {
+      return;
+    }
+    // Match EPUB: split oversized unspaced runs at UTF-8-safe MAX_WORD_SIZE chunks.
+    size_t remaining = runBytes;
+    while (remaining > 0) {
+      const size_t chunk = remaining > UTF8_LAYOUT_WORD_MAX_BYTES ? UTF8_LAYOUT_WORD_MAX_BYTES : remaining;
+      ++words;
+      remaining -= chunk;
+    }
+    runBytes = 0;
+  };
+
+  for (size_t i = 0; i < len; ++i) {
+    const unsigned char c = static_cast<unsigned char>(data[i]);
+    if (c == ' ' || c == '\r' || c == '\n' || c == '\t') {
+      flushRun();
+      continue;
+    }
+
+    // U+00A0 (C2 A0) — counts as its own layout word, like EPUB.
+    if (c == 0xC2 && i + 1 < len && static_cast<unsigned char>(data[i + 1]) == 0xA0) {
+      flushRun();
+      ++words;
+      ++i;
+      continue;
+    }
+
+    // U+202F (E2 80 AF) — narrow no-break space.
+    if (c == 0xE2 && i + 2 < len && static_cast<unsigned char>(data[i + 1]) == 0x80 &&
+        static_cast<unsigned char>(data[i + 2]) == 0xAF) {
+      flushRun();
+      ++words;
+      i += 2;
+      continue;
+    }
+
+    // U+FEFF BOM / ZWNBSP — skip.
+    if (c == 0xEF && i + 2 < len && static_cast<unsigned char>(data[i + 1]) == 0xBB &&
+        static_cast<unsigned char>(data[i + 2]) == 0xBF) {
+      i += 2;
+      continue;
+    }
+
+    ++runBytes;
+  }
+  flushRun();
+  return words;
+}

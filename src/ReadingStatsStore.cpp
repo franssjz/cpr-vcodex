@@ -1504,6 +1504,7 @@ double ReadingStatsStore::getEffectiveWordsPerMs() const {
 
 bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,
                                               const int32_t deltaMs) {
+  // Manual day corrections adjust lifetime reading time only — never word-rate ETA samples.
   if (dayOrdinal == 0 || deltaMs == 0) {
     return false;
   }

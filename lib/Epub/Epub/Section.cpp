@@ -172,13 +172,17 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
 
   serialization::readPod(file, pageCount);
 
+  // One seek for the li LUT offset — used by both the partial trailer and the word LUT.
+  uint32_t liLutOffset = 0;
+  if (pageCount > 0 || filePartial) {
+    file.seek(HEADER_SIZE - sizeof(uint32_t));
+    serialization::readPod(file, liLutOffset);
+  }
+
   if (filePartial) {
     // A partial's pageCount is the watermark of a suspended build. Read the watermark
     // trailer (appended after the li LUT + word-count table) so estimatedTotalPages can
     // extrapolate.
-    uint32_t liLutOffset = 0;
-    file.seek(HEADER_SIZE - sizeof(uint32_t));
-    serialization::readPod(file, liLutOffset);
     const uint32_t trailerOffset =
         liLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t) * 2;  // li + words
     const bool trailerValid =
@@ -200,9 +204,6 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
   // Load per-page word counts (v41+) from immediately after the li LUT.
   pageWordCounts_.clear();
   if (pageCount > 0) {
-    uint32_t liLutOffset = 0;
-    file.seek(HEADER_SIZE - sizeof(uint32_t));
-    serialization::readPod(file, liLutOffset);
     const uint32_t wordLutOffset = liLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
     const uint32_t wordLutEnd = wordLutOffset + static_cast<uint32_t>(pageCount) * sizeof(uint16_t);
     if (liLutOffset >= HEADER_SIZE && wordLutEnd <= file.size()) {

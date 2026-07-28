@@ -23,6 +23,16 @@ std::string utf8ComposeNfc(const std::string& in);
 // incomplete trailing bytes are excluded.
 int utf8SafeTruncateBuffer(const char* buf, int len);
 
+// EPUB layout word-token byte cap (ChapterHtmlSlimParser::MAX_WORD_SIZE). Long
+// unspaced runs (e.g. CJK) are split at this UTF-8-safe boundary and each piece
+// counts as one layout word — matching Page::countWords / TextBlock::wordCount.
+constexpr size_t UTF8_LAYOUT_WORD_MAX_BYTES = 200;
+
+// Count layout words the same way EPUB tokenizes plain text: ASCII whitespace
+// separates words; U+00A0 / U+202F each count as one word; other non-whitespace
+// runs count as one word per UTF8_LAYOUT_WORD_MAX_BYTES chunk.
+uint32_t utf8CountLayoutWords(const char* data, size_t len);
+
 // Returns true for CJK characters that allow line breaks on either side without hyphenation.
 // Covers CJK Unified Ideographs, Hiragana, Katakana, Hangul Syllables, CJK punctuation,
 // and fullwidth forms — the ranges where word boundaries are implicit per character.

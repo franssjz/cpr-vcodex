@@ -157,6 +157,7 @@ class Section {
   // Word count for a built/available page (0 if unknown / out of range).
   uint16_t getPageWordCount(uint16_t page) const;
   // Remaining chapter words from `fromPage` inclusive, including an estimate for
-  // still-unbuilt pages based on HTML byte density (not page-turn rate).
+  // still-unbuilt pages from mean words/built-page × estimated unbuilt page count
+  // (estimatedTotalPages uses the same page-count model as the status bar).
   uint32_t estimateRemainingWords(uint16_t fromPage) const;
 };
