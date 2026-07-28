@@ -184,21 +184,44 @@ uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
     return 0;
   }
 
+  // Mirror ChapterHtmlSlimParser characterData: accumulate a run, flush at
+  // UTF8_LAYOUT_WORD_MAX_BYTES with utf8SafeTruncateBuffer (never mid-sequence).
   uint32_t words = 0;
-  size_t runBytes = 0;
+  char run[UTF8_LAYOUT_WORD_MAX_BYTES + 4] = {};
+  int runLen = 0;
 
   auto flushRun = [&]() {
-    if (runBytes == 0) {
+    if (runLen <= 0) {
       return;
     }
-    // Match EPUB: split oversized unspaced runs at UTF-8-safe MAX_WORD_SIZE chunks.
-    size_t remaining = runBytes;
-    while (remaining > 0) {
-      const size_t chunk = remaining > UTF8_LAYOUT_WORD_MAX_BYTES ? UTF8_LAYOUT_WORD_MAX_BYTES : remaining;
-      ++words;
-      remaining -= chunk;
+    ++words;
+    runLen = 0;
+  };
+
+  auto flushAtCapacity = [&]() {
+    if (runLen < static_cast<int>(UTF8_LAYOUT_WORD_MAX_BYTES)) {
+      return;
     }
-    runBytes = 0;
+    const int safeLen = utf8SafeTruncateBuffer(run, runLen);
+    if (safeLen <= 0) {
+      runLen = 0;
+      return;
+    }
+    if (safeLen < runLen) {
+      const int overflow = runLen - safeLen;
+      char saved[4];
+      for (int j = 0; j < overflow && j < 4; ++j) {
+        saved[j] = run[safeLen + j];
+      }
+      runLen = safeLen;
+      flushRun();
+      for (int j = 0; j < overflow && j < 4; ++j) {
+        run[j] = saved[j];
+      }
+      runLen = overflow;
+    } else {
+      flushRun();
+    }
   };
 
   for (size_t i = 0; i < len; ++i) {
@@ -208,7 +231,7 @@ uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
       continue;
     }
 
-    // U+00A0 (C2 A0) — counts as its own layout word, like EPUB.
+    // U+00A0 (C2 A0) — own layout word, like EPUB.
     if (c == 0xC2 && i + 1 < len && static_cast<unsigned char>(data[i + 1]) == 0xA0) {
       flushRun();
       ++words;
@@ -232,7 +255,10 @@ uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
       continue;
     }
 
-    ++runBytes;
+    flushAtCapacity();
+    if (runLen < static_cast<int>(sizeof(run))) {
+      run[runLen++] = static_cast<char>(c);
+    }
   }
   flushRun();
   return words;

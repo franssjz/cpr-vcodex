@@ -33,8 +33,11 @@ class TxtReaderActivity final : public Activity {
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
-  // Book-wide word total for ETA (no per-page array — keeps RAM flat for large TXT).
+  // Book-wide word total. Per-page counts live only in the index cache on disk
+  // (not in RAM) so large TXT files stay within ESP32-C3 heap limits.
   uint32_t totalBookWords = 0;
+  // Byte offset of the per-page word table inside index.bin after a successful load/save.
+  uint32_t wordCountsFileOffset = 0;
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -63,19 +66,18 @@ class TxtReaderActivity final : public Activity {
   bool loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset);
   void buildPageIndex();
   bool loadPageIndexCache();
-  void savePageIndexCache() const;
+  void savePageIndexCache(const std::vector<uint16_t>& pageWords);
+  bool sumRemainingWordsFromCache(int fromPage, uint32_t& outRemaining) const;
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
-  void notePageEnteredIfChanged();
-  void clearPageDwell();
+  void creditCurrentPageWords();
   void maybeCreditPageWords(int page);
   uint32_t estimateRemainingWords(int fromPage) const;
-  uint16_t countWordsOnCurrentPage() const;
+  uint32_t countWordsInLines(const std::vector<TextLine>& lines) const;
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
-  static uint16_t countWordsInLines(const std::vector<TextLine>& lines);
 
  public:
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt)

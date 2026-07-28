@@ -31,6 +31,8 @@ bool tryFillStatusBarChapterEta(uint32_t remainingWords, double wordsPerMs, char
 uint32_t dwellCreditMs(unsigned long dwellMs, bool sameAsLastCredit);
 
 // Shared page-dwell tracker for EPUB (spine+page) and TXT (page, id1 unused).
+// clear() resets the active dwell window only; lastCredited* is kept so re-reads
+// of the same page still require REREAD_MIN_MS before another credit.
 struct PageDwell {
   unsigned long enteredMs = 0;
   int id0 = -1;
