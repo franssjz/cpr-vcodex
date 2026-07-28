@@ -29,6 +29,15 @@ metrics.
 - When changing export/import schema, preserve backward compatibility or add a
   clear migration path.
 
+## Chapter time remaining (status bar)
+
+- Rate is live-session only (`getEffectiveWordsPerMs`): no active session ⇒ no ETA.
+- EPUB credits use `TextBlock::wordCount()` / `Page::countWords()`; TXT uses
+  `utf8CountLayoutWords` on plain line text — rates are not bit-identical across formats.
+- Per-page word caches store `uint16` (saturate) for EPUB sections and TXT `index.bin`.
+- `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
+  locales fall back to English.
+
 ## Design Rules
 
 - Do not save stats on every tiny interaction. Debounce or save on activity exit

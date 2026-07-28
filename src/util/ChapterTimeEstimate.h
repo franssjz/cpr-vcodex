@@ -26,10 +26,6 @@ bool statusBarWantsChapterTime();
 bool tryFillStatusBarChapterEta(uint32_t remainingWords, double wordsPerMs, char* buf, size_t bufSize,
                                 const char** outEstimate);
 
-// Returns associated dwell ms to credit with page words, or 0 to skip credit.
-// sameAsLastCredit requires a longer linger before re-crediting a re-read page.
-uint32_t dwellCreditMs(unsigned long dwellMs, bool sameAsLastCredit);
-
 // Shared page-dwell tracker for EPUB (spine+page) and TXT (page, id1 unused).
 // clear() resets the active dwell window only; lastCredited* is kept so re-reads
 // of the same page still require REREAD_MIN_MS before another credit.
@@ -46,5 +42,9 @@ struct PageDwell {
   uint32_t creditMs(int a, int b, unsigned long nowMs) const;
   void markCredited(int a, int b);
 };
+
+// If dwell qualifies and words > 0, marks the page credited and returns associated ms.
+// Caller should pass that ms to READING_STATS.noteWordsRead. Returns 0 to skip.
+uint32_t takeDwellCreditMs(PageDwell& dwell, int id0, int id1, uint32_t words, unsigned long nowMs);
 
 }  // namespace ChapterTimeEstimate

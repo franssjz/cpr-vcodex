@@ -357,6 +357,8 @@ void PageTableFragment::recordFontUsage(FontCacheManager& fontCacheManager, cons
 }
 
 uint32_t Page::countWords() const {
+  // Post-layout token count (hyphenation / ruby / focus pieces via TextBlock::wordCount).
+  // Distinct from utf8CountLayoutWords used by the TXT reader for plain-text lines.
   uint32_t words = 0;
   for (const auto& element : elements) {
     if (!element) continue;

@@ -161,8 +161,9 @@ class ReadingStatsStore {
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
-  // Active-book word reading rate from paired word/dwell samples only.
-  // Returns 0 when there is not enough paired sample data yet.
+  // Live status-bar rate only: paired word/dwell samples for the active book.
+  // Returns 0 with no active session or when paired samples are below the gate
+  // (rate is not a lifetime average and vanishes when the session ends).
   double getEffectiveWordsPerMs() const;
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);

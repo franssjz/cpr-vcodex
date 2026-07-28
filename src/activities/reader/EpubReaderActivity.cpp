@@ -337,7 +337,9 @@ void EpubReaderActivity::onExit() {
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
-  // Paths that already called creditCurrentPageWords + endSession are no-ops here.
+  // Credit if this path did not already (early exits credit before endSession).
+  // endSession is idempotent: a second call keeps lastSessionSnapshot for the
+  // post-read stats banner. recordSessionEnded dedupes by snapshot serial.
   creditCurrentPageWords();
 
   APP_STATE.readerActivityLoadCount = 0;
@@ -1336,18 +1338,14 @@ void EpubReaderActivity::maybeCreditPageWords(const int spineIndex, const int pa
     return;
   }
 
-  const uint32_t associatedMs = pageDwell.creditMs(spineIndex, page, millis());
+  const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(page));
+  const uint32_t associatedMs =
+      ChapterTimeEstimate::takeDwellCreditMs(pageDwell, spineIndex, page, words, millis());
   if (associatedMs == 0) {
     return;
   }
 
-  const uint16_t words = section->getPageWordCount(static_cast<uint16_t>(page));
-  if (words == 0) {
-    return;
-  }
-
   READING_STATS.noteWordsRead(words, associatedMs);
-  pageDwell.markCredited(spineIndex, page);
 }
 
 void EpubReaderActivity::pageTurn(bool isForwardTurn) {
@@ -2042,12 +2040,17 @@ void EpubReaderActivity::renderStatusBar() const {
     title = epub->getTitle();
   }
 
-  char chapterTimeBuf[12] = {};
+  // Sized for multi-byte unit suffixes; formatCompactDuration fails closed if still too small.
+  char chapterTimeBuf[24] = {};
   const char* chapterTimeEstimate = nullptr;
   if (section->currentPage >= 0) {
-    ChapterTimeEstimate::tryFillStatusBarChapterEta(
-        section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)),
-        READING_STATS.getEffectiveWordsPerMs(), chapterTimeBuf, sizeof(chapterTimeBuf), &chapterTimeEstimate);
+    const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
+    // Skip remaining-words walk when rate is 0 (tryFill would no-op anyway).
+    if (wordsPerMs > 0.0) {
+      ChapterTimeEstimate::tryFillStatusBarChapterEta(
+          section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage)), wordsPerMs, chapterTimeBuf,
+          sizeof(chapterTimeBuf), &chapterTimeEstimate);
+    }
   }
 
   GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, true, chapterTimeEstimate);

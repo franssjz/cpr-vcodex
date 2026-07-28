@@ -38,6 +38,9 @@ class TxtReaderActivity final : public Activity {
   uint32_t totalBookWords = 0;
   // Byte offset of the per-page word table inside index.bin after a successful load/save.
   uint32_t wordCountsFileOffset = 0;
+  // Remaining words from currentPage inclusive; refreshed from disk when invalid.
+  uint32_t cachedRemainingWords = 0;
+  bool cachedRemainingValid = false;
   std::vector<TextLine> currentPageLines;
   int linesPerPage = 0;
   int viewportWidth = 0;
@@ -68,13 +71,15 @@ class TxtReaderActivity final : public Activity {
   bool loadPageIndexCache();
   void savePageIndexCache(const std::vector<uint16_t>& pageWords);
   bool sumRemainingWordsFromCache(int fromPage, uint32_t& outRemaining) const;
+  uint32_t proRateRemainingWords(int fromPage) const;
   void saveProgress() const;
   void loadProgress();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
   void creditCurrentPageWords();
   void maybeCreditPageWords(int page);
-  uint32_t estimateRemainingWords(int fromPage) const;
+  void invalidateRemainingWordsCache();
+  void ensureRemainingWordsCache();
   uint32_t countWordsInLines(const std::vector<TextLine>& lines) const;
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();

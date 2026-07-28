@@ -1450,7 +1450,7 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
 
 void ReadingStatsStore::endSession() {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
-    lastSessionSnapshot = {};
+    // Already ended — keep lastSessionSnapshot for post-exit UI (e.g. completion banner).
     activeSession = {};
     return;
   }
@@ -1490,6 +1490,7 @@ double ReadingStatsStore::getEffectiveWordsPerMs() const {
   constexpr uint64_t MIN_RATE_WORDS = 80;
   constexpr uint64_t MIN_RATE_MS = 60ULL * 1000ULL;
 
+  // Live status-bar rate only: no active session ⇒ no ETA (rate is not a lifetime average).
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
     return 0.0;
   }

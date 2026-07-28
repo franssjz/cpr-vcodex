@@ -13,8 +13,21 @@ bool formatRoundedUnit(const uint64_t value, const char* unit, char* buf, const 
   if (!unit || unit[0] == '\0') {
     return false;
   }
+  // ETA unit suffixes are authored in EN+ES only; other locales fall back to
+  // English via I18n (intentional — do not invent unit translations everywhere).
   const int written = snprintf(buf, bufSize, "%llu%s", static_cast<unsigned long long>(value), unit);
   return written > 0 && static_cast<size_t>(written) < bufSize;
+}
+
+uint32_t dwellCreditMs(const unsigned long dwellMs, const bool sameAsLastCredit) {
+  if (dwellMs < MIN_DWELL_MS) {
+    return 0;
+  }
+  if (sameAsLastCredit && dwellMs < REREAD_MIN_MS) {
+    return 0;
+  }
+  const unsigned long capped = dwellMs > MAX_DWELL_MS ? MAX_DWELL_MS : dwellMs;
+  return static_cast<uint32_t>(capped);
 }
 }  // namespace
 
@@ -75,17 +88,6 @@ bool tryFillStatusBarChapterEta(const uint32_t remainingWords, const double word
   return true;
 }
 
-uint32_t dwellCreditMs(const unsigned long dwellMs, const bool sameAsLastCredit) {
-  if (dwellMs < MIN_DWELL_MS) {
-    return 0;
-  }
-  if (sameAsLastCredit && dwellMs < REREAD_MIN_MS) {
-    return 0;
-  }
-  const unsigned long capped = dwellMs > MAX_DWELL_MS ? MAX_DWELL_MS : dwellMs;
-  return static_cast<uint32_t>(capped);
-}
-
 void PageDwell::clear() {
   enteredMs = 0;
   id0 = -1;
@@ -115,6 +117,19 @@ uint32_t PageDwell::creditMs(const int a, const int b, const unsigned long nowMs
 void PageDwell::markCredited(const int a, const int b) {
   lastCredited0 = a;
   lastCredited1 = b;
+}
+
+uint32_t takeDwellCreditMs(PageDwell& dwell, const int id0, const int id1, const uint32_t words,
+                           const unsigned long nowMs) {
+  if (words == 0) {
+    return 0;
+  }
+  const uint32_t associatedMs = dwell.creditMs(id0, id1, nowMs);
+  if (associatedMs == 0) {
+    return 0;
+  }
+  dwell.markCredited(id0, id1);
+  return associatedMs;
 }
 
 }  // namespace ChapterTimeEstimate

@@ -63,6 +63,7 @@ class Section {
   bool partial_ = false;
   uint16_t partialPageCount_ = 0;
   // Per-page word counts from the section cache / in-progress build. Empty until loaded.
+  // Each entry is uint16 (saturates at UINT16_MAX); matches TXT index.bin word table.
   std::vector<uint16_t> pageWordCounts_;
   // Parse watermark from the partial's trailer, for estimating the total page count.
   uint32_t partialBytesConsumed_ = 0;
@@ -155,6 +156,8 @@ class Section {
   std::optional<uint32_t> getXhtmlByteOffsetForPage(uint16_t page) const;
 
   // Word count for a built/available page (0 if unknown / out of range).
+  // Stored as uint16 (saturates at UINT16_MAX) to match the section cache layout —
+  // same ceiling as TXT index.bin per-page words; pathological dense pages undercount.
   uint16_t getPageWordCount(uint16_t page) const;
   // Remaining chapter words from `fromPage` inclusive, including an estimate for
   // still-unbuilt pages from mean words/built-page × estimated unbuilt page count
