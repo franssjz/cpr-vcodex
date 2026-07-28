@@ -346,10 +346,9 @@ std::string getSettingValueText(const SettingInfo& setting) {
       return "";
     }
     const uint8_t value = SETTINGS.*(setting.valuePtr);
-    if (setting.nameId == StrId::STR_STATUS_BAR_CHAPTER_PROGRESS &&
-        value == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME) {
+    if (setting.nameId == StrId::STR_STATUS_BAR_CHAPTER_PROGRESS) {
       char buf[64];
-      if (ChapterTimeEstimate::formatPagesPlusTime(buf, sizeof(buf))) {
+      if (ChapterTimeEstimate::formatChapterProgressLabel(value, buf, sizeof(buf))) {
         return buf;
       }
     }

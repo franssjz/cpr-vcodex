@@ -82,36 +82,15 @@ int clockCycleIndex(const uint8_t mode) {
   return 0;
 }
 
-const char* previewChapterTimeEstimate() {
+bool fillPreviewChapterTimeEstimate(char* buf, const size_t bufSize) {
   switch (SETTINGS.statusBarChapterProgress) {
     case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
     case CrossPointSettings::CHAPTER_PROGRESS_TIME: {
-      // static: pointer must outlive this function; only consumed in the same
-      // render call stack by drawStatusBar. Sized like reader chapterTimeBuf.
-      static char buf[24];
-      snprintf(buf, sizeof(buf), "15%s", tr(STR_ETA_UNIT_MINUTE));
-      return buf;
+      const int written = snprintf(buf, bufSize, "15%s", tr(STR_ETA_UNIT_MINUTE));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     default:
-      return nullptr;
-  }
-}
-
-std::string chapterProgressLabel(const uint8_t mode) {
-  switch (mode) {
-    case CrossPointSettings::CHAPTER_PROGRESS_PAGES:
-      return tr(STR_PAGES);
-    case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME: {
-      char buf[64];
-      if (ChapterTimeEstimate::formatPagesPlusTime(buf, sizeof(buf))) {
-        return buf;
-      }
-      return tr(STR_PAGES);
-    }
-    case CrossPointSettings::CHAPTER_PROGRESS_TIME:
-      return tr(STR_TIME);
-    default:
-      return tr(STR_HIDE);
+      return false;
   }
 }
 
@@ -252,8 +231,13 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
       [](int index) { return std::string(I18N.get(menuNames[index])); }, nullptr, nullptr,
       [](int index) -> std::string {
         switch (index) {
-          case ITEM_CHAPTER_PROGRESS:
-            return chapterProgressLabel(SETTINGS.statusBarChapterProgress);
+          case ITEM_CHAPTER_PROGRESS: {
+            char buf[64];
+            if (ChapterTimeEstimate::formatChapterProgressLabel(SETTINGS.statusBarChapterProgress, buf, sizeof(buf))) {
+              return buf;
+            }
+            return tr(STR_HIDE);
+          }
           case ITEM_BOOK_PROGRESS_PERCENTAGE:
             return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
           case ITEM_PROGRESS_BAR:
@@ -291,7 +275,12 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
     title = tr(STR_EXAMPLE_CHAPTER);
   }
 
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false, previewChapterTimeEstimate());
+  char previewChapterTimeBuf[24] = {};
+  const char* previewChapterTime = nullptr;
+  if (fillPreviewChapterTimeEstimate(previewChapterTimeBuf, sizeof(previewChapterTimeBuf))) {
+    previewChapterTime = previewChapterTimeBuf;
+  }
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, verticalPreviewPadding, 0, false, previewChapterTime);
 
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding,
                     renderer.getScreenHeight() - UITheme::getInstance().getStatusBarHeight() - verticalPreviewPadding -

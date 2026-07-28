@@ -84,7 +84,32 @@ bool formatPagesPlusTime(char* buf, const size_t bufSize) {
   return written > 0 && static_cast<size_t>(written) < bufSize;
 }
 
+bool formatChapterProgressLabel(const uint8_t mode, char* buf, const size_t bufSize) {
+  if (!buf || bufSize == 0) {
+    return false;
+  }
+  switch (mode) {
+    case CrossPointSettings::CHAPTER_PROGRESS_PAGES: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_PAGES));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+    case CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME:
+      return formatPagesPlusTime(buf, bufSize);
+    case CrossPointSettings::CHAPTER_PROGRESS_TIME: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_TIME));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+    case CrossPointSettings::CHAPTER_PROGRESS_HIDE:
+    default: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_HIDE));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+  }
+}
+
 void PageDwell::clear() {
+  // Intentionally leave lastCredited* so a clear+re-enter of the same page still
+  // requires REREAD_MIN_MS before another credit.
   enteredMs = 0;
   id0 = -1;
   id1 = -1;

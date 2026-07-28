@@ -292,7 +292,7 @@ constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_
 constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
 constexpr StrId OPT_OPDS_FILENAME_FORMAT[] = {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR};
 constexpr StrId OPT_BOOK_CHAPTER_HIDE[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
-// Index 1 (Pages+Time) is composed at display time from STR_PAGES + '+' + STR_TIME.
+// Index 1 is CHAPTER_PROGRESS_PAGES_TIME — JSON options use formatChapterProgressLabel.
 constexpr StrId OPT_CHAPTER_PROGRESS[] = {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE};
 constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
                                        StrId::STR_PROGRESS_BAR_THICK};
@@ -1913,11 +1913,10 @@ void CrossPointWebServer::handleGetSettings() const {
           } else {
             seenOption = true;
           }
-          if (s.key && strcmp(s.key, "statusBarChapterProgress") == 0 &&
-              i == CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME) {
-            char pagesPlusTime[64];
-            if (ChapterTimeEstimate::formatPagesPlusTime(pagesPlusTime, sizeof(pagesPlusTime))) {
-              sendJsonEscaped(server.get(), pagesPlusTime);
+          if (s.key && strcmp(s.key, "statusBarChapterProgress") == 0) {
+            char label[64];
+            if (ChapterTimeEstimate::formatChapterProgressLabel(i, label, sizeof(label))) {
+              sendJsonEscaped(server.get(), label);
             } else {
               sendJsonEscaped(server.get(), I18N.get(s.options[i]));
             }

@@ -862,22 +862,25 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     // Right aligned text for progress counter
     char progressStr[48];
     size_t offset = 0;
+    auto appendProgress = [&](const int written) {
+      if (written > 0) {
+        offset += static_cast<size_t>(written);
+      }
+    };
     if (showChapterPages) {
-      offset += static_cast<size_t>(
-          snprintf(progressStr + offset, sizeof(progressStr) - offset, "%d/%d", currentPage, pageCount));
+      appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%d/%d", currentPage, pageCount));
     }
     if (showChapterTime && offset < sizeof(progressStr)) {
-      offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%s",
-                                            showChapterPages ? " (" : "", chapterTimeEstimate));
+      appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%s",
+                              showChapterPages ? " (" : "", chapterTimeEstimate));
       if (showChapterPages && offset < sizeof(progressStr)) {
-        offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, ")"));
+        appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, ")"));
       }
     }
     if (showBookPercent && offset < sizeof(progressStr)) {
-      offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%.0f%%",
-                                            (showChapterPages || showChapterTime) ? " " : "", bookProgress));
+      appendProgress(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%.0f%%",
+                              (showChapterPages || showChapterTime) ? " " : "", bookProgress));
     }
-    (void)offset;
 
     progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressStr);
     renderer.drawText(

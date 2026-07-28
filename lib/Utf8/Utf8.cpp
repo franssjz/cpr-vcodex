@@ -184,60 +184,33 @@ uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
     return 0;
   }
 
-  // Mirror ChapterHtmlSlimParser characterData: accumulate a run length, flush at
-  // UTF8_LAYOUT_WORD_MAX_BYTES with utf8SafeTruncateBuffer (never mid-sequence).
-  // Only the trailing ≤4 bytes are kept on the stack for boundary checks.
+  // Mirror ChapterHtmlSlimParser characterData: track run start/length in `data`,
+  // flush at UTF8_LAYOUT_WORD_MAX_BYTES with utf8SafeTruncateBuffer (never mid-sequence).
   uint32_t words = 0;
+  size_t runStart = 0;
   int runLen = 0;
-  char tail[4] = {};
-  int tailLen = 0;
-
-  auto clearRun = [&]() {
-    runLen = 0;
-    tailLen = 0;
-  };
 
   auto flushRun = [&]() {
     if (runLen <= 0) {
       return;
     }
     ++words;
-    clearRun();
-  };
-
-  auto appendByte = [&](const unsigned char c) {
-    if (tailLen < 4) {
-      tail[tailLen++] = static_cast<char>(c);
-    } else {
-      tail[0] = tail[1];
-      tail[1] = tail[2];
-      tail[2] = tail[3];
-      tail[3] = static_cast<char>(c);
-    }
-    ++runLen;
+    runLen = 0;
   };
 
   auto flushAtCapacity = [&]() {
     if (runLen < static_cast<int>(UTF8_LAYOUT_WORD_MAX_BYTES)) {
       return;
     }
-    const int safeTail = utf8SafeTruncateBuffer(tail, tailLen);
-    if (safeTail <= 0) {
-      clearRun();
+    const int safeLen = utf8SafeTruncateBuffer(data + runStart, runLen);
+    if (safeLen <= 0) {
+      runLen = 0;
       return;
     }
-    if (safeTail < tailLen) {
-      const int overflow = tailLen - safeTail;
-      char saved[4];
-      for (int j = 0; j < overflow && j < 4; ++j) {
-        saved[j] = tail[safeTail + j];
-      }
+    if (safeLen < runLen) {
+      runStart += static_cast<size_t>(safeLen);
+      runLen -= safeLen;
       ++words;
-      for (int j = 0; j < overflow && j < 4; ++j) {
-        tail[j] = saved[j];
-      }
-      tailLen = overflow;
-      runLen = overflow;
     } else {
       flushRun();
     }
@@ -275,7 +248,10 @@ uint32_t utf8CountLayoutWords(const char* data, const size_t len) {
     }
 
     flushAtCapacity();
-    appendByte(c);
+    if (runLen == 0) {
+      runStart = i;
+    }
+    ++runLen;
   }
   flushRun();
   return words;

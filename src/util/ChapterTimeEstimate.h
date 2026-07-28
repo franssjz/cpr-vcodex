@@ -24,6 +24,11 @@ bool statusBarWantsChapterTime();
 // Compose "Pages+Time" from STR_PAGES + '+' + STR_TIME (no dedicated i18n key).
 bool formatPagesPlusTime(char* buf, size_t bufSize);
 
+// Label for statusBarChapterProgress enum index. Always use this instead of raw
+// StrId lookup — index CHAPTER_PROGRESS_PAGES_TIME is composed, and settings
+// tables may store a placeholder StrId for that slot.
+bool formatChapterProgressLabel(uint8_t mode, char* buf, size_t bufSize);
+
 // Shared page-dwell tracker for EPUB (spine+page) and TXT (page, id1 unused).
 // clear() resets the active dwell window only; lastCredited* is kept so re-reads
 // of the same page still require REREAD_MIN_MS before another credit.
