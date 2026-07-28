@@ -405,10 +405,18 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
   } else if (doc["statusBarChapterProgress"].isNull()) {
-    // Pre-enum settings only had a chapter page-count toggle.
+    // Migrate pre-enum toggles (page count, and briefly also time remaining) into the enum.
     const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
-    s.statusBarChapterProgress =
-        showPages ? CrossPointSettings::CHAPTER_PROGRESS_PAGES : CrossPointSettings::CHAPTER_PROGRESS_HIDE;
+    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
+    if (showPages && showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
+    } else if (showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_TIME;
+    } else if (showPages) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
+    } else {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
+    }
     if (needsResave) *needsResave = true;
   }
 
@@ -1320,6 +1328,7 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["coverBmpPath"] = book.coverBmpPath;
     obj["chapterTitle"] = book.chapterTitle;
     obj["totalReadingMs"] = book.totalReadingMs;
+    obj["totalWordsReadingMs"] = book.totalWordsReadingMs;
     obj["totalWordsRead"] = book.totalWordsRead;
     obj["sessions"] = book.sessions;
     obj["lastSessionMs"] = book.lastSessionMs;
@@ -1469,6 +1478,7 @@ bool JsonSettingsIO::loadReadingStatsDocument(ReadingStatsStore& store, const Js
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
+    book.totalWordsReadingMs = obj["totalWordsReadingMs"] | static_cast<uint64_t>(0);
     book.totalWordsRead = obj["totalWordsRead"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);

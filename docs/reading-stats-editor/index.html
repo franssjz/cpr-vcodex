@@ -736,6 +736,13 @@
       grid-column: 1 / -1;
     }
 
+    .field .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .field label {
       display: block;
       margin-bottom: 5px;
@@ -1384,6 +1391,9 @@
         coverBmpPath: "Cover BMP path",
         chapterTitle: "Chapter title",
         totalReadingMinutes: "Total reading minutes",
+        totalWordsRead: "Words read (ETA samples)",
+        wordsReadingMinutes: "Minutes paired with words (ETA)",
+        wordsRateHint: "ETA rate uses words ÷ paired minutes. Unpaired words are cleared on import.",
         lastSessionMinutes: "Last session minutes",
         bookProgress: "Book progress %",
         chapterProgress: "Chapter progress %",
@@ -1458,6 +1468,9 @@
         coverBmpPath: "Ruta de portada BMP",
         chapterTitle: "Título de capítulo",
         totalReadingMinutes: "Minutos totales de lectura",
+        totalWordsRead: "Palabras leídas (muestras ETA)",
+        wordsReadingMinutes: "Minutos emparejados con palabras (ETA)",
+        wordsRateHint: "La tasa ETA usa palabras ÷ minutos emparejados. Las palabras sin emparejar se borran al importar.",
         lastSessionMinutes: "Minutos de la última sesión",
         bookProgress: "Progreso del libro %",
         chapterProgress: "Progreso del capítulo %",
@@ -3366,6 +3379,7 @@
         chapterTitle: String(book.chapterTitle || ""),
         readingDays: readingDays.map(normalizeDay).filter(day => day.dayOrdinal && day.readingMs),
         totalReadingMs: toUInt(book.totalReadingMs),
+        totalWordsReadingMs: toUInt(book.totalWordsReadingMs),
         totalWordsRead: toUInt(book.totalWordsRead),
         sessions: toUInt(book.sessions),
         lastSessionMs: toUInt(book.lastSessionMs),
@@ -3376,6 +3390,10 @@
         chapterProgressPercent: clampPercent(book.chapterProgressPercent),
         completed: Boolean(book.completed)
       };
+      // Match firmware: unpaired historical words must not skew ETA rate.
+      if (!normalized.totalWordsReadingMs && normalized.totalWordsRead) {
+        normalized.totalWordsRead = 0;
+      }
       if (!normalized.bookId) normalized.bookId = normalized.path;
       if (!normalized.knownPaths.includes(normalized.path) && normalized.path) {
         normalized.knownPaths.unshift(normalized.path);
@@ -3493,6 +3511,7 @@
         chapterTitle: "",
         readingDays: [],
         totalReadingMs: 0,
+        totalWordsReadingMs: 0,
         totalWordsRead: 0,
         sessions: 0,
         lastSessionMs: 0,
@@ -3831,6 +3850,9 @@
           ${textField("coverBmpPath", t("coverBmpPath"), book.coverBmpPath)}
           ${textField("chapterTitle", t("chapterTitle"), book.chapterTitle)}
           ${numberField("totalReadingMinutes", t("totalReadingMinutes"), msToMinutes(book.totalReadingMs))}
+          ${numberField("totalWordsRead", t("totalWordsRead"), book.totalWordsRead)}
+          ${numberField("wordsReadingMinutes", t("wordsReadingMinutes"), msToMinutes(book.totalWordsReadingMs))}
+          <div class="field full"><p class="hint">${escapeHtml(t("wordsRateHint"))}</p></div>
           ${numberField("sessions", t("sessions"), book.sessions)}
           ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
           ${numberField("lastProgressPercent", t("bookProgress"), book.lastProgressPercent)}
@@ -3879,6 +3901,11 @@
         book.coverBmpPath = value("coverBmpPath");
         book.chapterTitle = value("chapterTitle");
         book.totalReadingMs = minutesToMs(value("totalReadingMinutes"));
+        book.totalWordsRead = toUInt(value("totalWordsRead"));
+        book.totalWordsReadingMs = minutesToMs(value("wordsReadingMinutes"));
+        if (!book.totalWordsReadingMs && book.totalWordsRead) {
+          book.totalWordsRead = 0;
+        }
         book.sessions = toUInt(value("sessions"));
         book.lastSessionMs = minutesToMs(value("lastSessionMinutes"));
         book.lastProgressPercent = clampPercent(value("lastProgressPercent"));

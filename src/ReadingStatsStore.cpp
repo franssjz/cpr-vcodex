@@ -522,6 +522,7 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
 
   primary.totalReadingMs += duplicate.totalReadingMs;
+  primary.totalWordsReadingMs += duplicate.totalWordsReadingMs;
   primary.totalWordsRead += duplicate.totalWordsRead;
   primary.sessions += duplicate.sessions;
   primary.lastSessionMs = std::max(primary.lastSessionMs, duplicate.lastSessionMs);
@@ -557,6 +558,11 @@ void ReadingStatsStore::normalizeBook(ReadingBookStats& book) {
   normalizeReadingDays(book.readingDays);
   book.lastProgressPercent = clampPercent(book.lastProgressPercent);
   book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
+  // Pre-pairing builds stored words against lifetime reading ms. Drop unpaired words so
+  // ETA rate cannot open on ~80 new words divided by hours of historical time.
+  if (book.totalWordsReadingMs == 0 && book.totalWordsRead > 0) {
+    book.totalWordsRead = 0;
+  }
 }
 
 void ReadingStatsStore::normalizeBooks() {
@@ -1219,7 +1225,6 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
   activeSession.bookIndex = 0;
   activeSession.lastInteractionMs = millis();
   activeSession.accumulatedMs = 0;
-  activeSession.sessionWordsRead = 0;
 
   markDirty();
 }
@@ -1249,11 +1254,14 @@ void ReadingStatsStore::noteActivity() {
   }
 }
 
-void ReadingStatsStore::noteWordsRead(const uint32_t words) {
-  if (!activeSession.active || words == 0) {
+void ReadingStatsStore::noteWordsRead(const uint32_t words, const uint32_t associatedMs) {
+  if (!activeSession.active || activeSession.bookIndex >= books.size() || words == 0 || associatedMs == 0) {
     return;
   }
-  activeSession.sessionWordsRead += words;
+  auto& book = books[activeSession.bookIndex];
+  book.totalWordsRead += words;
+  book.totalWordsReadingMs += associatedMs;
+  markDirty();
 }
 
 void ReadingStatsStore::tickActiveSession() {
@@ -1461,13 +1469,6 @@ void ReadingStatsStore::endSession() {
     markDirty();
   }
 
-  // Always persist words read for ETA rate, including short uncounted sessions,
-  // because noteActivity() already credits their reading time into totalReadingMs.
-  if (activeSession.sessionWordsRead > 0) {
-    book.totalWordsRead += activeSession.sessionWordsRead;
-    markDirty();
-  }
-
   lastSessionSnapshot.valid = true;
   lastSessionSnapshot.serial = ++sessionSerialCounter;
   lastSessionSnapshot.bookId = book.bookId;
@@ -1491,13 +1492,11 @@ double ReadingStatsStore::getEffectiveWordsPerMs() const {
   }
 
   const auto& book = books[activeSession.bookIndex];
-  // totalReadingMs already includes credited session time; totalWordsRead does not yet.
-  const uint64_t words = book.totalWordsRead + activeSession.sessionWordsRead;
-  const uint64_t ms = book.totalReadingMs;
-  if (words < MIN_RATE_WORDS || ms < MIN_RATE_MS) {
+  // Only dwell ms paired with credited page words — never lifetime totalReadingMs.
+  if (book.totalWordsRead < MIN_RATE_WORDS || book.totalWordsReadingMs < MIN_RATE_MS) {
     return 0.0;
   }
-  return static_cast<double>(words) / static_cast<double>(ms);
+  return static_cast<double>(book.totalWordsRead) / static_cast<double>(book.totalWordsReadingMs);
 }
 
 bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,
