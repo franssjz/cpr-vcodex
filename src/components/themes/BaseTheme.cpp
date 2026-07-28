@@ -17,7 +17,6 @@
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/TimeUtils.h"
 
 // Internal constants
@@ -847,7 +846,7 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   auto textY = screenHeight - UITheme::getInstance().getStatusBarHeight() - orientedMarginBottom - paddingBottom - 4;
   int progressTextWidth = 0;
 
-  const bool wantChapterTime = ChapterTimeEstimate::statusBarWantsChapterTime();
+  const bool wantChapterTime = SETTINGS.statusBarWantsChapterTime();
   const bool haveChapterTime =
       wantChapterTime && chapterTimeEstimate != nullptr && chapterTimeEstimate[0] != '\0';
   // TIME-only with no rate yet would otherwise leave an empty right cluster; show pages until ETA is ready.

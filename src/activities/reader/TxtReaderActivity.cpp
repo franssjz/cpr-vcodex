@@ -24,7 +24,6 @@
 #include "fontIds.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/BookIdentity.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/CompletedBookMover.h"
 
 namespace {
@@ -884,9 +883,9 @@ void TxtReaderActivity::renderStatusBar() const {
   char chapterTimeBuf[24] = {};
   const char* chapterTimeEstimate = nullptr;
   const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
-  if (ChapterTimeEstimate::statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
-      ChapterTimeEstimate::formatRemainingFromRate(estimateRemainingWords(currentPage), wordsPerMs, chapterTimeBuf,
-                                                   sizeof(chapterTimeBuf))) {
+  if (SETTINGS.statusBarWantsChapterTime() && wordsPerMs > 0.0 &&
+      ReaderUtils::formatRemainingFromRate(estimateRemainingWords(currentPage), wordsPerMs, chapterTimeBuf,
+                                           sizeof(chapterTimeBuf))) {
     chapterTimeEstimate = chapterTimeBuf;
   }
 

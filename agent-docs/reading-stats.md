@@ -41,7 +41,7 @@ metrics.
   `totalBookWords`.
 - `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
   locales fall back to English.
-- The Pages+Time setting label is composed via `formatChapterProgressLabel`
+- The Pages+Time setting label is composed via `CrossPointSettings::formatChapterProgressLabel`
   (`STR_PAGES + '+' + STR_TIME`); always use that helper for enum display.
 - XTC has no word ETA (bitmap pages, no status-bar chapter-time slot).
 - EPUB keeps a running `knownPageWordsTotal_` for ETA extrapolation.

@@ -9,7 +9,7 @@
 #include "EndOfBookOptions.h"
 #include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
-#include "util/ChapterTimeEstimate.h"
+#include "util/PageDwell.h"
 
 class Page;
 
@@ -47,7 +47,7 @@ class EpubReaderActivity final : public Activity {
   int sessionStartPage = 0;
   bool sessionProgressTouched = false;
   // Word-rate samples: dwell on the page currently displayed. Jumps never credit the left page.
-  ChapterTimeEstimate::PageDwell pageDwell;
+  PageDwell pageDwell;
   std::shared_ptr<Page> currentOverlayPageCache;
   EndOfBookOptions endOfBookOptions;
   int currentOverlayPageSpineIndex = -1;

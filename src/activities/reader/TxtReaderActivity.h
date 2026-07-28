@@ -8,7 +8,7 @@
 
 #include "CrossPointSettings.h"
 #include "activities/Activity.h"
-#include "util/ChapterTimeEstimate.h"
+#include "util/PageDwell.h"
 
 class TxtReaderActivity final : public Activity {
  public:
@@ -47,7 +47,7 @@ class TxtReaderActivity final : public Activity {
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
   // Word-rate samples: dwell on the page currently displayed.
-  ChapterTimeEstimate::PageDwell pageDwell;
+  PageDwell pageDwell;
 
   // Cached settings for cache validation (different fonts/margins require re-indexing)
   int cachedFontId = 0;

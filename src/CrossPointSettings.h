@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 
 #include <cstdint>
+#include <cstddef>
 #include <iosfwd>
 
 class CrossPointSettings {
@@ -466,6 +467,15 @@ class CrossPointSettings {
   void normalizeDisplayDay();
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
+
+  // Chapter Progress setting: Pages+Time / Time modes want a chapter ETA slot.
+  bool statusBarWantsChapterTime() const {
+    return statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME ||
+           statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
+  }
+  // Label for statusBarChapterProgress enum index. Pages+Time is composed from
+  // STR_PAGES + '+' + STR_TIME (no dedicated i18n key).
+  static bool formatChapterProgressLabel(uint8_t mode, char* buf, size_t bufSize);
 };
 
 // Helper macro to access settings

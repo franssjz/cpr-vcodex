@@ -13,7 +13,6 @@
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/TimeUtils.h"
 
 namespace {
@@ -233,7 +232,7 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
         switch (index) {
           case ITEM_CHAPTER_PROGRESS: {
             char buf[64];
-            if (ChapterTimeEstimate::formatChapterProgressLabel(SETTINGS.statusBarChapterProgress, buf, sizeof(buf))) {
+            if (CrossPointSettings::formatChapterProgressLabel(SETTINGS.statusBarChapterProgress, buf, sizeof(buf))) {
               return buf;
             }
             return tr(STR_HIDE);

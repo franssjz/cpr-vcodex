@@ -34,7 +34,6 @@
 #include "html/SettingsPageHtml.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "util/BookCacheUtils.h"
-#include "util/ChapterTimeEstimate.h"
 #include "util/IfFoundFile.h"
 #include "version.h"
 
@@ -1915,7 +1914,7 @@ void CrossPointWebServer::handleGetSettings() const {
           }
           if (s.key && strcmp(s.key, "statusBarChapterProgress") == 0) {
             char label[64];
-            if (ChapterTimeEstimate::formatChapterProgressLabel(i, label, sizeof(label))) {
+            if (CrossPointSettings::formatChapterProgressLabel(i, label, sizeof(label))) {
               sendJsonEscaped(server.get(), label);
             } else {
               sendJsonEscaped(server.get(), I18N.get(s.options[i]));
