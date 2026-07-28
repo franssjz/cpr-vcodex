@@ -1801,7 +1801,10 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
   }
 
   const bool enableTextAA = SETTINGS.textAntiAliasing && !renderer.isDarkMode();
-  const bool enableImageGrayscaleOnly = renderer.isDarkMode() && page->hasImages();
+  // Soft greyscale on inverted images turns fine white strokes into a noisy
+  // halo on e-ink; keep inverted images on the solid BW path instead.
+  const bool enableImageGrayscaleOnly =
+      renderer.isDarkMode() && page->hasImages() && !renderer.isDarkModeInvertImages();
   const bool forceFullRefresh = pendingForceFullRefresh;
   pendingForceFullRefresh = false;
   // Force special handling for pages with images when anti-aliasing is on

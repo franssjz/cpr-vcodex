@@ -152,8 +152,16 @@ struct DirectPixelWriter {
     bool state;
     switch (mode) {
       case GfxRenderer::BW:
-        draw = darkMode ? true : (pixelValue < 3);
-        state = (pixelValue < 3);
+        if (invertImages) {
+          // Dual of light-mode thresholding: any non-black becomes solid white.
+          // Without this, inverted AA greys (1/2) are painted black and erode
+          // thin white strokes (flourishes, line art) on the dark page.
+          draw = (pixelValue > 0);
+          state = false;
+        } else {
+          draw = darkMode ? true : (pixelValue < 3);
+          state = (pixelValue < 3);
+        }
         break;
       case GfxRenderer::GRAYSCALE_MSB:
         draw = (pixelValue == 1 || pixelValue == 2);
