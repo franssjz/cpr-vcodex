@@ -354,19 +354,6 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   }
 }
 
-uint8_t migrateChapterProgressFromLegacyToggles(const uint8_t showPages, const uint8_t showTime) {
-  if (showPages && showTime) {
-    return CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
-  }
-  if (showTime) {
-    return CrossPointSettings::CHAPTER_PROGRESS_TIME;
-  }
-  if (showPages) {
-    return CrossPointSettings::CHAPTER_PROGRESS_PAGES;
-  }
-  return CrossPointSettings::CHAPTER_PROGRESS_HIDE;
-}
-
 namespace {
 void migrateDisplayHeaderSettings(CrossPointSettings& s, const JsonDocument& doc, bool* needsResave) {
   if (doc["displayHeaderTime"].isNull()) {
@@ -418,10 +405,10 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
   if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
   } else if (doc["statusBarChapterProgress"].isNull()) {
-    // Migrate the short-lived dual-toggle settings into the combined enum.
+    // Pre-enum settings only had a chapter page-count toggle.
     const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
-    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
-    s.statusBarChapterProgress = migrateChapterProgressFromLegacyToggles(showPages, showTime);
+    s.statusBarChapterProgress =
+        showPages ? CrossPointSettings::CHAPTER_PROGRESS_PAGES : CrossPointSettings::CHAPTER_PROGRESS_HIDE;
     if (needsResave) *needsResave = true;
   }
 

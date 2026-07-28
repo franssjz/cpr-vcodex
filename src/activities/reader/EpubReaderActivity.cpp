@@ -2003,8 +2003,14 @@ void EpubReaderActivity::renderStatusBar() const {
       section->currentPage >= 0) {
     const uint32_t remainingWords =
         section->estimateRemainingWords(static_cast<uint16_t>(section->currentPage));
-    const uint64_t remainingMs =
-        ChapterTimeEstimate::estimateRemainingMs(remainingWords, READING_STATS.getEffectiveWordsPerMs());
+    const double wordsPerMs = READING_STATS.getEffectiveWordsPerMs();
+    uint64_t remainingMs = 0;
+    if (remainingWords > 0 && wordsPerMs > 0.0) {
+      const double ms = static_cast<double>(remainingWords) / wordsPerMs;
+      if (ms > 0.0 && ms < static_cast<double>(UINT64_MAX)) {
+        remainingMs = static_cast<uint64_t>(ms);
+      }
+    }
     if (ChapterTimeEstimate::formatCompactDuration(remainingMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
       chapterTimeEstimate = chapterTimeBuf;
     }

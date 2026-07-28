@@ -158,10 +158,9 @@ class ReadingStatsStore {
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
-  // Blended historical + current-session word reading rate (words per millisecond).
+  // Active-book word reading rate (words per millisecond), including the current session.
   // Returns 0 when there is not enough sample data yet.
   double getEffectiveWordsPerMs() const;
-  uint64_t getActiveSessionWordsRead() const;
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,

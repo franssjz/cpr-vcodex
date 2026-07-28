@@ -1029,8 +1029,13 @@ uint16_t Section::getPageWordCount(const uint16_t page) const {
 uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
   const uint16_t availablePages = pageCount;
   uint32_t remaining = 0;
-  for (uint16_t page = fromPage; page < availablePages; ++page) {
-    remaining += getPageWordCount(page);
+  uint32_t knownWords = 0;
+  for (uint16_t page = 0; page < availablePages; ++page) {
+    const uint16_t words = getPageWordCount(page);
+    knownWords += words;
+    if (page >= fromPage) {
+      remaining += words;
+    }
   }
 
   // Still-building / partial chapters: extrapolate unbuilt content from HTML density.
@@ -1044,18 +1049,12 @@ uint32_t Section::estimateRemainingWords(const uint16_t fromPage) const {
     totalBytes = partialTotalBytes_;
   }
 
-  if (totalBytes > bytesConsumed && bytesConsumed > 0 && availablePages > 0) {
-    uint32_t knownWords = 0;
-    for (uint16_t page = 0; page < availablePages; ++page) {
-      knownWords += getPageWordCount(page);
-    }
-    if (knownWords > 0) {
-      const uint64_t unbuiltBytes = static_cast<uint64_t>(totalBytes - bytesConsumed);
-      const uint64_t unbuiltWords =
-          (static_cast<uint64_t>(knownWords) * unbuiltBytes) / static_cast<uint64_t>(bytesConsumed);
-      if (unbuiltWords > 0 && unbuiltWords < static_cast<uint64_t>(UINT32_MAX)) {
-        remaining += static_cast<uint32_t>(unbuiltWords);
-      }
+  if (knownWords > 0 && totalBytes > bytesConsumed && bytesConsumed > 0) {
+    const uint64_t unbuiltBytes = static_cast<uint64_t>(totalBytes - bytesConsumed);
+    const uint64_t unbuiltWords =
+        (static_cast<uint64_t>(knownWords) * unbuiltBytes) / static_cast<uint64_t>(bytesConsumed);
+    if (unbuiltWords > 0 && unbuiltWords < static_cast<uint64_t>(UINT32_MAX)) {
+      remaining += static_cast<uint32_t>(unbuiltWords);
     }
   }
 
