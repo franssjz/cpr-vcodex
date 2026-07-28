@@ -857,23 +857,23 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   if (showBookPercent || showChapterPages || showChapterTime) {
     // Right aligned text for progress counter
     char progressStr[48];
-
-    if (showChapterPages && showChapterTime && showBookPercent) {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d (%s)  %.0f%%", currentPage, pageCount, chapterTimeEstimate,
-               bookProgress);
-    } else if (showChapterPages && showChapterTime) {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d (%s)", currentPage, pageCount, chapterTimeEstimate);
-    } else if (showChapterPages && showBookPercent) {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d  %.0f%%", currentPage, pageCount, bookProgress);
-    } else if (showChapterTime && showBookPercent) {
-      snprintf(progressStr, sizeof(progressStr), "%s  %.0f%%", chapterTimeEstimate, bookProgress);
-    } else if (showBookPercent) {
-      snprintf(progressStr, sizeof(progressStr), "%.0f%%", bookProgress);
-    } else if (showChapterPages) {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d", currentPage, pageCount);
-    } else {
-      snprintf(progressStr, sizeof(progressStr), "%s", chapterTimeEstimate);
+    size_t offset = 0;
+    if (showChapterPages) {
+      offset += static_cast<size_t>(
+          snprintf(progressStr + offset, sizeof(progressStr) - offset, "%d/%d", currentPage, pageCount));
     }
+    if (showChapterTime && offset < sizeof(progressStr)) {
+      offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%s",
+                                            showChapterPages ? " (" : "", chapterTimeEstimate));
+      if (showChapterPages && offset < sizeof(progressStr)) {
+        offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, ")"));
+      }
+    }
+    if (showBookPercent && offset < sizeof(progressStr)) {
+      offset += static_cast<size_t>(snprintf(progressStr + offset, sizeof(progressStr) - offset, "%s%.0f%%",
+                                            (showChapterPages || showChapterTime) ? " " : "", bookProgress));
+    }
+    (void)offset;
 
     progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressStr);
     renderer.drawText(
@@ -940,37 +940,41 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   if (!title.empty()) {
     textY -= textYOffset;
     // Centered chapter title text
-    // Page width minus existing content with 30px padding on each side
     const int rendererableScreenWidth =
         renderer.getScreenWidth() - (metrics.statusBarHorizontalMargin * 2) - orientedMarginLeft - orientedMarginRight;
 
     const int batteryAreaWidth = statusBarBatteryAreaWidth(renderer, metrics, showBatteryPercentage);
     const int clockReserveLeft = clockOnLeft && clockTextWidth > 0 ? (clockTextWidth + 10) : 0;
     const int clockReserveRight = clockOnRight && clockTextWidth > 0 ? (clockTextWidth + 10) : 0;
-    const int titleMarginLeft = batteryAreaWidth + clockReserveLeft + 30;
-    const int titleMarginRight = progressTextWidth + clockReserveRight + 30;
+    // Wider progress clusters (pages+time+%) need less decorative title padding so the
+    // title can still truncate cleanly instead of colliding with the right cluster.
+    const int titleSidePad = (showChapterTime && showChapterPages && showBookPercent) ? 12 : 30;
+    const int titleMarginLeft = batteryAreaWidth + clockReserveLeft + titleSidePad;
+    const int titleMarginRight = progressTextWidth + clockReserveRight + titleSidePad;
 
     // Attempt to center title on the screen, but if title is too wide then later we will center it within the
     // available space.
     int titleMarginLeftAdjusted = std::max(titleMarginLeft, titleMarginRight);
     int availableTitleSpace = rendererableScreenWidth - 2 * titleMarginLeftAdjusted;
 
-    int titleWidth;
-    titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+    int titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
     if (titleWidth > availableTitleSpace) {
       // Not enough space to center on the screen, center it within the remaining space instead
       availableTitleSpace = rendererableScreenWidth - titleMarginLeft - titleMarginRight;
       titleMarginLeftAdjusted = titleMarginLeft;
     }
-    if (titleWidth > availableTitleSpace) {
-      title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), availableTitleSpace);
-      titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
-    }
+    constexpr int MIN_TITLE_SPACE = 40;
+    if (availableTitleSpace >= MIN_TITLE_SPACE) {
+      if (titleWidth > availableTitleSpace) {
+        title = renderer.truncatedText(SMALL_FONT_ID, title.c_str(), availableTitleSpace);
+        titleWidth = renderer.getTextWidth(SMALL_FONT_ID, title.c_str());
+      }
 
-    renderer.drawText(SMALL_FONT_ID,
-                      titleMarginLeftAdjusted + metrics.statusBarHorizontalMargin + orientedMarginLeft +
-                          (availableTitleSpace - titleWidth) / 2,
-                      textY, title.c_str());
+      renderer.drawText(SMALL_FONT_ID,
+                        titleMarginLeftAdjusted + metrics.statusBarHorizontalMargin + orientedMarginLeft +
+                            (availableTitleSpace - titleWidth) / 2,
+                        textY, title.c_str());
+    }
   }
 }
 

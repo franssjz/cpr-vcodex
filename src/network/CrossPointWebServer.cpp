@@ -438,7 +438,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_OPDS_FILENAME_FORMAT, opdsFilenameFormat, OPT_OPDS_FILENAME_FORMAT, "opdsFilenameFormat",
              StrId::STR_KOREADER_SYNC),
 
-    WEB_ENUM(StrId::STR_CHAPTER_PROGRESS, statusBarChapterProgress, OPT_CHAPTER_PROGRESS, "statusBarChapterProgress",
+    WEB_ENUM(StrId::STR_STATUS_BAR_CHAPTER_PROGRESS, statusBarChapterProgress, OPT_CHAPTER_PROGRESS, "statusBarChapterProgress",
              StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_TOGGLE(StrId::STR_BOOK_PROGRESS_PERCENTAGE, statusBarBookProgressPercentage, "statusBarBookProgressPercentage",
                StrId::STR_CUSTOMISE_STATUS_BAR),
