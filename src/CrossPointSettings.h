@@ -339,7 +339,7 @@ class CrossPointSettings {
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
   // Experimental global dark mode for the device UI and supported readers.
-  // 0=off, 1=on + greyscale-invert ebook images, 2=on (UI/text only).
+  // 0=off, 1=on + greyscale-invert in-ebook images, 2=on (UI/text only).
   uint8_t darkMode = DARK_MODE_OFF;
   uint8_t antiGhostingExperimental = 0;
   // Home/apps helpers

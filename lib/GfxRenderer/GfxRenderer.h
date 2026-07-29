@@ -45,7 +45,8 @@ class GfxRenderer {
   Orientation orientation;
   bool fadingFix;
   bool darkMode;
-  // When dark mode is on, greyscale-invert ebook/bitmap images (3 - level).
+  // When dark mode is on, greyscale-invert in-ebook images only (DirectPixelWriter).
+  // UI covers/sleep BMPs use drawBitmap and must not follow this flag.
   bool darkModeInvertImages = false;
   uint8_t textDarkness = 0;  // 0=normal, 1=crisp, 2=dark, 3=extra dark
   uint8_t* frameBuffer = nullptr;

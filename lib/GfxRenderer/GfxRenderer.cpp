@@ -1192,16 +1192,10 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
         continue;
       }
 
-      const uint8_t rawVal = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
-      const bool invertImages = darkMode && darkModeInvertImages;
-      const uint8_t val = invertImages ? static_cast<uint8_t>(3 - rawVal) : rawVal;
+      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
 
       if (renderMode == BW) {
-        if (invertImages) {
-          if (val > 0) {
-            drawPixelRaw(screenX, screenY, false);  // solid white stroke
-          }
-        } else if (darkMode) {
+        if (darkMode) {
           drawPixelRaw(screenX, screenY, val < 3);
         } else if (val < 3) {
           drawPixelRaw(screenX, screenY, true);
@@ -1272,16 +1266,10 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
       }
 
       // Get 2-bit value (result of readNextRow quantization)
-      const uint8_t rawVal = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
-      const bool invertImages = darkMode && darkModeInvertImages;
-      const uint8_t val = invertImages ? static_cast<uint8_t>(3 - rawVal) : rawVal;
+      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
 
       // For 1-bit source: 0 or 1 -> map to black (0,1,2) or white (3)
-      if (invertImages) {
-        if (val > 0) {
-          drawPixelRaw(screenX, screenY, false);  // solid white stroke
-        }
-      } else if (darkMode) {
+      if (darkMode) {
         drawPixelRaw(screenX, screenY, val < 3);
       } else if (val < 3) {
         drawPixelRaw(screenX, screenY, true);
