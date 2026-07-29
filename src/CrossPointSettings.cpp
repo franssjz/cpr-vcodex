@@ -503,7 +503,7 @@ bool CrossPointSettings::formatChapterProgressLabel(const uint8_t mode, char* bu
       return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     case CHAPTER_PROGRESS_PAGES_TIME: {
-      const int written = snprintf(buf, bufSize, "%s+%s", tr(STR_PAGES), tr(STR_TIME));
+      const int written = snprintf(buf, bufSize, "%s + %s", tr(STR_PAGES), tr(STR_TIME));
       return written > 0 && static_cast<size_t>(written) < bufSize;
     }
     case CHAPTER_PROGRESS_TIME: {

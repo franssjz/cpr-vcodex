@@ -474,7 +474,7 @@ class CrossPointSettings {
            statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
   }
   // Label for statusBarChapterProgress enum index. Pages+Time is composed from
-  // STR_PAGES + '+' + STR_TIME (no dedicated i18n key).
+  // STR_PAGES + ' + ' + STR_TIME (no dedicated i18n key).
   static bool formatChapterProgressLabel(uint8_t mode, char* buf, size_t bufSize);
 };
 

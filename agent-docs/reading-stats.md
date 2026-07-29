@@ -38,8 +38,8 @@ metrics.
   `estimatedTotalPages`, TXT `totalPages`), inclusive of the current page.
 - `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
   locales fall back to English.
-- The Pages+Time setting label is composed via `CrossPointSettings::formatChapterProgressLabel`
-  (`STR_PAGES + '+' + STR_TIME`); always use that helper for enum display.
+- The Pages + Time setting label is composed via `CrossPointSettings::formatChapterProgressLabel`
+  (`STR_PAGES + ' + ' + STR_TIME`); always use that helper for enum display.
 - XTC has no chapter ETA (bitmap pages, no status-bar chapter-time slot).
 - Older `totalWordsRead` / `totalWordsReadingMs` samples are ignored; page-rate
   fields start fresh.
