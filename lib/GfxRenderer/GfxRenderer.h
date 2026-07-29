@@ -36,6 +36,7 @@ class SleepGreyStripBatch : public ISleepGreyStripSink {
   bool empty() const override { return strips_.empty(); }
 
   bool appendStrip(int yStart, int numRows, size_t stripBytes, const uint8_t* lsb, const uint8_t* msb) override;
+  bool loadStrip(int yStart, int numRows, size_t stripBytes, uint8_t* lsb, uint8_t* msb) const override;
 
   void flushToDisplay(const GfxRenderer& renderer) const override;
 

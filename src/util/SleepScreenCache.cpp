@@ -127,6 +127,17 @@ bool SleepGreyscaleStreamWriter::seekAndWrite(FsFile& file, const size_t offset,
   return file.write(data, length) == length;
 }
 
+bool SleepGreyscaleStreamWriter::seekAndRead(FsFile& file, const size_t offset, uint8_t* data,
+                                             const size_t length) const {
+  if (data == nullptr || length == 0) {
+    return false;
+  }
+  if (!file.seekSet(offset)) {
+    return false;
+  }
+  return file.read(data, length) == static_cast<int>(length);
+}
+
 void SleepGreyscaleStreamWriter::closeWriteFiles() {
   if (lsbFile_) {
     lsbFile_.close();
@@ -192,6 +203,25 @@ bool SleepGreyscaleStreamWriter::appendStrip(const int yStart, const int numRows
 
   wroteStrip_ = true;
   return true;
+}
+
+bool SleepGreyscaleStreamWriter::loadStrip(const int yStart, const int numRows, const size_t stripBytes, uint8_t* lsb,
+                                           uint8_t* msb) const {
+  if (!active_ || numRows <= 0 || stripBytes == 0 || lsb == nullptr || msb == nullptr) {
+    return false;
+  }
+
+  const size_t offset = static_cast<size_t>(yStart) * panelWidthBytes_;
+  if (offset + stripBytes > bufferSize_) {
+    return false;
+  }
+
+  // Files may not yet contain this strip (first visit) — treat as missing.
+  if (lsbFile_.fileSize() < offset + stripBytes || msbFile_.fileSize() < offset + stripBytes) {
+    return false;
+  }
+
+  return seekAndRead(lsbFile_, offset, lsb, stripBytes) && seekAndRead(msbFile_, offset, msb, stripBytes);
 }
 
 bool SleepGreyscaleStreamWriter::commitBw(const uint8_t* bwBuffer, const uint32_t bufferSize) {

@@ -17,6 +17,7 @@ class SleepGreyscaleStreamWriter : public ISleepGreyStripSink {
   bool isActive() const { return active_; }
 
   bool appendStrip(int yStart, int numRows, size_t stripBytes, const uint8_t* lsb, const uint8_t* msb) override;
+  bool loadStrip(int yStart, int numRows, size_t stripBytes, uint8_t* lsb, uint8_t* msb) const override;
   void flushToDisplay(const GfxRenderer& renderer) const override;
   bool empty() const override { return !wroteStrip_; }
 
@@ -27,10 +28,12 @@ class SleepGreyscaleStreamWriter : public ISleepGreyStripSink {
   static constexpr int STRIP_ROWS = 80;
 
   bool seekAndWrite(FsFile& file, size_t offset, const uint8_t* data, size_t length) const;
+  bool seekAndRead(FsFile& file, size_t offset, uint8_t* data, size_t length) const;
   void closeWriteFiles();
 
-  FsFile lsbFile_;
-  FsFile msbFile_;
+  // Mutable so const loadStrip can seek/read while files remain open O_RDWR.
+  mutable FsFile lsbFile_;
+  mutable FsFile msbFile_;
   std::string sourcePath_;
   uint32_t sourceSize_ = 0;
   uint32_t bufferSize_ = 0;
@@ -56,8 +59,8 @@ class SleepScreenCache {
 
  private:
   static constexpr const char* CACHE_DIR = "/.crosspoint/sleep_cache";
-  // Bump when cache file layout changes so stale entries are ignored.
-  static constexpr uint8_t CACHE_FORMAT_VERSION = 2;
+  // Bump when cache file layout / grey encode semantics change so stale entries are ignored.
+  static constexpr uint8_t CACHE_FORMAT_VERSION = 3;
 
   friend class SleepGreyscaleStreamWriter;
 
