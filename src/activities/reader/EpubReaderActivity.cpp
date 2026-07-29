@@ -888,7 +888,8 @@ void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot
   }
 
   renderer.setFadingFix(SETTINGS.fadingFix);
-  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
   renderer.setTextDarkness(SETTINGS.textDarkness);
   if (needsFullRefresh) {
     renderer.requestNextFullRefresh();

@@ -1192,7 +1192,8 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
         continue;
       }
 
-      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const uint8_t rawVal = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const uint8_t val = (darkMode && darkModeInvertImages) ? static_cast<uint8_t>(3 - rawVal) : rawVal;
 
       if (renderMode == BW) {
         if (darkMode) {
@@ -1266,7 +1267,8 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
       }
 
       // Get 2-bit value (result of readNextRow quantization)
-      const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const uint8_t rawVal = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
+      const uint8_t val = (darkMode && darkModeInvertImages) ? static_cast<uint8_t>(3 - rawVal) : rawVal;
 
       // For 1-bit source: 0 or 1 -> map to black (0,1,2) or white (3)
       if (darkMode) {
