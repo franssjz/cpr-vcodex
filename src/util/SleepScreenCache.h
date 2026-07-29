@@ -49,7 +49,7 @@ class SleepScreenCache {
   // Loads BW into the framebuffer and verifies grey plane files exist. Does not touch
   // controller grey RAM — call applyGreyscalePlanes after displaySleepGrayscaleBase.
   static bool loadGreyscale(GfxRenderer& renderer, const std::string& sourcePath);
-  // Copies cached LSB/MSB planes into controller RAM. Must run after the BW base refresh.
+  // Streams cached LSB/MSB planes to the panel in strips (no full-plane heap alloc).
   static bool applyGreyscalePlanes(const GfxRenderer& renderer, const std::string& sourcePath);
   static void save(const GfxRenderer& renderer, const std::string& sourcePath);
   static int invalidateAll();

@@ -333,32 +333,70 @@ bool SleepScreenCache::loadGreyscale(GfxRenderer& renderer, const std::string& s
 }
 
 bool SleepScreenCache::applyGreyscalePlanes(const GfxRenderer& renderer, const std::string& sourcePath) {
-  (void)renderer;
   const uint32_t sourceSize = getSourceFileSize(sourcePath);
   if (sourceSize == 0) {
     return false;
   }
 
+  const uint16_t panelWidthBytes = renderer.getDisplayWidthBytes();
+  const uint16_t panelHeight = renderer.getDisplayHeight();
   const uint32_t bufferSize = display.getBufferSize();
   const auto lsbPath = getCachePath(sourcePath, sourceSize, ".lsb.raw");
   const auto msbPath = getCachePath(sourcePath, sourceSize, ".msb.raw");
 
-  auto planeBuffer = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[bufferSize]);
-  if (!planeBuffer) {
-    LOG_ERR("SLC", "OOM: greyscale sleep cache plane (%u bytes)", bufferSize);
+  FsFile lsbFile;
+  FsFile msbFile;
+  if (!Storage.openFileForRead("SLC", lsbPath, lsbFile) || !Storage.openFileForRead("SLC", msbPath, msbFile)) {
+    LOG_ERR("SLC", "Could not open greyscale planes for apply");
     return false;
   }
 
-  if (!readPlaneFile(lsbPath.c_str(), planeBuffer.get(), bufferSize)) {
+  constexpr int STRIP_ROWS = 80;
+  const size_t stripBytes = static_cast<size_t>(panelWidthBytes) * STRIP_ROWS;
+  auto scratch = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes]);
+  if (!scratch) {
+    LOG_ERR("SLC", "OOM: greyscale apply strip (%zu bytes)", stripBytes);
+    lsbFile.close();
+    msbFile.close();
     return false;
   }
-  display.copyGrayscaleLsbBuffers(planeBuffer.get());
 
-  if (!readPlaneFile(msbPath.c_str(), planeBuffer.get(), bufferSize)) {
-    return false;
+  const int lastStripIdx = (static_cast<int>(panelHeight) - 1) / STRIP_ROWS;
+  for (int stripIdx = 0; stripIdx <= lastStripIdx; stripIdx++) {
+    const int yStart = stripIdx * STRIP_ROWS;
+    const int rows = std::min(STRIP_ROWS, static_cast<int>(panelHeight) - yStart);
+    if (rows <= 0) {
+      continue;
+    }
+
+    const size_t activeStripBytes = static_cast<size_t>(panelWidthBytes) * static_cast<size_t>(rows);
+    const size_t offset = static_cast<size_t>(yStart) * panelWidthBytes;
+    if (offset + activeStripBytes > bufferSize) {
+      LOG_ERR("SLC", "Greyscale apply strip out of bounds at y=%d", yStart);
+      lsbFile.close();
+      msbFile.close();
+      return false;
+    }
+
+    if (!lsbFile.seekSet(offset) || lsbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+      LOG_ERR("SLC", "Failed to read greyscale LSB strip at y=%d", yStart);
+      lsbFile.close();
+      msbFile.close();
+      return false;
+    }
+    renderer.writeGrayscalePlaneStrip(true, scratch.get(), yStart, rows);
+
+    if (!msbFile.seekSet(offset) || msbFile.read(scratch.get(), activeStripBytes) != static_cast<int>(activeStripBytes)) {
+      LOG_ERR("SLC", "Failed to read greyscale MSB strip at y=%d", yStart);
+      lsbFile.close();
+      msbFile.close();
+      return false;
+    }
+    renderer.writeGrayscalePlaneStrip(false, scratch.get(), yStart, rows);
   }
-  display.copyGrayscaleMsbBuffers(planeBuffer.get());
 
+  lsbFile.close();
+  msbFile.close();
   LOG_DBG("SLC", "Applied greyscale planes from cache");
   return true;
 }
