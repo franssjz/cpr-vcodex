@@ -33,13 +33,16 @@ struct DirectPixelWriter {
   // Row-precomputed: the Y-dependent portion of the physical coords
   int rowPhyXBase, rowPhyYBase;
 
-  void init(GfxRenderer& renderer) {
+  // Default: no invert. Pass ebookImageShouldInvert() for in-ebook images.
+  void init(GfxRenderer& renderer) { init(renderer, false); }
+
+  void init(GfxRenderer& renderer, const bool invertDecorativeImages) {
     fb = renderer.getWriteTarget();
     mode = renderer.getRenderMode();
     darkMode = renderer.isDarkMode();
     // Only invert while dark mode is active so temporary darkMode=false scopes
     // (sleep/boot/clean) keep original image tones without clearing this flag.
-    invertImages = darkMode && renderer.isDarkModeInvertImages();
+    invertImages = darkMode && invertDecorativeImages;
     displayWidthBytes = renderer.getDisplayWidthBytes();
     originY = renderer.getWriteOriginY();
     clipRows = renderer.getWriteRows();

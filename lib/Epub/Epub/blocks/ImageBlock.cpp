@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "../converters/DirectPixelWriter.h"
+#include "../converters/EbookImageDarkMode.h"
 #include "../converters/ImageDecoderFactory.h"
 
 // Cache file format:
@@ -82,7 +83,7 @@ void rememberImageFailure(const std::string& path) {
 }
 
 bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x, int y, int expectedWidth,
-                     int expectedHeight) {
+                     int expectedHeight, const char* identityPath) {
   FsFile cacheFile;
   if (!Storage.openFileForRead("IMG", cachePath, cacheFile)) {
     return false;
@@ -121,7 +122,7 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
   }
 
   DirectPixelWriter pw;
-  pw.init(renderer);
+  pw.init(renderer, ebookImageShouldInvert(renderer, cachedWidth, cachedHeight, identityPath));
 
   int rowsInBuffer = 0;
   int bufferRow = 0;
@@ -172,7 +173,10 @@ bool ImageBlock::hasValidCache() const {
 
 bool ImageBlock::needsDecode() const { return !imageFailedThisSession(imagePath) && !hasValidCache(); }
 
-void ImageBlock::clearSessionRenderFailures() { failedImageCount = 0; }
+void ImageBlock::clearSessionRenderFailures() {
+  failedImageCount = 0;
+  ebookImageDarkModeResetSession();
+}
 
 void ImageBlock::renderPlaceholder(GfxRenderer& renderer, const int x, const int y) const {
   renderer.fillRect(x, y, width, height, true);
@@ -247,7 +251,8 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
 
   // Try to render from cache first
   std::string cachePath = getCachePath(imagePath);
-  if (renderFromCache(renderer, cachePath, x, y, width, height)) {
+  const char* identityPath = !sourceItemHref.empty() ? sourceItemHref.c_str() : imagePath.c_str();
+  if (renderFromCache(renderer, cachePath, x, y, width, height, identityPath)) {
     return;  // Successfully rendered from cache
   }
 
@@ -289,6 +294,7 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
   config.performanceMode = false;
   config.useExactDimensions = true;  // Use pre-calculated dimensions to avoid rounding mismatches
   config.cachePath = cachePath;      // Enable caching during decode
+  config.identityPath = !sourceItemHref.empty() ? sourceItemHref : imagePath;
 
   ImageToFramebufferDecoder* decoder = ImageDecoderFactory::getDecoder(imagePath);
   if (!decoder) {
