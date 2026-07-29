@@ -1179,20 +1179,6 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
   free(rowBytes);
 }
 
-namespace {
-  void setPlaneStripPixel(uint8_t* strip, const uint32_t widthBytes, const int localRow, const int phyX,
-                          const bool markBlack) {
-    if (localRow < 0) {
-      return;
-    }
-    const uint32_t byteIndex = static_cast<uint32_t>(localRow) * widthBytes + static_cast<uint32_t>(phyX / 8);
-    const uint8_t bitPosition = static_cast<uint8_t>(7 - (phyX % 8));
-    if (markBlack) {
-      strip[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
-    }
-  }
-}
-
 bool SleepGreyStripBatch::appendStrip(const int yStart, const int numRows, const size_t stripBytes, const uint8_t* lsb,
                                       const uint8_t* msb) {
   if (numRows <= 0 || stripBytes == 0 || lsb == nullptr || msb == nullptr) {
@@ -1267,17 +1253,20 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
   constexpr int STRIP_ROWS = 80;
   const int displayHeight = static_cast<int>(panelHeight);
   const int displayWidthBytes = static_cast<int>(panelWidthBytes);
-  const size_t stripBytes = static_cast<size_t>(displayWidthBytes) * STRIP_ROWS;
   const int lastStripIdx = (displayHeight - 1) / STRIP_ROWS;
 
-  auto scratch = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[stripBytes * 2]);
-  if (!scratch) {
-    LOG_ERR("GFX", "OOM: sleep greyscale strip scratch (%zu bytes)", stripBytes * 2);
+  // Full-plane accumulation is required for Portrait: phyY decreases as logical X
+  // increases, so streaming strips while decoding would thrash SD (minutes of seek
+  // reload). If ~2x panel RAM is unavailable, fail and let SleepActivity overlay.
+  const size_t planeSize = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(displayHeight);
+  auto planeStorage = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[planeSize * 2]);
+  if (!planeStorage) {
+    LOG_ERR("GFX", "OOM: sleep greyscale plane buffers (%zu bytes); falling back", planeSize * 2);
     return false;
   }
-
-  uint8_t* lsbStrip = scratch.get();
-  uint8_t* msbStrip = scratch.get() + stripBytes;
+  uint8_t* lsbPlane = planeStorage.get();
+  uint8_t* msbPlane = planeStorage.get() + planeSize;
+  memset(lsbPlane, 0, planeSize * 2);
 
   float scale = 1.0f;
   bool isScaled = false;
@@ -1313,71 +1302,7 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
     return false;
   }
 
-  int buildingStripIdx = -1;
-  memset(lsbStrip, 0, stripBytes);
-  memset(msbStrip, 0, stripBytes);
-  bool stripWritten[32] = {};
-  if (lastStripIdx >= static_cast<int>(sizeof(stripWritten))) {
-    LOG_ERR("GFX", "Sleep greyscale strip count exceeds tracking array");
-    free(outputRow);
-    free(rowBytes);
-    return false;
-  }
-
-  // Prefer full-plane accumulation so Portrait (phyY decreases as logical X increases)
-  // does not thrash SD with per-row strip reload. Falls back to random-access strips.
-  const size_t planeSize = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(displayHeight);
-  auto lsbPlane = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[planeSize]);
-  auto msbPlane = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[planeSize]);
-  bool usePlaneAccum = lsbPlane && msbPlane;
-  if (usePlaneAccum) {
-    memset(lsbPlane.get(), 0, planeSize);
-    memset(msbPlane.get(), 0, planeSize);
-  } else {
-    lsbPlane.reset();
-    msbPlane.reset();
-    LOG_DBG("GFX", "Sleep greyscale plane accum unavailable; using strip reload path");
-  }
-
-  const auto flushStrip = [&](const int stripIdx) -> bool {
-    if (stripIdx < 0 || stripIdx > lastStripIdx) {
-      return true;
-    }
-    const int yStart = stripIdx * STRIP_ROWS;
-    const int rows = std::min(STRIP_ROWS, displayHeight - yStart);
-    if (rows <= 0) {
-      return true;
-    }
-    const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
-    if (!stripSink.appendStrip(yStart, rows, activeStripBytes, lsbStrip, msbStrip)) {
-      return false;
-    }
-    stripWritten[stripIdx] = true;
-    return true;
-  };
-
-  const auto switchToStrip = [&](const int targetStripIdx) -> bool {
-    if (targetStripIdx < 0 || targetStripIdx > lastStripIdx) {
-      return true;
-    }
-    if (buildingStripIdx == targetStripIdx) {
-      return true;
-    }
-    if (buildingStripIdx >= 0 && !flushStrip(buildingStripIdx)) {
-      return false;
-    }
-    buildingStripIdx = targetStripIdx;
-    const int yStart = targetStripIdx * STRIP_ROWS;
-    const int rows = std::min(STRIP_ROWS, displayHeight - yStart);
-    const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
-    if (!stripSink.loadStrip(yStart, rows, activeStripBytes, lsbStrip, msbStrip)) {
-      memset(lsbStrip, 0, stripBytes);
-      memset(msbStrip, 0, stripBytes);
-    }
-    return true;
-  };
-
-  const auto emitSleepGreyPixel = [&](const int screenX, const int screenY, const uint8_t val) -> bool {
+  const auto emitSleepGreyPixel = [&](const int screenX, const int screenY, const uint8_t val) {
     if (darkMode) {
       drawPixelRaw(screenX, screenY, val < 3);
     } else if (val < 3) {
@@ -1388,38 +1313,18 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
     int phyY = 0;
     rotateCoordinates(orientation, screenX, screenY, &phyX, &phyY, panelWidth, panelHeight);
     if (phyX < 0 || phyX >= static_cast<int>(panelWidth) || phyY < 0 || phyY >= displayHeight) {
-      return true;
+      return;
     }
 
-    if (usePlaneAccum) {
-      const uint32_t byteIndex =
-          static_cast<uint32_t>(phyY) * panelWidthBytes + static_cast<uint32_t>(phyX / 8);
-      const uint8_t bitPosition = static_cast<uint8_t>(7 - (phyX % 8));
-      if (val == 1) {
-        lsbPlane[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
-      }
-      if (val == 1 || val == 2) {
-        msbPlane[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
-      }
-      return true;
-    }
-
-    const int stripIdx = phyY / STRIP_ROWS;
-    if (!switchToStrip(stripIdx)) {
-      return false;
-    }
-    const int localRow = phyY - buildingStripIdx * STRIP_ROWS;
-    if (localRow < 0 || localRow >= STRIP_ROWS) {
-      return true;
-    }
-
+    const uint32_t byteIndex =
+        static_cast<uint32_t>(phyY) * panelWidthBytes + static_cast<uint32_t>(phyX / 8);
+    const uint8_t bitPosition = static_cast<uint8_t>(7 - (phyX % 8));
     if (val == 1) {
-      setPlaneStripPixel(lsbStrip, panelWidthBytes, localRow, phyX, true);
+      lsbPlane[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
     }
     if (val == 1 || val == 2) {
-      setPlaneStripPixel(msbStrip, panelWidthBytes, localRow, phyX, true);
+      msbPlane[byteIndex] |= static_cast<uint8_t>(1 << bitPosition);
     }
-    return true;
   };
 
   if (bitmap.rewindToData() != BmpReaderError::Ok) {
@@ -1468,11 +1373,7 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
 
         const int bmpX = cropPixX + srcCroppedCol;
         const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
-        if (!emitSleepGreyPixel(screenX, screenY, val)) {
-          free(outputRow);
-          free(rowBytes);
-          return false;
-        }
+        emitSleepGreyPixel(screenX, screenY, val);
       }
     }
   } else {
@@ -1513,47 +1414,23 @@ bool GfxRenderer::drawGreyscaleBitmapForSleep(const Bitmap& bitmap, const int x,
         }
 
         const uint8_t val = outputRow[bmpX / 4] >> (6 - ((bmpX * 2) % 8)) & 0x3;
-        if (!emitSleepGreyPixel(screenX, screenY, val)) {
-          free(outputRow);
-          free(rowBytes);
-          return false;
-        }
+        emitSleepGreyPixel(screenX, screenY, val);
       }
     }
   }
 
-  if (usePlaneAccum) {
-    for (int stripIdx = 0; stripIdx <= lastStripIdx; stripIdx++) {
-      const int yStart = stripIdx * STRIP_ROWS;
-      const int rows = std::min(STRIP_ROWS, displayHeight - yStart);
-      if (rows <= 0) {
-        continue;
-      }
-      const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
-      const size_t offset = static_cast<size_t>(yStart) * static_cast<size_t>(displayWidthBytes);
-      if (!stripSink.appendStrip(yStart, rows, activeStripBytes, lsbPlane.get() + offset, msbPlane.get() + offset)) {
-        free(outputRow);
-        free(rowBytes);
-        return false;
-      }
+  for (int stripIdx = 0; stripIdx <= lastStripIdx; stripIdx++) {
+    const int yStart = stripIdx * STRIP_ROWS;
+    const int rows = std::min(STRIP_ROWS, displayHeight - yStart);
+    if (rows <= 0) {
+      continue;
     }
-  } else {
-    if (buildingStripIdx >= 0 && !flushStrip(buildingStripIdx)) {
+    const size_t activeStripBytes = static_cast<size_t>(displayWidthBytes) * static_cast<size_t>(rows);
+    const size_t offset = static_cast<size_t>(yStart) * static_cast<size_t>(displayWidthBytes);
+    if (!stripSink.appendStrip(yStart, rows, activeStripBytes, lsbPlane + offset, msbPlane + offset)) {
       free(outputRow);
       free(rowBytes);
       return false;
-    }
-    for (int stripIdx = 0; stripIdx <= lastStripIdx; stripIdx++) {
-      if (stripWritten[stripIdx]) {
-        continue;
-      }
-      memset(lsbStrip, 0, stripBytes);
-      memset(msbStrip, 0, stripBytes);
-      if (!flushStrip(stripIdx)) {
-        free(outputRow);
-        free(rowBytes);
-        return false;
-      }
     }
   }
 

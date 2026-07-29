@@ -55,6 +55,11 @@ class SleepScreenCache {
   // Streams cached LSB/MSB planes to the panel in strips (no full-plane heap alloc).
   static bool applyGreyscalePlanes(const GfxRenderer& renderer, const std::string& sourcePath);
   static void save(const GfxRenderer& renderer, const std::string& sourcePath);
+  // Overlay-path greyscale cache: call prepare, then saveFrameBufferPlane for .raw / .lsb.raw / .msb.raw
+  // while the matching plane still sits in the framebuffer.
+  static bool prepareGreyscaleSave(const std::string& sourcePath, uint32_t sourceFileSize);
+  static bool saveFrameBufferPlane(const GfxRenderer& renderer, const std::string& sourcePath, uint32_t sourceFileSize,
+                                   const char* suffix);
   static int invalidateAll();
 
  private:

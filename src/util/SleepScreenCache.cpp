@@ -448,6 +448,32 @@ void SleepScreenCache::save(const GfxRenderer& renderer, const std::string& sour
   LOG_DBG("SLC", "Saved cache: %s", path.c_str());
 }
 
+bool SleepScreenCache::prepareGreyscaleSave(const std::string& sourcePath, const uint32_t sourceFileSize) {
+  if (sourcePath.empty() || sourceFileSize == 0) {
+    return false;
+  }
+  Storage.mkdir(CACHE_DIR);
+  removeEntry(sourcePath, sourceFileSize);
+  return true;
+}
+
+bool SleepScreenCache::saveFrameBufferPlane(const GfxRenderer& renderer, const std::string& sourcePath,
+                                            const uint32_t sourceFileSize, const char* suffix) {
+  if (sourcePath.empty() || sourceFileSize == 0 || suffix == nullptr) {
+    return false;
+  }
+
+  const uint32_t bufferSize = display.getBufferSize();
+  const auto path = getCachePath(sourcePath, sourceFileSize, suffix);
+  if (!writePlaneFile(path.c_str(), renderer.getFrameBuffer(), bufferSize)) {
+    removeEntry(sourcePath, sourceFileSize);
+    return false;
+  }
+
+  LOG_DBG("SLC", "Saved greyscale plane cache: %s", path.c_str());
+  return true;
+}
+
 int SleepScreenCache::invalidateAll() {
   auto dir = Storage.open(CACHE_DIR);
   if (!dir || !dir.isDirectory()) {
