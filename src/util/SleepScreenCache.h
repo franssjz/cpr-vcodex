@@ -46,7 +46,11 @@ class SleepGreyscaleStreamWriter : public ISleepGreyStripSink {
 class SleepScreenCache {
  public:
   static bool load(GfxRenderer& renderer, const std::string& sourcePath);
+  // Loads BW into the framebuffer and verifies grey plane files exist. Does not touch
+  // controller grey RAM — call applyGreyscalePlanes after displaySleepGrayscaleBase.
   static bool loadGreyscale(GfxRenderer& renderer, const std::string& sourcePath);
+  // Copies cached LSB/MSB planes into controller RAM. Must run after the BW base refresh.
+  static bool applyGreyscalePlanes(const GfxRenderer& renderer, const std::string& sourcePath);
   static void save(const GfxRenderer& renderer, const std::string& sourcePath);
   static int invalidateAll();
 

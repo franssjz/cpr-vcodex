@@ -305,10 +305,43 @@ bool SleepScreenCache::loadGreyscale(GfxRenderer& renderer, const std::string& s
   const auto lsbPath = getCachePath(sourcePath, sourceSize, ".lsb.raw");
   const auto msbPath = getCachePath(sourcePath, sourceSize, ".msb.raw");
 
+  // Verify grey planes exist and match the panel buffer size before accepting the cache hit.
+  FsFile lsbFile;
+  FsFile msbFile;
+  if (!Storage.openFileForRead("SLC", lsbPath, lsbFile) || lsbFile.fileSize() != bufferSize) {
+    if (lsbFile) {
+      lsbFile.close();
+    }
+    return false;
+  }
+  lsbFile.close();
+  if (!Storage.openFileForRead("SLC", msbPath, msbFile) || msbFile.fileSize() != bufferSize) {
+    if (msbFile) {
+      msbFile.close();
+    }
+    return false;
+  }
+  msbFile.close();
+
   uint8_t* frameBuffer = renderer.getFrameBuffer();
   if (!readPlaneFile(bwPath.c_str(), frameBuffer, bufferSize)) {
     return false;
   }
+
+  LOG_DBG("SLC", "Loaded greyscale BW cache (planes deferred): %s", bwPath.c_str());
+  return true;
+}
+
+bool SleepScreenCache::applyGreyscalePlanes(const GfxRenderer& renderer, const std::string& sourcePath) {
+  (void)renderer;
+  const uint32_t sourceSize = getSourceFileSize(sourcePath);
+  if (sourceSize == 0) {
+    return false;
+  }
+
+  const uint32_t bufferSize = display.getBufferSize();
+  const auto lsbPath = getCachePath(sourcePath, sourceSize, ".lsb.raw");
+  const auto msbPath = getCachePath(sourcePath, sourceSize, ".msb.raw");
 
   auto planeBuffer = std::unique_ptr<uint8_t[]>(new (std::nothrow) uint8_t[bufferSize]);
   if (!planeBuffer) {
@@ -326,7 +359,7 @@ bool SleepScreenCache::loadGreyscale(GfxRenderer& renderer, const std::string& s
   }
   display.copyGrayscaleMsbBuffers(planeBuffer.get());
 
-  LOG_DBG("SLC", "Loaded greyscale cache: %s", bwPath.c_str());
+  LOG_DBG("SLC", "Applied greyscale planes from cache");
   return true;
 }
 
