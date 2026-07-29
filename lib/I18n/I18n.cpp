@@ -1,6 +1,7 @@
 #include "I18n.h"
 
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 #include <HalStorage.h>
@@ -20,18 +21,34 @@ I18n& I18n::getInstance() {
   return instance;
 }
 
-const char* I18n::get(StrId id) const {
+namespace {
+
+const char* lookupRaw(Language language, StrId id) {
   const auto index = static_cast<size_t>(id);
   if (index >= static_cast<size_t>(StrId::_COUNT)) {
     return "???";
   }
 
-  const LangStrings lang = getLanguageStrings(_language);
+  const LangStrings lang = getLanguageStrings(language);
   const uint16_t off = lang.offsets[index];
   if (off & 0x8000) {
     return STRINGS_EN_DATA + (off & 0x7FFF);
   }
   return lang.data + off;
+}
+
+}  // namespace
+
+const char* I18n::get(StrId id) const {
+  // Dark-mode middle option: compose ON + Dividers (no separate translation key).
+  // Raw lookup for Dividers avoids recursing through this special case.
+  if (id == StrId::STR_STATE_ON_DIVIDERS) {
+    std::snprintf(_compositeBuf, sizeof(_compositeBuf), "%s + %s", lookupRaw(_language, StrId::STR_STATE_ON),
+                  lookupRaw(_language, StrId::STR_STATE_ON_DIVIDERS));
+    return _compositeBuf;
+  }
+
+  return lookupRaw(_language, id);
 }
 
 void I18n::setLanguage(Language lang) {

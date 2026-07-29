@@ -252,10 +252,10 @@ class CrossPointSettings {
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
 
   // Experimental global dark mode: UI/reader invert, optionally with ebook image invert.
-  // Cycle order: OFF -> ON + Images -> ON (legacy darkMode=1 becomes ON + Images).
+  // Cycle order: OFF -> ON + Dividers -> ON (legacy darkMode=1 becomes ON + Dividers).
   enum DARK_MODE {
     DARK_MODE_OFF = 0,
-    DARK_MODE_ON_IMAGES = 1,
+    DARK_MODE_ON_DIVIDERS = 1,
     DARK_MODE_ON = 2,
     DARK_MODE_COUNT
   };
@@ -470,7 +470,7 @@ class CrossPointSettings {
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
   bool isDarkModeEnabled() const { return darkMode != DARK_MODE_OFF; }
-  bool isDarkModeInvertImages() const { return darkMode == DARK_MODE_ON_IMAGES; }
+  bool isDarkModeInvertDividers() const { return darkMode == DARK_MODE_ON_DIVIDERS; }
 };
 
 // Helper macro to access settings

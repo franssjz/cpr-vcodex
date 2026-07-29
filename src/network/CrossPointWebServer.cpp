@@ -277,7 +277,7 @@ constexpr StrId OPT_DISPLAY_HEADER[] = {StrId::STR_STATE_OFF, StrId::STR_DISPLAY
 constexpr StrId OPT_AUTO_MANUAL[] = {StrId::STR_REFRESH_MODE_AUTO, StrId::STR_MANUAL};
 constexpr StrId OPT_REMINDER_STARTS[] = {StrId::STR_STATE_OFF, StrId::STR_NUM_10, StrId::STR_NUM_20, StrId::STR_NUM_30,
                                          StrId::STR_NUM_40,    StrId::STR_NUM_50, StrId::STR_NUM_60};
-constexpr StrId OPT_DARK_MODE[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON};
+constexpr StrId OPT_DARK_MODE[] = {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON};
 constexpr StrId OPT_DATE_FORMAT[] = {StrId::STR_DATE_FORMAT_DD_MM_YYYY, StrId::STR_DATE_FORMAT_MM_DD_YYYY,
                                      StrId::STR_DATE_FORMAT_YYYY_MM_DD};
 constexpr StrId OPT_DAILY_GOAL[] = {StrId::STR_MIN_15, StrId::STR_MIN_30, StrId::STR_MIN_45, StrId::STR_MIN_60};

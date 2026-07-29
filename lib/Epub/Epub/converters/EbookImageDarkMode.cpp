@@ -38,7 +38,7 @@ void ebookImageDarkModeResetSession() { gSeenCount = 0; }
 
 bool ebookImageShouldInvert(GfxRenderer& renderer, const int16_t width, const int16_t height,
                             const char* identityPath) {
-  if (!renderer.isDarkMode() || !renderer.isDarkModeInvertImages() || width <= 0 || height <= 0) {
+  if (!renderer.isDarkMode() || !renderer.isDarkModeInvertDividers() || width <= 0 || height <= 0) {
     return false;
   }
 

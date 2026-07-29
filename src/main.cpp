@@ -282,7 +282,7 @@ void setupDisplayAndFonts(bool seamless = false) {
   display.begin(seamless);
   renderer.begin();
   renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
-  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
   activityManager.begin();
   LOG_DBG("MAIN", "Display initialized");
 
@@ -546,7 +546,7 @@ void loop() {
 
   renderer.setFadingFix(SETTINGS.fadingFix);
   renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
-  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
   renderer.setTextDarkness(SETTINGS.textDarkness);
 
 #ifdef ENABLE_SERIAL_LOG

@@ -41,7 +41,7 @@ const std::vector<SettingInfo>& getSettingsList() {
         SettingInfo::Toggle(StrId::STR_ANTI_GHOSTING_EXPERIMENTAL, &CrossPointSettings::antiGhostingExperimental,
                             "antiGhostingExperimental", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode,
-                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON}, "darkMode",
+                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON}, "darkMode",
                           StrId::STR_CAT_DISPLAY),
         SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                             StrId::STR_CAT_DISPLAY),

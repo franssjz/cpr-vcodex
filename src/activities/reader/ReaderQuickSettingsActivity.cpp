@@ -38,7 +38,7 @@ const std::vector<ReaderQuickSettingsActivity::QuickSetting>& ReaderQuickSetting
       {StrId::STR_DARK_MODE,
        QuickSettingType::Enum,
        &CrossPointSettings::darkMode,
-       {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_IMAGES, StrId::STR_STATE_ON}},
+       {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON}},
       {StrId::STR_REFRESH_FREQ,
        QuickSettingType::Enum,
        &CrossPointSettings::refreshFrequency,
@@ -127,7 +127,7 @@ void ReaderQuickSettingsActivity::applyImmediateRendererSetting(const QuickSetti
   }
 
   renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
-  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertImages());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
   renderer.setFadingFix(SETTINGS.fadingFix);
   renderer.setTextDarkness(SETTINGS.textDarkness);
   if (needsImmediateRendererFullRefresh(setting)) {

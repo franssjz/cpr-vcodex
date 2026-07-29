@@ -125,7 +125,7 @@ class GfxRenderer {
   void setDarkMode(const bool enabled) { darkMode = enabled; }
   bool isDarkMode() const { return darkMode; }
   void setDarkModeInvertImages(const bool enabled) { darkModeInvertImages = enabled; }
-  bool isDarkModeInvertImages() const { return darkModeInvertImages; }
+  bool isDarkModeInvertDividers() const { return darkModeInvertImages; }
   void requestNextRefresh(const HalDisplay::RefreshMode mode) const {
     nextRefreshOverride = mode;
     nextRefreshOverridePending = true;
