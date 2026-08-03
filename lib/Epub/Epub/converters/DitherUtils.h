@@ -26,9 +26,16 @@ inline const uint8_t bayer4x4[4][4] = {
 //   palette 2 alone (~70% reflectance).
 // - T23 raised 192 -> 210 to keep mid-bright pixels (sRGB 180-210) from
 //   blowing out to pure white after the soft-shoulder offset.
+// - Highlight guard above 242 (same threshold YACP uses): without it the flat
+//   -12 offset drops pure white to 243, which the Bayer dither then pushes
+//   under T23 at matrix cells 0 and 1 — rendering 12.5% of white pixels as
+//   light gray (~70% reflectance on the factory LUT) and giving paper a faint
+//   texture. Skipping the offset here restores the stock guarantee that white
+//   stays white, and leaves gray 0-242 bit-identical.
 inline uint8_t applyBayerDither4Level(uint8_t gray, int x, int y) {
   int g = gray;
   int offset = (g < 64) ? g * 12 / 64 : 12;
+  if (g > 242) offset = 0;
   g -= offset;
 
   int bayer = bayer4x4[y & 3][x & 3];
