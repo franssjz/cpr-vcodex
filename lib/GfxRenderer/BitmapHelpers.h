@@ -11,6 +11,50 @@ uint8_t quantizeSimple(int gray);
 uint8_t quantize1bit(int gray, int x, int y);
 int adjustPixel(int gray);
 
+// Result of 4-level quantization: the palette index written to the output,
+// and the reflectance the panel actually produces for it. Error diffusion
+// needs the second value — feeding back the nominal palette level instead of
+// the measured one biases the whole image.
+struct QuantizedGray4 {
+  uint8_t index;
+  int value;
+};
+
+// Threshold set used to map 8-bit gray onto the panel's four levels.
+//
+// Tuned: measured on the X4. Levels do not sit at even 85-step intervals
+//   because the panel's mid grays are lighter than nominal, and the
+//   thresholds are shifted down to match. This is what the reader has always
+//   used; it is the default so behaviour is unchanged.
+// NativePalette: even midpoints of the nominal 0/85/170/255 palette. Kept
+//   because it is the correct choice for content already authored against
+//   those exact levels, and to make the alternative explicit rather than
+//   commented out.
+//
+// Cross-reference for anyone comparing with the YACP fork: their
+// Gray4QuantizationMode::Legacy is this Tuned set, and their ::Native is
+// NativePalette. They default to Native; we default to Tuned. Switching our
+// default is a hardware-visible change, not a cleanup — it would need a
+// side-by-side look on the panel first.
+enum class Gray4QuantizationMode : uint8_t { Tuned, NativePalette };
+
+inline QuantizedGray4 quantizeGray4(int gray, const Gray4QuantizationMode mode) {
+  if (gray < 0) gray = 0;
+  if (gray > 255) gray = 255;
+
+  if (mode == Gray4QuantizationMode::NativePalette) {
+    if (gray < 43) return {0, 0};
+    if (gray < 128) return {1, 85};
+    if (gray < 213) return {2, 170};
+    return {3, 255};
+  }
+
+  if (gray < 30) return {0, 15};
+  if (gray < 50) return {1, 30};
+  if (gray < 140) return {2, 80};
+  return {3, 210};
+}
+
 enum class BmpRowOrder { BottomUp, TopDown };
 
 // Populates a 1-bit BMP header in the provided memory.
@@ -104,7 +148,8 @@ class Atkinson1BitDitherer {
 // Less error buildup = fewer artifacts than Floyd-Steinberg
 class AtkinsonDitherer {
  public:
-  explicit AtkinsonDitherer(int width) : width(width) {
+  explicit AtkinsonDitherer(int width, Gray4QuantizationMode quantizationMode = Gray4QuantizationMode::Tuned)
+      : width(width), quantizationMode(quantizationMode) {
     errorRow0 = new int16_t[width + 4]();  // Current row
     errorRow1 = new int16_t[width + 4]();  // Next row
     errorRow2 = new int16_t[width + 4]();  // Row after next
@@ -128,37 +173,9 @@ class AtkinsonDitherer {
     if (adjusted > 255) adjusted = 255;
 
     // Quantize to 4 levels
-    uint8_t quantized;
-    int quantizedValue;
-    if (false) {  // original thresholds
-      if (adjusted < 43) {
-        quantized = 0;
-        quantizedValue = 0;
-      } else if (adjusted < 128) {
-        quantized = 1;
-        quantizedValue = 85;
-      } else if (adjusted < 213) {
-        quantized = 2;
-        quantizedValue = 170;
-      } else {
-        quantized = 3;
-        quantizedValue = 255;
-      }
-    } else {  // fine-tuned to X4 eink display
-      if (adjusted < 30) {
-        quantized = 0;
-        quantizedValue = 15;
-      } else if (adjusted < 50) {
-        quantized = 1;
-        quantizedValue = 30;
-      } else if (adjusted < 140) {
-        quantized = 2;
-        quantizedValue = 80;
-      } else {
-        quantized = 3;
-        quantizedValue = 210;
-      }
-    }
+    const QuantizedGray4 q = quantizeGray4(adjusted, quantizationMode);
+    const uint8_t quantized = q.index;
+    const int quantizedValue = q.value;
 
     // Calculate error (only distribute 6/8 = 75%)
     int error = (adjusted - quantizedValue) >> 3;  // error/8
@@ -190,6 +207,7 @@ class AtkinsonDitherer {
 
  private:
   int width;
+  Gray4QuantizationMode quantizationMode;
   int16_t* errorRow0;
   int16_t* errorRow1;
   int16_t* errorRow2;
@@ -205,7 +223,8 @@ class AtkinsonDitherer {
 //      7/16  X
 class FloydSteinbergDitherer {
  public:
-  explicit FloydSteinbergDitherer(int width) : width(width), rowCount(0) {
+  explicit FloydSteinbergDitherer(int width, Gray4QuantizationMode quantizationMode = Gray4QuantizationMode::Tuned)
+      : width(width), quantizationMode(quantizationMode), rowCount(0) {
     errorCurRow = new int16_t[width + 2]();  // +2 for boundary handling
     errorNextRow = new int16_t[width + 2]();
   }
@@ -232,37 +251,9 @@ class FloydSteinbergDitherer {
     if (adjusted > 255) adjusted = 255;
 
     // Quantize to 4 levels (0, 85, 170, 255)
-    uint8_t quantized;
-    int quantizedValue;
-    if (false) {  // original thresholds
-      if (adjusted < 43) {
-        quantized = 0;
-        quantizedValue = 0;
-      } else if (adjusted < 128) {
-        quantized = 1;
-        quantizedValue = 85;
-      } else if (adjusted < 213) {
-        quantized = 2;
-        quantizedValue = 170;
-      } else {
-        quantized = 3;
-        quantizedValue = 255;
-      }
-    } else {  // fine-tuned to X4 eink display
-      if (adjusted < 30) {
-        quantized = 0;
-        quantizedValue = 15;
-      } else if (adjusted < 50) {
-        quantized = 1;
-        quantizedValue = 30;
-      } else if (adjusted < 140) {
-        quantized = 2;
-        quantizedValue = 80;
-      } else {
-        quantized = 3;
-        quantizedValue = 210;
-      }
-    }
+    const QuantizedGray4 q = quantizeGray4(adjusted, quantizationMode);
+    const uint8_t quantized = q.index;
+    const int quantizedValue = q.value;
 
     // Calculate error
     int error = adjusted - quantizedValue;
@@ -316,6 +307,7 @@ class FloydSteinbergDitherer {
 
  private:
   int width;
+  Gray4QuantizationMode quantizationMode;
   int rowCount;
   int16_t* errorCurRow;
   int16_t* errorNextRow;
