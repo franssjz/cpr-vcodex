@@ -2,11 +2,13 @@
 
 #include <Txt.h>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "CrossPointSettings.h"
 #include "activities/Activity.h"
+#include "util/PageDwell.h"
 
 class TxtReaderActivity final : public Activity {
  public:
@@ -41,6 +43,8 @@ class TxtReaderActivity final : public Activity {
   bool pendingForceFullRefresh = false;
   bool waitingForConfirmSecondClick = false;
   unsigned long firstConfirmClickMs = 0UL;
+  // Word-rate samples: dwell on the page currently displayed.
+  PageDwell pageDwell;
 
   // Cached settings for cache validation (different fonts/margins require re-indexing)
   int cachedFontId = 0;
@@ -63,6 +67,10 @@ class TxtReaderActivity final : public Activity {
   void loadProgress();
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
+  void creditCurrentPage();
+  void maybeCreditPage(int page);
+  void resumeAfterSubactivity();
+  void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
   std::string moveCompletedBookIfEnabled();
   void exitReaderAfterOptionalCompletedMove();
 

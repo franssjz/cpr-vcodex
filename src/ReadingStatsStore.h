@@ -25,6 +25,9 @@ struct ReadingBookStats {
   std::string chapterTitle;
   std::vector<ReadingDayStats> readingDays;
   uint64_t totalReadingMs = 0;
+  // Page-rate samples only: ms co-collected with totalPagesRead (not lifetime reading time).
+  uint64_t totalPagesReadingMs = 0;
+  uint64_t totalPagesRead = 0;
   uint32_t sessions = 0;
   uint32_t lastSessionMs = 0;
   uint32_t firstReadAt = 0;
@@ -150,11 +153,18 @@ class ReadingStatsStore {
                     const std::string& coverBmpPath, uint8_t progressPercent = 0, const std::string& chapterTitle = "",
                     uint8_t chapterProgressPercent = 0);
   void noteActivity();
+  // Credit pages finished together with the dwell time spent on that page.
+  // Samples are marked dirty immediately; deferred save runs when the interval is due.
+  void notePagesRead(uint32_t pages, uint32_t associatedMs);
   void tickActiveSession();
   void resumeSession();
   void updateProgress(uint8_t progressPercent, bool completed = false, const std::string& chapterTitle = "",
                       uint8_t chapterProgressPercent = 0);
   void endSession();
+  // Live status-bar rate only: paired page/dwell samples for the active book.
+  // Returns 0 with no active session or when paired samples are below the gate
+  // (rate is not a lifetime average and vanishes when the session ends).
+  double getEffectivePagesPerMs() const;
   bool adjustBookReadingTime(const std::string& path, uint32_t dayOrdinal, int32_t deltaMs);
   bool setBookFirstReadDate(const std::string& path, uint32_t dayOrdinal);
   bool updateBookMetadata(const std::string& path, const std::string& title, const std::string& author,

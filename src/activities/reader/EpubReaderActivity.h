@@ -9,6 +9,7 @@
 #include "EndOfBookOptions.h"
 #include "EpubReaderMenuActivity.h"
 #include "activities/Activity.h"
+#include "util/PageDwell.h"
 
 class Page;
 
@@ -48,6 +49,8 @@ class EpubReaderActivity final : public Activity {
   int sessionStartSpineIndex = 0;
   int sessionStartPage = 0;
   bool sessionProgressTouched = false;
+  // Word-rate samples: dwell on the page currently displayed. Jumps never credit the left page.
+  PageDwell pageDwell;
   std::shared_ptr<Page> currentOverlayPageCache;
   EndOfBookOptions endOfBookOptions;
   int currentOverlayPageSpineIndex = -1;
@@ -122,6 +125,12 @@ class EpubReaderActivity final : public Activity {
   void exitReaderAfterOptionalCompletedMove();
   void markCurrentBookAsFinished();
   void pageTurn(bool isForwardTurn);
+  void resumeAfterSubactivity();
+  // noteActivity + clear dwell, then resumeSession + restart dwell on return.
+  void openReaderSubactivity(std::unique_ptr<Activity>&& activity, ActivityResultHandler onResult);
+  // Credit the current page's dwell sample while the reading session is still active.
+  void creditCurrentPage();
+  void maybeCreditPage(int spineIndex, int page);
   void requestCurrentPageFullRefresh();
   void toggleTemporaryStatusBar();
   void cacheCurrentPageForOverlay(const std::shared_ptr<Page>& page, int marginLeft, int marginTop);

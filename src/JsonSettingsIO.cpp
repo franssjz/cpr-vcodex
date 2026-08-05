@@ -309,35 +309,35 @@ void migrateLegacyStatsShortcut(CrossPointSettings& settings, const JsonDocument
 void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::STATUS_BAR_MODE>(settings.statusBar)) {
     case CrossPointSettings::NONE:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::NO_PROGRESS:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
       settings.statusBarBattery = 1;
       break;
     case CrossPointSettings::ONLY_BOOK_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 0;
       settings.statusBarProgressBar = CrossPointSettings::BOOK_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::HIDE_TITLE;
       settings.statusBarBattery = 0;
       break;
     case CrossPointSettings::CHAPTER_PROGRESS_BAR:
-      settings.statusBarChapterPageCount = 0;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::CHAPTER_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -345,7 +345,7 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
       break;
     case CrossPointSettings::FULL:
     default:
-      settings.statusBarChapterPageCount = 1;
+      settings.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
       settings.statusBarBookProgressPercentage = 1;
       settings.statusBarProgressBar = CrossPointSettings::HIDE_PROGRESS;
       settings.statusBarTitle = CrossPointSettings::CHAPTER_TITLE;
@@ -402,8 +402,22 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     dest[maxLen - 1] = '\0';
   };
 
-  if (doc["statusBarChapterPageCount"].isNull()) {
+  if (doc["statusBarChapterProgress"].isNull() && doc["statusBarChapterPageCount"].isNull()) {
     applyLegacyStatusBarSettings(s);
+  } else if (doc["statusBarChapterProgress"].isNull()) {
+    // Migrate pre-enum toggles (page count, and briefly also time remaining) into the enum.
+    const uint8_t showPages = doc["statusBarChapterPageCount"] | static_cast<uint8_t>(1);
+    const uint8_t showTime = doc["statusBarChapterTimeRemaining"] | static_cast<uint8_t>(0);
+    if (showPages && showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES_TIME;
+    } else if (showTime) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_TIME;
+    } else if (showPages) {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_PAGES;
+    } else {
+      s.statusBarChapterProgress = CrossPointSettings::CHAPTER_PROGRESS_HIDE;
+    }
+    if (needsResave) *needsResave = true;
   }
 
   loadEnum("sleepScreen", s.sleepScreen, CrossPointSettings::SLEEP_SCREEN_MODE_COUNT);
@@ -522,7 +536,8 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
   }
 
-  loadToggle("statusBarChapterPageCount", s.statusBarChapterPageCount);
+  loadEnum("statusBarChapterProgress", s.statusBarChapterProgress,
+           CrossPointSettings::STATUS_BAR_CHAPTER_PROGRESS_COUNT);
   loadToggle("statusBarBookProgressPercentage", s.statusBarBookProgressPercentage);
   loadEnum("statusBarProgressBar", s.statusBarProgressBar, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_COUNT);
   loadEnum("statusBarProgressBarThickness", s.statusBarProgressBarThickness,
@@ -892,7 +907,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["koSyncAutoPullOnOpen"] = s.koSyncAutoPullOnOpen;
   doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
-  doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
+  doc["statusBarChapterProgress"] = s.statusBarChapterProgress;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;
@@ -983,240 +998,6 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   return loadSettingsDirect(s, doc, needsResave);
-
-  auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
-
-  // Legacy migration: if statusBarChapterPageCount is absent this is a pre-refactor settings file.
-  // Populate s with migrated values now so the generic loop below picks them up as defaults and clamps them.
-  if (doc["statusBarChapterPageCount"].isNull()) {
-    applyLegacyStatusBarSettings(s);
-  }
-
-  for (const auto& info : getSettingsList()) {
-    if (!info.key) continue;
-    // Dynamic entries (KOReader etc.) are stored in their own files - skip.
-    if (!info.valuePtr && !info.stringOffset) continue;
-
-    if (info.stringOffset) {
-      const char* strPtr = (const char*)&s + info.stringOffset;
-      const std::string fieldDefault = strPtr;  // current buffer = struct-initializer default
-      std::string val;
-      if (info.obfuscated) {
-        bool ok = false;
-        val = obfuscation::deobfuscateFromBase64(doc[std::string(info.key) + "_obf"] | "", &ok);
-        if (!ok || val.empty()) {
-          val = doc[info.key] | fieldDefault;
-          if (val != fieldDefault && needsResave) *needsResave = true;
-        }
-      } else {
-        val = doc[info.key] | fieldDefault;
-      }
-      char* destPtr = (char*)&s + info.stringOffset;
-      if (info.stringMaxLen == 0) {
-        LOG_ERR("CPS", "Misconfigured SettingInfo: stringMaxLen is 0 for key '%s'", info.key);
-        destPtr[0] = '\0';
-        if (needsResave) *needsResave = true;
-        continue;
-      }
-      strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
-      destPtr[info.stringMaxLen - 1] = '\0';
-    } else {
-      const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
-      uint8_t v = doc[info.key] | fieldDefault;
-      if (info.type == SettingType::ENUM) {
-        v = clamp(v, (uint8_t)info.enumValues.size(), fieldDefault);
-      } else if (info.type == SettingType::TOGGLE) {
-        v = clamp(v, (uint8_t)2, fieldDefault);
-      } else if (info.type == SettingType::VALUE) {
-        if (v < info.valueRange.min)
-          v = info.valueRange.min;
-        else if (v > info.valueRange.max)
-          v = info.valueRange.max;
-      }
-      s.*(info.valuePtr) = v;
-    }
-  }
-
-  // Front button remap - managed by RemapFrontButtons sub-activity, not in SettingsList.
-  const uint8_t fontSizeSchemaVersion = doc["fontSizeSchemaVersion"] | static_cast<uint8_t>(0);
-  if (fontSizeSchemaVersion < FONT_SIZE_SCHEMA_VERSION && !doc["fontSize"].isNull()) {
-    const uint8_t legacyFontSize = doc["fontSize"] | static_cast<uint8_t>(CrossPointSettings::MEDIUM - 1);
-    if (legacyFontSize < static_cast<uint8_t>(CrossPointSettings::EXTRA_LARGE)) {
-      s.fontSize = static_cast<uint8_t>(legacyFontSize + 1);
-      if (needsResave) *needsResave = true;
-    }
-  }
-
-  const uint8_t rawFontFamily = doc["fontFamily"] | s.fontFamily;
-  if (rawFontFamily >= static_cast<uint8_t>(CrossPointSettings::FONT_FAMILY_COUNT)) {
-    s.fontFamily = CrossPointSettings::BOOKERLY;
-    if (needsResave) *needsResave = true;
-  } else {
-    s.fontFamily = rawFontFamily;
-  }
-
-  using S = CrossPointSettings;
-  s.frontButtonBack =
-      clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
-  s.frontButtonConfirm = clamp(doc["frontButtonConfirm"] | (uint8_t)S::FRONT_HW_CONFIRM, S::FRONT_BUTTON_HARDWARE_COUNT,
-                               S::FRONT_HW_CONFIRM);
-  s.frontButtonLeft =
-      clamp(doc["frontButtonLeft"] | (uint8_t)S::FRONT_HW_LEFT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_LEFT);
-  s.frontButtonRight =
-      clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
-  s.displayDay = clamp(doc["displayDay"] | s.displayDay, S::DISPLAY_HEADER_MODE_COUNT, s.displayDay);
-  migrateDisplayHeaderSettings(s, doc, needsResave);
-  s.autoSyncDay = clamp(doc["autoSyncDay"] | s.autoSyncDay, static_cast<uint8_t>(2), s.autoSyncDay);
-  s.syncDayWifiChoice =
-      clamp(doc["syncDayWifiChoice"] | s.syncDayWifiChoice, S::SYNC_DAY_WIFI_CHOICE_COUNT, s.syncDayWifiChoice);
-  s.syncDayReminderStarts = clamp(doc["syncDayReminderStarts"] | s.syncDayReminderStarts,
-                                  S::SYNC_DAY_REMINDER_STARTS_COUNT, s.syncDayReminderStarts);
-  {
-    const std::string sleepDirectory = doc["sleepDirectory"] | std::string("");
-    strncpy(s.sleepDirectory, sleepDirectory.c_str(), sizeof(s.sleepDirectory) - 1);
-    s.sleepDirectory[sizeof(s.sleepDirectory) - 1] = '\0';
-  }
-  s.sleepImageOrder = clamp(doc["sleepImageOrder"] | static_cast<uint8_t>(S::SLEEP_IMAGE_SHUFFLE),
-                            S::SLEEP_IMAGE_ORDER_COUNT, S::SLEEP_IMAGE_SHUFFLE);
-  s.timeZonePreset =
-      TimeZoneRegistry::clampPresetIndex(doc["timeZonePreset"] | TimeZoneRegistry::DEFAULT_TIME_ZONE_INDEX);
-  s.dateFormat = clamp(doc["dateFormat"] | s.dateFormat, S::DATE_FORMAT_COUNT, s.dateFormat);
-  s.opdsFilenameFormat =
-      clamp(doc["opdsFilenameFormat"] | s.opdsFilenameFormat, S::OPDS_FILENAME_FORMAT_COUNT, s.opdsFilenameFormat);
-  s.koSyncAutoPullOnOpen =
-      clamp(doc["koSyncAutoPullOnOpen"] | s.koSyncAutoPullOnOpen, static_cast<uint8_t>(2), s.koSyncAutoPullOnOpen);
-  s.koSyncAutoPushOnClose =
-      clamp(doc["koSyncAutoPushOnClose"] | s.koSyncAutoPushOnClose, static_cast<uint8_t>(2), s.koSyncAutoPushOnClose);
-  s.dailyGoalTarget = clamp(doc["dailyGoalTarget"] | s.dailyGoalTarget, S::DAILY_GOAL_TARGET_COUNT, s.dailyGoalTarget);
-  {
-    const uint8_t rawFlashcardStudyMode = doc["flashcardStudyMode"] | s.flashcardStudyMode;
-    const uint8_t flashcardStudyModeSchemaVersion = doc["flashcardStudyModeSchemaVersion"] | static_cast<uint8_t>(0);
-    s.flashcardStudyMode = migrateStoredFlashcardStudyMode(rawFlashcardStudyMode, flashcardStudyModeSchemaVersion,
-                                                           s.flashcardStudyMode, nullptr);
-  }
-  s.flashcardSessionSize = clamp(doc["flashcardSessionSize"] | s.flashcardSessionSize, S::FLASHCARD_SESSION_SIZE_COUNT,
-                                 s.flashcardSessionSize);
-  s.showStatsAfterReading =
-      clamp(doc["showStatsAfterReading"] | s.showStatsAfterReading, static_cast<uint8_t>(2), s.showStatsAfterReading);
-  s.achievementsEnabled =
-      clamp(doc["achievementsEnabled"] | s.achievementsEnabled, static_cast<uint8_t>(2), s.achievementsEnabled);
-  s.achievementPopups =
-      clamp(doc["achievementPopups"] | s.achievementPopups, static_cast<uint8_t>(2), s.achievementPopups);
-
-  const uint8_t shortcutLocationCount = S::SHORTCUT_LOCATION_COUNT;
-  const uint8_t shortcutOrderCount = static_cast<uint8_t>(getShortcutDefinitions().size() + 1);
-  s.appsHubShortcutOrder =
-      clamp(doc["appsHubShortcutOrder"] | s.appsHubShortcutOrder, shortcutOrderCount, s.appsHubShortcutOrder);
-  s.browseFilesShortcut =
-      clamp(doc["browseFilesShortcut"] | s.browseFilesShortcut, shortcutLocationCount, s.browseFilesShortcut);
-  s.browseFilesShortcutOrder = clamp(doc["browseFilesShortcutOrder"] | s.browseFilesShortcutOrder, shortcutOrderCount,
-                                     s.browseFilesShortcutOrder);
-  s.statsShortcut = clamp(doc["statsShortcut"] | s.statsShortcut, shortcutLocationCount, s.statsShortcut);
-  s.statsShortcutOrder =
-      clamp(doc["statsShortcutOrder"] | s.statsShortcutOrder, shortcutOrderCount, s.statsShortcutOrder);
-  s.syncDayShortcut = clamp(doc["syncDayShortcut"] | s.syncDayShortcut, shortcutLocationCount, s.syncDayShortcut);
-  s.syncDayShortcutOrder =
-      clamp(doc["syncDayShortcutOrder"] | s.syncDayShortcutOrder, shortcutOrderCount, s.syncDayShortcutOrder);
-  s.settingsShortcut = clamp(doc["settingsShortcut"] | s.settingsShortcut, shortcutLocationCount, s.settingsShortcut);
-  s.settingsShortcutOrder =
-      clamp(doc["settingsShortcutOrder"] | s.settingsShortcutOrder, shortcutOrderCount, s.settingsShortcutOrder);
-  s.readingStatsShortcut =
-      clamp(doc["readingStatsShortcut"] | s.readingStatsShortcut, shortcutLocationCount, s.readingStatsShortcut);
-  s.readingStatsShortcutOrder = clamp(doc["readingStatsShortcutOrder"] | s.readingStatsShortcutOrder,
-                                      shortcutOrderCount, s.readingStatsShortcutOrder);
-  s.readingHeatmapShortcut =
-      clamp(doc["readingHeatmapShortcut"] | s.readingHeatmapShortcut, shortcutLocationCount, s.readingHeatmapShortcut);
-  s.readingHeatmapShortcutOrder = clamp(doc["readingHeatmapShortcutOrder"] | s.readingHeatmapShortcutOrder,
-                                        shortcutOrderCount, s.readingHeatmapShortcutOrder);
-  s.readingProfileShortcut =
-      clamp(doc["readingProfileShortcut"] | s.readingProfileShortcut, shortcutLocationCount, s.readingProfileShortcut);
-  s.readingProfileShortcutOrder = clamp(doc["readingProfileShortcutOrder"] | s.readingProfileShortcutOrder,
-                                        shortcutOrderCount, s.readingProfileShortcutOrder);
-  s.achievementsShortcut =
-      clamp(doc["achievementsShortcut"] | s.achievementsShortcut, shortcutLocationCount, s.achievementsShortcut);
-  s.achievementsShortcutOrder = clamp(doc["achievementsShortcutOrder"] | s.achievementsShortcutOrder,
-                                      shortcutOrderCount, s.achievementsShortcutOrder);
-  s.ifFoundShortcut = clamp(doc["ifFoundShortcut"] | s.ifFoundShortcut, shortcutLocationCount, s.ifFoundShortcut);
-  s.ifFoundShortcutOrder =
-      clamp(doc["ifFoundShortcutOrder"] | s.ifFoundShortcutOrder, shortcutOrderCount, s.ifFoundShortcutOrder);
-  s.readMeShortcut = clamp(doc["readMeShortcut"] | s.readMeShortcut, shortcutLocationCount, s.readMeShortcut);
-  s.readMeShortcutOrder =
-      clamp(doc["readMeShortcutOrder"] | s.readMeShortcutOrder, shortcutOrderCount, s.readMeShortcutOrder);
-  s.recentBooksShortcut =
-      clamp(doc["recentBooksShortcut"] | s.recentBooksShortcut, shortcutLocationCount, s.recentBooksShortcut);
-  s.recentBooksShortcutOrder = clamp(doc["recentBooksShortcutOrder"] | s.recentBooksShortcutOrder, shortcutOrderCount,
-                                     s.recentBooksShortcutOrder);
-  s.bookmarksShortcut =
-      clamp(doc["bookmarksShortcut"] | s.bookmarksShortcut, shortcutLocationCount, s.bookmarksShortcut);
-  s.bookmarksShortcutOrder =
-      clamp(doc["bookmarksShortcutOrder"] | s.bookmarksShortcutOrder, shortcutOrderCount, s.bookmarksShortcutOrder);
-  s.favoritesShortcut =
-      clamp(doc["favoritesShortcut"] | s.favoritesShortcut, shortcutLocationCount, s.favoritesShortcut);
-  s.favoritesShortcutOrder =
-      clamp(doc["favoritesShortcutOrder"] | s.favoritesShortcutOrder, shortcutOrderCount, s.favoritesShortcutOrder);
-  s.flashcardsShortcut =
-      clamp(doc["flashcardsShortcut"] | s.flashcardsShortcut, shortcutLocationCount, s.flashcardsShortcut);
-  s.flashcardsShortcutOrder =
-      clamp(doc["flashcardsShortcutOrder"] | s.flashcardsShortcutOrder, shortcutOrderCount, s.flashcardsShortcutOrder);
-  s.fileTransferShortcut =
-      clamp(doc["fileTransferShortcut"] | s.fileTransferShortcut, shortcutLocationCount, s.fileTransferShortcut);
-  s.fileTransferShortcutOrder = clamp(doc["fileTransferShortcutOrder"] | s.fileTransferShortcutOrder,
-                                      shortcutOrderCount, s.fileTransferShortcutOrder);
-  s.screenCleanShortcut =
-      clamp(doc["screenCleanShortcut"] | s.screenCleanShortcut, shortcutLocationCount, s.screenCleanShortcut);
-  s.screenCleanShortcutOrder = clamp(doc["screenCleanShortcutOrder"] | s.screenCleanShortcutOrder, shortcutOrderCount,
-                                     s.screenCleanShortcutOrder);
-  s.sleepShortcut = clamp(doc["sleepShortcut"] | s.sleepShortcut, shortcutLocationCount, s.sleepShortcut);
-  s.sleepShortcutOrder =
-      clamp(doc["sleepShortcutOrder"] | s.sleepShortcutOrder, shortcutOrderCount, s.sleepShortcutOrder);
-  s.opdsBrowserShortcut =
-      clamp(doc["opdsBrowserShortcut"] | s.opdsBrowserShortcut, shortcutLocationCount, s.opdsBrowserShortcut);
-  s.opdsBrowserShortcutOrder = clamp(doc["opdsBrowserShortcutOrder"] | s.opdsBrowserShortcutOrder, shortcutOrderCount,
-                                     s.opdsBrowserShortcutOrder);
-
-  s.browseFilesShortcutVisible = clamp(doc["browseFilesShortcutVisible"] | s.browseFilesShortcutVisible,
-                                       static_cast<uint8_t>(2), s.browseFilesShortcutVisible);
-  s.statsShortcutVisible =
-      clamp(doc["statsShortcutVisible"] | s.statsShortcutVisible, static_cast<uint8_t>(2), s.statsShortcutVisible);
-  s.syncDayShortcutVisible = clamp(doc["syncDayShortcutVisible"] | s.syncDayShortcutVisible, static_cast<uint8_t>(2),
-                                   s.syncDayShortcutVisible);
-  s.settingsShortcutVisible = clamp(doc["settingsShortcutVisible"] | s.settingsShortcutVisible, static_cast<uint8_t>(2),
-                                    s.settingsShortcutVisible);
-  s.readingStatsShortcutVisible = clamp(doc["readingStatsShortcutVisible"] | s.readingStatsShortcutVisible,
-                                        static_cast<uint8_t>(2), s.readingStatsShortcutVisible);
-  s.readingHeatmapShortcutVisible = clamp(doc["readingHeatmapShortcutVisible"] | s.readingHeatmapShortcutVisible,
-                                          static_cast<uint8_t>(2), s.readingHeatmapShortcutVisible);
-  s.readingProfileShortcutVisible = clamp(doc["readingProfileShortcutVisible"] | s.readingProfileShortcutVisible,
-                                          static_cast<uint8_t>(2), s.readingProfileShortcutVisible);
-  s.achievementsShortcutVisible = clamp(doc["achievementsShortcutVisible"] | s.achievementsShortcutVisible,
-                                        static_cast<uint8_t>(2), s.achievementsShortcutVisible);
-  s.ifFoundShortcutVisible = clamp(doc["ifFoundShortcutVisible"] | s.ifFoundShortcutVisible, static_cast<uint8_t>(2),
-                                   s.ifFoundShortcutVisible);
-  s.readMeShortcutVisible =
-      clamp(doc["readMeShortcutVisible"] | s.readMeShortcutVisible, static_cast<uint8_t>(2), s.readMeShortcutVisible);
-  s.recentBooksShortcutVisible = clamp(doc["recentBooksShortcutVisible"] | s.recentBooksShortcutVisible,
-                                       static_cast<uint8_t>(2), s.recentBooksShortcutVisible);
-  s.bookmarksShortcutVisible = clamp(doc["bookmarksShortcutVisible"] | s.bookmarksShortcutVisible,
-                                     static_cast<uint8_t>(2), s.bookmarksShortcutVisible);
-  s.favoritesShortcutVisible = clamp(doc["favoritesShortcutVisible"] | s.favoritesShortcutVisible,
-                                     static_cast<uint8_t>(2), s.favoritesShortcutVisible);
-  s.flashcardsShortcutVisible = clamp(doc["flashcardsShortcutVisible"] | s.flashcardsShortcutVisible,
-                                      static_cast<uint8_t>(2), s.flashcardsShortcutVisible);
-  s.fileTransferShortcutVisible = clamp(doc["fileTransferShortcutVisible"] | s.fileTransferShortcutVisible,
-                                        static_cast<uint8_t>(2), s.fileTransferShortcutVisible);
-  s.screenCleanShortcutVisible = clamp(doc["screenCleanShortcutVisible"] | s.screenCleanShortcutVisible,
-                                       static_cast<uint8_t>(2), s.screenCleanShortcutVisible);
-  s.sleepShortcutVisible =
-      clamp(doc["sleepShortcutVisible"] | s.sleepShortcutVisible, static_cast<uint8_t>(2), s.sleepShortcutVisible);
-  s.opdsBrowserShortcutVisible = clamp(doc["opdsBrowserShortcutVisible"] | s.opdsBrowserShortcutVisible,
-                                       static_cast<uint8_t>(2), s.opdsBrowserShortcutVisible);
-
-  normalizeShortcutOrderSettings(s);
-  CrossPointSettings::validateFrontButtonMapping(s);
-
-  LOG_DBG("CPS", "Settings loaded from file");
-
-  return true;
 }
 
 // ---- KOReaderCredentialStore ----
@@ -1547,6 +1328,8 @@ bool JsonSettingsIO::saveReadingStats(const ReadingStatsStore& store, const char
     obj["coverBmpPath"] = book.coverBmpPath;
     obj["chapterTitle"] = book.chapterTitle;
     obj["totalReadingMs"] = book.totalReadingMs;
+    obj["totalPagesReadingMs"] = book.totalPagesReadingMs;
+    obj["totalPagesRead"] = book.totalPagesRead;
     obj["sessions"] = book.sessions;
     obj["lastSessionMs"] = book.lastSessionMs;
     obj["firstReadAt"] = book.firstReadAt;
@@ -1695,6 +1478,10 @@ bool JsonSettingsIO::loadReadingStatsDocument(ReadingStatsStore& store, const Js
     book.coverBmpPath = obj["coverBmpPath"] | std::string("");
     book.chapterTitle = obj["chapterTitle"] | std::string("");
     book.totalReadingMs = obj["totalReadingMs"] | static_cast<uint64_t>(0);
+    // Page-rate ETA samples. Legacy totalWordsRead / totalWordsReadingMs (word-rate
+    // prototypes) are intentionally ignored — rates are not convertible.
+    book.totalPagesReadingMs = obj["totalPagesReadingMs"] | static_cast<uint64_t>(0);
+    book.totalPagesRead = obj["totalPagesRead"] | static_cast<uint64_t>(0);
     book.sessions = obj["sessions"] | static_cast<uint32_t>(0);
     book.lastSessionMs = obj["lastSessionMs"] | static_cast<uint32_t>(0);
     book.firstReadAt = obj["firstReadAt"] | static_cast<uint32_t>(0);

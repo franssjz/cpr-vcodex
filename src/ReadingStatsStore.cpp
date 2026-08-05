@@ -522,6 +522,8 @@ void ReadingStatsStore::mergeBookInto(ReadingBookStats& primary, const ReadingBo
   }
 
   primary.totalReadingMs += duplicate.totalReadingMs;
+  primary.totalPagesReadingMs += duplicate.totalPagesReadingMs;
+  primary.totalPagesRead += duplicate.totalPagesRead;
   primary.sessions += duplicate.sessions;
   primary.lastSessionMs = std::max(primary.lastSessionMs, duplicate.lastSessionMs);
   if (primary.firstReadAt == 0 || (duplicate.firstReadAt != 0 && duplicate.firstReadAt < primary.firstReadAt)) {
@@ -556,6 +558,10 @@ void ReadingStatsStore::normalizeBook(ReadingBookStats& book) {
   normalizeReadingDays(book.readingDays);
   book.lastProgressPercent = clampPercent(book.lastProgressPercent);
   book.chapterProgressPercent = clampPercent(book.chapterProgressPercent);
+  // Drop unpaired page samples so ETA rate cannot open on pages without dwell ms.
+  if (book.totalPagesReadingMs == 0 && book.totalPagesRead > 0) {
+    book.totalPagesRead = 0;
+  }
 }
 
 void ReadingStatsStore::normalizeBooks() {
@@ -1247,6 +1253,27 @@ void ReadingStatsStore::noteActivity() {
   }
 }
 
+void ReadingStatsStore::notePagesRead(const uint32_t pages, const uint32_t associatedMs) {
+  if (!activeSession.active || activeSession.bookIndex >= books.size() || pages == 0 || associatedMs == 0) {
+    return;
+  }
+  auto& book = books[activeSession.bookIndex];
+  if (book.totalPagesRead > UINT64_MAX - pages) {
+    book.totalPagesRead = UINT64_MAX;
+  } else {
+    book.totalPagesRead += pages;
+  }
+  if (book.totalPagesReadingMs > UINT64_MAX - associatedMs) {
+    book.totalPagesReadingMs = UINT64_MAX;
+  } else {
+    book.totalPagesReadingMs += associatedMs;
+  }
+  markDirty();
+  if (shouldSaveDeferred()) {
+    saveToFile();
+  }
+}
+
 void ReadingStatsStore::tickActiveSession() {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
     return;
@@ -1430,7 +1457,7 @@ bool ReadingStatsStore::removeBook(const std::string& path) {
 
 void ReadingStatsStore::endSession() {
   if (!activeSession.active || activeSession.bookIndex >= books.size()) {
-    lastSessionSnapshot = {};
+    // Already ended — keep lastSessionSnapshot for post-exit UI (e.g. completion banner).
     activeSession = {};
     return;
   }
@@ -1466,8 +1493,26 @@ void ReadingStatsStore::endSession() {
   saveToFile();
 }
 
+double ReadingStatsStore::getEffectivePagesPerMs() const {
+  constexpr uint64_t MIN_RATE_PAGES = 3;
+  constexpr uint64_t MIN_RATE_MS = 60ULL * 1000ULL;
+
+  // Live status-bar rate only: no active session ⇒ no ETA (rate is not a lifetime average).
+  if (!activeSession.active || activeSession.bookIndex >= books.size()) {
+    return 0.0;
+  }
+
+  const auto& book = books[activeSession.bookIndex];
+  // Only dwell ms paired with credited pages — never lifetime totalReadingMs.
+  if (book.totalPagesRead < MIN_RATE_PAGES || book.totalPagesReadingMs < MIN_RATE_MS) {
+    return 0.0;
+  }
+  return static_cast<double>(book.totalPagesRead) / static_cast<double>(book.totalPagesReadingMs);
+}
+
 bool ReadingStatsStore::adjustBookReadingTime(const std::string& path, const uint32_t dayOrdinal,
                                               const int32_t deltaMs) {
+  // Manual day corrections adjust lifetime reading time only — never page-rate ETA samples.
   if (dayOrdinal == 0 || deltaMs == 0) {
     return false;
   }

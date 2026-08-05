@@ -116,9 +116,10 @@ int UITheme::getStatusBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
 
   // Add status bar margin
-  const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.statusBarBookProgressPercentage ||
-                             SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE ||
-                             SETTINGS.statusBarBattery;
+  const bool showStatusBar =
+      SETTINGS.statusBarChapterProgress != CrossPointSettings::CHAPTER_PROGRESS_HIDE ||
+      SETTINGS.statusBarBookProgressPercentage ||
+      SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE || SETTINGS.statusBarBattery;
   const bool showProgressBar =
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   return (showStatusBar ? (metrics.statusBarVerticalMargin) : 0) +

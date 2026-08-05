@@ -291,6 +291,9 @@ constexpr StrId OPT_SHORTCUT_LOCATION[] = {StrId::STR_HOME_LOCATION, StrId::STR_
 constexpr StrId OPT_KO_MATCH[] = {StrId::STR_FILENAME, StrId::STR_BINARY};
 constexpr StrId OPT_OPDS_FILENAME_FORMAT[] = {StrId::STR_AUTHOR_TITLE, StrId::STR_TITLE_AUTHOR};
 constexpr StrId OPT_BOOK_CHAPTER_HIDE[] = {StrId::STR_BOOK, StrId::STR_CHAPTER, StrId::STR_HIDE};
+// Length-only for WEB_ENUM: JSON option labels always use formatChapterProgressLabel
+// (Pages+Time is composed; these StrIds are never sent to the client).
+constexpr StrId OPT_CHAPTER_PROGRESS[] = {StrId::STR_PAGES, StrId::STR_PAGES, StrId::STR_TIME, StrId::STR_HIDE};
 constexpr StrId OPT_BAR_THICKNESS[] = {StrId::STR_PROGRESS_BAR_THIN, StrId::STR_PROGRESS_BAR_MEDIUM,
                                        StrId::STR_PROGRESS_BAR_THICK};
 constexpr StrId OPT_XTC_STATUS_BAR[] = {StrId::STR_HIDE, StrId::STR_BOTTOM, StrId::STR_TOP};
@@ -436,8 +439,8 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_OPDS_FILENAME_FORMAT, opdsFilenameFormat, OPT_OPDS_FILENAME_FORMAT, "opdsFilenameFormat",
              StrId::STR_KOREADER_SYNC),
 
-    WEB_TOGGLE(StrId::STR_CHAPTER_PAGE_COUNT, statusBarChapterPageCount, "statusBarChapterPageCount",
-               StrId::STR_CUSTOMISE_STATUS_BAR),
+    WEB_ENUM(StrId::STR_STATUS_BAR_CHAPTER_PROGRESS, statusBarChapterProgress, OPT_CHAPTER_PROGRESS, "statusBarChapterProgress",
+             StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_TOGGLE(StrId::STR_BOOK_PROGRESS_PERCENTAGE, statusBarBookProgressPercentage, "statusBarBookProgressPercentage",
                StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_ENUM(StrId::STR_PROGRESS_BAR, statusBarProgressBar, OPT_BOOK_CHAPTER_HIDE, "statusBarProgressBar",
@@ -1910,7 +1913,16 @@ void CrossPointWebServer::handleGetSettings() const {
           } else {
             seenOption = true;
           }
-          sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+          if (s.key && strcmp(s.key, "statusBarChapterProgress") == 0) {
+            char label[64];
+            if (CrossPointSettings::formatChapterProgressLabel(i, label, sizeof(label))) {
+              sendJsonEscaped(server.get(), label);
+            } else {
+              sendJsonEscaped(server.get(), "");
+            }
+          } else {
+            sendJsonEscaped(server.get(), I18N.get(s.options[i]));
+          }
         }
         server->sendContent("]", 1);
         break;

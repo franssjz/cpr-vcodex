@@ -3,6 +3,10 @@
  *
  * XTC ebook reader activity implementation
  * Displays pre-rendered XTC pages on e-ink display
+ *
+ * Intentionally has no chapter word-ETA / page-dwell sampling: XTC pages are
+ * bitmaps without a word count, and this reader does not use drawStatusBar's
+ * chapter-time slot.
  */
 
 #include "XtcReaderActivity.h"

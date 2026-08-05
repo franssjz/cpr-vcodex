@@ -736,6 +736,13 @@
       grid-column: 1 / -1;
     }
 
+    .field .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
     .field label {
       display: block;
       margin-bottom: 5px;
@@ -1384,6 +1391,9 @@
         coverBmpPath: "Cover BMP path",
         chapterTitle: "Chapter title",
         totalReadingMinutes: "Total reading minutes",
+        totalPagesRead: "Pages read (ETA samples)",
+        pagesReadingMinutes: "Minutes paired with pages (ETA)",
+        pagesRateHint: "ETA rate uses pages ÷ paired minutes (fractional minutes OK). Unpaired pages are cleared on import when paired minutes are truly zero. Recalculate from days only updates total reading minutes.",
         lastSessionMinutes: "Last session minutes",
         bookProgress: "Book progress %",
         chapterProgress: "Chapter progress %",
@@ -1458,6 +1468,9 @@
         coverBmpPath: "Ruta de portada BMP",
         chapterTitle: "Título de capítulo",
         totalReadingMinutes: "Minutos totales de lectura",
+        totalPagesRead: "Páginas leídas (muestras ETA)",
+        pagesReadingMinutes: "Minutos emparejados con páginas (ETA)",
+        pagesRateHint: "La tasa ETA usa páginas ÷ minutos emparejados (se permiten fracciones). Las páginas sin emparejar se borran al importar si los minutos emparejados son realmente cero. Recalcular desde días solo actualiza los minutos totales de lectura.",
         lastSessionMinutes: "Minutos de la última sesión",
         bookProgress: "Progreso del libro %",
         chapterProgress: "Progreso del capítulo %",
@@ -3237,8 +3250,16 @@
       return Math.round(toUInt(ms) / MS_PER_MINUTE);
     }
 
+    // Fractional minutes for ETA paired-ms editing (avoids wiping sub-30s samples via round-to-0).
+    function msToExactMinutes(ms) {
+      const value = toUInt(ms) / MS_PER_MINUTE;
+      return Number(value.toFixed(4));
+    }
+
     function minutesToMs(minutes) {
-      return toUInt(minutes) * MS_PER_MINUTE;
+      const value = Number(minutes);
+      if (!Number.isFinite(value) || value <= 0) return 0;
+      return Math.round(value * MS_PER_MINUTE);
     }
 
     function formatDuration(ms) {
@@ -3366,6 +3387,8 @@
         chapterTitle: String(book.chapterTitle || ""),
         readingDays: readingDays.map(normalizeDay).filter(day => day.dayOrdinal && day.readingMs),
         totalReadingMs: toUInt(book.totalReadingMs),
+        totalPagesReadingMs: toUInt(book.totalPagesReadingMs),
+        totalPagesRead: toUInt(book.totalPagesRead),
         sessions: toUInt(book.sessions),
         lastSessionMs: toUInt(book.lastSessionMs),
         firstReadAt: toUInt(book.firstReadAt),
@@ -3375,6 +3398,10 @@
         chapterProgressPercent: clampPercent(book.chapterProgressPercent),
         completed: Boolean(book.completed)
       };
+      // Match firmware: unpaired page samples must not skew ETA rate.
+      if (!normalized.totalPagesReadingMs && normalized.totalPagesRead) {
+        normalized.totalPagesRead = 0;
+      }
       if (!normalized.bookId) normalized.bookId = normalized.path;
       if (!normalized.knownPaths.includes(normalized.path) && normalized.path) {
         normalized.knownPaths.unshift(normalized.path);
@@ -3492,6 +3519,8 @@
         chapterTitle: "",
         readingDays: [],
         totalReadingMs: 0,
+        totalPagesReadingMs: 0,
+        totalPagesRead: 0,
         sessions: 0,
         lastSessionMs: 0,
         firstReadAt: 0,
@@ -3829,6 +3858,9 @@
           ${textField("coverBmpPath", t("coverBmpPath"), book.coverBmpPath)}
           ${textField("chapterTitle", t("chapterTitle"), book.chapterTitle)}
           ${numberField("totalReadingMinutes", t("totalReadingMinutes"), msToMinutes(book.totalReadingMs))}
+          ${numberField("totalPagesRead", t("totalPagesRead"), book.totalPagesRead)}
+          ${numberField("pagesReadingMinutes", t("pagesReadingMinutes"), msToExactMinutes(book.totalPagesReadingMs), "0.01")}
+          <div class="field full"><p class="hint">${escapeHtml(t("pagesRateHint"))}</p></div>
           ${numberField("sessions", t("sessions"), book.sessions)}
           ${numberField("lastSessionMinutes", t("lastSessionMinutes"), msToMinutes(book.lastSessionMs))}
           ${numberField("lastProgressPercent", t("bookProgress"), book.lastProgressPercent)}
@@ -3877,6 +3909,11 @@
         book.coverBmpPath = value("coverBmpPath");
         book.chapterTitle = value("chapterTitle");
         book.totalReadingMs = minutesToMs(value("totalReadingMinutes"));
+        book.totalPagesRead = toUInt(value("totalPagesRead"));
+        book.totalPagesReadingMs = minutesToMs(value("pagesReadingMinutes"));
+        if (!book.totalPagesReadingMs && book.totalPagesRead) {
+          book.totalPagesRead = 0;
+        }
         book.sessions = toUInt(value("sessions"));
         book.lastSessionMs = minutesToMs(value("lastSessionMinutes"));
         book.lastProgressPercent = clampPercent(value("lastProgressPercent"));
@@ -3994,11 +4031,11 @@
       `;
     }
 
-    function numberField(id, label, currentValue) {
+    function numberField(id, label, currentValue, step = "1") {
       return `
         <div class="field">
           <label for="field-${id}">${label}</label>
-          <input id="field-${id}" type="number" min="0" step="1" value="${escapeAttr(currentValue)}">
+          <input id="field-${id}" type="number" min="0" step="${escapeAttr(step)}" value="${escapeAttr(currentValue)}">
         </div>
       `;
     }

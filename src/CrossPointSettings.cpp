@@ -2,10 +2,12 @@
 
 #include <HalClock.h>
 #include <HalStorage.h>
+#include <I18n.h>
 #include <JsonSettingsIO.h>
 #include <Logging.h>
 #include <Serialization.h>
 
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -488,5 +490,30 @@ int CrossPointSettings::getReaderFontId() const {
         case EXTRA_LARGE:
           return NOTOSANS_18_FONT_ID;
       }
+  }
+}
+
+bool CrossPointSettings::formatChapterProgressLabel(const uint8_t mode, char* buf, const size_t bufSize) {
+  if (!buf || bufSize == 0) {
+    return false;
+  }
+  switch (mode) {
+    case CHAPTER_PROGRESS_PAGES: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_PAGES));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+    case CHAPTER_PROGRESS_PAGES_TIME: {
+      const int written = snprintf(buf, bufSize, "%s + %s", tr(STR_PAGES), tr(STR_TIME));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+    case CHAPTER_PROGRESS_TIME: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_TIME));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
+    case CHAPTER_PROGRESS_HIDE:
+    default: {
+      const int written = snprintf(buf, bufSize, "%s", tr(STR_HIDE));
+      return written > 0 && static_cast<size_t>(written) < bufSize;
+    }
   }
 }

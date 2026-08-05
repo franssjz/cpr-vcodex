@@ -29,6 +29,21 @@ metrics.
 - When changing export/import schema, preserve backward compatibility or add a
   clear migration path.
 
+## Chapter time remaining (status bar)
+
+- Rate is live-session only (`getEffectivePagesPerMs`): no active session ⇒ no ETA.
+- Credits 1 page per qualified dwell sample (EPUB and TXT); ETA = remaining pages ÷ pages/ms.
+- Gate: ≥3 paired pages and ≥60s paired dwell ms.
+- Remaining pages use the same page-count model as the status bar (EPUB
+  `estimatedTotalPages`, TXT `totalPages`), inclusive of the current page.
+- `STR_ETA_UNIT_MINUTE` / `_HOUR` / `_DAY` / `_YEAR` exist in EN+ES only; other
+  locales fall back to English.
+- The Pages + Time setting label is composed via `CrossPointSettings::formatChapterProgressLabel`
+  (`STR_PAGES + ' + ' + STR_TIME`); always use that helper for enum display.
+- XTC has no chapter ETA (bitmap pages, no status-bar chapter-time slot).
+- Older `totalWordsRead` / `totalWordsReadingMs` samples are ignored; page-rate
+  fields start fresh.
+
 ## Design Rules
 
 - Do not save stats on every tiny interaction. Debounce or save on activity exit

@@ -6,7 +6,6 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Serialization.h>
-#include <Utf8.h>
 
 #include <algorithm>
 #include <cctype>
@@ -31,7 +30,8 @@ namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
-constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format changes
+// v10: page offsets only (chapter ETA uses page-rate; no word totals).
+constexpr uint8_t CACHE_VERSION = 10;
 constexpr uint8_t MARKDOWN_QUOTE_INDENT = 1;
 constexpr uint8_t MARKDOWN_LIST_INDENT = 1;
 
@@ -322,6 +322,11 @@ void TxtReaderActivity::onExit() {
   // Reset orientation back to portrait for the rest of the UI
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 
+  // Credit if this path did not already (early exits credit before endSession).
+  // endSession is idempotent: a second call keeps lastSessionSnapshot for the
+  // post-read stats banner. recordSessionEnded dedupes by snapshot serial.
+  creditCurrentPage();
+
   pageOffsets.clear();
   currentPageLines.clear();
   APP_STATE.readerActivityLoadCount = 0;
@@ -353,6 +358,7 @@ void TxtReaderActivity::loop() {
 
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
+    creditCurrentPage();
     const std::string fileBrowserPath = moveCompletedBookIfEnabled();
     READING_STATS.endSession();
     ACHIEVEMENTS.recordSessionEnded(READING_STATS.getLastSessionSnapshot());
@@ -379,14 +385,20 @@ void TxtReaderActivity::loop() {
 
   if (prevTriggered && currentPage > 0) {
     READING_STATS.noteActivity();
+    // Backward turns never credit; re-reads credit later if the reader lingers.
     currentPage--;
+    pageDwell.noteEntered(currentPage, 0, millis());
     requestUpdate();
   } else if (nextTriggered) {
     if (currentPage < totalPages - 1) {
       READING_STATS.noteActivity();
+      maybeCreditPage(currentPage);
       currentPage++;
+      pageDwell.noteEntered(currentPage, 0, millis());
       requestUpdate();
     } else {
+      READING_STATS.noteActivity();
+      maybeCreditPage(currentPage);
       READING_STATS.updateProgress(100, true, "", 100);
       exitReaderAfterOptionalCompletedMove();
     }
@@ -402,9 +414,12 @@ void TxtReaderActivity::requestCurrentPageFullRefresh() {
 void TxtReaderActivity::toggleTemporaryStatusBar() {
   READING_STATS.noteActivity();
   statusBarTemporarilyHidden = !statusBarTemporarilyHidden;
+  // Full reinit is required: status-bar height changes the viewport and linesPerPage,
+  // which invalidates pageOffsets (different page breaks).
   initialized = false;
   pageOffsets.clear();
   currentPageLines.clear();
+  pageDwell.clear();
   pendingForceFullRefresh = true;
   requestUpdate();
 }
@@ -434,6 +449,7 @@ std::string TxtReaderActivity::moveCompletedBookIfEnabled() {
 }
 
 void TxtReaderActivity::exitReaderAfterOptionalCompletedMove() {
+  creditCurrentPage();
   const std::string exitPath = moveCompletedBookIfEnabled();
   exitReaderToHomeOrStats(renderer, mappedInput, exitPath);
 }
@@ -468,10 +484,7 @@ void TxtReaderActivity::initializeReader() {
 
   // Try to load cached page index first
   if (!loadPageIndexCache()) {
-    // Cache not found, build page index
-    buildPageIndex();
-    // Save to cache for next time
-    savePageIndexCache();
+    buildPageIndex();  // builds and saves cache
   }
 
   // Load saved progress
@@ -517,6 +530,43 @@ void TxtReaderActivity::buildPageIndex() {
 
   totalPages = pageOffsets.size();
   LOG_DBG("TRS", "Built page index: %d pages", totalPages);
+  savePageIndexCache();
+}
+
+void TxtReaderActivity::creditCurrentPage() {
+  maybeCreditPage(currentPage);
+  pageDwell.clear();
+}
+
+void TxtReaderActivity::maybeCreditPage(const int page) {
+  if (page < 0) {
+    return;
+  }
+
+  constexpr uint32_t kPages = 1;
+  const uint32_t associatedMs = pageDwell.takeCredit(page, 0, kPages, millis());
+  if (associatedMs == 0) {
+    return;
+  }
+
+  READING_STATS.notePagesRead(kPages, associatedMs);
+}
+
+void TxtReaderActivity::resumeAfterSubactivity() {
+  READING_STATS.resumeSession();
+  pageDwell.noteEntered(currentPage, 0, millis(), true);
+}
+
+void TxtReaderActivity::openReaderSubactivity(std::unique_ptr<Activity>&& activity,
+                                              ActivityResultHandler onResult) {
+  READING_STATS.noteActivity();
+  pageDwell.clear();
+  startActivityForResult(std::move(activity), [this, onResult = std::move(onResult)](const ActivityResult& result) {
+    resumeAfterSubactivity();
+    if (onResult) {
+      onResult(result);
+    }
+  });
 }
 
 bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<TextLine>& outLines, size_t& nextOffset) {
@@ -764,6 +814,9 @@ void TxtReaderActivity::renderPage() {
 
   // BW rendering
   renderLines();
+  if (currentPage >= 0) {
+    pageDwell.noteEntered(currentPage, 0, millis());
+  }
   renderStatusBar();
 
   const bool forceFullRefresh = pendingForceFullRefresh;
@@ -786,7 +839,19 @@ void TxtReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE) {
     title = txt->getTitle();
   }
-  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title);
+
+  // Sized for multi-byte unit suffixes; formatCompactDuration fails closed if still too small.
+  char chapterTimeBuf[24] = {};
+  const char* chapterTimeEstimate = nullptr;
+  const double pagesPerMs = READING_STATS.getEffectivePagesPerMs();
+  const uint32_t remainingPages =
+      (currentPage >= 0 && totalPages > currentPage) ? static_cast<uint32_t>(totalPages - currentPage) : 0;
+  if (SETTINGS.statusBarWantsChapterTime() && pagesPerMs > 0.0 &&
+      ReaderUtils::formatRemainingFromRate(remainingPages, pagesPerMs, chapterTimeBuf, sizeof(chapterTimeBuf))) {
+    chapterTimeEstimate = chapterTimeBuf;
+  }
+
+  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, true, chapterTimeEstimate);
 }
 
 void TxtReaderActivity::saveProgress() const {
@@ -838,15 +903,15 @@ void TxtReaderActivity::loadProgress() {
 }
 
 bool TxtReaderActivity::loadPageIndexCache() {
-  // Cache file format (using serialization module):
+  // Cache file format (serialization module, little-endian POD writes):
   // - uint32_t: magic "TXTI"
   // - uint8_t: cache version
   // - uint32_t: file size (to validate cache)
   // - int32_t: viewport width
   // - int32_t: lines per page
-  // - int32_t: font ID (to invalidate cache on font change)
-  // - int32_t: screen margin (to invalidate cache on margin change)
-  // - uint8_t: paragraph alignment (to invalidate cache on alignment change)
+  // - int32_t: font ID
+  // - int32_t: screen margin
+  // - uint8_t: paragraph alignment
   // - uint32_t: total pages count
   // - N * uint32_t: page offsets
 
@@ -857,7 +922,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
     return false;
   }
 
-  // Read and validate header using serialization module
   uint32_t magic;
   serialization::readPod(f, magic);
   if (magic != CACHE_MAGIC) {
@@ -917,7 +981,6 @@ bool TxtReaderActivity::loadPageIndexCache() {
   uint32_t numPages;
   serialization::readPod(f, numPages);
 
-  // Read page offsets
   pageOffsets.clear();
   pageOffsets.reserve(numPages);
 
@@ -940,7 +1003,6 @@ void TxtReaderActivity::savePageIndexCache() const {
     return;
   }
 
-  // Write header using serialization module
   serialization::writePod(f, CACHE_MAGIC);
   serialization::writePod(f, CACHE_VERSION);
   serialization::writePod(f, static_cast<uint32_t>(txt->getFileSize()));
@@ -951,7 +1013,6 @@ void TxtReaderActivity::savePageIndexCache() const {
   serialization::writePod(f, cachedParagraphAlignment);
   serialization::writePod(f, static_cast<uint32_t>(pageOffsets.size()));
 
-  // Write page offsets
   for (size_t offset : pageOffsets) {
     serialization::writePod(f, static_cast<uint32_t>(offset));
   }

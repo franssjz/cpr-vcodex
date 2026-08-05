@@ -3,6 +3,7 @@
 #include <HalStorage.h>
 
 #include <cstdint>
+#include <cstddef>
 #include <iosfwd>
 
 class CrossPointSettings {
@@ -55,6 +56,13 @@ class CrossPointSettings {
     CHAPTER_PROGRESS = 1,
     HIDE_PROGRESS = 2,
     STATUS_BAR_PROGRESS_BAR_COUNT
+  };
+  enum STATUS_BAR_CHAPTER_PROGRESS {
+    CHAPTER_PROGRESS_PAGES = 0,
+    CHAPTER_PROGRESS_PAGES_TIME = 1,
+    CHAPTER_PROGRESS_TIME = 2,
+    CHAPTER_PROGRESS_HIDE = 3,
+    STATUS_BAR_CHAPTER_PROGRESS_COUNT
   };
   enum STATUS_BAR_PROGRESS_BAR_THICKNESS {
     PROGRESS_BAR_THIN = 0,
@@ -261,7 +269,7 @@ class CrossPointSettings {
   uint8_t cleanSleepRefresh = 1;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
-  uint8_t statusBarChapterPageCount = 1;
+  uint8_t statusBarChapterProgress = CHAPTER_PROGRESS_PAGES;
   uint8_t statusBarBookProgressPercentage = 1;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
@@ -459,6 +467,15 @@ class CrossPointSettings {
   void normalizeDisplayDay();
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
+
+  // Chapter Progress setting: Pages+Time / Time modes want a chapter ETA slot.
+  bool statusBarWantsChapterTime() const {
+    return statusBarChapterProgress == CHAPTER_PROGRESS_PAGES_TIME ||
+           statusBarChapterProgress == CHAPTER_PROGRESS_TIME;
+  }
+  // Label for statusBarChapterProgress enum index. Pages+Time is composed from
+  // STR_PAGES + ' + ' + STR_TIME (no dedicated i18n key).
+  static bool formatChapterProgressLabel(uint8_t mode, char* buf, size_t bufSize);
 };
 
 // Helper macro to access settings
