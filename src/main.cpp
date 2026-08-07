@@ -285,7 +285,8 @@ void ensureSdFontLoaded() {
 void setupDisplayAndFonts(bool seamless = false) {
   display.begin(seamless);
   renderer.begin();
-  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
   activityManager.begin();
   LOG_DBG("MAIN", "Display initialized");
 
@@ -550,7 +551,8 @@ void loop() {
   halTiltSensor.update(SETTINGS.tiltPageTurn, SETTINGS.orientation, activityManager.isReaderActivity());
 
   renderer.setFadingFix(SETTINGS.fadingFix);
-  renderer.setDarkMode(SETTINGS.darkMode);
+  renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+  renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
   renderer.setTextDarkness(SETTINGS.textDarkness);
 
 #ifdef ENABLE_SERIAL_LOG

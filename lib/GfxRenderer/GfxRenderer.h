@@ -45,6 +45,10 @@ class GfxRenderer {
   Orientation orientation;
   bool fadingFix;
   bool darkMode;
+  // When dark mode is on, allow selective invert of decorative in-ebook images
+  // (DirectPixelWriter + EbookImageDarkMode). UI covers/sleep BMPs use
+  // drawBitmap and must not follow this flag.
+  bool darkModeInvertImages = false;
   uint8_t textDarkness = 0;  // 0=normal, 1=crisp, 2=dark, 3=extra dark
   uint8_t* frameBuffer = nullptr;
   uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
@@ -120,6 +124,8 @@ class GfxRenderer {
   void setFadingFix(const bool enabled) { fadingFix = enabled; }
   void setDarkMode(const bool enabled) { darkMode = enabled; }
   bool isDarkMode() const { return darkMode; }
+  void setDarkModeInvertImages(const bool enabled) { darkModeInvertImages = enabled; }
+  bool isDarkModeInvertDividers() const { return darkModeInvertImages; }
   void requestNextRefresh(const HalDisplay::RefreshMode mode) const {
     nextRefreshOverride = mode;
     nextRefreshOverridePending = true;

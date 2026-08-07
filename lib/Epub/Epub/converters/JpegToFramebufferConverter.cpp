@@ -14,6 +14,7 @@
 
 #include "DirectPixelWriter.h"
 #include "DitherUtils.h"
+#include "EbookImageDarkMode.h"
 #include "PixelCache.h"
 
 namespace {
@@ -47,6 +48,7 @@ struct JpegContext {
 
   PixelCache cache;
   bool caching{false};
+  bool invertImages{false};
 };
 
 // File I/O callbacks use pFile->fHandle to access the FsFile*,
@@ -167,7 +169,7 @@ int jpegDrawCallback(JPEGDRAW* pDraw) {
 
   // Pre-compute orientation and render-mode state once per callback invocation
   DirectPixelWriter pw;
-  pw.init(renderer);
+  pw.init(renderer, ctx->invertImages);
 
   // The cache streams to disk one MCU-row band at a time. Flushing rows below
   // this block (raster order guarantees they are final) repositions the band;
@@ -468,6 +470,11 @@ bool JpegToFramebufferConverter::decodeToFramebuffer(const std::string& imagePat
   ctx.invScaleFPX = (int32_t)((int64_t)ctx.scaledSrcWidth * FP_ONE / destWidth);
   ctx.fineScaleFPY = (int32_t)((int64_t)destHeight * FP_ONE / ctx.scaledSrcHeight);
   ctx.invScaleFPY = (int32_t)((int64_t)ctx.scaledSrcHeight * FP_ONE / destHeight);
+  {
+    const char* identity = !config.identityPath.empty() ? config.identityPath.c_str() : imagePath.c_str();
+    ctx.invertImages =
+        ebookImageShouldInvert(renderer, static_cast<int16_t>(destWidth), static_cast<int16_t>(destHeight), identity);
+  }
 
   LOG_DBG("JPG", "JPEG %dx%d -> %dx%d (scale %.2f, jpegScale 1/%d, fineScale %.2f)%s", srcWidth, srcHeight, destWidth,
           destHeight, targetScale, jpegScaleDenom, (float)destWidth / ctx.scaledSrcWidth,

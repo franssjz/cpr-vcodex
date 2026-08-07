@@ -84,7 +84,8 @@ const std::vector<SettingInfo>& getDeviceDisplaySettings() {
       SettingInfo::Enum(StrId::STR_HOME_BOOK_SOURCE, &CrossPointSettings::homeBookSource,
                         {StrId::STR_RECENTS, StrId::STR_FAVORITES}),
       SettingInfo::Toggle(StrId::STR_ANTI_GHOSTING_EXPERIMENTAL, &CrossPointSettings::antiGhostingExperimental),
-      SettingInfo::Toggle(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode),
+      SettingInfo::Enum(StrId::STR_DARK_MODE, &CrossPointSettings::darkMode,
+                        {StrId::STR_STATE_OFF, StrId::STR_STATE_ON_DIVIDERS, StrId::STR_STATE_ON}),
       SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix),
   };
   return settings;
@@ -851,7 +852,8 @@ void SettingsActivity::toggleCurrentSetting() {
   }
 
   if (setting.valuePtr == &CrossPointSettings::darkMode) {
-    renderer.setDarkMode(SETTINGS.darkMode);
+    renderer.setDarkMode(SETTINGS.isDarkModeEnabled());
+    renderer.setDarkModeInvertImages(SETTINGS.isDarkModeInvertDividers());
     renderer.requestNextFullRefresh();
     requestUpdate(true);
   }

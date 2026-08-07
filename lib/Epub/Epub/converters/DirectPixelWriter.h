@@ -18,6 +18,7 @@ struct DirectPixelWriter {
   uint8_t* fb;
   GfxRenderer::RenderMode mode;
   bool darkMode;
+  bool invertImages;
   uint16_t displayWidthBytes;  // Runtime framebuffer stride (X4: 100, X3: 99)
   int originY;
   int clipRows;
@@ -32,10 +33,16 @@ struct DirectPixelWriter {
   // Row-precomputed: the Y-dependent portion of the physical coords
   int rowPhyXBase, rowPhyYBase;
 
-  void init(GfxRenderer& renderer) {
+  // Default: no invert. Pass ebookImageShouldInvert() for in-ebook images.
+  void init(GfxRenderer& renderer) { init(renderer, false); }
+
+  void init(GfxRenderer& renderer, const bool invertDecorativeImages) {
     fb = renderer.getWriteTarget();
     mode = renderer.getRenderMode();
     darkMode = renderer.isDarkMode();
+    // Only invert while dark mode is active so temporary darkMode=false scopes
+    // (sleep/boot/clean) keep original image tones without clearing this flag.
+    invertImages = darkMode && invertDecorativeImages;
     displayWidthBytes = renderer.getDisplayWidthBytes();
     originY = renderer.getWriteOriginY();
     clipRows = renderer.getWriteRows();
@@ -135,14 +142,29 @@ struct DirectPixelWriter {
   // Write a single 2-bit dithered pixel value to the framebuffer.
   // Must be called after beginRow() for the current row.
   // No bounds checking — caller guarantees coordinates are valid.
+  // pixelValue is already quantized greyscale (0=black .. 3=white). When
+  // invertImages is set (ebook ON + Dividers only), invert that greyscale level
+  // before thresholding so colour art does not get a raw RGB invert.
   inline void writePixel(int logicalX, uint8_t pixelValue) const {
+    if (invertImages) {
+      pixelValue = static_cast<uint8_t>(3 - pixelValue);
+    }
+
     // Determine whether to draw based on render mode
     bool draw;
     bool state;
     switch (mode) {
       case GfxRenderer::BW:
-        draw = darkMode ? true : (pixelValue < 3);
-        state = (pixelValue < 3);
+        if (invertImages) {
+          // Dual of light-mode thresholding: any non-black becomes solid white.
+          // Without this, inverted AA greys (1/2) are painted black and erode
+          // thin white strokes (flourishes, line art) on the dark page.
+          draw = (pixelValue > 0);
+          state = false;
+        } else {
+          draw = darkMode ? true : (pixelValue < 3);
+          state = (pixelValue < 3);
+        }
         break;
       case GfxRenderer::GRAYSCALE_MSB:
         draw = (pixelValue == 1 || pixelValue == 2);

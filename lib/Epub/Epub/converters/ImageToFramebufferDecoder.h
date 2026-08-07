@@ -19,6 +19,7 @@ struct RenderConfig {
   bool performanceMode = false;
   bool useExactDimensions = false;  // If true, use maxWidth/maxHeight as exact output size (no recalculation)
   std::string cachePath;            // If non-empty, decoder will write pixel cache to this path
+  std::string identityPath;         // EPUB-stable path for divider reuse tracking
 };
 
 class ImageToFramebufferDecoder {

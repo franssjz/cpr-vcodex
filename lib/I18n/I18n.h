@@ -35,6 +35,8 @@ class I18n {
   void saveSettings();
 
   Language _language;
+  // Scratch for labels composed from multiple StrIds (e.g. ON + Dividers).
+  mutable char _compositeBuf[48];
 };
 
 // Convenience macros

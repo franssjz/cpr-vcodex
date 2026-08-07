@@ -251,6 +251,15 @@ class CrossPointSettings {
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
 
+  // Experimental global dark mode: UI/reader invert, optionally with ebook image invert.
+  // Cycle order: OFF -> ON + Dividers -> ON (legacy darkMode=1 becomes ON + Dividers).
+  enum DARK_MODE {
+    DARK_MODE_OFF = 0,
+    DARK_MODE_ON_DIVIDERS = 1,
+    DARK_MODE_ON = 2,
+    DARK_MODE_COUNT
+  };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Sleep screen cover mode settings
@@ -330,7 +339,8 @@ class CrossPointSettings {
   // UI Theme
   uint8_t uiTheme = LYRA_CUSTOM;
   // Experimental global dark mode for the device UI and supported readers.
-  uint8_t darkMode = 0;
+  // 0=off, 1=on + greyscale-invert in-ebook images, 2=on (UI/text only).
+  uint8_t darkMode = DARK_MODE_OFF;
   uint8_t antiGhostingExperimental = 0;
   // Home/apps helpers
   uint8_t displayDay = 1;
@@ -459,6 +469,8 @@ class CrossPointSettings {
   void normalizeDisplayDay();
   int getRefreshFrequency() const;
   bool getForcedReaderRefreshMode(HalDisplay::RefreshMode& mode) const;
+  bool isDarkModeEnabled() const { return darkMode != DARK_MODE_OFF; }
+  bool isDarkModeInvertDividers() const { return darkMode == DARK_MODE_ON_DIVIDERS; }
 };
 
 // Helper macro to access settings

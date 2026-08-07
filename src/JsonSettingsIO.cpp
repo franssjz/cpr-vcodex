@@ -422,7 +422,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.uiTheme = migrateStoredUiTheme(rawUiTheme, uiThemeSchemaVersion, s.uiTheme, needsResave);
   }
   loadToggle("fadingFix", s.fadingFix);
-  loadToggle("darkMode", s.darkMode);
+  loadEnum("darkMode", s.darkMode, CrossPointSettings::DARK_MODE_COUNT);
   loadToggle("antiGhostingExperimental", s.antiGhostingExperimental);
 
   loadString("sdFontFamilyName", s.sdFontFamilyName, sizeof(s.sdFontFamilyName));

@@ -29,7 +29,7 @@ constexpr uint8_t AUTO_UI_REFRESH_DEBT_MAX = 6;
 }  // namespace
 
 void ActivityManager::requestUiTransitionRefresh(const uint8_t previousWeight, const uint8_t nextWeight) {
-  if (SETTINGS.darkMode || renderer.isDarkMode()) {
+  if (SETTINGS.isDarkModeEnabled() || renderer.isDarkMode()) {
     autoUiRefreshDebt = 0;
     return;
   }

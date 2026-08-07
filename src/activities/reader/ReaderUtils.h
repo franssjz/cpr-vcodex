@@ -139,7 +139,7 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
 }
 
 inline void requestReaderUiTransitionRefresh(GfxRenderer& renderer) {
-  if (SETTINGS.darkMode || renderer.isDarkMode()) {
+  if (SETTINGS.isDarkModeEnabled() || renderer.isDarkMode()) {
     return;
   }
 
