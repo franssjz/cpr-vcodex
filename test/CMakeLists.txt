@@ -44,3 +44,4 @@ include(GoogleTest)
 
 add_subdirectory(utf8_compose)
 add_subdirectory(reader_position)
+add_subdirectory(gray_pipeline)
