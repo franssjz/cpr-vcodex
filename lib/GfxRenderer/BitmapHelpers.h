@@ -38,17 +38,36 @@ struct QuantizedGray4 {
 // side-by-side look on the panel first.
 enum class Gray4QuantizationMode : uint8_t { Tuned, NativePalette };
 
-// Note on error diffusion, since it interacts with the values above: callers
-// must compute the diffused error against the *unclamped* accumulated value
-// (source + inherited error), clamping only the copy they pass in here for
+// Bound for the error-diffusion accumulator; see the note below quantizeGray4.
+// Guards the int16_t error rows against unbounded growth when the palette
+// cannot represent an input extreme.
+constexpr int DITHER_ACCUMULATOR_LIMIT = 2048;
+
+inline int saturateDitherAccumulator(const int value) {
+  if (value > DITHER_ACCUMULATOR_LIMIT) return DITHER_ACCUMULATOR_LIMIT;
+  if (value < -DITHER_ACCUMULATOR_LIMIT) return -DITHER_ACCUMULATOR_LIMIT;
+  return value;
+}
+
+// Note on error diffusion, since it interacts with the values above.
+//
+// Callers compute the diffused error against the *unclamped* accumulated value
+// (source + inherited error), clamping only the copy passed in here for
 // threshold selection. It matters most under Tuned, whose reconstruction tops
 // out at 210 rather than 255: a white region then carries a permanent +45
 // deficit, and clamping first discards exactly that surplus instead of letting
 // neighbouring pixels trade it back. Measured on synthetic text-like content
-// (82% white), propagating it cuts local tone error 33.5 -> 25.3; on smooth
-// midtone content the two are indistinguishable. Error stays small either way
-// (peak ~159, so ~19 per neighbour after >>3) — nowhere near overflowing the
-// int16_t error rows.
+// (82% white), propagating it cuts local tone error 33.5 -> 25.3.
+//
+// That surplus is unreachable, though — no output level can satisfy it — so a
+// diffuser that redistributes 100% of the error never sheds it. Atkinson
+// spreads only 6/8 and is therefore contractive (peak accumulator 369, error
+// rows 114 on a solid 800x480 field). Floyd-Steinberg spreads 16/16 and is
+// not: solid white diverges to ~36691 by row 428, wrapping the int16_t rows.
+// saturateDitherAccumulator() bounds the accumulator so that cannot happen.
+// The limit sits ~5x above Atkinson's observed worst case, so it never
+// engages on the default path, and ~16x below INT16_MAX with the widest
+// single-neighbour share ((v*7)>>4) still fitting comfortably.
 inline QuantizedGray4 quantizeGray4(int gray, const Gray4QuantizationMode mode) {
   if (gray < 0) gray = 0;
   if (gray > 255) gray = 255;
@@ -103,7 +122,7 @@ class Atkinson1BitDitherer {
     // Add accumulated error. Keep the unclamped sum: the diffused error must
     // be measured against it (see the note on quantizeGray4), otherwise
     // overshoot beyond [0,255] is discarded instead of carried to neighbours.
-    const int accumulated = gray + errorRow0[x + 2];
+    const int accumulated = saturateDitherAccumulator(gray + errorRow0[x + 2]);
     int adjusted = accumulated;
     if (adjusted < 0) adjusted = 0;
     if (adjusted > 255) adjusted = 255;
@@ -182,8 +201,9 @@ class AtkinsonDitherer {
 
   uint8_t processPixel(int gray, int x) {
     // Add accumulated error
-    // Keep the unclamped sum for the error term (see quantizeGray4's note).
-    const int accumulated = gray + errorRow0[x + 2];
+    // Keep the unclamped sum for the error term (see quantizeGray4's note),
+    // saturated so it cannot grow without bound.
+    const int accumulated = saturateDitherAccumulator(gray + errorRow0[x + 2]);
     int adjusted = accumulated;
     if (adjusted < 0) adjusted = 0;
     if (adjusted > 255) adjusted = 255;
@@ -260,8 +280,10 @@ class FloydSteinbergDitherer {
   // x is the logical x position (0 to width-1), direction handled internally
   uint8_t processPixel(int gray, int x) {
     // Add accumulated error to this pixel. The unclamped sum is what the error
-    // term is measured against (see quantizeGray4's note).
-    const int accumulated = gray + errorCurRow[x + 1];
+    // term is measured against (see quantizeGray4's note). Saturating it is
+    // load-bearing here: Floyd-Steinberg redistributes the whole error, so an
+    // input extreme the palette cannot represent would otherwise diverge.
+    const int accumulated = saturateDitherAccumulator(gray + errorCurRow[x + 1]);
 
     // Clamp to valid range, for quantization only
     int adjusted = accumulated;

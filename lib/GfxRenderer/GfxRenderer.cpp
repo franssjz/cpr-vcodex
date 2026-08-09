@@ -11,6 +11,7 @@
 #include <cassert>
 #include <climits>
 
+#include "FillPolarity.h"
 #include "FontCacheManager.h"
 
 namespace {
@@ -711,10 +712,9 @@ void GfxRenderer::drawRoundedRect(const int x, const int y, const int width, con
 }
 
 void GfxRenderer::fillRect(const int x, const int y, const int width, const int height, const bool state) const {
-  // GRAY2: inverted framebuffer convention — a "black" fill must set plane
-  // bits (White template sets bits), and vice versa.
-  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
-  if (gray2 ? !state : state) {
+  // GRAY2 polarity and dual-plane mirroring are handled inside fillRectImpl,
+  // so every entry point (here, fillRectDither, fillRoundedRect) gets them.
+  if (state) {
     fillRectImpl<Color::Black>(x, y, width, height);
   } else {
     fillRectImpl<Color::White>(x, y, width, height);
@@ -835,35 +835,42 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
   const uint8_t tailMask = static_cast<uint8_t>(0xFFu << (7 - (physicalX1 & 7)));
   const uint32_t panelStride = panelWidthBytes;
   const bool invertForDarkMode = darkMode && renderMode == BW;
+  // GRAY2 inverts the framebuffer convention: the plane starts cleared and a
+  // set bit *marks* the pixel, so "black" sets bits here where BW clears them.
+  const bool gray2 = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB);
+  // Dual-plane GRAY2: the second plane must receive the same coverage, or the
+  // fill only lands in the LSB plane and renders as the wrong level.
+  uint8_t* const msbTarget = isDualGray2Active() ? _stripBufMsb : nullptr;
 
   if constexpr (color == Color::Black || color == Color::White) {
     const bool fillBlack = invertForDarkMode ? color == Color::White : color == Color::Black;
-    const uint8_t fillByte = fillBlack ? 0x00u : 0xFFu;
-    // Dual-plane GRAY2: a solid B/W fill is identical in both planes.
-    uint8_t* targets[2] = {target, isDualGray2Active() ? _stripBufMsb : nullptr};
+    const bool setBits = fillSetsBits(fillBlack, gray2);
+    const uint8_t fillByte = setBits ? 0xFFu : 0x00u;
+    // A solid B/W fill is identical in both planes.
+    uint8_t* targets[2] = {target, msbTarget};
     for (uint8_t* fillTarget : targets) {
       if (fillTarget == nullptr) continue;
       for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
         uint8_t* row = fillTarget + static_cast<uint32_t>(physicalY - originY) * panelStride;
         if (byteStart == byteEnd) {
           const uint8_t mask = headMask & tailMask;
-          if (fillBlack) {
-            row[byteStart] &= static_cast<uint8_t>(~mask);
-          } else {
+          if (setBits) {
             row[byteStart] |= mask;
+          } else {
+            row[byteStart] &= static_cast<uint8_t>(~mask);
           }
-        } else if (fillBlack) {
-          row[byteStart] &= static_cast<uint8_t>(~headMask);
-          if (byteEnd > byteStart + 1) {
-            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
-          }
-          row[byteEnd] &= static_cast<uint8_t>(~tailMask);
-        } else {
+        } else if (setBits) {
           row[byteStart] |= headMask;
           if (byteEnd > byteStart + 1) {
             memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
           }
           row[byteEnd] |= tailMask;
+        } else {
+          row[byteStart] &= static_cast<uint8_t>(~headMask);
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] &= static_cast<uint8_t>(~tailMask);
         }
       }
     }
@@ -937,18 +944,26 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
       blackMasks[samplePhysicalY & 3] = mask;
     }
 
-    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
-      const uint8_t whiteMask = static_cast<uint8_t>(~blackMasks[physicalY & 3]);
-      uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
-      if (byteStart == byteEnd) {
-        const uint8_t rectMask = headMask & tailMask;
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
-      } else {
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+    // A dithered fill is a black/white pattern, so in GRAY2 both planes carry
+    // the same mask — marked pixels end up black, unmarked white, matching
+    // what drawPixelDither produces per pixel. In BW the stored polarity is
+    // inverted (a set bit is white), hence the two mask choices below.
+    uint8_t* targets[2] = {target, msbTarget};
+    for (uint8_t* fillTarget : targets) {
+      if (fillTarget == nullptr) continue;
+      for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+        const uint8_t patternMask = ditherPatternMask(blackMasks[physicalY & 3], gray2);
+        uint8_t* row = fillTarget + static_cast<uint32_t>(physicalY - originY) * panelStride;
+        if (byteStart == byteEnd) {
+          const uint8_t rectMask = headMask & tailMask;
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & patternMask));
+        } else {
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & patternMask));
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, patternMask, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & patternMask));
         }
-        row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
       }
     }
   }
