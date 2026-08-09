@@ -74,6 +74,10 @@ class GfxRenderer {
   mutable bool nextRefreshOverridePending = false;
   mutable HalDisplay::RefreshMode nextRefreshOverride = HalDisplay::FAST_REFRESH;
   mutable DisplayState displayState = DisplayState::BW;
+  // Which waveform's tone calibration image decoding should target. Set by the
+  // reader before rendering a page; consumed by the image cache so pixels
+  // quantized for one waveform are not reused under the other.
+  mutable GrayscaleMode imageToneMode = GrayscaleMode::Differential;
 
   // Tiled grayscale strip target. When active, drawPixel()/clearScreen()
   // operate on a caller-owned scratch holding physical rows
@@ -242,6 +246,9 @@ class GfxRenderer {
   void displayGrayBuffer(const unsigned char* lut = nullptr, bool factoryMode = false) const;
   // LUT for a GrayscaleMode (nullptr = driver default differential LUT).
   static const unsigned char* grayscaleLutFor(GrayscaleMode mode);
+  // Tone calibration that image decoding should target for this page.
+  void setImageToneMode(const GrayscaleMode mode) const { imageToneMode = mode; }
+  GrayscaleMode getImageToneMode() const { return imageToneMode; }
   void writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const;
   bool supportsStripGrayscale() const;
   bool storeBwBuffer();    // Returns true if buffer was stored successfully

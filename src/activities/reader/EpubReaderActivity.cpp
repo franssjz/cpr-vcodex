@@ -1814,6 +1814,13 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
   HalDisplay::RefreshMode configuredRefreshMode = HalDisplay::FAST_REFRESH;
   const bool hasConfiguredRefreshMode = ReaderUtils::getConfiguredReaderRefreshMode(configuredRefreshMode);
 
+  // Decide the tone calibration before anything decodes an image: the factory
+  // path only runs when no refresh mode is forced, and image pixels are cached
+  // quantized for whichever waveform is in play.
+  const bool willUseFactoryGray = imagePageWithAA && !forceFullRefresh && !hasConfiguredRefreshMode;
+  renderer.setImageToneMode(willUseFactoryGray ? GfxRenderer::GrayscaleMode::FactoryQuality
+                                               : GfxRenderer::GrayscaleMode::Differential);
+
   page->render(renderer, SETTINGS.getReaderFontId(), orientedMarginLeft, orientedMarginTop, SETTINGS.bionicReading);
   drawTextHighlights(*page, orientedMarginTop, orientedMarginLeft);
   renderStatusBar();
