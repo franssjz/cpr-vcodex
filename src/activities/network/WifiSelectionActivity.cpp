@@ -39,6 +39,12 @@ void WifiSelectionActivity::onEnter() {
     WIFI_STORE.loadFromFile();
   }
 
+  if (allowAutoConnect && autoConnectOnly && WIFI_STORE.getCredentials().empty()) {
+    LOG_DBG("WIFI", "Auto-connect only requested with no saved credentials");
+    onComplete(false);
+    return;
+  }
+
   // Reset state
   selectedNetworkIndex = 0;
   networks.clear();
@@ -157,6 +163,11 @@ void WifiSelectionActivity::processWifiScanResults() {
   if (scanResult == WIFI_SCAN_FAILED) {
     networks.clear();
     realNetworkCount = 0;
+    if (allowAutoConnect && autoConnectOnly) {
+      LOG_DBG("WIFI", "Auto-connect only requested but WiFi scan failed");
+      onComplete(false);
+      return;
+    }
     appendHiddenNetworkEntry();
     state = WifiSelectionState::NETWORK_LIST;
     selectedNetworkIndex = 0;
@@ -245,6 +256,12 @@ void WifiSelectionActivity::processWifiScanResults() {
         return;
       }
     }
+  }
+
+  if (allowAutoConnect && autoConnectOnly) {
+    LOG_DBG("WIFI", "Auto-connect only found no saved network in range");
+    onComplete(false);
+    return;
   }
 
   state = WifiSelectionState::NETWORK_LIST;
