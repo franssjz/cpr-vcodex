@@ -1948,6 +1948,10 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
     if (complete) {
       return fp4::toPixel(widthFP);
     }
+    // Merge regression: this return was lost, so layout fell through to the
+    // glyph path below, which sees no resident SD glyphs during measurement
+    // and sized every word at zero width (words drawn on top of each other).
+    return fp4::toPixel(widthFP);
   }
 
   const auto fontIt = fontMap.find(resolvedFontId);
