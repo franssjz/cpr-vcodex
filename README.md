@@ -51,17 +51,17 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Item | Value |
 |---|---|
 | Project | `CPR-vCodex` |
-| Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested; `Xteink X4 Pro` release target in progress |
-| Current release (CPR-vCodex) build | [`1.5.0.26-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.5.0.26-cpr-vcodex) |
+| Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested; `Xteink X4 Pro` via separate ESP32-S3 release builds |
+| Current release (CPR-vCodex) build | [`1.5.0.29-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.5.0.29-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`a485dc46`](https://github.com/Free-Ink/freeink-sdk/commit/a485dc46ef5fb2283e4bdb674002ddbef97a9268), with runtime X3/X4 and X3 UC8253/UC8279d detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | Selected CrossPoint Reader 1.5 changes reviewed through `master` [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc), plus targeted CrossInk improvements, manually adapted to retain the vCodex band renderer, KOReader profiles, reading statistics, highlights, themes, ruby, Lyra, and SD-card fonts. Release `1.5.0.22` additionally adopts CrossPoint's pinned `freeink-sdk` hardware layer and the isolated SD recovery entry from [`5717374e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5717374e4be88b3d30f45626bf796ceb3687c836). |
-| Current release focus | Improves four-level grayscale for EPUB image pages on X3/X4 while preparing separate X4 Pro firmware release assets. |
-| Latest release notes | - Factory-waveform grayscale for EPUB image pages in Auto refresh mode, with calibrated dithering and adaptive JPEG tone mapping.<br>- Waveform-specific cache validation and a differential redraw fallback when factory rendering cannot reserve memory.<br>- Preserved highlights and scaled text, 218 host regressions, and 86.8% release flash usage. X4 Pro auto-flash support is being wired through a separate ESP32-S3 release asset. |
+| Current release focus | Adds the separated X3/X4 vs X4 Pro release/OTA path and restores SD-card font advance measurements. |
+| Latest release notes | - X3/X4 use the shared ESP32-C3 firmware asset; X4 Pro uses the separate ESP32-S3 `-x4pro` asset.<br>- Browser Auto Flash and on-device OTA/Wi-Fi update checks now select the matching firmware build instead of sharing one top-level URL.<br>- Restored SD-card font advance-table measurement for external `.cpfont` families. |
 | Base firmware line | `CrossPoint Reader 1.5.0` |
 | Latest official commit reviewed | `master` through [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` through [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc) |
-| Latest official commit incorporated | Release `1.5.0.26` retains the CrossPoint/freeink X3/X4 hardware base and adapts the factory grayscale pipeline from PR #169. The next release path adds a separate X4 Pro firmware target. |
+| Latest official commit incorporated | Release `1.5.0.29` retains the CrossPoint/freeink X3/X4 hardware base, adapts the factory grayscale pipeline from PR #169, and publishes a separate X4 Pro firmware target. |
 | Intentional upstream exclusions | Whole-UI/SDK replacement, reboot-on-OOM behaviour, S3-only features, global CSS deduplication, unsupported themes, and Hebrew editing without a complete bidirectional text engine remain excluded. |
 
 ## Froze in Update Complete (Soft Bricked?) — X3 recovery
@@ -78,7 +78,7 @@ Affected users have successfully recovered devices running CPR-vCodex `1.5.0.3` 
 
 ## Web tools
 
-- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware on ESP32-C3 Xteink X3/X4 devices from Chrome or Edge using Web Serial, and can also serve X4 Pro once the current release publishes the separate ESP32-S3 `-x4pro` asset. The flasher validates the selected device partition table before writing.
+- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware on ESP32-C3 Xteink X3/X4 devices and ESP32-S3 Xteink X4 Pro devices from Chrome or Edge using Web Serial. The flasher selects the matching release asset and validates the selected device partition table before writing.
 - [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
 - Device web settings treat the KOReader password as write-only: the stored value is never returned to the browser, which only indicates that a password is already configured.
 
@@ -620,7 +620,7 @@ Important artifacts include:
 
 ### Recovering Reading Stats after 1.5.0.1 or 1.5.0.2
 
-Update to `1.5.0.26-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
+Update to `1.5.0.29-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
 
 If the displayed totals are still incomplete or incorrect, open `Settings > Apps > Reading Stats > Import Reading Stats` and select the newest suitable dated backup under `/exports/stats_backup_YYYY-MM-DD`. Those weekly backups appear directly in the import list and do not need to be renamed. If the only copy is on a computer, place it on the SD card as exactly `/exports/stats_exported` (without a `.json` extension), then import it. Try older dated backups newest-first if necessary, and preserve a copy of the SD card before cleaning or resetting statistics.
 
@@ -633,7 +633,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.5.0`
-- current release build style: `1.5.0.26-cpr-vcodex`
+- current release build style: `1.5.0.29-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -703,10 +703,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.5.0.26-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.5.0.29-cpr-vcodex
 ```
 
-- push a stable tag named like `1.5.0.26-cpr-vcodex`
+- push a stable tag named like `1.5.0.29-cpr-vcodex`
 - the release workflow builds `gh_release`, validates that the packaged artifact
   name matches the tag, and attaches the flashable `<tag>.bin`, build metadata,
   and firmware-budget reports to the GitHub Release

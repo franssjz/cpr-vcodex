@@ -14,6 +14,7 @@ class ReleaseJsonParser {
 
   void reset();
   void feed(const char* data, size_t len);
+  void setPreferredAssetSuffix(const char* assetSuffix);
 
   bool foundTag() const;
   bool foundFirmware() const;
@@ -57,12 +58,13 @@ class ReleaseJsonParser {
   uint8_t assetDepth;
 
   char tagName[32];
+  char preferredAssetSuffix[16];
   char firmwareUrl[512];
   size_t firmwareSize;
   bool tagFound;
   bool firmwareFound;
 
-  char currentAssetName[32];
+  char currentAssetName[64];
   char currentAssetUrl[512];
   size_t currentAssetSize;
 };

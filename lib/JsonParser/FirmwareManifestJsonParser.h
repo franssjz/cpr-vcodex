@@ -14,6 +14,7 @@ class FirmwareManifestJsonParser {
 
   void reset();
   void feed(const char* data, size_t len);
+  void setPreferredBuildId(const char* buildId);
 
   bool foundManifest() const;
   const char* getVersion() const;
@@ -24,8 +25,16 @@ class FirmwareManifestJsonParser {
   enum class LastKey : uint8_t {
     NONE,
     VERSION,
+    BUILDS,
+    ID,
     DOWNLOAD_URL,
     SIZE,
+  };
+
+  enum class Position : uint8_t {
+    TOP_LEVEL,
+    IN_BUILDS_ARRAY,
+    IN_BUILD_OBJECT,
   };
 
   static void sOnKey(void* ctx, const char* key, size_t len);
@@ -39,12 +48,25 @@ class FirmwareManifestJsonParser {
   static void sOnArrayEnd(void* ctx);
 
   StreamingJsonParser parser;
+  Position position;
   LastKey lastKey;
   uint8_t depth;
+  uint8_t buildDepth;
 
+  char preferredBuildId[16];
   char version[40];
   char downloadUrl[512];
   size_t firmwareSize;
   bool versionFound;
   bool downloadUrlFound;
+  bool preferredBuildFound;
+
+  char currentBuildId[16];
+  char currentBuildDownloadUrl[512];
+  size_t currentBuildFirmwareSize;
+  bool currentBuildIdFound;
+  bool currentBuildDownloadUrlFound;
+
+  void resetCurrentBuild();
+  void commitCurrentBuild();
 };

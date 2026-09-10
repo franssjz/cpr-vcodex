@@ -27,6 +27,7 @@ void ReleaseJsonParser::reset() {
   depth = 0;
   assetDepth = 0;
   tagName[0] = '\0';
+  preferredAssetSuffix[0] = '\0';
   firmwareUrl[0] = '\0';
   firmwareSize = 0;
   tagFound = false;
@@ -37,6 +38,10 @@ void ReleaseJsonParser::reset() {
 }
 
 void ReleaseJsonParser::feed(const char* data, size_t len) { parser.feed(data, len); }
+void ReleaseJsonParser::setPreferredAssetSuffix(const char* assetSuffix) {
+  if (!assetSuffix) assetSuffix = "";
+  safeCopy(preferredAssetSuffix, sizeof(preferredAssetSuffix), assetSuffix, strlen(assetSuffix));
+}
 
 bool ReleaseJsonParser::foundTag() const { return tagFound; }
 bool ReleaseJsonParser::foundFirmware() const { return firmwareFound; }
@@ -45,10 +50,10 @@ const char* ReleaseJsonParser::getFirmwareUrl() const { return firmwareUrl; }
 size_t ReleaseJsonParser::getFirmwareSize() const { return firmwareSize; }
 
 void ReleaseJsonParser::commitAsset() {
-  char releaseAssetName[48];
-  snprintf(releaseAssetName, sizeof(releaseAssetName), "%s.bin", tagName);
+  char releaseAssetName[64];
+  snprintf(releaseAssetName, sizeof(releaseAssetName), "%s%s.bin", tagName, preferredAssetSuffix);
   const bool isReleaseAsset = tagFound && strcmp(currentAssetName, releaseAssetName) == 0;
-  const bool isLegacyAsset = strcmp(currentAssetName, "firmware.bin") == 0;
+  const bool isLegacyAsset = preferredAssetSuffix[0] == '\0' && strcmp(currentAssetName, "firmware.bin") == 0;
 
   // CPR-vCodex releases publish tag-named firmware assets. Keep accepting
   // upstream's legacy firmware.bin name as a fallback, but prefer the tag match.

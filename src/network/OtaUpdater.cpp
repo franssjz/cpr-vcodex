@@ -1,6 +1,7 @@
 #include "OtaUpdater.h"
 
 #include <FirmwareManifestJsonParser.h>
+#include <BoardConfig.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <ReleaseJsonParser.h>
@@ -18,6 +19,13 @@ namespace {
 constexpr char firmwareManifestUrl[] = "https://franssjz.github.io/cpr-vcodex/firmware/manifest.json";
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/franssjz/cpr-vcodex/releases/latest";
 constexpr char otaCachePath[] = "/.crosspoint/ota-update.bin";
+#if FREEINK_DEVICE_X4PRO
+constexpr char preferredFirmwareBuildId[] = "x4pro";
+constexpr char preferredReleaseAssetSuffix[] = "-x4pro";
+#else
+constexpr char preferredFirmwareBuildId[] = "c3";
+constexpr char preferredReleaseAssetSuffix[] = "";
+#endif
 
 /*
  * When esp_crt_bundle.h is included here, Arduino's include path can resolve
@@ -202,6 +210,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   totalSize = 0;
 
   FirmwareManifestJsonParser manifestParser;
+  manifestParser.setPreferredBuildId(preferredFirmwareBuildId);
   LOG_DBG("OTA", "Checking firmware manifest (current: %s)", currentVersionString());
   OtaUpdaterError manifestResult = performStreamingRequest(firmwareManifestUrl, manifest_event_handler, &manifestParser, 2048);
   LOG_DBG("OTA", "Manifest response received: %zu bytes total", totalBytesReceived);
@@ -224,6 +233,7 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   }
 
   ReleaseJsonParser releaseParser;
+  releaseParser.setPreferredAssetSuffix(preferredReleaseAssetSuffix);
   LOG_DBG("OTA", "Falling back to latest GitHub release after manifest check failed: %d", manifestResult);
   const OtaUpdaterError releaseResult = performStreamingRequest(latestReleaseUrl, release_event_handler, &releaseParser, 4096);
   LOG_DBG("OTA", "Release response received: %zu bytes total", totalBytesReceived);
