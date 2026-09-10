@@ -11,6 +11,7 @@
 #include <cassert>
 #include <climits>
 
+#include "FillPolarity.h"
 #include "FontCacheManager.h"
 #include "SmallCaps.h"
 
@@ -233,6 +234,20 @@ static inline void rotateCoordinates(const GfxRenderer::Orientation orientation,
 
 enum class TextRotation { None, Rotated90CW };
 
+// Absolute planes replace the BW base, so scaled glyphs and white UI text
+// must participate too. White glyphs erase their ink coverage in both planes.
+static void renderFactoryGlyphPixel(const GfxRenderer& renderer, const GfxRenderer::RenderMode mode, const int x,
+                                    const int y, const uint8_t level, const bool black) {
+  if (level == 3) return;
+  if (!black) {
+    renderer.drawPixel(x, y, true);
+  } else if (renderer.isDualGray2Active()) {
+    renderer.drawPixelGray2(x, y, level);
+  } else if (mode == GfxRenderer::GRAY2_LSB ? !(level & 1) : level < 2) {
+    renderer.drawPixel(x, y, false);
+  }
+}
+
 // Shared glyph rendering logic for normal and rotated text.
 // Coordinate mapping and cursor advance direction are selected at compile time via the template parameter.
 // Render a glyph at 50% scale. Used for SUP/SUB style bits.
@@ -244,7 +259,9 @@ enum class TextRotation { None, Rotated90CW };
 // horizontal space for the scaled glyph.
 static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMode renderMode,
                              const EpdFontFamily& fontFamily, const uint32_t cp, int cursorX, int cursorY,
-                             const bool pixelState, const EpdFontFamily::Style style) {
+                             const bool inputPixelState, const EpdFontFamily::Style style) {
+  const bool gray2 = renderMode == GfxRenderer::GRAY2_LSB || renderMode == GfxRenderer::GRAY2_MSB;
+  const bool pixelState = gray2 ? !inputPixelState : inputPixelState;
   const EpdGlyph* glyph = fontFamily.getGlyph(cp, style);
   if (!glyph) return;
 
@@ -345,7 +362,9 @@ static void renderCharSmallCaps(const GfxRenderer& renderer, const GfxRenderer::
       }
 
       bool draw = false;
-      if (renderMode == GfxRenderer::BW) {
+      if (renderMode == GfxRenderer::GRAY2_LSB || renderMode == GfxRenderer::GRAY2_MSB) {
+        renderFactoryGlyphPixel(renderer, renderMode, baseX + dstX, baseY + dstY, 3 - maxRaw, pixelState);
+      } else if (renderMode == GfxRenderer::BW) {
         draw = maxRaw != 0;
       } else {
         const uint8_t bmpVal = 3 - maxRaw;
@@ -419,6 +438,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
             if (bmpVal < 3) {
               renderer.drawPixel(screenX, screenY, pixelState);
             }
+          } else if (renderMode == GfxRenderer::GRAY2_LSB || renderMode == GfxRenderer::GRAY2_MSB) {
+            // Factory absolute 2-bit encoding (see RenderMode docs):
+            // LSB (BW RAM) marks Black(0) and LightGray(2); MSB (RED RAM)
+            // marks Black(0) and DarkGray(1). clearScreen(0x00) base;
+            // drawPixel(false) sets the plane bit.
+            renderFactoryGlyphPixel(renderer, renderMode, screenX, screenY, bmpVal, pixelState);
           } else {
             bool hitMsb = false;
             bool hitLsb = false;
@@ -468,7 +493,12 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
           const uint8_t bit_index = 7 - (pixelPosition & 7);
 
           if ((byte >> bit_index) & 1) {
-            renderer.drawPixel(screenX, screenY, pixelState);
+            // In GRAY2 modes the framebuffer convention is inverted vs BW:
+            // clearScreen(0x00) is background and drawPixel(false) marks
+            // active pixels. BW-convention callers pass pixelState=true for
+            // "black" — invert so 1-bit glyphs render solid black.
+            const bool gray2 = renderMode == GfxRenderer::GRAY2_LSB || renderMode == GfxRenderer::GRAY2_MSB;
+            renderer.drawPixel(screenX, screenY, gray2 ? !pixelState : pixelState);
           }
         }
       }
@@ -509,6 +539,46 @@ void GfxRenderer::drawPixelRaw(const int x, const int y, const bool state) const
     target[byteIndex] &= ~(1 << bitPosition);  // Clear bit
   } else {
     target[byteIndex] |= 1 << bitPosition;  // Set bit
+  }
+
+  // Dual-plane GRAY2: 1-bit draws (glyphs, lines, fills, icons) are fully
+  // black or fully white in both planes, so mirror the write to the MSB
+  // scratch. 2-bit content bypasses this via drawPixelGray2/DirectPixelWriter.
+  if (_stripBufMsb != nullptr && target == _stripBuf && renderMode == GRAY2_LSB) {
+    if (state) {
+      _stripBufMsb[byteIndex] &= ~(1 << bitPosition);
+    } else {
+      _stripBufMsb[byteIndex] |= 1 << bitPosition;
+    }
+  }
+}
+
+void GfxRenderer::drawPixelGray2(const int x, const int y, const uint8_t val) const {
+  // LSB (BW RAM) marks Black(0) and LightGray(2); MSB (RED RAM) marks
+  // Black(0) and DarkGray(1). Marks only — background stays cleared.
+  const bool lsb = !(val & 1);
+  const bool msb = val < 2;
+  if (!lsb && !msb) return;
+
+  int phyX = 0;
+  int phyY = 0;
+  rotateCoordinates(orientation, x, y, &phyX, &phyY, panelWidth, panelHeight);
+  if (phyX < 0 || phyX >= panelWidth || phyY < 0 || phyY >= panelHeight) return;
+
+  uint32_t rowY = static_cast<uint32_t>(phyY);
+  if (_stripActive) {
+    if (phyY < _stripY0 || phyY >= _stripY0 + _stripRows) return;
+    rowY = static_cast<uint32_t>(phyY - _stripY0);
+  }
+
+  const uint32_t byteIndex = rowY * panelWidthBytes + (phyX / 8);
+  const uint8_t bitMask = 1 << (7 - (phyX % 8));
+
+  if (lsb) {
+    (_stripActive ? _stripBuf : frameBuffer)[byteIndex] |= bitMask;
+  }
+  if (msb && _stripBufMsb != nullptr) {
+    _stripBufMsb[byteIndex] |= bitMask;
   }
 }
 
@@ -626,8 +696,10 @@ void GfxRenderer::drawText(const int fontId, const int x, const int y, const cha
   }
 }
 
-void GfxRenderer::drawLine(int x1, int y1, int x2, int y2, const bool state) const {
+void GfxRenderer::drawLine(int x1, int y1, int x2, int y2, const bool inState) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
+  // GRAY2: inverted framebuffer convention — BW callers pass true for "black".
+  const bool state = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB) ? !inState : inState;
   if (x1 == x2) {
     if (y2 < y1) {
       std::swap(y1, y2);
@@ -770,6 +842,8 @@ void GfxRenderer::drawRoundedRect(const int x, const int y, const int width, con
 }
 
 void GfxRenderer::fillRect(const int x, const int y, const int width, const int height, const bool state) const {
+  // GRAY2 polarity and dual-plane mirroring are handled inside fillRectImpl,
+  // so every entry point (here, fillRectDither, fillRoundedRect) gets them.
   if (state) {
     fillRectImpl<Color::Black>(x, y, width, height);
   } else {
@@ -786,34 +860,44 @@ void GfxRenderer::drawPixelDither<Color::Clear>(const int x, const int y) const 
 
 template <>
 void GfxRenderer::drawPixelDither<Color::Black>(const int x, const int y) const {
-  drawPixel(x, y, true);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, !gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::White>(const int x, const int y) const {
-  drawPixel(x, y, false);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::LightGray>(const int x, const int y) const {
-  drawPixel(x, y, x % 2 == 0 && y % 2 == 0);
+  const bool pix = x % 2 == 0 && y % 2 == 0;
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::MediumGray>(const int x, const int y) const {
   static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-  drawPixel(x, y, BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::MediumGray));
+  const bool pix = BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::MediumGray);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) const {
-  drawPixel(x, y, (x + y) % 2 == 0);  // TODO: maybe find a better pattern?
+  const bool pix = (x + y) % 2 == 0;  // TODO: maybe find a better pattern?
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 template <>
 void GfxRenderer::drawPixelDither<Color::ExtraDarkGray>(const int x, const int y) const {
   static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
-  drawPixel(x, y, BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::ExtraDarkGray));
+  const bool pix = BAYER_4X4[y & 3][x & 3] < static_cast<uint8_t>(Color::ExtraDarkGray);
+  const bool gray2 = renderMode == GRAY2_LSB || renderMode == GRAY2_MSB;
+  drawPixel(x, y, gray2 ? !pix : pix);
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
@@ -881,31 +965,43 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
   const uint8_t tailMask = static_cast<uint8_t>(0xFFu << (7 - (physicalX1 & 7)));
   const uint32_t panelStride = panelWidthBytes;
   const bool invertForDarkMode = darkMode && renderMode == BW;
+  // GRAY2 inverts the framebuffer convention: the plane starts cleared and a
+  // set bit *marks* the pixel, so "black" sets bits here where BW clears them.
+  const bool gray2 = (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB);
+  // Dual-plane GRAY2: the second plane must receive the same coverage, or the
+  // fill only lands in the LSB plane and renders as the wrong level.
+  uint8_t* const msbTarget = isDualGray2Active() ? _stripBufMsb : nullptr;
 
   if constexpr (color == Color::Black || color == Color::White) {
     const bool fillBlack = invertForDarkMode ? color == Color::White : color == Color::Black;
-    const uint8_t fillByte = fillBlack ? 0x00u : 0xFFu;
-    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
-      uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
-      if (byteStart == byteEnd) {
-        const uint8_t mask = headMask & tailMask;
-        if (fillBlack) {
-          row[byteStart] &= static_cast<uint8_t>(~mask);
+    const bool setBits = fillSetsBits(fillBlack, gray2);
+    const uint8_t fillByte = setBits ? 0xFFu : 0x00u;
+    // A solid B/W fill is identical in both planes.
+    uint8_t* targets[2] = {target, msbTarget};
+    for (uint8_t* fillTarget : targets) {
+      if (fillTarget == nullptr) continue;
+      for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+        uint8_t* row = fillTarget + static_cast<uint32_t>(physicalY - originY) * panelStride;
+        if (byteStart == byteEnd) {
+          const uint8_t mask = headMask & tailMask;
+          if (setBits) {
+            row[byteStart] |= mask;
+          } else {
+            row[byteStart] &= static_cast<uint8_t>(~mask);
+          }
+        } else if (setBits) {
+          row[byteStart] |= headMask;
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] |= tailMask;
         } else {
-          row[byteStart] |= mask;
+          row[byteStart] &= static_cast<uint8_t>(~headMask);
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] &= static_cast<uint8_t>(~tailMask);
         }
-      } else if (fillBlack) {
-        row[byteStart] &= static_cast<uint8_t>(~headMask);
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
-        }
-        row[byteEnd] &= static_cast<uint8_t>(~tailMask);
-      } else {
-        row[byteStart] |= headMask;
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
-        }
-        row[byteEnd] |= tailMask;
       }
     }
   } else {
@@ -978,18 +1074,26 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
       blackMasks[samplePhysicalY & 3] = mask;
     }
 
-    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
-      const uint8_t whiteMask = static_cast<uint8_t>(~blackMasks[physicalY & 3]);
-      uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
-      if (byteStart == byteEnd) {
-        const uint8_t rectMask = headMask & tailMask;
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
-      } else {
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+    // A dithered fill is a black/white pattern, so in GRAY2 both planes carry
+    // the same mask — marked pixels end up black, unmarked white, matching
+    // what drawPixelDither produces per pixel. In BW the stored polarity is
+    // inverted (a set bit is white), hence the two mask choices below.
+    uint8_t* targets[2] = {target, msbTarget};
+    for (uint8_t* fillTarget : targets) {
+      if (fillTarget == nullptr) continue;
+      for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+        const uint8_t patternMask = ditherPatternMask(blackMasks[physicalY & 3], gray2);
+        uint8_t* row = fillTarget + static_cast<uint32_t>(physicalY - originY) * panelStride;
+        if (byteStart == byteEnd) {
+          const uint8_t rectMask = headMask & tailMask;
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & patternMask));
+        } else {
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & patternMask));
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, patternMask, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & patternMask));
         }
-        row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
       }
     }
   }
@@ -1325,6 +1429,15 @@ void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, con
         drawPixel(screenX, screenY, false);
       } else if (renderMode == GRAYSCALE_LSB && val == 1) {
         drawPixel(screenX, screenY, false);
+      } else if (renderMode == GRAY2_LSB && isDualGray2Active()) {
+        // Dual-plane pass: write both plane bits explicitly.
+        drawPixelGray2(screenX, screenY, val);
+      } else if (renderMode == GRAY2_LSB && !(val & 1)) {
+        // Factory absolute LSB (BW RAM): mark Black(0) and LightGray(2).
+        drawPixel(screenX, screenY, false);
+      } else if (renderMode == GRAY2_MSB && val < 2) {
+        // Factory absolute MSB (RED RAM): mark Black(0) and DarkGray(1).
+        drawPixel(screenX, screenY, false);
       }
     }
   }
@@ -1405,6 +1518,11 @@ void GfxRenderer::drawBitmap1Bit(const Bitmap& bitmap, const int x, const int y,
 void GfxRenderer::fillPolygon(const int* xPoints, const int* yPoints, int numPoints, bool state) const {
   if (numPoints < 3) return;
 
+  // GRAY2: inverted framebuffer convention — BW callers pass true for "black".
+  if (renderMode == GRAY2_LSB || renderMode == GRAY2_MSB) {
+    state = !state;
+  }
+
   // Find bounding box
   int minY = yPoints[0], maxY = yPoints[0];
   for (int i = 1; i < numPoints; i++) {
@@ -1470,14 +1588,18 @@ void GfxRenderer::clearScreen(const uint8_t color) const {
   const uint8_t effectiveColor = (darkMode && renderMode == BW && color == 0xFF) ? 0x00 : color;
   if (_stripActive) {
     memset(_stripBuf, effectiveColor, static_cast<size_t>(panelWidthBytes) * static_cast<size_t>(_stripRows));
+    if (_stripBufMsb) {
+      memset(_stripBufMsb, effectiveColor, static_cast<size_t>(panelWidthBytes) * static_cast<size_t>(_stripRows));
+    }
     return;
   }
   display.clearScreen(effectiveColor);
 }
 
-void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const {
+void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows, uint8_t* scratchMsb) const {
   assert(scratch != nullptr && stripRows > 0 && stripY0 >= 0 && stripY0 <= static_cast<int>(panelHeight) - stripRows);
   _stripBuf = scratch;
+  _stripBufMsb = scratchMsb;
   _stripY0 = stripY0;
   _stripRows = stripRows;
   _stripActive = true;
@@ -1486,6 +1608,7 @@ void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows)
 void GfxRenderer::endStripTarget() const {
   _stripActive = false;
   _stripBuf = nullptr;
+  _stripBufMsb = nullptr;
   _stripY0 = 0;
   _stripRows = 0;
 }
@@ -1520,7 +1643,11 @@ void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode) const
     effectiveRefreshMode = nextRefreshOverride;
     nextRefreshOverridePending = false;
   }
-  display.displayBuffer(effectiveRefreshMode, fadingFix);
+  // After a factory LUT render the panel already powered down (self-contained
+  // 0xC7 sequence) — requesting another turn-off would double power-cycle.
+  const bool turnOff = (displayState == DisplayState::FactoryLut) ? false : fadingFix;
+  display.displayBuffer(effectiveRefreshMode, turnOff);
+  displayState = DisplayState::BW;
 }
 
 std::string GfxRenderer::truncatedText(const int fontId, const char* text, const int maxWidth,
@@ -1996,7 +2123,20 @@ void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuff
 
 void GfxRenderer::copyGrayscaleMsbBuffers() const { display.copyGrayscaleMsbBuffers(frameBuffer); }
 
-void GfxRenderer::displayGrayBuffer() const { display.displayGrayBuffer(fadingFix); }
+void GfxRenderer::displayGrayBuffer(const unsigned char* lut, const bool factoryMode) const {
+  display.displayGrayBuffer(fadingFix, lut, factoryMode);
+  displayState = factoryMode ? DisplayState::FactoryLut : DisplayState::BW;
+}
+
+const unsigned char* GfxRenderer::grayscaleLutFor(const GrayscaleMode mode) {
+  switch (mode) {
+    case GrayscaleMode::FactoryFast:
+    case GrayscaleMode::FactoryQuality:
+    case GrayscaleMode::Differential:
+    default:
+      return nullptr;
+  }
+}
 
 void GfxRenderer::writeGrayscalePlaneStrip(bool lsbPlane, const uint8_t* scratch, int yStart, int numRows) const {
   if (scratch == nullptr) {
