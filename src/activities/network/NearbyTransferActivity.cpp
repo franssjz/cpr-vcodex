@@ -260,7 +260,7 @@ bool NearbyTransferActivity::applyPosition(const NearbyProtocol::Position& posit
 }
 
 void NearbyTransferActivity::abort() {
-  source_.close();
+  if (source_) source_.close();
   upload_.cancel(destination_);
 }
 
