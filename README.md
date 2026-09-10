@@ -52,13 +52,13 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested; `Xteink X4 Pro` via separate ESP32-S3 release builds |
-| Current release (CPR-vCodex) build | [`1.5.0.29-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.5.0.29-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.5.0.30-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.5.0.30-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`a485dc46`](https://github.com/Free-Ink/freeink-sdk/commit/a485dc46ef5fb2283e4bdb674002ddbef97a9268), with runtime X3/X4 and X3 UC8253/UC8279d detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | Selected CrossPoint Reader 1.5 changes reviewed through `master` [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc), plus targeted CrossInk improvements, manually adapted to retain the vCodex band renderer, KOReader profiles, reading statistics, highlights, themes, ruby, Lyra, and SD-card fonts. Release `1.5.0.22` additionally adopts CrossPoint's pinned `freeink-sdk` hardware layer and the isolated SD recovery entry from [`5717374e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5717374e4be88b3d30f45626bf796ceb3687c836). |
-| Current release focus | Adds the separated X3/X4 vs X4 Pro release/OTA path and restores SD-card font advance measurements. |
-| Latest release notes | - X3/X4 use the shared ESP32-C3 firmware asset; X4 Pro uses the separate ESP32-S3 `-x4pro` asset.<br>- Browser Auto Flash and on-device OTA/Wi-Fi update checks now select the matching firmware build instead of sharing one top-level URL.<br>- Restored SD-card font advance-table measurement for external `.cpfont` families. |
+| Current release focus | Maintenance fixes for Nearby Transfer receive cleanup and virtual keyboard one-step navigation, shipped for both X3/X4 and X4 Pro firmware tracks. |
+| Latest release notes | - Fixed `Receive Nearby` crashing when cleanup tried to close a source file that receive mode never opened ([#209](https://github.com/franssjz/cpr-vcodex/issues/209)).<br>- Fixed virtual keyboard cursor/navigation jumps so short left/right presses move exactly one position ([#210](https://github.com/franssjz/cpr-vcodex/issues/210)).<br>- Keeps the shared ESP32-C3 X3/X4 firmware asset and separate ESP32-S3 X4 Pro `-x4pro` asset for Auto Flash and OTA. |
 | Base firmware line | `CrossPoint Reader 1.5.0` |
 | Latest official commit reviewed | `master` through [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` through [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc) |
 | Latest official commit incorporated | Release `1.5.0.29` retains the CrossPoint/freeink X3/X4 hardware base, adapts the factory grayscale pipeline from PR #169, and publishes a separate X4 Pro firmware target. |
