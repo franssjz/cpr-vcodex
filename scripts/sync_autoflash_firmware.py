@@ -270,9 +270,13 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None, tag: str | N
     }
     (firmware_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
+    default_download_url = str(default_build["downloadUrl"])
+    default_firmware_size = int(default_build["size"])
+    default_sha256 = str(default_build["sha256"])
+
     for relative in ("README.md", "docs/assets/site.js", "docs/index.html", "docs/flash.html"):
-        update_text_file(project_dir / relative, tag, download_url)
-    update_flash_fallback(project_dir / "docs" / "flash.html", tag, download_url, firmware_size, sha256)
+        update_text_file(project_dir / relative, tag, default_download_url)
+    update_flash_fallback(project_dir / "docs" / "flash.html", tag, default_download_url, default_firmware_size, default_sha256)
 
     env_path = os.environ.get("GITHUB_ENV")
     if env_path:

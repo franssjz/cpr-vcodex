@@ -598,7 +598,7 @@
         <p class="status" id="status" data-site-i18n="readyStatus">Ready. Clicking Flash will open the browser serial device chooser.</p>
 
         <div class="actions">
-          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex-x4pro.bin" data-site-i18n="downloadBin">Download .bin</a>
+          <a class="button" id="download-link" href="https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex.bin" data-site-i18n="downloadBin">Download .bin</a>
           <a class="button" href="https://xteink.dve.al/" rel="noopener" data-site-i18n="communityFlasher">Community flasher</a>
         </div>
 
@@ -726,9 +726,9 @@ pio run -e x4pro-gh_release -t upload</code></pre>
     const FALLBACK_RELEASE = {
       version: "1.5.0.29-cpr-vcodex",
       firmwareUrl: "firmware/firmware.bin",
-      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex-x4pro.bin",
-      size: 5526432,
-      sha256: "beb1cf296fe9030bfaef2bec460e7b453044e5caebdacde85c12e6cf1aa8b397",
+      downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex.bin",
+      size: 5701792,
+      sha256: "e4c388e623503b5839a13c78aaebac273558f2820b7dcdda8615981f32e5e728",
       source: {
         type: "github-release",
         repo: "franssjz/cpr-vcodex",
@@ -742,7 +742,7 @@ pio run -e x4pro-gh_release -t upload</code></pre>
           label: "Xteink X3/X4",
           chipFamily: "ESP32-C3",
           firmwareUrl: "firmware/firmware.bin",
-          downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex-x4pro.bin",
+          downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.29-cpr-vcodex/1.5.0.29-cpr-vcodex.bin",
           size: 5700928,
           sha256: "840b007577c60319efff63b1d72dc8a13ea9b71e550c96257082e9d24d66ebb4",
           source: {
@@ -813,7 +813,7 @@ pio run -e x4pro-gh_release -t upload</code></pre>
       button.addEventListener("click", () => {
         selectedDevice = button.dataset.device;
         localStorage.setItem(DEVICE_STORAGE_KEY, selectedDevice);
-        updateDeviceSelection();
+        updateFirmwareDetails();
       });
     });
     window.addEventListener("cpr-tools-language-change", updateDeviceSelection);
