@@ -55,7 +55,8 @@ void ButtonNavigator::onRelease(const Buttons& buttons, const Callback& callback
 
 void ButtonNavigator::onContinuous(const Buttons& buttons, const Callback& callback) {
   const bool isPressed = std::any_of(buttons.begin(), buttons.end(), [this](const MappedInputManager::Button button) {
-    return mappedInput != nullptr && mappedInput->isPressed(button) && shouldNavigateContinuously();
+    return mappedInput != nullptr && mappedInput->isPressed(button) && !mappedInput->wasPressed(button) &&
+           shouldNavigateContinuously();
   });
 
   if (isPressed) {
