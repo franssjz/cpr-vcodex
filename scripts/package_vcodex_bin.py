@@ -12,6 +12,10 @@ README_PATH = "README.md"
 BUILD_VERSION_JSON_PATH = "artifacts/build-version.json"
 RELEASE_COUNTER_FILE_TEMPLATE = ".release-counter-{base}.txt"
 RELEASE_DRY_RUN_ENV = "VCODEX_RELEASE_DRY_RUN"
+RELEASE_ASSET_SUFFIX_BY_ENV = {
+    "gh_release": "",
+    "x4pro-gh_release": "-x4pro",
+}
 
 
 def load_build_metadata(project_dir: Path) -> tuple[str, str, int | None]:
@@ -108,7 +112,9 @@ def package_vcodex_bin(source, target, env):
     output_dir = project_dir / "artifacts"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    artifact_name = f"{safe_version}-cpr-vcodex.bin"
+    pio_env = env.subst("$PIOENV")
+    release_asset_suffix = RELEASE_ASSET_SUFFIX_BY_ENV.get(pio_env, "")
+    artifact_name = f"{safe_version}-cpr-vcodex{release_asset_suffix}.bin"
     artifact_path = output_dir / artifact_name
     shutil.copy2(firmware_path, artifact_path)
 
@@ -119,16 +125,17 @@ def package_vcodex_bin(source, target, env):
         "artifactPath": str(artifact_path),
         "firmwareBytes": artifact_path.stat().st_size,
         "sourceBin": str(firmware_path),
-        "environment": env.subst("$PIOENV"),
+        "environment": pio_env,
+        "releaseAssetSuffix": release_asset_suffix,
     }
     if build_seq is not None:
         metadata["buildSequence"] = build_seq
-    metadata_path = output_dir / f"{safe_version}-cpr-vcodex.json"
+    metadata_path = output_dir / f"{safe_version}-cpr-vcodex{release_asset_suffix}.json"
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
-    if env.subst("$PIOENV") == "gh_release" and os.environ.get(RELEASE_DRY_RUN_ENV) == "1":
+    if pio_env == "gh_release" and os.environ.get(RELEASE_DRY_RUN_ENV) == "1":
         print(f"Release metadata update skipped: {RELEASE_DRY_RUN_ENV}=1")
-    elif env.subst("$PIOENV") == "gh_release":
+    elif pio_env == "gh_release":
         persist_release_counter(project_dir, base_version, build_seq)
         update_readme_release_version(project_dir, artifact_name)
 

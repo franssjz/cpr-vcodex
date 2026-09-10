@@ -36,6 +36,6 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware/firmware.bin docs/firmware/manifest.json
+          git add README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware
           git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION}"
           git push origin HEAD:master

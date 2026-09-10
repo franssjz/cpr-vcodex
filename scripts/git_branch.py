@@ -31,7 +31,7 @@ RELEASE_COUNTER_FILE_TEMPLATE = ".release-counter-{base}.txt"
 DEV_COUNTER_FILE_TEMPLATE = ".dev-counter-{base}-r{release}.txt"
 BUILD_VERSION_JSON_REL = os.path.join(COUNTER_DIR, "build-version.json")
 VERSION_INC_REL = os.path.join("src", "version.generated.inc")
-SUPPORTED_ENVS = ("default", "gh_release", "gh_release_rc", "slim")
+SUPPORTED_ENVS = ("default", "gh_release", "gh_release_rc", "slim", "x4pro", "x4pro-gh_release", "x4pro-gh_release_rc")
 INITIAL_RELEASE_NUMBER = 0
 
 
@@ -255,14 +255,14 @@ def inject_version(env):
     project_dir = env["PROJECT_DIR"]
     base_version = get_base_version(project_dir)
 
-    if env_name == "default":
+    if env_name in ("default", "x4pro"):
         release_number, release_counter_path = get_dev_release_number(project_dir, base_version)
         build_counter, counter_path = next_dev_counter(project_dir, base_version, release_number)
         short_sha = get_git_short_sha(project_dir)
         version_string = f"{base_version}.{release_number}.dev{build_counter}-{short_sha}"
         build_kind = "dev"
         print(f"CPR-vCodex release line: {release_number} ({release_counter_path})")
-    elif env_name == "gh_release":
+    elif env_name in ("gh_release", "x4pro-gh_release"):
         tagged_release = release_number_from_tag(base_version)
         if tagged_release:
             release_number, tag = tagged_release
@@ -272,7 +272,7 @@ def inject_version(env):
         build_counter = release_number
         version_string = f"{base_version}.{release_number}"
         build_kind = "release"
-    elif env_name == "gh_release_rc":
+    elif env_name in ("gh_release_rc", "x4pro-gh_release_rc"):
         rc_hash = os.environ.get("CROSSPOINT_RC_HASH", "unknown")
         release_number, release_counter_path = get_current_release_number(project_dir, base_version)
         build_counter = release_number

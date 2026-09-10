@@ -7,6 +7,14 @@ jobs:
   build-release-candidate:
     if: startsWith(github.ref_name, 'release/')
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pio_env: gh_release_rc
+            artifact: firmware.bin
+          - pio_env: x4pro-gh_release_rc
+            artifact: firmware-x4pro.bin
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,15 +44,19 @@ jobs:
       - name: Build CrossPoint Release Candidate
         env:
           CROSSPOINT_RC_HASH: ${{ env.SHORT_SHA }}
-        run: pio run -e gh_release_rc
+        run: pio run -e "${{ matrix.pio_env }}"
+
+      - name: Name release candidate asset
+        if: matrix.artifact != 'firmware.bin'
+        run: cp ".pio/build/${{ matrix.pio_env }}/firmware.bin" ".pio/build/${{ matrix.pio_env }}/${{ matrix.artifact }}"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CrossPoint-RC-${{ env.BRANCH_SUFFIX }}
+          name: CPR-vCodex-RC-${{ env.BRANCH_SUFFIX }}-${{ matrix.pio_env }}
           path: |
-            .pio/build/gh_release_rc/bootloader.bin
-            .pio/build/gh_release_rc/firmware.bin
-            .pio/build/gh_release_rc/firmware.elf
-            .pio/build/gh_release_rc/firmware.map
-            .pio/build/gh_release_rc/partitions.bin
+            .pio/build/${{ matrix.pio_env }}/bootloader.bin
+            .pio/build/${{ matrix.pio_env }}/${{ matrix.artifact }}
+            .pio/build/${{ matrix.pio_env }}/firmware.elf
+            .pio/build/${{ matrix.pio_env }}/firmware.map
+            .pio/build/${{ matrix.pio_env }}/partitions.bin

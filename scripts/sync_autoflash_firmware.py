@@ -16,6 +16,26 @@ from typing import Any
 DEFAULT_REPO = "franssjz/cpr-vcodex"
 APP_PARTITION_SIZE = 6_553_600
 MIN_FIRMWARE_SIZE = 1_000_000
+FIRMWARE_BUILDS = [
+    {
+        "id": "c3",
+        "devices": ["x4", "x3"],
+        "label": "Xteink X3/X4",
+        "chipFamily": "ESP32-C3",
+        "assetSuffix": "",
+        "localName": "firmware.bin",
+        "appPartitionSize": APP_PARTITION_SIZE,
+    },
+    {
+        "id": "x4pro",
+        "devices": ["x4pro"],
+        "label": "Xteink X4 Pro",
+        "chipFamily": "ESP32-S3",
+        "assetSuffix": "-x4pro",
+        "localName": "firmware-x4pro.bin",
+        "appPartitionSize": 0x7E0000,
+    },
+]
 VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-[0-9A-Za-z._-]*cpr-vcodex\b")
 FIRMWARE_TAG_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-cpr-vcodex$")
 DOWNLOAD_URL_RE = re.compile(
@@ -44,22 +64,28 @@ def download_bytes(url: str) -> bytes:
         return response.read()
 
 
-def select_firmware_asset(release: dict[str, Any]) -> dict[str, Any]:
+def select_firmware_asset(release: dict[str, Any], asset_suffix: str = "") -> dict[str, Any]:
     tag = str(release["tag_name"])
     assets = release.get("assets") or []
     if not assets:
         raise RuntimeError(f"Release {tag} has no downloadable assets")
 
-    exact_name = f"{tag}.bin"
+    exact_name = f"{tag}{asset_suffix}.bin"
     for asset in assets:
         if asset.get("name") == exact_name:
             return asset
 
-    for asset in assets:
-        if asset.get("name") == "firmware.bin":
-            return asset
+    if not asset_suffix:
+        for asset in assets:
+            if asset.get("name") == "firmware.bin":
+                return asset
 
-    bin_assets = [asset for asset in assets if str(asset.get("name", "")).endswith(".bin")]
+    bin_assets = [
+        asset
+        for asset in assets
+        if str(asset.get("name", "")).endswith(".bin")
+        and (not asset_suffix or str(asset.get("name", "")).endswith(f"{asset_suffix}.bin"))
+    ]
     if len(bin_assets) == 1:
         return bin_assets[0]
 
@@ -169,50 +195,78 @@ def update_flash_fallback(path: Path, tag: str, download_url: str, firmware_size
 def sync_autoflash(repo: str, project_dir: Path, token: str | None, tag: str | None = None) -> str:
     release = fetch_firmware_release_by_tag(repo, tag, token) if tag else fetch_latest_firmware_release(repo, token)
     tag = str(release["tag_name"])
-    asset = select_firmware_asset(release)
-    download_url = str(asset["browser_download_url"])
-    firmware = download_bytes(download_url)
-    firmware_size = len(firmware)
-    expected_size = asset.get("size")
-
-    if expected_size is not None and int(expected_size) != firmware_size:
-        raise RuntimeError(f"Downloaded firmware size mismatch: asset={expected_size}, downloaded={firmware_size}")
-    if firmware_size < MIN_FIRMWARE_SIZE:
-        raise RuntimeError(f"Downloaded firmware is suspiciously small: {firmware_size} bytes")
-    if firmware_size > APP_PARTITION_SIZE:
-        raise RuntimeError(f"Downloaded firmware is too large for the app partition: {firmware_size} bytes")
-
-    sha256 = hashlib.sha256(firmware).hexdigest()
     firmware_dir = project_dir / "docs" / "firmware"
-    write_atomic(firmware_dir / "firmware.bin", firmware)
+    synced_builds: list[dict[str, Any]] = []
 
-    manifest = {
-        "name": "CPR-vCodex",
-        "version": tag,
-        "firmwareUrl": "firmware/firmware.bin",
-        "downloadUrl": download_url,
-        "size": firmware_size,
-        "sha256": sha256,
-        "source": {
-            "type": "github-release",
-            "repo": repo,
-            "tag": tag,
-            "asset": asset.get("name"),
-            "publishedAt": release.get("published_at"),
-            "assetUpdatedAt": asset.get("updated_at"),
-        },
-        "new_install_prompt_erase": False,
-        "builds": [
+    for build in FIRMWARE_BUILDS:
+        asset_suffix = str(build["assetSuffix"])
+        try:
+            asset = select_firmware_asset(release, asset_suffix)
+        except RuntimeError:
+            if asset_suffix:
+                continue
+            raise
+
+        download_url = str(asset["browser_download_url"])
+        firmware = download_bytes(download_url)
+        firmware_size = len(firmware)
+        expected_size = asset.get("size")
+        app_partition_size = int(build["appPartitionSize"])
+
+        if expected_size is not None and int(expected_size) != firmware_size:
+            raise RuntimeError(f"Downloaded firmware size mismatch for {build['id']}: asset={expected_size}, downloaded={firmware_size}")
+        if firmware_size < MIN_FIRMWARE_SIZE:
+            raise RuntimeError(f"Downloaded firmware for {build['id']} is suspiciously small: {firmware_size} bytes")
+        if firmware_size > app_partition_size:
+            raise RuntimeError(
+                f"Downloaded firmware for {build['id']} is too large for its app partition: {firmware_size} bytes"
+            )
+
+        sha256 = hashlib.sha256(firmware).hexdigest()
+        local_name = str(build["localName"])
+        write_atomic(firmware_dir / local_name, firmware)
+        synced_builds.append(
             {
-                "chipFamily": "ESP32-C3",
+                "id": build["id"],
+                "devices": build["devices"],
+                "label": build["label"],
+                "chipFamily": build["chipFamily"],
+                "firmwareUrl": f"firmware/{local_name}",
+                "downloadUrl": download_url,
+                "size": firmware_size,
+                "sha256": sha256,
+                "source": {
+                    "type": "github-release",
+                    "repo": repo,
+                    "tag": tag,
+                    "asset": asset.get("name"),
+                    "publishedAt": release.get("published_at"),
+                    "assetUpdatedAt": asset.get("updated_at"),
+                },
                 "parts": [
                     {
-                        "path": "firmware.bin",
+                        "path": local_name,
                         "offset": 65536,
                     }
                 ],
             }
-        ],
+        )
+
+    if not synced_builds:
+        raise RuntimeError(f"Release {tag} did not contain a usable firmware asset")
+
+    default_build = synced_builds[0]
+
+    manifest = {
+        "name": "CPR-vCodex",
+        "version": tag,
+        "firmwareUrl": default_build["firmwareUrl"],
+        "downloadUrl": default_build["downloadUrl"],
+        "size": default_build["size"],
+        "sha256": default_build["sha256"],
+        "source": default_build["source"],
+        "new_install_prompt_erase": False,
+        "builds": synced_builds,
     }
     (firmware_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
@@ -226,9 +280,8 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None, tag: str | N
             env_file.write(f"AUTOFLASH_VERSION={tag}\n")
 
     print(f"Synced auto-flash firmware to {tag}")
-    print(f"Asset: {asset.get('name')}")
-    print(f"Size: {firmware_size}")
-    print(f"SHA-256: {sha256}")
+    for build in synced_builds:
+        print(f"Asset: {build['source']['asset']} ({build['id']}, {build['size']} bytes, SHA-256 {build['sha256']})")
     return tag
 
 

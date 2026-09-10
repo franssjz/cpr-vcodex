@@ -14,6 +14,14 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pio_env: gh_release
+            asset_suffix: ''
+          - pio_env: x4pro-gh_release
+            asset_suffix: '-x4pro'
     steps:
       - name: Checkout repository
         run: |
@@ -37,9 +45,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          pio run -e gh_release | tee "artifacts/${GITHUB_REF_NAME}-build.log"
+          pio run -e "${{ matrix.pio_env }}" | tee "artifacts/${GITHUB_REF_NAME}${{ matrix.asset_suffix }}-build.log"
 
       - name: Report firmware budget
+        if: matrix.pio_env == 'gh_release'
         run: |
           python3 scripts/firmware_budget_report.py \
             --tag "${GITHUB_REF_NAME}" \
@@ -50,8 +59,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
-          artifact="artifacts/${tag}.bin"
-          metadata="artifacts/${tag}.json"
+          suffix="${{ matrix.asset_suffix }}"
+          artifact="artifacts/${tag}${suffix}.bin"
+          metadata="artifacts/${tag}${suffix}.json"
 
           test -f "${artifact}" || {
             echo "Expected packaged firmware ${artifact} was not created."
@@ -70,13 +80,49 @@ jobs:
           from pathlib import Path
 
           tag = os.environ["GITHUB_REF_NAME"]
-          metadata = json.loads(Path(f"artifacts/{tag}.json").read_text(encoding="utf-8"))
-          if metadata.get("artifactName") != f"{tag}.bin":
-              raise SystemExit(f"metadata artifactName mismatch: {metadata.get('artifactName')} != {tag}.bin")
-          if metadata.get("environment") != "gh_release":
+          suffix = os.environ["ASSET_SUFFIX"]
+          metadata = json.loads(Path(f"artifacts/{tag}{suffix}.json").read_text(encoding="utf-8"))
+          if metadata.get("artifactName") != f"{tag}{suffix}.bin":
+              raise SystemExit(f"metadata artifactName mismatch: {metadata.get('artifactName')} != {tag}{suffix}.bin")
+          if metadata.get("releaseAssetSuffix") != suffix:
+              raise SystemExit(f"metadata suffix mismatch: {metadata.get('releaseAssetSuffix')} != {suffix}")
+          if metadata.get("environment") != os.environ["PIO_ENV"]:
               raise SystemExit(f"unexpected release environment: {metadata.get('environment')}")
           print(f"Validated {metadata['artifactName']} ({metadata['firmwareBytes']} bytes)")
           PY
+        env:
+          ASSET_SUFFIX: ${{ matrix.asset_suffix }}
+          PIO_ENV: ${{ matrix.pio_env }}
+
+      - name: Upload packaged firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.pio_env }}
+          path: |
+            artifacts/${{ github.ref_name }}${{ matrix.asset_suffix }}.bin
+            artifacts/${{ github.ref_name }}${{ matrix.asset_suffix }}.json
+            artifacts/${{ github.ref_name }}${{ matrix.asset_suffix }}-build.log
+            artifacts/${{ github.ref_name }}-firmware-budget.json
+            artifacts/${{ github.ref_name }}-firmware-budget.md
+          if-no-files-found: ignore
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs: build-release
+    steps:
+      - name: Checkout repository
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_REF}"
+          git checkout --force FETCH_HEAD
+
+      - name: Download packaged firmware
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
 
       - name: Publish GitHub Release assets
         env:
@@ -85,7 +131,9 @@ jobs:
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           artifact="artifacts/${tag}.bin"
+          x4pro_artifact="artifacts/${tag}-x4pro.bin"
           metadata="artifacts/${tag}.json"
+          x4pro_metadata="artifacts/${tag}-x4pro.json"
           budget_json="artifacts/${tag}-firmware-budget.json"
           budget_md="artifacts/${tag}-firmware-budget.md"
           notes_file="$(mktemp)"
@@ -95,7 +143,9 @@ jobs:
           if gh release view "${tag}" >/dev/null 2>&1; then
             gh release upload "${tag}" \
               "${artifact}#${tag}.bin" \
+              "${x4pro_artifact}#${tag}-x4pro.bin" \
               "${metadata}#${tag}.json" \
+              "${x4pro_metadata}#${tag}-x4pro.json" \
               "${budget_json}#${tag}-firmware-budget.json" \
               "${budget_md}#${tag}-firmware-budget.md" \
               --clobber
@@ -103,7 +153,9 @@ jobs:
           else
             gh release create "${tag}" \
               "${artifact}#${tag}.bin" \
+              "${x4pro_artifact}#${tag}-x4pro.bin" \
               "${metadata}#${tag}.json" \
+              "${x4pro_metadata}#${tag}-x4pro.json" \
               "${budget_json}#${tag}-firmware-budget.json" \
               "${budget_md}#${tag}-firmware-budget.md" \
               --verify-tag \

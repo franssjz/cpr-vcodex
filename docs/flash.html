@@ -521,7 +521,7 @@
           <div class="step">
             <div>
               <h3 data-site-i18n="browserTitle">Use Chrome or Edge on desktop</h3>
-              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the ESP32-C3 USB serial port.</p>
+              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the USB serial port for the selected device.</p>
             </div>
           </div>
           <div class="step">
@@ -536,7 +536,7 @@
       <aside class="card flash-panel">
         <div class="device-box">
           <span class="device-label" id="device-model-title" data-site-i18n="deviceModelTitle">Device model</span>
-          <p data-site-i18n="deviceModelText">Choose the exact model before flashing. X3 and X4 use different OTA app partition sizes.</p>
+          <p data-site-i18n="deviceModelText">Choose the exact model before flashing. The flasher validates the partition table before writing.</p>
           <div class="device-options" role="radiogroup" aria-labelledby="device-model-title">
             <button class="device-option" type="button" role="radio" aria-checked="true" data-device="x4">
               <strong data-site-i18n="deviceX4">Xteink X4</strong>
@@ -546,12 +546,12 @@
               <strong data-site-i18n="deviceX3">Xteink X3</strong>
               <span>ESP32-C3 · 7.4 MB OTA slot</span>
             </button>
-            <button class="device-option" type="button" role="radio" aria-checked="false" disabled>
+            <button class="device-option" type="button" role="radio" aria-checked="false" data-device="x4pro" disabled>
               <strong data-site-i18n="deviceX4Pro">Xteink X4 Pro</strong>
-              <span data-site-i18n="deviceX4ProStatus">Not supported · ESP32-S3</span>
+              <span data-site-i18n="deviceX4ProStatus">ESP32-S3 · 7.9 MB OTA slot</span>
             </button>
           </div>
-          <p class="device-unsupported-note" data-site-i18n="deviceX4ProUnsupported">X4 Pro is not compatible with the current ESP32-C3 firmware. It needs a separate ESP32-S3 build; do not select X4 for an X4 Pro.</p>
+          <p class="device-unsupported-note" data-site-i18n="deviceX4ProUnsupported">X4 Pro uses a separate ESP32-S3 firmware asset. The option is enabled only when the current release manifest includes that build.</p>
         </div>
 
         <div class="version-box">
@@ -612,7 +612,8 @@
       <pre><code>git clone https://github.com/franssjz/cpr-vcodex.git
 cd cpr-vcodex
 
-pio run -e gh_release -t upload</code></pre>
+pio run -e gh_release -t upload
+pio run -e x4pro-gh_release -t upload</code></pre>
     </section>
   </main>
 
@@ -631,6 +632,7 @@ pio run -e gh_release -t upload</code></pre>
     const DEVICE_CONFIGS = {
       x4: {
         label: "Xteink X4",
+        firmwareBuild: "c3",
         appSize: 0x640000,
         appOffsets: {
           app0: 0x10000,
@@ -647,6 +649,7 @@ pio run -e gh_release -t upload</code></pre>
       },
       x3: {
         label: "Xteink X3",
+        firmwareBuild: "c3",
         appSize: 0x770000,
         appOffsets: {
           app0: 0x10000,
@@ -660,16 +663,25 @@ pio run -e gh_release -t upload</code></pre>
           {type: "data-spiffs", offset: 15663104, size: 1048576},
           {type: "data-coredump", offset: 16711680, size: 65536}
         ]
+      },
+      x4pro: {
+        label: "Xteink X4 Pro",
+        firmwareBuild: "x4pro",
+        appSize: 0x7e0000,
+        appOffsets: {
+          app0: 0x10000,
+          app1: 0x7f0000
+        },
+        partitions: [
+          {type: "data-nvs", offset: 0x9000, size: 0x5000},
+          {type: "data-ota", offset: 0xe000, size: 0x2000},
+          {type: "app-ota_0", offset: 0x10000, size: 0x7e0000},
+          {type: "app-ota_1", offset: 0x7f0000, size: 0x7e0000},
+          {type: "data-spiffs", offset: 0xfd0000, size: 0x14000},
+          {type: "data-coredump", offset: 0xfe4000, size: 0x1c000}
+        ]
       }
     };
-    const X4_PRO_PARTITIONS = [
-      {type: "data-nvs", offset: 0x9000, size: 0x5000},
-      {type: "data-ota", offset: 0xe000, size: 0x2000},
-      {type: "app-ota_0", offset: 0x10000, size: 0x7e0000},
-      {type: "app-ota_1", offset: 0x7f0000, size: 0x7e0000},
-      {type: "data-spiffs", offset: 0xfd0000, size: 0x14000},
-      {type: "data-coredump", offset: 0xfe4000, size: 0x1c000}
-    ];
     const STEP_IDS = [
       "connect",
       "partition",
@@ -722,7 +734,25 @@ pio run -e gh_release -t upload</code></pre>
         repo: "franssjz/cpr-vcodex",
         tag: "1.5.0.26-cpr-vcodex",
         asset: "1.5.0.26-cpr-vcodex.bin"
-      }
+      },
+      builds: [
+        {
+          id: "c3",
+          devices: ["x4", "x3"],
+          label: "Xteink X3/X4",
+          chipFamily: "ESP32-C3",
+          firmwareUrl: "firmware/firmware.bin",
+          downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.26-cpr-vcodex/1.5.0.26-cpr-vcodex.bin",
+          size: 5700928,
+          sha256: "840b007577c60319efff63b1d72dc8a13ea9b71e550c96257082e9d24d66ebb4",
+          source: {
+            type: "github-release",
+            repo: "franssjz/cpr-vcodex",
+            tag: "1.5.0.26-cpr-vcodex",
+            asset: "1.5.0.26-cpr-vcodex.bin"
+          }
+        }
+      ]
     };
 
     const els = {
@@ -743,8 +773,10 @@ pio run -e gh_release -t upload</code></pre>
     };
 
     const firmware = {...FALLBACK_RELEASE};
+    const firmwareBuilds = new Map();
     const stepNodes = new Map();
     let currentTransport = null;
+    let running = false;
     let selectedDevice = localStorage.getItem(DEVICE_STORAGE_KEY);
     if (!DEVICE_CONFIGS[selectedDevice]) {
       selectedDevice = "x4";
@@ -766,10 +798,14 @@ pio run -e gh_release -t upload</code></pre>
         firmware.size = manifest.size || firmware.size;
         firmware.sha256 = manifest.sha256 || firmware.sha256;
         firmware.source = manifest.source || firmware.source;
+        if (Array.isArray(manifest.builds) && manifest.builds.some(build => build?.id)) {
+          firmware.builds = manifest.builds;
+        }
         updateFirmwareDetails();
       })
       .catch(() => updateFirmwareDetails());
 
+    hydrateFirmwareBuilds();
     updateFirmwareDetails();
     updateDeviceSelection();
 
@@ -786,6 +822,11 @@ pio run -e gh_release -t upload</code></pre>
     async function startFlash() {
       let loader = null;
       const device = getDeviceConfig();
+      const selectedFirmware = getFirmwareForDevice();
+      if (!selectedFirmware) {
+        setError(siteT("firmwareBuildUnavailable", {device: device.label}));
+        return;
+      }
       setError("");
       setStatus(siteT("choosePort"));
       resetSteps();
@@ -817,7 +858,7 @@ pio run -e gh_release -t upload</code></pre>
 
         const firmwareData = await runStep("download", async () => {
           updateStep("download", {detail: siteT("fetchingFirmware")});
-          const response = await fetch(firmware.firmwareUrl, {cache: "no-store"});
+          const response = await fetch(selectedFirmware.firmwareUrl, {cache: "no-store"});
           if (!response.ok) {
             throw new Error(`${siteT("firmwareDownloadFailed")}: HTTP ${response.status}`);
           }
@@ -832,19 +873,19 @@ pio run -e gh_release -t upload</code></pre>
           if (data.length < APP_MIN_SIZE) {
             throw new Error(siteT("firmwareTooSmall"));
           }
-          if (firmware.size && data.length !== firmware.size) {
-            throw new Error(siteT("firmwareSizeMismatch", {expected: formatBytes(firmware.size), actual: formatBytes(data.length)}));
+          if (selectedFirmware.size && data.length !== selectedFirmware.size) {
+            throw new Error(siteT("firmwareSizeMismatch", {expected: formatBytes(selectedFirmware.size), actual: formatBytes(data.length)}));
           }
-          if (firmware.sha256) {
+          if (selectedFirmware.sha256) {
             if (!crypto.subtle) {
               throw new Error(siteT("firmwareHashUnavailable"));
             }
             const digest = await sha256Hex(data);
-            if (digest !== firmware.sha256.toLowerCase()) {
+            if (digest !== selectedFirmware.sha256.toLowerCase()) {
               throw new Error(siteT("firmwareHashMismatch"));
             }
           }
-          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}, SHA-256 ${shortSha(firmware.sha256)}`});
+          updateStep("download", {detail: `${firmware.version}, ${formatBytes(data.length)}, SHA-256 ${shortSha(selectedFirmware.sha256)}`});
           return data;
         });
 
@@ -1057,9 +1098,6 @@ pio run -e gh_release -t upload</code></pre>
     }
 
     function validatePartitionTable(table, device) {
-      if (partitionTablesMatch(table, X4_PRO_PARTITIONS)) {
-        throw new Error(siteT("partitionUnsupportedX4Pro"));
-      }
       const ok = partitionTablesMatch(table, device.partitions);
       if (!ok) {
         throw new Error(
@@ -1226,10 +1264,11 @@ pio run -e gh_release -t upload</code></pre>
     }
 
     function setRunning(isRunning) {
-      els.flashButton.disabled = isRunning || !webSerialSupported;
+      running = isRunning;
+      els.flashButton.disabled = isRunning || !webSerialSupported || !getFirmwareForDevice();
       els.flashButton.textContent = isRunning ? siteT("flashing") : flashButtonLabel();
       els.deviceOptions.forEach(button => {
-        button.disabled = isRunning;
+        button.disabled = isRunning || !getFirmwareForDevice(button.dataset.device);
       });
     }
 
@@ -1264,18 +1303,29 @@ pio run -e gh_release -t upload</code></pre>
     }
 
     function updateFirmwareDetails() {
-      const source = firmware.source || {};
+      hydrateFirmwareBuilds();
+      if (!getFirmwareForDevice(selectedDevice)) {
+        const firstAvailable = Object.keys(DEVICE_CONFIGS).find(deviceId => getFirmwareForDevice(deviceId));
+        selectedDevice = firstAvailable || "x4";
+        localStorage.setItem(DEVICE_STORAGE_KEY, selectedDevice);
+      }
+      const selectedFirmware = getFirmwareForDevice();
+      const source = selectedFirmware?.source || firmware.source || {};
       const sourceTag = source.tag || firmware.version;
       const sourceRepo = source.repo || "franssjz/cpr-vcodex";
       els.version.textContent = firmware.version;
       els.source.textContent = source.type === "github-release"
         ? `${sourceRepo}@${sourceTag}`
         : siteT("firmwareSourceUnknown");
-      els.asset.textContent = source.asset || firmware.downloadUrl.split("/").pop() || siteT("firmwareSourceUnknown");
-      els.size.textContent = firmware.size ? formatBytes(firmware.size) : siteT("firmwareSizeUnknown");
-      els.sha.textContent = firmware.sha256 ? shortSha(firmware.sha256) : siteT("firmwareSourceUnknown");
-      els.sha.title = firmware.sha256 || "";
-      els.downloadLink.href = firmware.downloadUrl;
+      els.asset.textContent = source.asset || selectedFirmware?.downloadUrl?.split("/").pop() || siteT("firmwareSourceUnknown");
+      els.size.textContent = selectedFirmware?.size ? formatBytes(selectedFirmware.size) : siteT("firmwareSizeUnknown");
+      els.sha.textContent = selectedFirmware?.sha256 ? shortSha(selectedFirmware.sha256) : siteT("firmwareSourceUnknown");
+      els.sha.title = selectedFirmware?.sha256 || "";
+      if (selectedFirmware?.downloadUrl) {
+        els.downloadLink.href = selectedFirmware.downloadUrl;
+      } else {
+        els.downloadLink.removeAttribute("href");
+      }
       updateDeviceSelection();
     }
 
@@ -1283,8 +1333,10 @@ pio run -e gh_release -t upload</code></pre>
       const device = getDeviceConfig();
       els.deviceOptions.forEach(button => {
         button.setAttribute("aria-checked", button.dataset.device === selectedDevice ? "true" : "false");
+        button.disabled = running || !getFirmwareForDevice(button.dataset.device);
       });
-      if (!els.flashButton.disabled || !webSerialSupported) {
+      els.flashButton.disabled = running || !webSerialSupported || !getFirmwareForDevice();
+      if (!running) {
         els.flashButton.textContent = flashButtonLabel();
       }
       els.flashButton.setAttribute("aria-label", flashButtonLabel());
@@ -1298,6 +1350,43 @@ pio run -e gh_release -t upload</code></pre>
 
     function flashButtonLabel() {
       return siteT("flashButtonForDevice", {device: getDeviceConfig().label});
+    }
+
+    function hydrateFirmwareBuilds() {
+      firmwareBuilds.clear();
+      const builds = Array.isArray(firmware.builds) && firmware.builds.length
+        ? firmware.builds
+        : [{
+            id: "c3",
+            devices: ["x4", "x3"],
+            firmwareUrl: firmware.firmwareUrl,
+            downloadUrl: firmware.downloadUrl,
+            size: firmware.size,
+            sha256: firmware.sha256,
+            source: firmware.source
+          }];
+      for (const build of builds) {
+        if (build && build.id) {
+          firmwareBuilds.set(build.id, build);
+        }
+      }
+      if (!firmwareBuilds.size && firmware.firmwareUrl) {
+        firmwareBuilds.set("c3", {
+          id: "c3",
+          devices: ["x4", "x3"],
+          firmwareUrl: firmware.firmwareUrl,
+          downloadUrl: firmware.downloadUrl,
+          size: firmware.size,
+          sha256: firmware.sha256,
+          source: firmware.source
+        });
+      }
+    }
+
+    function getFirmwareForDevice(deviceId = selectedDevice) {
+      const device = DEVICE_CONFIGS[deviceId];
+      if (!device) return null;
+      return firmwareBuilds.get(device.firmwareBuild) || null;
     }
 
     function shortSha(value) {

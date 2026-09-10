@@ -51,17 +51,17 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Item | Value |
 |---|---|
 | Project | `CPR-vCodex` |
-| Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested |
+| Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested; `Xteink X4 Pro` release target in progress |
 | Current release (CPR-vCodex) build | [`1.5.0.26-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.5.0.26-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`a485dc46`](https://github.com/Free-Ink/freeink-sdk/commit/a485dc46ef5fb2283e4bdb674002ddbef97a9268), with runtime X3/X4 and X3 UC8253/UC8279d detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | Selected CrossPoint Reader 1.5 changes reviewed through `master` [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc), plus targeted CrossInk improvements, manually adapted to retain the vCodex band renderer, KOReader profiles, reading statistics, highlights, themes, ruby, Lyra, and SD-card fonts. Release `1.5.0.22` additionally adopts CrossPoint's pinned `freeink-sdk` hardware layer and the isolated SD recovery entry from [`5717374e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5717374e4be88b3d30f45626bf796ceb3687c836). |
-| Current release focus | Improves four-level grayscale for EPUB image pages on X3/X4 while preserving the established differential refresh and low-memory fallback paths. |
-| Latest release notes | - Factory-waveform grayscale for EPUB image pages in Auto refresh mode, with calibrated dithering and adaptive JPEG tone mapping.<br>- Waveform-specific cache validation and a differential redraw fallback when factory rendering cannot reserve memory.<br>- Preserved highlights and scaled text, 218 host regressions, and 86.8% release flash usage. X4 Pro remains unsupported. |
+| Current release focus | Improves four-level grayscale for EPUB image pages on X3/X4 while preparing separate X4 Pro firmware release assets. |
+| Latest release notes | - Factory-waveform grayscale for EPUB image pages in Auto refresh mode, with calibrated dithering and adaptive JPEG tone mapping.<br>- Waveform-specific cache validation and a differential redraw fallback when factory rendering cannot reserve memory.<br>- Preserved highlights and scaled text, 218 host regressions, and 86.8% release flash usage. X4 Pro auto-flash support is being wired through a separate ESP32-S3 release asset. |
 | Base firmware line | `CrossPoint Reader 1.5.0` |
 | Latest official commit reviewed | `master` through [`95a847c7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/95a847c7210a5060cf0bb5a20fbc855869d735f2) and `develop` through [`93d572fc`](https://github.com/crosspoint-reader/crosspoint-reader/commit/93d572fc) |
-| Latest official commit incorporated | Release `1.5.0.26` retains the CrossPoint/freeink X3/X4 hardware base and adapts the factory grayscale pipeline from PR #169 without adding the separate X4 Pro firmware target. |
+| Latest official commit incorporated | Release `1.5.0.26` retains the CrossPoint/freeink X3/X4 hardware base and adapts the factory grayscale pipeline from PR #169. The next release path adds a separate X4 Pro firmware target. |
 | Intentional upstream exclusions | Whole-UI/SDK replacement, reboot-on-OOM behaviour, S3-only features, global CSS deduplication, unsupported themes, and Hebrew editing without a complete bidirectional text engine remain excluded. |
 
 ## Froze in Update Complete (Soft Bricked?) — X3 recovery
@@ -78,7 +78,7 @@ Affected users have successfully recovered devices running CPR-vCodex `1.5.0.3` 
 
 ## Web tools
 
-- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware on ESP32-C3 Xteink X3 and X4 devices from Chrome or Edge using Web Serial. X4 Pro is a distinct ESP32-S3 device and is not currently supported; the flasher recognizes its partition table and stops before writing.
+- [Auto Flash](https://franssjz.github.io/cpr-vcodex/flash.html) installs the latest CPR-vCodex firmware on ESP32-C3 Xteink X3/X4 devices from Chrome or Edge using Web Serial, and can also serve X4 Pro once the current release publishes the separate ESP32-S3 `-x4pro` asset. The flasher validates the selected device partition table before writing.
 - [Reading Stats Editor](https://franssjz.github.io/cpr-vcodex/reading-stats-editor/) edits exported reading stats locally in the browser. No upload, no server.
 - Device web settings treat the KOReader password as write-only: the stored value is never returned to the browser, which only indicates that a password is already configured.
 

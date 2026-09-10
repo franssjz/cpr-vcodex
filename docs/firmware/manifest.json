@@ -16,7 +16,25 @@
   "new_install_prompt_erase": false,
   "builds": [
     {
+      "id": "c3",
+      "devices": [
+        "x4",
+        "x3"
+      ],
+      "label": "Xteink X3/X4",
       "chipFamily": "ESP32-C3",
+      "firmwareUrl": "firmware/firmware.bin",
+      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.26-cpr-vcodex/1.5.0.26-cpr-vcodex.bin",
+      "size": 5700928,
+      "sha256": "840b007577c60319efff63b1d72dc8a13ea9b71e550c96257082e9d24d66ebb4",
+      "source": {
+        "type": "github-release",
+        "repo": "franssjz/cpr-vcodex",
+        "tag": "1.5.0.26-cpr-vcodex",
+        "asset": "1.5.0.26-cpr-vcodex.bin",
+        "publishedAt": "2026-09-10T08:18:12Z",
+        "assetUpdatedAt": "2026-09-10T08:18:12Z"
+      },
       "parts": [
         {
           "path": "firmware.bin",
