@@ -21,9 +21,13 @@ void ConfirmationActivity::onEnter() {
   if (!heading.empty()) {
     safeHeading = renderer.truncatedText(fontId, heading.c_str(), maxWidth, EpdFontFamily::BOLD);
   }
-  // Explanatory confirmation text must remain readable instead of losing its
-  // consequence at the edge of a single truncated line. Newlines delimit
-  // paragraphs, while the bounded line count keeps the button area clear.
+  // The body wraps rather than truncating: a prompt explaining what is about to
+  // happen is routinely longer than one line, and truncating it cut off the part
+  // that mattered. The heading stays single-line: it's a title, not prose.
+  //
+  // A newline in the body starts a new paragraph, so callers can separate the
+  // question being asked from the explanation of what it means instead of
+  // running them together as one block.
   if (!body.empty()) {
     size_t start = 0;
     while (start <= body.size() && static_cast<int>(bodyLines.size()) < MAX_BODY_LINES) {
