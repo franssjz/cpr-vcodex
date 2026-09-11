@@ -1,17 +1,17 @@
 {
   "name": "CPR-vCodex",
-  "version": "1.6.0.31-cpr-vcodex",
+  "version": "1.6.0.32-cpr-vcodex",
   "firmwareUrl": "firmware/firmware.bin",
-  "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex.bin",
-  "size": 6390128,
-  "sha256": "cc3ef58b490b9bf47fc81cd9f6ad79f5066a3c29aaf77e08aecbbb00991f3d95",
+  "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.32-cpr-vcodex/1.6.0.32-cpr-vcodex.bin",
+  "size": 6390448,
+  "sha256": "89743db68a450a26fb59448b45c259501e65469ad72a49a868be814cf4ac2b13",
   "source": {
     "type": "github-release",
     "repo": "franssjz/cpr-vcodex",
-    "tag": "1.6.0.31-cpr-vcodex",
-    "asset": "1.6.0.31-cpr-vcodex.bin",
-    "publishedAt": "2026-09-11T16:42:16Z",
-    "assetUpdatedAt": "2026-09-11T16:43:09Z"
+    "tag": "1.6.0.32-cpr-vcodex",
+    "asset": "1.6.0.32-cpr-vcodex.bin",
+    "publishedAt": "2026-09-11T19:26:33Z",
+    "assetUpdatedAt": "2026-09-11T19:26:33Z"
   },
   "devices": {
     "x4": {
@@ -19,24 +19,24 @@
       "chipFamily": "ESP32-C3",
       "environment": "gh_release",
       "path": "firmware/firmware.bin",
-      "asset": "1.6.0.31-cpr-vcodex.bin",
-      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex.bin",
-      "size": 6390128,
-      "sha256": "cc3ef58b490b9bf47fc81cd9f6ad79f5066a3c29aaf77e08aecbbb00991f3d95",
+      "asset": "1.6.0.32-cpr-vcodex.bin",
+      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.32-cpr-vcodex/1.6.0.32-cpr-vcodex.bin",
+      "size": 6390448,
+      "sha256": "89743db68a450a26fb59448b45c259501e65469ad72a49a868be814cf4ac2b13",
       "appSlotSize": 6553600,
-      "assetUpdatedAt": "2026-09-11T16:43:09Z"
+      "assetUpdatedAt": "2026-09-11T19:26:33Z"
     },
     "x3": {
       "board": "x4",
       "chipFamily": "ESP32-C3",
       "environment": "gh_release",
       "path": "firmware/firmware.bin",
-      "asset": "1.6.0.31-cpr-vcodex.bin",
-      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex.bin",
-      "size": 6390128,
-      "sha256": "cc3ef58b490b9bf47fc81cd9f6ad79f5066a3c29aaf77e08aecbbb00991f3d95",
+      "asset": "1.6.0.32-cpr-vcodex.bin",
+      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.32-cpr-vcodex/1.6.0.32-cpr-vcodex.bin",
+      "size": 6390448,
+      "sha256": "89743db68a450a26fb59448b45c259501e65469ad72a49a868be814cf4ac2b13",
       "appSlotSize": 7798784,
-      "assetUpdatedAt": "2026-09-11T16:43:09Z"
+      "assetUpdatedAt": "2026-09-11T19:26:33Z"
     }
   },
   "new_install_prompt_erase": false,
