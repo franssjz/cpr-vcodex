@@ -68,7 +68,7 @@ X4PRO_TARGET = FirmwareTarget(
     asset_suffix="-x4pro",
     local_name="firmware-x4pro.bin",
     slot_size=8_257_536,
-    required=False,
+    required=True,
     environment="x4pro-gh_release",
 )
 FIRMWARE_TARGETS: tuple[FirmwareTarget, ...] = (C3_TARGET, X4PRO_TARGET)
