@@ -695,6 +695,10 @@ X4 Pro flashing notes:
 - The ESP32-S3 on the X4 Pro cannot be reset over the serial connection the
   way the C3 boards can. If the upload does not start, unplug the USB cable,
   plug it back in, and hold the Power button while the upload begins.
+- If a frozen X4 Pro still cannot connect, enter its ROM download mode: hold
+  the upper/previous-page side button (GPIO0), press and release Reset, then
+  release the side button. Select the new ESP32-S3 USB JTAG/Serial port in the
+  browser and start the flash again.
 - USB Serial/JTAG is the normal USB personality, so `pio device monitor` works.
   The USB Drive mode in File Transfer switches the port to mass storage only
   while that screen is open and reboots back to serial on exit.
