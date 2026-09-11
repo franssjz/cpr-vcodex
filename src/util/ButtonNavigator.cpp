@@ -65,6 +65,21 @@ void ButtonNavigator::onContinuous(const Buttons& buttons, const Callback& callb
   }
 }
 
+void ButtonNavigator::onNextLongPressOnce(const Callback& callback) { onLongPressOnce(getNextButtons(), callback); }
+
+void ButtonNavigator::onPreviousLongPressOnce(const Callback& callback) {
+  onLongPressOnce(getPreviousButtons(), callback);
+}
+
+void ButtonNavigator::onLongPressOnce(const Buttons& buttons, const Callback& callback) {
+  if (!mappedInput) return;
+
+  const bool wasLongPressed = std::any_of(buttons.begin(), buttons.end(), [this](const MappedInputManager::Button button) {
+    return mappedInput->wasLongPressed(button, continuousStartMs);
+  });
+  if (wasLongPressed) callback();
+}
+
 bool ButtonNavigator::shouldNavigateContinuously() const {
   if (!mappedInput) return false;
 

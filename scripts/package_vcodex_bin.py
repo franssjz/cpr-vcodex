@@ -109,10 +109,9 @@ def package_vcodex_bin(source, target, env):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     pio_env = env.subst("$PIOENV")
-    # Board suffix: the ESP32-S3 X4 Pro envs publish "<tag>-x4pro.bin" next to
-    # the C3 "<tag>.bin" so the two binaries never collide in artifacts/ or on
-    # the GitHub release. Dev x4pro builds already carry "-x4pro" in their
-    # generated version string (scripts/git_branch.py); don't double it.
+    # Board suffix for internal ESP32-S3 X4 Pro builds. Public distribution is
+    # withdrawn; keeping distinct local names prevents C3/X4 Pro confusion in
+    # maintainer diagnostics. Dev versions already carry the suffix.
     board_suffix = ""
     if pio_env.startswith("x4pro") and not safe_version.endswith("-x4pro"):
         board_suffix = "-x4pro"

@@ -13,8 +13,6 @@ jobs:
         include:
           - pio_env: gh_release_rc
             asset: firmware.bin
-          - pio_env: x4pro-gh_release_rc
-            asset: firmware-x4pro.bin
     steps:
       - uses: actions/checkout@v4
         with:

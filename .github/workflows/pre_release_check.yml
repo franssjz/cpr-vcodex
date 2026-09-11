@@ -1,9 +1,8 @@
 name: Pre-release Check
 
-# Dry-run builds both release environments (gh_release for the ESP32-C3 X4/X3
-# image, x4pro-gh_release for the ESP32-S3 X4 Pro image), validates the two
-# packaged artifact pairs against the candidate tag, and checks the auto-flash
-# manifest. Nothing is tagged or published.
+# Dry-run builds the published ESP32-C3 X4/X3 release environment, validates
+# its artifact pair against the candidate tag, and checks that Auto Flash does
+# not expose an X4 Pro image. Nothing is tagged or published.
 
 on:
   workflow_dispatch:
@@ -13,7 +12,7 @@ on:
         required: true
         type: string
       flash_budget_percent:
-        description: "Maximum flash usage percent of each board's OTA app slot (C3: 6.4 MB, X4 Pro: 8.2 MB)"
+        description: "Maximum flash usage percent of the X4/X3 OTA app slot (6.4 MB)"
         required: false
         default: "97.5"
         type: string
@@ -60,10 +59,11 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: pio-${{ runner.os }}-
 
-      - name: Run pre-release check (gh_release + x4pro-gh_release)
+      - name: Run pre-release check (gh_release only)
         run: |
           python scripts/pre_release_check.py \
             --tag "${{ inputs.tag }}" \
+            --env gh_release \
             --flash-budget-percent "${{ inputs.flash_budget_percent }}"
 
       - name: Upload firmware budget reports
@@ -74,7 +74,4 @@ jobs:
             artifacts/${{ inputs.tag }}-build.log
             artifacts/${{ inputs.tag }}-firmware-budget.json
             artifacts/${{ inputs.tag }}-firmware-budget.md
-            artifacts/${{ inputs.tag }}-x4pro-build.log
-            artifacts/${{ inputs.tag }}-x4pro-firmware-budget.json
-            artifacts/${{ inputs.tag }}-x4pro-firmware-budget.md
           if-no-files-found: error

@@ -1,10 +1,8 @@
 name: Sync Auto Flash Firmware
 
-# Mirrors the latest stable GitHub release into docs/firmware/ for the browser
-# flasher: `<tag>.bin` -> firmware.bin (ESP32-C3 X4/X3, required) and
-# `<tag>-x4pro.bin` -> firmware-x4pro.bin (ESP32-S3 X4 Pro, optional until a
-# release ships it). The manifest, flash.html fallback block, README and site
-# strings are rewritten together so they always describe the same release.
+# Mirrors the latest stable ESP32-C3 X4/X3 release into docs/firmware/ for the
+# browser flasher. X4 Pro distribution is withdrawn: the sync removes any
+# stale X4 Pro copy and never adds it to the manifest.
 
 on:
   workflow_dispatch:
@@ -42,8 +40,8 @@ jobs:
       - name: Commit synchronized auto-flash firmware
         run: |
           set -euo pipefail
-          # Stage docs/firmware as a directory so a newly added firmware-x4pro.bin
-          # (or its removal when a release lacks the X4 Pro asset) is captured.
+          # Stage docs/firmware as a directory so stale withdrawn files are
+          # removed together with the regenerated manifest.
           git add -- README.md docs/assets/site.js docs/index.html docs/flash.html docs/firmware
           if git diff --cached --quiet; then
             echo "Auto-flash firmware is already synchronized."
@@ -52,9 +50,5 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "${AUTOFLASH_X4PRO:-0}" = "1" ]; then
-            git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION} (X4/X3 + X4 Pro)"
-          else
-            git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION}"
-          fi
+          git commit -m "docs: sync auto-flash firmware to ${AUTOFLASH_VERSION}"
           git push origin "HEAD:${PAGES_BRANCH}"

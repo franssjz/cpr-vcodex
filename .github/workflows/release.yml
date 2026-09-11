@@ -1,9 +1,8 @@
 name: Compile Release
 
-# Builds every supported board's release firmware on tag push. Each matrix
-# entry packages its own asset set: the C3 X4/X3 binary keeps the historic
-# `<tag>.bin` naming, the ESP32-S3 X4 Pro binary is published as
-# `<tag>-x4pro.bin`. Matrix pio_env names must match platformio.ini.
+# Publishes only the ESP32-C3 firmware shared by X4/X3. X4 Pro distribution is
+# withdrawn pending hardware validation and a recovery path for USB-locked
+# devices; release tags must not create `-x4pro` assets.
 
 on:
   push:
@@ -27,8 +26,6 @@ jobs:
         include:
           - pio_env: gh_release
             suffix: ""
-          - pio_env: x4pro-gh_release
-            suffix: "-x4pro"
     env:
       PIO_ENV: ${{ matrix.pio_env }}
       ASSET_SUFFIX: ${{ matrix.suffix }}
@@ -139,8 +136,6 @@ jobs:
 
           python3 scripts/release_notes_from_changelog.py --tag "${release_tag}" > "${notes_file}"
 
-          # Both matrix entries race on the same release; whichever lands first
-          # creates it, the other uploads into it. Retry create->upload once.
           upload_assets() {
             gh release upload "${release_tag}" \
               "${artifact}#${tag}.bin" \

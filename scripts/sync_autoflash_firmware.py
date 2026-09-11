@@ -20,9 +20,8 @@ APP_PARTITION_SIZE = 6_553_600
 MIN_FIRMWARE_SIZE = 1_000_000
 VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-[0-9A-Za-z._-]*cpr-vcodex\b")
 FIRMWARE_TAG_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-cpr-vcodex$")
-# Release asset URLs: group "suffix" distinguishes the ESP32-S3 X4 Pro asset
-# (`<tag>-x4pro.bin`) from the C3 asset (`<tag>.bin`) so each is rewritten to
-# its own download URL instead of every URL collapsing onto the C3 one.
+# Release asset URLs retain suffix awareness so old X4 Pro links are not ever
+# rewritten to the C3 image while X4 Pro distribution is withdrawn.
 DOWNLOAD_URL_RE = re.compile(
     r"https://github\.com/[^/]+/[^/]+/releases/download/[^/]+/(?P<name>[^\"'\s<>/]+?)(?P<suffix>-x4pro)?\.bin"
 )
@@ -68,10 +67,13 @@ X4PRO_TARGET = FirmwareTarget(
     asset_suffix="-x4pro",
     local_name="firmware-x4pro.bin",
     slot_size=8_257_536,
-    required=True,
+    required=False,
     environment="x4pro-gh_release",
 )
-FIRMWARE_TARGETS: tuple[FirmwareTarget, ...] = (C3_TARGET, X4PRO_TARGET)
+# Only the C3 image is distributable. Keep the X4 Pro descriptor solely so the
+# sync can identify and remove stale local files without downloading them.
+FIRMWARE_TARGETS: tuple[FirmwareTarget, ...] = (C3_TARGET,)
+WITHDRAWN_TARGETS: tuple[FirmwareTarget, ...] = (X4PRO_TARGET,)
 
 # The X3 shares the C3 image but has a larger OTA slot; the manifest exposes it
 # as its own device entry so flash.html can pick per-device limits uniformly.
@@ -81,7 +83,6 @@ X3_SLOT_SIZE = 7_798_784
 DEVICE_ENTRIES: tuple[tuple[str, FirmwareTarget, int], ...] = (
     ("x4", C3_TARGET, C3_TARGET.slot_size),
     ("x3", C3_TARGET, X3_SLOT_SIZE),
-    ("x4pro", X4PRO_TARGET, X4PRO_TARGET.slot_size),
 )
 
 
@@ -243,12 +244,11 @@ def build_manifest(
     """Build docs/firmware/manifest.json.
 
     `images` maps target key -> {"asset": <github asset>, "size": int, "sha256": str,
-    "downloadUrl": str}. The C3 entry ("x4") is mandatory; "x4pro" is optional.
+    "downloadUrl": str}. Only the C3 entry ("x4") is distributable.
 
     The top level keeps the historic flat C3 fields (version/firmwareUrl/
     downloadUrl/size/sha256/source) so older page copies keep working, and adds
-    a `devices` object keyed x4/x3/x4pro plus an ESP Web Tools style `builds`
-    list with one entry per chip family.
+    a `devices` object keyed x4/x3 plus an ESP Web Tools style `builds` list.
     """
     tag = str(release["tag_name"])
     c3 = images[C3_TARGET.key]
@@ -314,15 +314,13 @@ def rewrite_download_urls(text: str, urls_by_suffix: dict[str, str]) -> str:
     return DOWNLOAD_URL_RE.sub(replace, text)
 
 
-def update_text_file(path: Path, tag: str, download_url: str, x4pro_download_url: str | None = None) -> bool:
+def update_text_file(path: Path, tag: str, download_url: str) -> bool:
     if not path.exists():
         return False
 
     original = path.read_text(encoding="utf-8")
     updated = VERSION_RE.sub(tag, original)
     urls_by_suffix = {"": download_url}
-    if x4pro_download_url:
-        urls_by_suffix[X4PRO_TARGET.asset_suffix] = x4pro_download_url
     updated = rewrite_download_urls(updated, urls_by_suffix)
     if updated == original:
         return False
@@ -400,6 +398,12 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None, tag: str | N
     tag = str(release["tag_name"])
     firmware_dir = project_dir / "docs" / "firmware"
 
+    for target in WITHDRAWN_TARGETS:
+        stale = firmware_dir / target.local_name
+        if stale.exists():
+            stale.unlink()
+            print(f"Removed withdrawn {stale.relative_to(project_dir)}")
+
     images: dict[str, dict[str, Any]] = {}
     for target in FIRMWARE_TARGETS:
         asset = select_target_asset(release, target)
@@ -431,19 +435,14 @@ def sync_autoflash(repo: str, project_dir: Path, token: str | None, tag: str | N
     (firmware_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
 
     c3 = images[C3_TARGET.key]
-    x4pro = images.get(X4PRO_TARGET.key)
-    # Even when the release lacks the X4 Pro asset, rewrite any existing X4 Pro
-    # URL to the new tag so the docs never point at a mismatched release.
-    x4pro_url = x4pro["downloadUrl"] if x4pro else asset_download_url(repo, tag, X4PRO_TARGET)
     for relative in ("README.md", "docs/assets/site.js", "docs/index.html", "docs/flash.html"):
-        update_text_file(project_dir / relative, tag, c3["downloadUrl"], x4pro_url)
+        update_text_file(project_dir / relative, tag, c3["downloadUrl"])
     update_flash_fallback(project_dir / "docs" / "flash.html", manifest)
 
     env_path = os.environ.get("GITHUB_ENV")
     if env_path:
         with open(env_path, "a", encoding="utf-8") as env_file:
             env_file.write(f"AUTOFLASH_VERSION={tag}\n")
-            env_file.write(f"AUTOFLASH_X4PRO={'1' if x4pro else '0'}\n")
 
     print(f"Synced auto-flash firmware to {tag}")
     for target in FIRMWARE_TARGETS:

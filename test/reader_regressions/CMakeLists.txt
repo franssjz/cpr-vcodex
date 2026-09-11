@@ -3,6 +3,7 @@ add_executable(reader_regressions_test
   DictionaryFontSelectionTest.cpp
   FsHelpersCaseTest.cpp
   HighlightTextMatcherTest.cpp
+  ImageDitherTest.cpp
   ImageSafetyTest.cpp
   ReadingSessionLogTest.cpp
   RubyCjkLayoutTest.cpp

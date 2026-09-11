@@ -75,4 +75,8 @@ if(Python3_Interpreter_FOUND)
     NAME web_optimizer_regressions
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_optimizer_regressions/EpubOptimizerFallbackTest.py
   )
+  add_test(
+    NAME web_flash_regressions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_flash_regressions/FlashPageTest.py
+  )
 endif()

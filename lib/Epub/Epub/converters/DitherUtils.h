@@ -10,18 +10,21 @@ inline const uint8_t bayer4x4[4][4] = {
     {15, 7, 13, 5},
 };
 
-// Apply Bayer dithering and quantize to 4 levels (0-3)
-// Stateless - works correctly with any pixel processing order
+// Quantize to the panel's four physical gray levels while distributing the
+// fractional level over a 4x4 Bayer cell. This preserves the average luminance
+// across the full 0..255 range instead of crushing values around the fixed
+// quarter-tone thresholds. Stateless: safe for tiled or out-of-order decoding.
 inline uint8_t applyBayerDither4Level(uint8_t gray, int x, int y) {
-  int bayer = bayer4x4[y & 3][x & 3];
-  int dither = (bayer - 8) * 5;  // Scale to +/-40 (half of quantization step 85)
+  constexpr uint16_t maxLevel = 3;
+  constexpr uint16_t inputRange = 255;
+  const uint16_t scaled = static_cast<uint16_t>(gray) * maxLevel;
+  uint8_t level = static_cast<uint8_t>(scaled / inputRange);
+  const uint16_t remainder = scaled % inputRange;
 
-  int adjusted = gray + dither;
-  if (adjusted < 0) adjusted = 0;
-  if (adjusted > 255) adjusted = 255;
-
-  if (adjusted < 64) return 0;
-  if (adjusted < 128) return 1;
-  if (adjusted < 192) return 2;
-  return 3;
+  // Cell-centred thresholds 8, 24, ... 248 give an even 16-step coverage.
+  const uint16_t threshold = static_cast<uint16_t>(bayer4x4[y & 3][x & 3]) * 16 + 8;
+  if (level < maxLevel && remainder > threshold) {
+    ++level;
+  }
+  return level;
 }

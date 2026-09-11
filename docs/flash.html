@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X4, X3 or X4 Pro using a browser-based Web Serial installer.">
+  <meta name="description" content="Flash CPR-vCodex firmware to an Xteink X4 or X3 using a browser-based Web Serial installer. X4 Pro distribution is withdrawn.">
   <title>Auto Flash - CPR-vCodex</title>
   <link rel="stylesheet" href="assets/site.css">
   <style>
@@ -503,7 +503,7 @@
     <section class="hero">
       <p class="eyebrow" data-site-i18n="flashEyebrow">Browser-based installer</p>
       <h1 data-site-i18n="flashTitle">Flash CPR-vCodex</h1>
-      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X4, X3 or X4 Pro from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
+      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X4 or X3 from Chrome or Edge using Web Serial. X4 Pro distribution is withdrawn.</p>
     </section>
 
     <section class="grid">
@@ -519,13 +519,13 @@
           <div class="step">
             <div>
               <h3 data-site-i18n="cableTitle">Use a data USB-C cable</h3>
-              <p data-site-i18n="cableText">Connect the Xteink to your computer. If no serial port appears, wake and unlock the device, then reconnect it. On the X4 Pro, unplug and replug the cable and hold Power if the port does not show up.</p>
+              <p data-site-i18n="cableText">Connect the Xteink X4 or X3 to your computer. If no serial port appears, wake and unlock the device, then reconnect it.</p>
             </div>
           </div>
           <div class="step">
             <div>
               <h3 data-site-i18n="browserTitle">Use Chrome or Edge on desktop</h3>
-              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the Xteink USB serial port (ESP32-C3 on the X4 and X3, ESP32-S3 on the X4 Pro).</p>
+              <p data-site-i18n="browserText">Firefox and Safari do not support Web Serial. The browser will ask you to choose the ESP32-C3 USB serial port of the X4 or X3.</p>
             </div>
           </div>
           <div class="step">
@@ -540,7 +540,7 @@
       <aside class="card flash-panel">
         <div class="device-box">
           <span class="device-label" id="device-model-title" data-site-i18n="deviceModelTitle">Device model</span>
-          <p data-site-i18n="deviceModelText">Choose the exact model before flashing. X3 and X4 share one ESP32-C3 image with different OTA slot sizes; the X4 Pro is an ESP32-S3 with its own firmware. The page checks the connected chip before writing.</p>
+          <p data-site-i18n="deviceModelText">Choose X4 or X3 before flashing. They share one ESP32-C3 image with different OTA slot sizes. X4 Pro firmware is not distributed.</p>
           <div class="device-options" role="radiogroup" aria-labelledby="device-model-title">
             <button class="device-option" type="button" role="radio" aria-checked="true" data-device="x4">
               <strong data-site-i18n="deviceX4">Xteink X4</strong>
@@ -550,11 +550,12 @@
               <strong data-site-i18n="deviceX3">Xteink X3</strong>
               <span data-site-i18n="deviceX3Slot">ESP32-C3 · 7.4 MB OTA slot</span>
             </button>
-            <button class="device-option" type="button" role="radio" aria-checked="false" data-device="x4pro">
+            <button class="device-option" type="button" role="radio" aria-checked="false" aria-disabled="true" data-device="x4pro" disabled>
               <strong data-site-i18n="deviceX4Pro">Xteink X4 Pro</strong>
-              <span data-site-i18n="deviceX4ProSlot">ESP32-S3 · 8.2 MB OTA slot</span>
+              <span data-site-i18n="deviceX4ProBlocked">Firmware withdrawn · flashing blocked</span>
             </button>
           </div>
+          <p class="device-note" data-site-i18n="x4ProDistributionWarning">Do not install CPR-vCodex on X4 Pro. Its binaries and flashing paths are withdrawn while locked-device recovery is investigated.</p>
           <p class="device-note" id="device-note" hidden></p>
         </div>
 
@@ -617,10 +618,7 @@
 cd cpr-vcodex
 
 # Xteink X4 / X3 (ESP32-C3)
-pio run -e gh_release -t upload
-
-# Xteink X4 Pro (ESP32-S3)
-pio run -e x4pro-gh_release -t upload</code></pre>
+pio run -e gh_release -t upload</code></pre>
     </section>
   </main>
 
@@ -635,19 +633,7 @@ pio run -e x4pro-gh_release -t upload</code></pre>
     const OTADATA_OFFSET = 0xe000;
     const OTADATA_SIZE = 0x2000;
     const APP_MIN_SIZE = 0xf0000;
-    const DEVICE_STORAGE_KEY = "cprVcodexFlashDevice";
     const RELEASE_REPO = "franssjz/cpr-vcodex";
-    // Stock Xteink X4 Pro (ESP32-S3, 16 MB) partition table. Its OTA slots are
-    // 0x7E0000 each; the CPR-vCodex X4 Pro image is linked against the smaller
-    // C3 slot size, so it always fits.
-    const X4_PRO_PARTITIONS = [
-      {type: "data-nvs", offset: 0x9000, size: 0x5000},
-      {type: "data-ota", offset: 0xe000, size: 0x2000},
-      {type: "app-ota_0", offset: 0x10000, size: 0x7e0000},
-      {type: "app-ota_1", offset: 0x7f0000, size: 0x7e0000},
-      {type: "data-spiffs", offset: 0xfd0000, size: 0x14000},
-      {type: "data-coredump", offset: 0xfe4000, size: 0x1c000}
-    ];
     // `chip` must equal esptool-js (0.5.7) `loader.chip.CHIP_NAME` for the
     // connected part; the flasher aborts before any write if they differ.
     // `firmwareKey` selects the image entry in firmware/manifest.json `devices`.
@@ -692,15 +678,7 @@ pio run -e x4pro-gh_release -t upload</code></pre>
         label: "Xteink X4 Pro",
         chip: "ESP32-S3",
         firmwareKey: "x4pro",
-        appSize: 0x7e0000,
-        appOffsets: {
-          app0: 0x10000,
-          app1: 0x7f0000
-        },
-        partitions: X4_PRO_PARTITIONS,
-        // The S3 USB Serial/JTAG cannot be reset from the host; the user
-        // power-cycles it after the write (see flashCompleteX4Pro).
-        manualReset: true
+        distributionBlocked: true
       }
     };
     const STEP_IDS = [
@@ -772,14 +750,6 @@ pio run -e x4pro-gh_release -t upload</code></pre>
           downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex.bin",
           size: 6390128,
           sha256: "cc3ef58b490b9bf47fc81cd9f6ad79f5066a3c29aaf77e08aecbbb00991f3d95"
-        },
-        x4pro: {
-          chipFamily: "ESP32-S3",
-          path: "firmware/firmware-x4pro.bin",
-          asset: "1.6.0.31-cpr-vcodex-x4pro.bin",
-          downloadUrl: "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex-x4pro.bin",
-          size: 6494064,
-          sha256: "1424ca2080db6dd75ee3844b53411e4055f59a598458b83ae7929a013c63247a"
         }
       }
     };
@@ -806,10 +776,10 @@ pio run -e x4pro-gh_release -t upload</code></pre>
     const stepNodes = new Map();
     let currentTransport = null;
     let flashInProgress = false;
-    let selectedDevice = localStorage.getItem(DEVICE_STORAGE_KEY);
-    if (!DEVICE_CONFIGS[selectedDevice]) {
-      selectedDevice = "x4";
-    }
+    // Start every auto-flash visit on the safest/common target. Do not restore
+    // a previous X4 Pro choice: a stale selection can make a later X4 flash
+    // attempt confusing even though the chip-family guard prevents the write.
+    let selectedDevice = "x4";
     const webSerialSupported = "serial" in navigator;
 
     if (!webSerialSupported) {
@@ -842,7 +812,6 @@ pio run -e x4pro-gh_release -t upload</code></pre>
     els.deviceOptions.forEach(button => {
       button.addEventListener("click", () => {
         selectedDevice = button.dataset.device;
-        localStorage.setItem(DEVICE_STORAGE_KEY, selectedDevice);
         updateDeviceSelection();
       });
     });
@@ -1315,7 +1284,8 @@ pio run -e x4pro-gh_release -t upload</code></pre>
       els.flashButton.disabled = isRunning || !webSerialSupported || !getDeviceFirmware(getDeviceConfig());
       els.flashButton.textContent = isRunning ? siteT("flashing") : flashButtonLabel();
       els.deviceOptions.forEach(button => {
-        button.disabled = isRunning;
+        const device = DEVICE_CONFIGS[button.dataset.device];
+        button.disabled = isRunning || Boolean(device && device.distributionBlocked);
       });
     }
 
@@ -1366,7 +1336,9 @@ pio run -e x4pro-gh_release -t upload</code></pre>
         els.sha.title = image.sha256 || "";
         els.downloadLink.href = image.downloadUrl;
       } else {
-        els.asset.textContent = siteT("firmwareNotPublished", {chip: device.chip});
+        els.asset.textContent = device.distributionBlocked
+          ? siteT("firmwareWithdrawn")
+          : siteT("firmwareNotPublished", {chip: device.chip});
         els.size.textContent = siteT("firmwareSizeUnknown");
         els.sha.textContent = siteT("firmwareSourceUnknown");
         els.sha.title = "";
@@ -1390,7 +1362,10 @@ pio run -e x4pro-gh_release -t upload</code></pre>
       els.flashButton.setAttribute("aria-label", flashButtonLabel());
       els.flashButton.title = flashButtonLabel();
       els.downloadLink.title = `${firmware.version} for ${device.label}`;
-      if (!image) {
+      if (device.distributionBlocked) {
+        els.deviceNote.textContent = siteT("x4ProDistributionWarning");
+        els.deviceNote.hidden = false;
+      } else if (!image) {
         els.deviceNote.textContent = siteT("firmwareUnavailableForDevice", {device: device.label, chip: device.chip});
         els.deviceNote.hidden = false;
       } else if (device.manualReset) {
@@ -1406,11 +1381,10 @@ pio run -e x4pro-gh_release -t upload</code></pre>
       return DEVICE_CONFIGS[selectedDevice] || DEVICE_CONFIGS.x4;
     }
 
-    // Resolve the image for a device from the manifest `devices` map. The
-    // ESP32-C3 entries fall back to the flat top-level fields (older manifest
-    // shape); the ESP32-S3 entry has no fallback, so a release without the
-    // X4 Pro asset leaves the X4 Pro option visible but not flashable.
+    // Resolve the image for a device from the manifest `devices` map. A local
+    // distribution block wins over any stale cached manifest or old asset.
     function getDeviceFirmware(device) {
+      if (device.distributionBlocked) return null;
       const devices = firmware.devices || {};
       const entry = devices[device.firmwareKey];
       if (entry && entry.path && entry.sha256) {

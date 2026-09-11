@@ -71,12 +71,12 @@ RELEASE_TARGETS: tuple[ReleaseTarget, ...] = (
     ),
 )
 TARGETS_BY_ENV = {target.env: target for target in RELEASE_TARGETS}
+PUBLISHED_RELEASE_TARGETS: tuple[ReleaseTarget, ...] = (TARGETS_BY_ENV["gh_release"],)
 
 # Manifest device entries: key -> (target whose image it flashes, slot size).
 MANIFEST_DEVICES: dict[str, tuple[ReleaseTarget, int]] = {
     "x4": (TARGETS_BY_ENV["gh_release"], APP_PARTITION_SIZE),
     "x3": (TARGETS_BY_ENV["gh_release"], X3_APP_PARTITION_SIZE),
-    "x4pro": (TARGETS_BY_ENV["x4pro-gh_release"], X4PRO_APP_PARTITION_SIZE),
 }
 
 
@@ -331,7 +331,13 @@ def validate_autoflash_manifest(project_dir: Path) -> None:
 
     devices = manifest.get("devices")
     if not isinstance(devices, dict):
-        fail("Auto-flash manifest must carry a `devices` object keyed x4/x3/x4pro")
+        fail("Auto-flash manifest must carry a `devices` object keyed x4/x3")
+
+    if "x4pro" in devices:
+        fail("Auto-flash manifest must not expose withdrawn devices.x4pro firmware")
+    stale_x4pro = firmware_dir / TARGETS_BY_ENV["x4pro-gh_release"].local_firmware
+    if stale_x4pro.exists():
+        fail(f"Withdrawn X4 Pro firmware copy must not exist: {stale_x4pro}")
 
     tag = manifest.get("version")
     for key, (target, slot_size) in MANIFEST_DEVICES.items():
@@ -384,15 +390,15 @@ def main() -> int:
         dest="envs",
         action="append",
         choices=sorted(TARGETS_BY_ENV),
-        help="Restrict to one release environment (repeatable). Default: all of "
-        + ", ".join(target.env for target in RELEASE_TARGETS),
+        help="Restrict to one release environment (repeatable). Default published target: "
+        + ", ".join(target.env for target in PUBLISHED_RELEASE_TARGETS),
     )
     parser.add_argument("--skip-build", action="store_true", help="Validate existing artifacts without rebuilding")
     parser.add_argument("--allow-dirty", action="store_true")
     parser.add_argument("--allow-existing-tag", action="store_true")
     args = parser.parse_args()
 
-    targets = [TARGETS_BY_ENV[env] for env in (args.envs or [target.env for target in RELEASE_TARGETS])]
+    targets = [TARGETS_BY_ENV[env] for env in (args.envs or [target.env for target in PUBLISHED_RELEASE_TARGETS])]
 
     project_dir = Path.cwd()
     try:

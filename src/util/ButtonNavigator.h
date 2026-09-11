@@ -38,6 +38,12 @@ class ButtonNavigator final {
   void onPreviousContinuous(const Callback& callback);
   void onContinuous(const Buttons& buttons, const Callback& callback);
 
+  // Page-oriented lists need one jump per physical hold. Repeating every
+  // interval can advance several pages while an e-ink refresh is in progress.
+  void onNextLongPressOnce(const Callback& callback);
+  void onPreviousLongPressOnce(const Callback& callback);
+  void onLongPressOnce(const Buttons& buttons, const Callback& callback);
+
   [[nodiscard]] static int nextIndex(int currentIndex, int totalItems);
   [[nodiscard]] static int previousIndex(int currentIndex, int totalItems);
 

@@ -37,18 +37,6 @@
       "sha256": "cc3ef58b490b9bf47fc81cd9f6ad79f5066a3c29aaf77e08aecbbb00991f3d95",
       "appSlotSize": 7798784,
       "assetUpdatedAt": "2026-09-11T16:43:09Z"
-    },
-    "x4pro": {
-      "board": "x4pro",
-      "chipFamily": "ESP32-S3",
-      "environment": "x4pro-gh_release",
-      "path": "firmware/firmware-x4pro.bin",
-      "asset": "1.6.0.31-cpr-vcodex-x4pro.bin",
-      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.31-cpr-vcodex/1.6.0.31-cpr-vcodex-x4pro.bin",
-      "size": 6494064,
-      "sha256": "1424ca2080db6dd75ee3844b53411e4055f59a598458b83ae7929a013c63247a",
-      "appSlotSize": 8257536,
-      "assetUpdatedAt": "2026-09-11T16:42:15Z"
     }
   },
   "new_install_prompt_erase": false,
@@ -59,16 +47,6 @@
       "parts": [
         {
           "path": "firmware.bin",
-          "offset": 65536
-        }
-      ]
-    },
-    {
-      "chipFamily": "ESP32-S3",
-      "board": "x4pro",
-      "parts": [
-        {
-          "path": "firmware-x4pro.bin",
           "offset": 65536
         }
       ]

@@ -113,9 +113,9 @@ void UiListActivity::navigateButtons() {
   // Page by the rows the last build actually drew (pageRows), not the
   // fixed-height visibleRows estimate: with wrapped labels the estimate
   // overshoots and rows between pages would never be shown.
-  buttonNavigator.onNextContinuous(
+  buttonNavigator.onNextLongPressOnce(
       [this, count, &n] { moveSelectionTo(ButtonNavigator::nextPageIndex(n.selected, count, n.pageRows())); });
-  buttonNavigator.onPreviousContinuous(
+  buttonNavigator.onPreviousLongPressOnce(
       [this, count, &n] { moveSelectionTo(ButtonNavigator::previousPageIndex(n.selected, count, n.pageRows())); });
 }
 

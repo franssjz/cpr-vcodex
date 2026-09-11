@@ -105,14 +105,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Artifact names match the release asset names OtaUpdater requests:
-        # plain firmware.bin for the C3 X4/X3 binary, firmware-x4pro.bin for
-        # the ESP32-S3 X4 Pro binary. Env names must match platformio.ini.
+        # Keep compiling X4 Pro as an internal regression check, but never
+        # upload its binary while public distribution is withdrawn.
         include:
           - env: default
             asset: firmware.bin
+            publish: true
           - env: x4pro
             asset: firmware-x4pro.bin
+            publish: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -171,6 +172,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload firmware artifact
+        if: matrix.publish
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
