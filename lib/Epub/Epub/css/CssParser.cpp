@@ -7,11 +7,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <string_view>
+#include <type_traits>
 
 namespace {
 
@@ -97,11 +100,33 @@ void forEachDelimitedToken(std::string_view s, Pred isDelimiter, F&& fn) {
 // non-numeric suffix, or any from_chars error.
 template <typename T>
 bool tryParseNumber(std::string_view s, T& out) {
-  const char* begin = s.data();
-  const char* end = s.data() + s.size();
-  if (begin < end && *begin == '+') ++begin;
-  const auto r = std::from_chars(begin, end, out);
-  return r.ec == std::errc{} && r.ptr == end;
+#if defined(__GLIBCXX__) && defined(_GLIBCXX_RELEASE) && _GLIBCXX_RELEASE < 11
+  // Ubuntu 20.04's older libstdc++ has integer from_chars but no
+  // floating-point overload. Keep strict full-token parsing for its simulator
+  // and host-test builds; current ESP and desktop toolchains use from_chars.
+  if constexpr (std::is_floating_point_v<T>) {
+    constexpr size_t MAX_NUMBER_LENGTH = 63;
+    if (s.empty() || s.size() > MAX_NUMBER_LENGTH) return false;
+
+    char buffer[MAX_NUMBER_LENGTH + 1];
+    std::memcpy(buffer, s.data(), s.size());
+    buffer[s.size()] = '\0';
+
+    char* parsedEnd = nullptr;
+    errno = 0;
+    const float value = std::strtof(buffer, &parsedEnd);
+    if (errno == ERANGE || parsedEnd != buffer + s.size()) return false;
+    out = static_cast<T>(value);
+    return true;
+  } else
+#endif
+  {
+    const char* begin = s.data();
+    const char* end = s.data() + s.size();
+    if (begin < end && *begin == '+') ++begin;
+    const auto r = std::from_chars(begin, end, out);
+    return r.ec == std::errc{} && r.ptr == end;
+  }
 }
 
 // Collect up to 4 whitespace-separated tokens for a CSS edge-value shorthand

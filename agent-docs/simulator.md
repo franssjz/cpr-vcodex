@@ -41,6 +41,14 @@ pio run -e simulator -t run_simulator          # X4 (buttons only)
 pio run -e simulator_x3 -t run_simulator       # X3 landscape, tilt sensor
 ```
 
+On Windows, run the simulator inside WSL (native Windows is not supported by
+crosspoint-simulator). Install `libsdl2-dev` and `libssl-dev`, then use the GCC
+profile:
+
+```bash
+pio run -e simulator_x4_pro_wsl -t run_simulator
+```
+
 Keys: arrows = side/front buttons, Return = Confirm, Escape = Back, P = Power,
 S = sleep, H = Home key (X4 Pro), mouse = tap and swipe on touch profiles.
 

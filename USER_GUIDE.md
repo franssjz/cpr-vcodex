@@ -777,14 +777,16 @@ If the device is stuck in a bootloop, press and release the Reset button. Then, 
 The e-ink screen keeps its last image without power, so an unchanged screen does not necessarily mean the device is bricked. To enter the firmware picker without navigating the normal UI:
 
 1. Put one known-good `.bin` firmware file for your device in the SD card root (the X4/X3 `<tag>.bin`, or `<tag>-x4pro.bin` for the X4 Pro). For deterministic blind recovery, use a clean FAT32/exFAT card with no directories or other BIN files.
-2. Start with the device fully asleep. Hold the upper side/page button (`UP`), then press and hold Power as well.
-3. Hold both buttons for 5–7 seconds. Release `UP` first, keep holding Power for about one more second, then release it.
+2. Start with the device fully asleep. On an X3, hold the upper side/page button (`UP`). On an X4 or X4 Pro, hold the lower side/page button (`DOWN`); their upper button is wired to the ESP32 boot-strap pin and must not be used for recovery. Then press and hold Power as well.
+3. Hold both buttons for 5–7 seconds. Release the side button first, keep holding Power for about one more second, then release it.
 4. Wait at least 30 seconds for the SD card and recovery picker to initialize.
-5. Press the logical `Confirm` button once to select the BIN. With the default front-button mapping, this is the second bottom-edge button.
+5. Select the BIN. On the X4 Pro, tap its row on the touchscreen. On button-only devices, press the logical `Confirm` button once; with the default front-button mapping, this is the second bottom-edge button.
 6. Wait up to two minutes while the firmware is validated.
-7. Press the logical `Right` button once to accept the final confirmation. With the default mapping, this is the fourth bottom-edge button. The final dialog deliberately uses `Left` for cancel and `Right` for confirm; pressing `Confirm` again does not start flashing.
+7. Accept the final confirmation. On the X4 Pro, tap the confirmation action on the right of the dialog. On button-only devices, press the logical `Right` button once; with the default mapping, this is the fourth bottom-edge button. The final dialog deliberately uses `Left` for cancel and `Right` for confirm; pressing `Confirm` again does not start flashing.
 8. Do not press buttons, remove the SD card, or interrupt power for at least three minutes. The device restarts automatically after a successful flash.
 
 When the display is not working, connect a serial monitor if possible and look for `Recovery firmware mode`, `Selected`, `image validation`, and `SD firmware update complete` messages before repeating any step.
+
+> **X4 Pro recovery from CPR-vCodex 1.5.0.28–1.5.0.30:** do not use the blind SD sequence above while one of these builds is installed. Those experimental builds lack the complete X4 Pro touch/boot integration and use the wrong recovery key. Remove their BIN from the SD card and recover over USB with the CrossPoint browser installer and a known-good X4 Pro image. After flashing, unplug and reconnect USB, press and release Reset, and hold Power for a few seconds to start the device. The corrected firmware can use the touchscreen SD flow described above for later updates.
 
 There can be issues with broken cache or config. In this case, delete the `.crosspoint` directory on your SD card (or consider deleting only `settings.json`, `state.json`, or `epub_*` cache directories in the `.crosspoint/` folder).
