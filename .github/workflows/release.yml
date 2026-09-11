@@ -20,8 +20,6 @@ jobs:
         include:
           - pio_env: gh_release
             asset_suffix: ''
-          - pio_env: x4pro-gh_release
-            asset_suffix: '-x4pro'
     steps:
       - name: Checkout repository
         run: |
@@ -131,9 +129,7 @@ jobs:
           set -euo pipefail
           tag="${GITHUB_REF_NAME}"
           artifact="artifacts/${tag}.bin"
-          x4pro_artifact="artifacts/${tag}-x4pro.bin"
           metadata="artifacts/${tag}.json"
-          x4pro_metadata="artifacts/${tag}-x4pro.json"
           budget_json="artifacts/${tag}-firmware-budget.json"
           budget_md="artifacts/${tag}-firmware-budget.md"
           notes_file="$(mktemp)"
@@ -143,9 +139,7 @@ jobs:
           if gh release view "${tag}" >/dev/null 2>&1; then
             gh release upload "${tag}" \
               "${artifact}#${tag}.bin" \
-              "${x4pro_artifact}#${tag}-x4pro.bin" \
               "${metadata}#${tag}.json" \
-              "${x4pro_metadata}#${tag}-x4pro.json" \
               "${budget_json}#${tag}-firmware-budget.json" \
               "${budget_md}#${tag}-firmware-budget.md" \
               --clobber
@@ -153,9 +147,7 @@ jobs:
           else
             gh release create "${tag}" \
               "${artifact}#${tag}.bin" \
-              "${x4pro_artifact}#${tag}-x4pro.bin" \
               "${metadata}#${tag}.json" \
-              "${x4pro_metadata}#${tag}-x4pro.json" \
               "${budget_json}#${tag}-firmware-budget.json" \
               "${budget_md}#${tag}-firmware-budget.md" \
               --verify-tag \

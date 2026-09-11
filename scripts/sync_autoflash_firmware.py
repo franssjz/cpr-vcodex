@@ -26,15 +26,6 @@ FIRMWARE_BUILDS = [
         "localName": "firmware.bin",
         "appPartitionSize": APP_PARTITION_SIZE,
     },
-    {
-        "id": "x4pro",
-        "devices": ["x4pro"],
-        "label": "Xteink X4 Pro",
-        "chipFamily": "ESP32-S3",
-        "assetSuffix": "-x4pro",
-        "localName": "firmware-x4pro.bin",
-        "appPartitionSize": 0x7E0000,
-    },
 ]
 VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-[0-9A-Za-z._-]*cpr-vcodex\b")
 FIRMWARE_TAG_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+(?:[.-][0-9A-Za-z]+)?-cpr-vcodex$")

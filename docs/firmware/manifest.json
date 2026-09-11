@@ -41,32 +41,6 @@
           "offset": 65536
         }
       ]
-    },
-    {
-      "id": "x4pro",
-      "devices": [
-        "x4pro"
-      ],
-      "label": "Xteink X4 Pro",
-      "chipFamily": "ESP32-S3",
-      "firmwareUrl": "firmware/firmware-x4pro.bin",
-      "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.5.0.30-cpr-vcodex/1.5.0.30-cpr-vcodex-x4pro.bin",
-      "size": 5526464,
-      "sha256": "6f9c9530157b34edf2fc7264087e0ba786c01b0ff17d378d3ec93faf2a02e41a",
-      "source": {
-        "type": "github-release",
-        "repo": "franssjz/cpr-vcodex",
-        "tag": "1.5.0.30-cpr-vcodex",
-        "asset": "1.5.0.30-cpr-vcodex-x4pro.bin",
-        "publishedAt": "2026-09-10T16:43:05Z",
-        "assetUpdatedAt": "2026-09-10T16:43:05Z"
-      },
-      "parts": [
-        {
-          "path": "firmware-x4pro.bin",
-          "offset": 65536
-        }
-      ]
     }
   ]
 }

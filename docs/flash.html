@@ -499,7 +499,7 @@
     <section class="hero">
       <p class="eyebrow" data-site-i18n="flashEyebrow">Browser-based installer</p>
       <h1 data-site-i18n="flashTitle">Flash CPR-vCodex</h1>
-      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X3 or X4 from Chrome or Edge using Web Serial. It writes the inactive app partition and then switches boot to it.</p>
+      <p data-site-i18n="flashSubtitle">Install the latest CPR-vCodex firmware on your Xteink X3 or X4 from Chrome or Edge using Web Serial. X4 Pro flashing is currently disabled.</p>
     </section>
 
     <section class="grid">
@@ -551,8 +551,8 @@
               <span data-site-i18n="deviceX4ProStatus">ESP32-S3 · 7.9 MB OTA slot</span>
             </button>
           </div>
-          <p class="device-unsupported-note" data-site-i18n="deviceX4ProUnsupported">X4 Pro uses a separate ESP32-S3 firmware asset. The option is enabled only when the current release manifest includes that build.</p>
-          <p class="device-unsupported-note">If your X4 Pro is already on 1.5.0.28, update to 1.5.0.29 with this browser flasher once; on-device OTA selects the X4 Pro asset from 1.5.0.29 onward.</p>
+          <p class="device-unsupported-note" data-site-i18n="deviceX4ProUnsupported">X4 Pro flashing is disabled while a reported post-update boot failure is investigated.</p>
+          <p class="device-unsupported-note" data-site-i18n="deviceX4ProBridgeWarning">Do not install CPR-vCodex on X4 Pro until this notice is removed.</p>
         </div>
 
         <div class="version-box">
@@ -613,8 +613,7 @@
       <pre><code>git clone https://github.com/franssjz/cpr-vcodex.git
 cd cpr-vcodex
 
-pio run -e gh_release -t upload
-pio run -e x4pro-gh_release -t upload</code></pre>
+pio run -e gh_release -t upload</code></pre>
     </section>
   </main>
 
@@ -665,23 +664,6 @@ pio run -e x4pro-gh_release -t upload</code></pre>
           {type: "data-coredump", offset: 16711680, size: 65536}
         ]
       },
-      x4pro: {
-        label: "Xteink X4 Pro",
-        firmwareBuild: "x4pro",
-        appSize: 0x7e0000,
-        appOffsets: {
-          app0: 0x10000,
-          app1: 0x7f0000
-        },
-        partitions: [
-          {type: "data-nvs", offset: 0x9000, size: 0x5000},
-          {type: "data-ota", offset: 0xe000, size: 0x2000},
-          {type: "app-ota_0", offset: 0x10000, size: 0x7e0000},
-          {type: "app-ota_1", offset: 0x7f0000, size: 0x7e0000},
-          {type: "data-spiffs", offset: 0xfd0000, size: 0x14000},
-          {type: "data-coredump", offset: 0xfe4000, size: 0x1c000}
-        ]
-      }
     };
     const STEP_IDS = [
       "connect",
