@@ -19,7 +19,6 @@ class ImageBlock final : public Block {
   bool hasValidCache() const;
   bool needsDecode() const;
   void renderPlaceholder(GfxRenderer& renderer, int x, int y) const;
-  static void clearSessionRenderFailures();
 
   // A page render draws its image up to ~13 times (BW double-refresh plus every
   // grayscale band pass), and each draw streams the whole .pxc off SD. The
@@ -48,6 +47,11 @@ class ImageBlock final : public Block {
   std::string srcPath;  // book-internal source href; empty once known-extracted
   int16_t width;
   int16_t height;
+  // Suppress duplicate decode attempts across the many BW/grayscale passes of
+  // one loaded page. This deliberately is not global/session state: leaving
+  // and revisiting the page creates a new block and retries transient OOM/SD
+  // failures instead of pinning the placeholder until the reader is reopened.
+  bool renderFailed = false;
 
   static void* extractCtx;
   static ExtractFn extractFn;

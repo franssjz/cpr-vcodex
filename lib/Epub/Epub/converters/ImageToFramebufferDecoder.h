@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 
+#include "PixelCacheFormat.h"
+
 class GfxRenderer;
 
 struct ImageDimensions {
@@ -23,6 +25,7 @@ struct RenderConfig {
   float sourceCropY = 0.0f;         // Fraction cropped equally from the top and bottom edges
   bool preserveAlpha = false;       // Skip transparent pixels instead of compositing them against white
   std::string cachePath;            // If non-empty, decoder will write pixel cache to this path
+  PixelCacheVariant cacheVariant = PixelCacheVariant::Differential;
 };
 
 class ImageToFramebufferDecoder {

@@ -1,5 +1,7 @@
 #include "Section.h"
 
+#include <FontCacheManager.h>
+#include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -251,6 +253,12 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
   if (build_) {
     LOG_ERR("SCT", "startBuild called while a build is already active");
     return false;
+  }
+  // CrossPoint c4d8c395: section layout is allocation-heavy and every SD font
+  // cache below is rebuildable. Reclaim it before CSS/parser/page arenas so a
+  // large retained glyph bitmap cannot split the remaining C3 heap.
+  if (auto* fontCache = renderer.getFontCacheManager()) {
+    fontCache->releaseSdFontCaches();
   }
   buildComplete_ = false;
   builtPageCount_ = 0;

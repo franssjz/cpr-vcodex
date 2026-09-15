@@ -621,6 +621,15 @@ void setup() {
   BootRecovery::enterStage(BootRecovery::BootStage::DisplayAndFonts);
   setupDisplayAndFonts(resume != BootResume::Splash);
 
+  // Firmware-side equivalent of FreeInk SDK 6644bf2: a sunlight-fading
+  // refresh powers the X4 panel down afterwards, but its first paint after a
+  // splashless wake still needs a non-differential waveform to replace the
+  // retained sleep image. The next displayBuffer consumes this one-shot; if a
+  // loading icon is drawn below, that HALF refresh consumes it harmlessly.
+  if (resume == BootResume::SplashlessWake && gpio.deviceIsX4()) {
+    renderer.requestNextRefresh(HalDisplay::HALF_REFRESH);
+  }
+
   switch (resume) {
     case BootResume::Silent:
       // Splash skipped: the routing block below picks the target activity; the
@@ -963,7 +972,14 @@ void loop() {
     if (millis() - lastActivityTime >= HalPowerManager::IDLE_POWER_SAVING_MS) {
       // If we've been inactive for a while, increase the delay to save power
       powerManager.setPowerSaving(true);  // Lower CPU frequency after extended inactivity
-      delay(50);
+      // Keep the same 50 ms power-saving budget, but sample raw contacts every
+      // 10 ms. InputManager needs two agreeing polls for a debounced press; one
+      // monolithic sleep could reduce a short click to a single sample.
+      const unsigned long idleStart = millis();
+      while (millis() - idleStart < 50) {
+        delay(10);
+        if (gpio.rawInputActive()) break;
+      }
     } else {
       // Short delay to prevent tight loop while still being responsive
       delay(10);

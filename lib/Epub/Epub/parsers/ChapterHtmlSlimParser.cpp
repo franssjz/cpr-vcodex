@@ -933,7 +933,7 @@ void ChapterHtmlSlimParser::emitBufferedTableAsFragments(BufferedTable& table) {
         nextRowIndex++;
       }
 
-      auto tableFragment = std::shared_ptr<PageTableFragment>(new (std::nothrow) PageTableFragment(
+      auto tableFragment = std::unique_ptr<PageTableFragment>(new (std::nothrow) PageTableFragment(
           tableWidth, segment.columnCount, TABLE_CELL_PADDING, lineHeight, std::move(fragmentRows),
           table.blockStyle.leftInset(), currentPageNextY));
       if (!tableFragment) {
@@ -942,7 +942,7 @@ void ChapterHtmlSlimParser::emitBufferedTableAsFragments(BufferedTable& table) {
         lowMemoryAbort = true;
         return;
       }
-      currentPage->elements.push_back(tableFragment);
+      currentPage->elements.push_back(std::move(tableFragment));
       setCurrentPageVisibleOffset(visibleTextOffset);
       for (const auto& footnote : fragmentFootnotes) {
         currentPage->addFootnote(footnote.number, footnote.href);
@@ -1077,13 +1077,13 @@ void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
 
   currentPageNextY += topSpacing;
 
-  auto pageRule = std::shared_ptr<PageHorizontalRule>(
+  auto pageRule = std::unique_ptr<PageHorizontalRule>(
       new (std::nothrow) PageHorizontalRule(width, ruleThickness, xPos, currentPageNextY));
   if (!pageRule) {
     LOG_ERR("EHP", "Failed to create PageHorizontalRule");
     return;
   }
-  currentPage->elements.push_back(pageRule);
+  currentPage->elements.push_back(std::move(pageRule));
   setCurrentPageVisibleOffset(visibleTextOffset);
   currentPageNextY = static_cast<int16_t>(currentPageNextY + ruleThickness + bottomSpacing);
 
@@ -1558,8 +1558,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   return;
                 }
                 int xPos = (self->viewportWidth - displayWidth) / 2;
-                auto pageImage =
-                    std::shared_ptr<PageImage>(new (std::nothrow) PageImage(imageBlock, xPos, self->currentPageNextY));
+                auto pageImage = std::unique_ptr<PageImage>(
+                    new (std::nothrow) PageImage(std::move(imageBlock), xPos, self->currentPageNextY));
                 if (!pageImage) {
                   const auto heap = MemoryBudget::snapshot();
                   LOG_ERR("EHP", "Failed to create PageImage (%u free, %u max alloc)", heap.freeHeap,
@@ -1567,7 +1567,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   self->lowMemoryAbort = true;
                   return;
                 }
-                self->currentPage->elements.push_back(pageImage);
+                self->currentPage->elements.push_back(std::move(pageImage));
                 self->setCurrentPageVisibleOffset(self->visibleTextOffset);
                 self->currentPageNextY += displayHeight + imageMarginBottom;
 
@@ -2540,7 +2540,7 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line, const
 
   // Apply horizontal left inset (margin + padding) as x position offset
   const int16_t xOffset = line->getBlockStyle().leftInset();
-  auto pageLine = std::shared_ptr<PageLine>(new (std::nothrow) PageLine(line, xOffset, currentPageNextY));
+  auto pageLine = std::unique_ptr<PageLine>(new (std::nothrow) PageLine(line, xOffset, currentPageNextY));
   if (!pageLine) {
     const auto heap = MemoryBudget::snapshot();
     LOG_ERR("EHP", "Failed to create PageLine (%u free, %u max alloc)", heap.freeHeap, heap.maxAllocHeap);
@@ -2557,7 +2557,7 @@ void ChapterHtmlSlimParser::addLineToPage(std::shared_ptr<TextBlock> line, const
       LOG_DBG("EHP", "Dropped page link: %.48s", link.href);
     }
   }
-  currentPage->elements.push_back(pageLine);
+  currentPage->elements.push_back(std::move(pageLine));
   currentPageNextY += lineHeight;
 }
 

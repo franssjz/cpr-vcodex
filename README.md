@@ -52,13 +52,13 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested. **X4 Pro firmware distribution is withdrawn** because locked devices do not have a confirmed recovery path. |
-| Current release (CPR-vCodex) build | [`1.6.0.32-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.32-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.6.0.33-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.33-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc), with runtime X3/X4 panel detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff), including the FreeInkUI activity/input architecture and complete X4 Pro support, merged while retaining CPR-vCodex settings, statistics, bookmarks/highlights, dictionaries, themes, SD fonts, and release tooling. |
-| Current release focus | Safety withdrawal of X4 Pro distribution plus image-tone and list-navigation fixes for the X4/X3 release. |
-| Latest release notes | - Withdraws every X4 Pro release/Auto Flash path after [#212](https://github.com/franssjz/cpr-vcodex/issues/212), because USB-locked units have no confirmed recovery route.<br>- Preserves shadow and midtone detail in four-level EPUB images ([#215](https://github.com/franssjz/cpr-vcodex/issues/215)).<br>- Makes one long press advance exactly one Library page ([#214](https://github.com/franssjz/cpr-vcodex/issues/214)).<br>- Keeps X4 as the Auto Flash default on every visit. |
+| Current release focus | More reliable text and image reading under fragmented memory, effective image-cache contrast upgrades, cleaner wake, and more responsive short button presses. |
+| Latest release notes | - Rebuilds legacy EPUB image caches once so the contrast correction from [#215](https://github.com/franssjz/cpr-vcodex/issues/215) reaches existing books.<br>- Retries transient image failures after revisiting a page instead of pinning placeholders for the session ([#217](https://github.com/franssjz/cpr-vcodex/issues/217)).<br>- Reduces reader heap fragmentation and repeated SD-font reads in text-only and illustrated books.<br>- Improves short-button detection and cleans retained sleep-screen pixels after splashless wake. |
 | Base firmware line | `CrossPoint Reader 1.6.0` (upstream `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff)) |
 | Latest official commit reviewed | `develop` through [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff) |
 | Latest official commit incorporated | Release `1.6.0.31` adopted the FreeInkUI integration from [PR #206](https://github.com/franssjz/cpr-vcodex/pull/206), including freeink-sdk [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc); X4 Pro distribution is now withdrawn. |
@@ -621,7 +621,7 @@ Important artifacts include:
 
 ### Recovering Reading Stats after 1.5.0.1 or 1.5.0.2
 
-Update to `1.6.0.32-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
+Update to `1.6.0.33-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
 
 If the displayed totals are still incomplete or incorrect, open `Settings > Apps > Reading Stats > Import Reading Stats` and select the newest suitable dated backup under `/exports/stats_backup_YYYY-MM-DD`. Those weekly backups appear directly in the import list and do not need to be renamed. If the only copy is on a computer, place it on the SD card as exactly `/exports/stats_exported` (without a `.json` extension), then import it. Try older dated backups newest-first if necessary, and preserve a copy of the SD card before cleaning or resetting statistics.
 
@@ -634,7 +634,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.6.0`
-- current release build style: `1.6.0.32-cpr-vcodex`
+- current release build style: `1.6.0.33-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -717,10 +717,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.6.0.32-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.6.0.33-cpr-vcodex
 ```
 
-- push a stable tag named like `1.6.0.32-cpr-vcodex`
+- push a stable tag named like `1.6.0.33-cpr-vcodex`
 - `pre_release_check.py` dry-runs `gh_release`, checks it against the 6,553,600
   byte X4 OTA slot, validates the artifact pair, and rejects any X4 Pro entry
   or stale X4 Pro browser binary

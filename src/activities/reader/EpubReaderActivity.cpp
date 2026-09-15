@@ -266,7 +266,6 @@ void EpubReaderActivity::onEnter() {
     return;
   }
 
-  ImageBlock::clearSessionRenderFailures();
   ImageBlock::setExtractor(epub.get(), [](void* ctx, const char* src, const char* dest) {
     return static_cast<Epub*>(ctx)->extractItemToFile(src, dest);
   });

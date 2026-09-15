@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -127,7 +128,10 @@ class PageTableFragment final : public PageElement {
 class Page {
  public:
   // the list of block index and line numbers on this page
-  std::vector<std::shared_ptr<PageElement>> elements;
+  // Elements have one owner (the page). unique_ptr avoids a separate shared
+  // control-block allocation per line/image/rule, a major source of EPUB heap
+  // fragmentation on the C3 (adapted from CrossPoint c33a8b0e).
+  std::vector<std::unique_ptr<PageElement>> elements;
   std::vector<FootnoteEntry> footnotes;
   static constexpr uint16_t MAX_FOOTNOTES_PER_PAGE = 16;
   std::vector<PageLink> links;
@@ -178,11 +182,11 @@ class Page {
   // Check if page contains any images (used to force full refresh)
   bool hasImages() const {
     return std::any_of(elements.begin(), elements.end(),
-                       [](const std::shared_ptr<PageElement>& el) { return el && el->getTag() == TAG_PageImage; });
+                       [](const std::unique_ptr<PageElement>& el) { return el && el->getTag() == TAG_PageImage; });
   }
 
   bool hasImagesNeedingDecode() const {
-    return std::any_of(elements.begin(), elements.end(), [](const std::shared_ptr<PageElement>& element) {
+    return std::any_of(elements.begin(), elements.end(), [](const std::unique_ptr<PageElement>& element) {
       return element && element->getTag() == TAG_PageImage &&
              static_cast<const PageImage&>(*element).getImageBlock().needsDecode();
     });

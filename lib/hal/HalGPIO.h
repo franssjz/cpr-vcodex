@@ -78,6 +78,9 @@ class HalGPIO {
   bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
   unsigned long getPowerButtonHeldTime() const;
+  // Hardware-level contact state, independent of the debounced edge queue.
+  // Used to interrupt long idle sleeps before a short press can be missed.
+  bool rawInputActive();
   bool hasTouch() const;
   // Capacitive Home key reported by the touch controller (X4 Pro). The tap
   // event fires on release and excludes a long hold.
