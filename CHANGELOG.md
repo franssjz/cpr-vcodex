@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.6.0.37 — X3/X4 stability and OTA status
+
+- Show the installed and published versions after a successful update check.
+  An equal or newer installed version reports that the device is up to date.
+  Separate connection/manifest errors from installation failures, and retry
+  the published manifest through GitHub's raw host with certificate validation.
+
+- Restore the saved UI language from its ISO code in `settings.json`. Migrate
+  older `language.bin` indices using the order shipped through 1.5.0.30,
+  including Vietnamese; retain the original file and reject truncated input.
+  Preserve unreadable settings files during migration. Render language names
+  with the existing Ubuntu UI fonts so Hebrew and Vietnamese are both readable.
+- Reject incomplete OTA manifests, invalid sizes and unusable URLs before
+  flashing. Add fault-injection tests for interrupted transfers, wrong chips
+  and boards, digest mismatches, and flash failures.
+- Handle allocation failures in BMP/JPEG/PNG dithering and PNG scaling instead
+  of aborting the firmware when memory is exhausted. Preserve existing image
+  thresholds and allocation sizes.
+- Correct documentation that advertised an unpublished 1.6.0.34 release.
+  Local builds no longer change the published-version row in README; the
+  existing release synchronization owns that update after publication.
+- Reject final BINs larger than the OTA slot, including image padding that
+  PlatformIO's ELF size omits. Keep the default diagnostic build at INFO.
+- Compact the remaining 24 dense built-in kerning tables into the sparse
+  format already supported by CrossPoint/CrossInk. Preserve every spacing
+  value, glyph and metric; recover about 326 KiB of flash without removing fonts.
+- Generate the ESP-IDF application descriptor from the same version as the UI,
+  preserving SDK boot compatibility fields. Reject stale application versions
+  and mismatched chips before packaging a BIN. Run packaging even when the
+  firmware is restored from the build cache.
+  See [the stability audit](agent-docs/stability-audit-2026-09.md) for evidence,
+  remaining hardware checks and the decision against a blanket rollback.
+
 This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking release changes in this file.
 
 > Additional `1.5.0.20` sync: SD-font page bitmaps now use fragmentation-resistant 4 KiB chunks, and the font tooling can include IPA Extensions and Spacing Modifier Letters ([`28af4189`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28af4189d45516e2d08539d82c607deb91bb8b38), [`5eec70de`](https://github.com/crosspoint-reader/crosspoint-reader/commit/5eec70de362b8311df6c9489646d0a061cd0e49a)).
@@ -26,6 +59,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.0.37` | - X3/X4 stabilization release; X4 Pro distribution remains withdrawn.<br>- OTA status shows installed and published versions, reports equal/newer builds as up to date, and distinguishes failed checks from failed installations. Certificate-verified manifest fallback improves resilience when Pages is unreachable.<br>- Repair OTA payload transport; require a complete authenticated manifest and verify size, SHA-256, chip and board before activating the inactive slot.<br>- Preserve saved ISO language codes and migrate historical language indices without deleting the original settings. Keep all 24 UI languages, including Spanish.<br>- Handle image allocation failures and recover about 326 KiB of font-table flash without changing glyphs, metrics or spacing.<br>- Validate packaged image size, chip and embedded application version, including cached builds.<br>- Automated fault-injection and simulator checks are documented in the stability audit. End-to-end OTA/reboot on physical X3 and X4 remains unverified; an installed client stuck at 0 B may need the SD Card Firmware Update path described in README. |
 | `1.6.0.34` | - Fixed Wi-Fi OTA downloads stopping at `0 B / 0%` on X3/X4, reported in [#219](https://github.com/franssjz/cpr-vcodex/issues/219). The regression entered with the 1.6.0.31 network migration: after the verified manifest request, the ESP32-C3 could fail to allocate the certificate-backed second TLS session before receiving any firmware bytes.<br>- Restored the proven low-fragmentation Arduino TLS transport for the firmware payload only. The manifest remains certificate-verified, its SHA-256 is now mandatory, and the downloaded image is activated only after its exact size, SHA-256, ESP chip, CPR-vCodex board tag, and ESP image structure all validate.<br>- Streams the image directly into the inactive OTA partition and aborts without selecting it on any network, write, identity, size, or digest failure. This follows CrossPoint's direct-slot OTA design from [`3e627112`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3e627112) while retaining CPR-vCodex's stronger board and release-manifest checks.<br>- Documented the one-time Wi-Fi File Transfer bridge required by devices already running 1.6.0.31-1.6.0.33: their faulty updater cannot repair itself until 1.6.0.34 is installed through `SD Card Firmware Update`; later OTA updates use the repaired path normally.<br>- Passed the firmware-manifest regressions and the `gh_release` ESP32-C3 build. The packaged image is 6,433,776 bytes and fits the 6,553,600-byte X4/X3 OTA slot with 119,824 bytes remaining; physical X3/X4 OTA confirmation is still requested. |
 | `1.6.0.33` | - Hardened EPUB image rendering for [#217](https://github.com/franssjz/cpr-vcodex/issues/217): `.pxc` caches now carry a format and calibration version, so old quantized pixels rebuild once and the contrast correction from [#215](https://github.com/franssjz/cpr-vcodex/issues/215) is applied to existing books. Image failures are scoped to the loaded page instead of the reader session, allowing later visits to recover from transient SD or low-memory failures.<br>- Reduced fragmentation during text and image reading by releasing rebuildable font caches before section construction, making full-page SD-font prewarm replace the prior page, reserving growing bitmap arenas before rebuilding their smaller metadata, and giving page elements unique ownership. These changes selectively adapt CrossPoint [`c4d8c395`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c4d8c395), [`c80c537f`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c80c537f), and [`c33a8b0e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c33a8b0e).<br>- Made short button presses harder to miss during the idle wait by following CrossPoint [`9ba16086`](https://github.com/crosspoint-reader/crosspoint-reader/commit/9ba16086), and forced one clean splashless X4 wake refresh to avoid retained sleep-screen pixels, mirroring freeink-sdk [`6644bf2`](https://github.com/Free-Ink/freeink-sdk/commit/6644bf2).<br>- Passed 43 reader regressions, six SD-font cache regressions, and both `default` and `gh_release` ESP32-C3 builds. The published release image is 6,391,952 bytes and fits the 6,553,600-byte X4 OTA slot; the hardware-specific wake and short-press paths still require confirmation on a physical device. |
 | `1.6.0.32` | - Withdrew X4 Pro firmware distribution again after [#212](https://github.com/franssjz/cpr-vcodex/issues/212) confirmed that affected CN/USB-locked devices may have no usable USB recovery path. Stable releases and release candidates now publish only the shared ESP32-C3 X4/X3 image; CI keeps the X4 Pro target compile-only and does not upload its binary.<br>- Hardened Pages and Auto Flash so X4 is always the default, X4 Pro is visibly marked as withdrawn and cannot be selected or flashed, stale X4 Pro browser binaries are deleted, and generated manifests reject `devices.x4pro` even if an old release still contains an asset.<br>- Reworked four-level Bayer quantization to preserve average luminance across the full grayscale range, retaining dark and midtone image detail reported as crushed in [#215](https://github.com/franssjz/cpr-vcodex/issues/215).<br>- Changed Library/list long-press paging to fire once per physical hold instead of repeating during slow e-ink refreshes, fixing multi-page jumps reported in [#214](https://github.com/franssjz/cpr-vcodex/issues/214).<br>- Passed 40 reader regressions, four Auto Flash regressions, workflow/Python/JavaScript syntax checks, and the `gh_release` ESP32-C3 build. The packaged image is 6,390,608 bytes and fits the 6,553,600-byte X4 OTA slot. Issue [#213](https://github.com/franssjz/cpr-vcodex/issues/213) remains under investigation and is not claimed as fixed by this release. |

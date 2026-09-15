@@ -79,12 +79,8 @@ class CallbackWriteStream final : public Stream {
   bool callbackOk_ = true;
 };
 
-bool isRedirect(int status) {
-  return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
-}
-
 // Compatibility path for the OTA payload only. This is the transport used by
-// working releases through 1.6.0.30: it avoids CA-chain allocation during the
+// working releases through 1.5.0.30: it avoids CA-chain allocation during the
 // second HTTPS handshake. The manifest still travels through verified
 // esp_http_client, and OtaUpdater authenticates every payload byte against the
 // manifest SHA-256 before selecting the new boot partition.
@@ -126,6 +122,10 @@ HttpDownloader::DownloadError runOtaGetCompat(const std::string& url, Sink& sink
   return HttpDownloader::OK;
 }
 #endif
+
+bool isRedirect(int status) {
+  return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
+}
 
 // OtaUpdater.cpp already disables WiFi power-save for firmware downloads, but
 // OPDS feed/book fetches never did despite being able to run just as long for

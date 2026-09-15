@@ -7,10 +7,11 @@
 
 // X4 (and X3) factory bootloaders accept our patch_firmware_image.py-patched
 // firmware.bin (web flasher proves this), but the running ESP-IDF's
-// esp_image_verify rejects with bogus efuse-blk-rev errors. Both SD-card and
-// OTA update paths bypass that runtime check by writing the OTA app partition
-// raw and updating otadata directly — same scheme as the web flasher
+// esp_image_verify can reject with bogus efuse-blk-rev errors. The SD-card
+// update path writes the OTA app partition raw and updates otadata directly
+// after FirmwareFlasher validates the image — same scheme as the web flasher
 // (crosspoint-reader-docs/src/lib/flasher/OtaPartition.ts).
+// Network OTA uses esp_ota_* with the linked efuse-revision wrapper instead.
 //
 // Layout reference: esp_flash_partitions.h. CRC covers ota_seq (4 bytes) only.
 

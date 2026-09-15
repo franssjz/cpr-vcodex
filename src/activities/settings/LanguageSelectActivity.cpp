@@ -66,8 +66,7 @@ void LanguageSelectActivity::activateIndex(const int index) {
     refreshUiFontsForCurrentLanguage();
   }
 
-  // Persist in settings.json as well as I18n's own language file so both
-  // stay in sync (upstream boot path reads SETTINGS.language).
+  // Persist the stable language code in the same store the boot path reads.
   SETTINGS.language = langIndex;
   SETTINGS.saveToFile();
 

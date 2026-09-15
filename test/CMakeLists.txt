@@ -34,7 +34,7 @@ target_include_directories(crosspoint_test_common INTERFACE
   ${REPO_ROOT}/lib/Serialization
 )
 if(MSVC)
-  target_compile_options(crosspoint_test_common INTERFACE /W4)
+  target_compile_options(crosspoint_test_common INTERFACE /W4 /Zc:preprocessor)
 else()
   target_compile_options(crosspoint_test_common INTERFACE
     -Wall
@@ -68,9 +68,18 @@ add_subdirectory(page_link)
 # Fork (CPR-vCodex) suites
 add_subdirectory(reader_position)
 add_subdirectory(reader_regressions)
+add_subdirectory(language_settings)
+add_subdirectory(ota_update)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
+  add_test(NAME builtin_kerning_regressions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/differential_rounding/BuiltinKerningTest.py)
+  add_test(NAME autoflash_manifest_regressions
+    COMMAND ${Python3_EXECUTABLE} -m unittest discover -s test/release_tools -p AutoflashManifestTest.py)
+  set_tests_properties(autoflash_manifest_regressions PROPERTIES WORKING_DIRECTORY ${REPO_ROOT})
+  add_test(NAME firmware_packaging_regressions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/release_tools/FirmwarePackagingTest.py)
   add_test(
     NAME web_optimizer_regressions
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_optimizer_regressions/EpubOptimizerFallbackTest.py

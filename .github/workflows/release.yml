@@ -68,6 +68,13 @@ jobs:
           key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
           restore-keys: pio-${{ runner.os }}-
 
+      - name: Run native regression tests
+        run: |
+          set -euo pipefail
+          cmake -S test -B build/release-tests -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/release-tests -j2
+          ctest --test-dir build/release-tests --output-on-failure -j2
+
       - name: Build CPR-vCodex release
         env:
           VCODEX_RELEASE_TAG: ${{ github.ref_name }}

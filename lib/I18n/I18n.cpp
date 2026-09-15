@@ -2,7 +2,6 @@
 
 #include <HalStorage.h>
 #include <Logging.h>
-#include <Serialization.h>
 
 #include <cstddef>
 #include <cstring>
@@ -39,7 +38,6 @@ void I18n::setLanguage(Language lang) {
     return;
   }
   _language = lang;
-  saveSettings();
 }
 
 const char* I18n::getLanguageName(Language lang) const {
@@ -51,6 +49,7 @@ const char* I18n::getLanguageName(Language lang) const {
 }
 
 Language I18n::languageFromCode(const char* code) {
+  if (!code) return Language::EN;
   for (uint8_t i = 0; i < getLanguageCount(); i++) {
     if (strcmp(code, LANGUAGE_CODES[i]) == 0) {
       return static_cast<Language>(i);
@@ -59,42 +58,29 @@ Language I18n::languageFromCode(const char* code) {
   return Language::EN;
 }
 
-void I18n::saveSettings() {
-  Storage.mkdir("/.crosspoint");
-
-  HalFile file;
-  if (!Storage.openFileForWrite("I18N", SETTINGS_FILE, file)) {
-    LOG_ERR("I18N", "Failed to save settings");
-    return;
-  }
-
-  serialization::writePod(file, SETTINGS_VERSION);
-  serialization::writePod(file, static_cast<uint8_t>(_language));
-
-  file.close();
-  LOG_DBG("I18N", "Settings saved: language=%d", static_cast<int>(_language));
-}
-
-void I18n::loadSettings() {
+bool I18n::loadSettings() {
   HalFile file;
   if (!Storage.openFileForRead("I18N", SETTINGS_FILE, file)) {
     LOG_DBG("I18N", "No settings file, using default (English)");
-    return;
+    return false;
   }
 
-  uint8_t version;
-  serialization::readPod(file, version);
-  if (version != SETTINGS_VERSION) {
-    LOG_ERR("I18N", "Settings version mismatch");
-    return;
+  uint8_t data[2] = {};
+  if (file.read(data, sizeof(data)) != sizeof(data) || data[0] != SETTINGS_VERSION) {
+    LOG_ERR("I18N", "Invalid legacy language file");
+    return false;
   }
-
-  uint8_t lang;
-  serialization::readPod(file, lang);
-  if (lang < static_cast<size_t>(Language::_COUNT)) {
-    _language = static_cast<Language>(lang);
-    LOG_DBG("I18N", "Loaded language: %d", static_cast<int>(_language));
+  // CPR releases through 1.5.0.30 stored the _order ordinal, not the
+  // BCP47-sorted enum. Vietnamese was appended after upstream's V1 table.
+  if (data[1] < V1_LANGUAGE_COUNT) {
+    _language = V1_LANGUAGES[data[1]];
+  } else if (data[1] == V1_LANGUAGE_COUNT) {
+    _language = Language::VI;
+  } else {
+    LOG_ERR("I18N", "Invalid legacy language index: %u", data[1]);
+    return false;
   }
+  return true;
 }
 
 // Generate character set for a specific language

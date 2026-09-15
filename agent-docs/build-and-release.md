@@ -55,7 +55,12 @@ python -X utf8 -m platformio run -e default -j 1
 - Release builds are tag-driven when `VCODEX_RELEASE_TAG` or `GITHUB_REF_NAME`
   matches `<base>.<release>-cpr-vcodex`.
 - Local release counters under `artifacts/` are ignored by git. Only
-  `gh_release` advances the counter and rewrites the README release row.
+  `gh_release` advances the counter; local builds never rewrite the published
+  README release row.
+- `src/version.cpp` owns the ESP-IDF application descriptor with the same
+  generated version as the UI. Incremental builds must not inherit the cached
+  core archive's old application version. Its IDF field records the SDK header's
+  major/minor/patch version; boot compatibility fields retain the SDK settings.
 
 ## Release Safety
 
@@ -83,6 +88,10 @@ when the build artifacts already exist and were produced intentionally.
 Important scripts:
 
 - `scripts/package_vcodex_bin.py`: packages firmware after PlatformIO builds.
+  Checks the final BIN against the OTA slot, including padding, and validates
+  the embedded application version and chip before packaging. A local release
+  build advances its local counter but does not update README's published version;
+  `sync_autoflash_firmware.py` updates that from the published release.
   Internal envs starting with `x4pro` get the `-x4pro` artifact suffix and
   `board: "x4pro"` in metadata, but those files are not published.
 - `scripts/firmware_budget_report.py`: reports flash usage and budget. The

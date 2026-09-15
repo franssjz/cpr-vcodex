@@ -185,7 +185,11 @@ void applyUiFontsForLanguage(const Language lang) {
 }  // namespace
 
 void refreshUiFontsForCurrentLanguage() { applyUiFontsForLanguage(I18N.getLanguage()); }
-void useLanguageSelectionUiFonts() { applyUiFontsForLanguage(Language::VI); }
+void useLanguageSelectionUiFonts() {
+  // The built-in Ubuntu UI faces cover every language name, including Hebrew
+  // and Vietnamese. The Noto Sans reader face used for Vietnamese UI lacks Hebrew.
+  applyUiFontsForLanguage(Language::EN);
+}
 
 // Definitions for SilentRestart.h. RTC_NOINIT survives ESP.restart() but not power loss.
 RTC_NOINIT_ATTR uint32_t silentRebootMagic;
@@ -506,18 +510,34 @@ void setup() {
     SETTINGS.readerMenuStyle = CrossPointSettings::READER_MENU_TOOLBAR;
   }
 
+  bool canPersistLanguageMigration = false;
   if (BootRecovery::shouldSkipSettings()) {
     logSkip("Skipping settings load due to recovery mode");
   } else {
     BootRecovery::enterStage(BootRecovery::BootStage::Settings);
-    SETTINGS.loadFromFile();
+    const bool settingsLoaded = SETTINGS.loadFromFile();
+    // A failed read of an existing store must not be replaced with defaults
+    // merely because the language migration needs to save its ISO code.
+    canPersistLanguageMigration = settingsLoaded || (!Storage.exists("/.crosspoint/settings.json") &&
+                                                     !Storage.exists("/.crosspoint/settings.json.tmp") &&
+                                                     !Storage.exists("/.crosspoint/settings.bin"));
   }
 
   if (BootRecovery::shouldSkipLanguage()) {
     logSkip("Skipping language load due to recovery mode");
   } else {
     BootRecovery::enterStage(BootRecovery::BootStage::Language);
-    I18N.loadSettings();
+    if (SETTINGS.language < getLanguageCount()) {
+      I18N.setLanguage(static_cast<Language>(SETTINGS.language));
+    } else {
+      I18N.loadSettings();
+      SETTINGS.language = static_cast<uint8_t>(I18N.getLanguage());
+      // Keep the legacy file intact. JSON's atomic save is the single source
+      // of truth from now on, including an explicitly selected English.
+      if (canPersistLanguageMigration && !SETTINGS.saveToFile()) {
+        LOG_ERR("I18N", "Failed to persist language migration");
+      }
+    }
   }
 
   if (BootRecovery::shouldSkipKOReader()) {

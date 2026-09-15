@@ -1063,7 +1063,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["hideFileExtension"] = s.hideFileExtension;
   doc["removeReadBooksFromRecents"] = s.removeReadBooksFromRecents;
   // Language as ISO code string (upstream format).
-  doc["language"] = (s.language < getLanguageCount()) ? LANGUAGE_CODES[s.language] : "EN";
+  if (s.language < getLanguageCount()) doc["language"] = LANGUAGE_CODES[s.language];
   // uint16_t mask; omitted while unconfigured so the default keeps following the UI language.
   if (s.keyboardLayouts != 0) {
     doc["keyboardLayouts"] = s.keyboardLayouts;

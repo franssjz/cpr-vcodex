@@ -28,6 +28,11 @@ skill from `.agents/skills/`; for deeper project details, read the linked
   X4 Pro distribution is withdrawn; `x4pro*` environments are compile-only
   maintainer tools and must not produce public binaries, Pages entries, or
   release assets until the withdrawal is explicitly reversed.
+- X3/X4 users also depend on a working OTA/SD update path. Never infer USB
+  recoverability from the model: preserve the running slot, partition table,
+  bootloader, settings and recovery path. A successful build is not hardware
+  validation. See `agent-docs/stability-audit-2026-09.md` for regression history
+  and the X3/X4 validation matrix before another release.
 - The X4 Pro build (`x4pro`, `x4pro-gh_release`, `x4pro-gh_release_rc` envs)
   runs on a dual-core ESP32-S3, so SMP rules apply: never pass NULL spinlocks to
   FreeRTOS critical sections, keep the render task pinned to one core, and do

@@ -25,6 +25,8 @@
 
 namespace {
 constexpr char firmwareManifestUrl[] = "https://franssjz.github.io/cpr-vcodex/firmware/manifest.json";
+constexpr char firmwareManifestFallbackUrl[] =
+    "https://raw.githubusercontent.com/franssjz/cpr-vcodex/master/docs/firmware/manifest.json";
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/franssjz/cpr-vcodex/releases/latest";
 
 struct ParsedVersion {
@@ -151,7 +153,14 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
   if (isC3X4Board()) {
     FirmwareManifestJsonParser manifestParser;
     LOG_DBG("OTA", "Checking firmware manifest (current: %s)", currentVersionString());
-    const OtaUpdaterError manifestResult = performStreamingRequest(firmwareManifestUrl, manifestParser, bytesReceived);
+    OtaUpdaterError manifestResult = performStreamingRequest(firmwareManifestUrl, manifestParser, bytesReceived);
+    if (manifestResult != OK || !manifestParser.foundManifest()) {
+      // The same published manifest is committed by the Pages sync. Retry via
+      // GitHub's raw host when Pages/TLS fails, retaining certificate validation
+      // and the mandatory image digest. Never turn a failed query into NO_UPDATE.
+      manifestParser.reset();
+      manifestResult = performStreamingRequest(firmwareManifestFallbackUrl, manifestParser, bytesReceived);
+    }
     LOG_DBG("OTA", "Manifest response received: %zu bytes total", bytesReceived);
     LOG_DBG("OTA", "Manifest parser result: manifest=%s", manifestParser.foundManifest() ? "yes" : "no");
 
@@ -228,10 +237,6 @@ bool OtaUpdater::isUpdateNewer() const {
 
   const bool currentPreRelease = currentVersion.isRc || currentVersion.isDev;
   const bool latestPreRelease = latest.isRc || latest.isDev;
-  if (currentVersion.isDev && !latestPreRelease) {
-    return true;
-  }
-
   for (int index = 0; index < 4; ++index) {
     if (latest.parts[index] != currentVersion.parts[index]) {
       return latest.parts[index] > currentVersion.parts[index];
@@ -261,8 +266,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   // avoid the CA-chain heap spike, while the SHA-256 comes from the separately
   // verified manifest. The inactive slot is never selected unless the digest,
   // image format, chip and embedded board tag all pass.
-  if (isC3X4Board() && expectedSha256.size() != 64) {
-    LOG_ERR("OTA", "Authenticated manifest SHA-256 missing");
+  if (isC3X4Board() && (expectedSha256.size() != 64 || otaSize < 64 * 1024)) {
+    LOG_ERR("OTA", "Authenticated manifest SHA-256 or firmware size invalid");
     return JSON_PARSE_ERROR;
   }
 
@@ -294,9 +299,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   mbedtls_sha256_init(&shaContext);
   mbedtls_sha256_starts(&shaContext, 0);
 
-  const auto consume = [this, otaHandle, onProgress, ctx, &lastReportedPercent, &header, &headerLength,
-                        &wrongDevice, &writeOk, &sizeOk, &tagScanner, &shaContext](const uint8_t* data,
-                                                                                 size_t len) {
+  const auto consume = [this, otaHandle, onProgress, ctx, &lastReportedPercent, &header, &headerLength, &wrongDevice,
+                        &writeOk, &sizeOk, &tagScanner, &shaContext](const uint8_t* data, size_t len) {
     if (otaSize > 0 && (processedSize > otaSize || len > otaSize - processedSize)) {
       sizeOk = false;
       return false;
@@ -355,8 +359,8 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   }
   if (downloadResult != HttpDownloader::OK || !writeOk || !sizeOk || processedSize == 0 ||
       (otaSize > 0 && processedSize != otaSize)) {
-    LOG_ERR("OTA", "Firmware transfer failed: http=%d write=%d size=%zu/%zu", downloadResult, writeOk,
-            processedSize, otaSize);
+    LOG_ERR("OTA", "Firmware transfer failed: http=%d write=%d size=%zu/%zu", downloadResult, writeOk, processedSize,
+            otaSize);
     esp_ota_abort(otaHandle);
     return writeOk ? HTTP_ERROR : INTERNAL_UPDATE_ERROR;
   }

@@ -830,7 +830,8 @@ TEST(FirmwareManifestJsonParser, ParsesManifest) {
 }
 
 TEST(FirmwareManifestJsonParser, MissingDownloadUrl) {
-  const char* json = R"({"version":"1.3.0.9-cpr-vcodex","size":6192336,"sha256":"2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098"})";
+  const char* json =
+      R"({"version":"1.3.0.9-cpr-vcodex","size":6192336,"sha256":"2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098"})";
 
   FirmwareManifestJsonParser p;
   p.feed(json, strlen(json));
@@ -844,8 +845,62 @@ TEST(FirmwareManifestJsonParser, RejectsMissingOrInvalidSha256) {
   noSha.feed(missing, strlen(missing));
   EXPECT_FALSE(noSha.foundManifest());
 
-  const char* invalid = R"({"version":"1.3.0.9-cpr-vcodex","downloadUrl":"https://example.com/fw.bin","size":6192336,"sha256":"not-a-sha256"})";
+  const char* invalid =
+      R"({"version":"1.3.0.9-cpr-vcodex","downloadUrl":"https://example.com/fw.bin","size":6192336,"sha256":"not-a-sha256"})";
   FirmwareManifestJsonParser badSha;
   badSha.feed(invalid, strlen(invalid));
   EXPECT_FALSE(badSha.foundManifest());
+}
+
+namespace {
+std::string manifestWith(const std::string& size, const std::string& url = "https://example.com/fw.bin") {
+  return "{\"version\":\"1.6.0.35-cpr-vcodex\",\"downloadUrl\":\"" + url + "\",\"size\":" + size +
+         ",\"sha256\":\"2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098\"}";
+}
+}  // namespace
+
+TEST(FirmwareManifestJsonParser, RequiresCompleteResponseAtEverySplit) {
+  const std::string json = manifestWith("6433776");
+  for (size_t split = 0; split < json.size(); ++split) {
+    FirmwareManifestJsonParser parser;
+    parser.feed(json.data(), split);
+    EXPECT_FALSE(parser.foundManifest()) << split;
+    parser.feed(json.data() + split, json.size() - split);
+    EXPECT_TRUE(parser.foundManifest()) << split;
+  }
+}
+
+TEST(FirmwareManifestJsonParser, RejectsInvalidSizes) {
+  for (const char* size : {"0", "-1", "1.5", "1e6", "4294967296", "999999999999999999999999", "null", "\"6553600\""}) {
+    const std::string json = manifestWith(size);
+    FirmwareManifestJsonParser parser;
+    parser.feed(json.data(), json.size());
+    EXPECT_FALSE(parser.foundManifest()) << size;
+  }
+}
+
+TEST(FirmwareManifestJsonParser, RejectsEmptyOrUnusableUrlsAndVersions) {
+  for (const auto& url : {std::string(), std::string("http://example.com/fw.bin"), std::string(600, 'x')}) {
+    const std::string json = manifestWith("6433776", url);
+    FirmwareManifestJsonParser parser;
+    parser.feed(json.data(), json.size());
+    EXPECT_FALSE(parser.foundManifest());
+  }
+  std::string json = manifestWith("6433776");
+  const auto start = json.find("1.6.0.35-cpr-vcodex");
+  json.erase(start, strlen("1.6.0.35-cpr-vcodex"));
+  FirmwareManifestJsonParser parser;
+  parser.feed(json.data(), json.size());
+  EXPECT_FALSE(parser.foundManifest());
+}
+
+TEST(FirmwareManifestJsonParser, InvalidDuplicateCannotReuseEarlierValue) {
+  for (const char* field : {"\"size\":null", "\"sha256\":null", "\"downloadUrl\":null", "\"version\":null"}) {
+    std::string json = manifestWith("6433776");
+    json.pop_back();
+    json += std::string(",") + field + "}";
+    FirmwareManifestJsonParser parser;
+    parser.feed(json.data(), json.size());
+    EXPECT_FALSE(parser.foundManifest()) << field;
+  }
 }

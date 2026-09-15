@@ -542,9 +542,9 @@ class CrossPointSettings {
   // Restore the saved on/off state after a normal boot or wake. Brightness and
   // warmth are always remembered even when this is disabled.
   uint8_t frontlightRestoreOnWake = 1;
-  // Language setting (Language enum index, default 0 = EN). Persisted as an ISO
-  // code string for stability across enum reorders.
-  uint8_t language = 0;
+  // Runtime enum index, persisted as an ISO code. Unset until boot migrates
+  // language.bin; do not serialize an English default before that migration.
+  uint8_t language = UINT8_MAX;
   // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits.
   // 0 means "not configured", resolved to the UI language's layout plus English.
   uint16_t keyboardLayouts = 0;

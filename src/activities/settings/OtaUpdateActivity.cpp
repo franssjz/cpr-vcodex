@@ -37,7 +37,7 @@ std::string formatByteSizeCompact(const size_t bytes) {
 }
 
 std::string buildNewVersionLine(const OtaUpdater& updater) {
-  std::string line = std::string(tr(STR_NEW_VERSION)) + updater.getLatestVersion();
+  std::string line = std::string(tr(STR_NEW_VERSION)) + " " + updater.getLatestVersion();
   if (updater.getOtaSize() > 0) {
     line += " (" + formatByteSizeCompact(updater.getOtaSize()) + ")";
   }
@@ -53,6 +53,7 @@ void OtaUpdateActivity::checkForUpdateNow() {
   {
     RenderLock lock(*this);
     state = CHECKING_FOR_UPDATE;
+    failedDetail = nullptr;
   }
   requestUpdateAndWait();
 
@@ -72,7 +73,9 @@ void OtaUpdateActivity::checkForUpdateNow() {
     LOG_DBG("OTA", "Update check failed: %d", res);
     {
       RenderLock lock(*this);
-      state = FAILED;
+      failedDetail =
+          res == OtaUpdater::JSON_PARSE_ERROR ? tr(STR_UPDATE_RESPONSE_INVALID) : tr(STR_UPDATE_CONNECTION_FAILED);
+      state = CHECK_FAILED;
     }
     return;
   }
@@ -172,7 +175,7 @@ void OtaUpdateActivity::render(RenderLock&&) {
     // Cancel/Update popup doesn't cover it (same layout as ConfirmationActivity).
     const int infoTop = pageHeight / 6;
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, infoTop,
-                      (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+                      (std::string(tr(STR_CURRENT_VERSION)) + " " + CROSSPOINT_VERSION).c_str());
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, infoTop + height + metrics.verticalSpacing,
                       buildNewVersionLine(updater).c_str());
 
@@ -195,20 +198,28 @@ void OtaUpdateActivity::render(RenderLock&&) {
         (formatByteSizeCompact(updater.getProcessedSize()) + " / " + formatByteSizeCompact(updater.getTotalSize()))
             .c_str());
   } else if (state == NO_UPDATE) {
-    renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_NO_UPDATE), true, EpdFontFamily::BOLD);
+    renderer.drawCenteredText(UI_10_FONT_ID, top,
+                              updater.getLatestVersion().empty() ? tr(STR_NO_UPDATE) : tr(STR_DEVICE_UP_TO_DATE), true,
+                              EpdFontFamily::BOLD);
     renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing,
-                              (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+                              (std::string(tr(STR_CURRENT_VERSION)) + " " + CROSSPOINT_VERSION).c_str());
+    if (!updater.getLatestVersion().empty()) {
+      renderer.drawCenteredText(UI_10_FONT_ID, top + 2 * (height + metrics.verticalSpacing),
+                                (std::string(tr(STR_PUBLISHED_VERSION)) + " " + updater.getLatestVersion()).c_str());
+    }
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_RETRY), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-  } else if (state == FAILED) {
-    renderer.drawCenteredText(UI_10_FONT_ID, top, tr(STR_UPDATE_FAILED), true, EpdFontFamily::BOLD);
+  } else if (state == FAILED || state == CHECK_FAILED) {
+    renderer.drawCenteredText(UI_10_FONT_ID, top,
+                              state == CHECK_FAILED ? tr(STR_UPDATE_CHECK_FAILED) : tr(STR_UPDATE_FAILED), true,
+                              EpdFontFamily::BOLD);
     int detailOffset = 1;
     if (failedDetail) {
       renderer.drawCenteredText(UI_10_FONT_ID, top + height + metrics.verticalSpacing, failedDetail);
       detailOffset = 2;
     }
     renderer.drawCenteredText(UI_10_FONT_ID, top + height * detailOffset + metrics.verticalSpacing * detailOffset,
-                              (std::string(tr(STR_CURRENT_VERSION)) + CROSSPOINT_VERSION).c_str());
+                              (std::string(tr(STR_CURRENT_VERSION)) + " " + CROSSPOINT_VERSION).c_str());
     if (!updater.getLatestVersion().empty()) {
       const int versionOffset = detailOffset + 1;
       renderer.drawCenteredText(UI_10_FONT_ID, top + height * versionOffset + metrics.verticalSpacing * versionOffset,
@@ -274,7 +285,7 @@ void OtaUpdateActivity::loop() {
     return;
   }
 
-  if (state == FAILED || state == NO_UPDATE) {
+  if (state == FAILED || state == CHECK_FAILED || state == NO_UPDATE) {
     // Confirm retries the check (release lookup may have failed transiently);
     // Back or a screen tap leaves.
     if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {

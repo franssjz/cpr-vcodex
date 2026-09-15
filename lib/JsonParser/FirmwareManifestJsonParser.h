@@ -51,4 +51,5 @@ class FirmwareManifestJsonParser {
   bool versionFound;
   bool downloadUrlFound;
   bool sha256Found;
+  bool rootComplete;
 };
