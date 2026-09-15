@@ -1,6 +1,7 @@
 #pragma once
 #include <HalStorage.h>
 
+#include <cstdint>
 #include <functional>
 #include <string>
 
