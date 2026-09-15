@@ -98,10 +98,8 @@ def build_firmware(env):
 
 def parse_size_line(regex, output):
     """Extract used-bytes integer matching *regex* from PlatformIO output, or None."""
-    m = regex.search(output)
-    if m:
-        return int(m.group(1))
-    return None
+    matches = list(regex.finditer(output))
+    return int(matches[-1].group(1)) if matches else None
 
 
 def write_csv(out, rows, fieldnames):

@@ -79,4 +79,8 @@ if(Python3_Interpreter_FOUND)
     NAME web_flash_regressions
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_flash_regressions/FlashPageTest.py
   )
+  add_test(
+    NAME firmware_budget_report_regressions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/release_tools/FirmwareBudgetReportTest.py
+  )
 endif()

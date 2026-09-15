@@ -144,9 +144,12 @@ def require_tag_available(tag: str, allow_existing_tag: bool) -> None:
 
 
 def parse_size(regex: re.Pattern[str], output: str, label: str) -> tuple[int, int]:
-    match = regex.search(output)
-    if not match:
+    matches = list(regex.finditer(output))
+    if not matches:
         fail(f"Could not parse {label} usage from PlatformIO output")
+    # Some environments report intermediate images before the final firmware.
+    # Only the last PlatformIO size summary describes the packaged application.
+    match = matches[-1]
     return int(match.group(1)), int(match.group(2))
 
 

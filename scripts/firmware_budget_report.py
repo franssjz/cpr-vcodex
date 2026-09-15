@@ -43,9 +43,12 @@ def fail(message: str) -> None:
 
 
 def parse_size(regex: re.Pattern[str], output: str, label: str) -> tuple[int, int]:
-    match = regex.search(output)
-    if not match:
+    matches = list(regex.finditer(output))
+    if not matches:
         fail(f"Could not parse {label} usage from build log")
+    # PlatformIO can emit size summaries for intermediate images before the
+    # application. The final match is the firmware that gets packaged.
+    match = matches[-1]
     return int(match.group(1)), int(match.group(2))
 
 
