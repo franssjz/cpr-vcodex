@@ -1,5 +1,6 @@
 #include "FirmwareManifestJsonParser.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 
@@ -23,17 +24,20 @@ void FirmwareManifestJsonParser::reset() {
   depth = 0;
   version[0] = '\0';
   downloadUrl[0] = '\0';
+  firmwareSha256[0] = '\0';
   firmwareSize = 0;
   versionFound = false;
   downloadUrlFound = false;
+  sha256Found = false;
 }
 
 void FirmwareManifestJsonParser::feed(const char* data, size_t len) { parser.feed(data, len); }
 
-bool FirmwareManifestJsonParser::foundManifest() const { return versionFound && downloadUrlFound; }
+bool FirmwareManifestJsonParser::foundManifest() const { return versionFound && downloadUrlFound && sha256Found; }
 const char* FirmwareManifestJsonParser::getVersion() const { return version; }
 const char* FirmwareManifestJsonParser::getDownloadUrl() const { return downloadUrl; }
 size_t FirmwareManifestJsonParser::getFirmwareSize() const { return firmwareSize; }
+const char* FirmwareManifestJsonParser::getFirmwareSha256() const { return firmwareSha256; }
 
 void FirmwareManifestJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
   auto* self = static_cast<FirmwareManifestJsonParser*>(ctx);
@@ -48,6 +52,8 @@ void FirmwareManifestJsonParser::sOnKey(void* ctx, const char* key, size_t len) 
     self->lastKey = LastKey::DOWNLOAD_URL;
   } else if (len == 4 && memcmp(key, "size", 4) == 0) {
     self->lastKey = LastKey::SIZE;
+  } else if (len == 6 && memcmp(key, "sha256", 6) == 0) {
+    self->lastKey = LastKey::SHA256;
   } else {
     self->lastKey = LastKey::NONE;
   }
@@ -61,6 +67,22 @@ void FirmwareManifestJsonParser::sOnString(void* ctx, const char* value, size_t 
   } else if (self->depth == 1 && self->lastKey == LastKey::DOWNLOAD_URL) {
     safeCopy(self->downloadUrl, sizeof(self->downloadUrl), value, len);
     self->downloadUrlFound = true;
+  } else if (self->depth == 1 && self->lastKey == LastKey::SHA256) {
+    self->firmwareSha256[0] = '\0';
+    self->sha256Found = false;
+    if (len == 64) {
+      bool valid = true;
+      for (size_t i = 0; i < len; ++i) {
+        if (!std::isxdigit(static_cast<unsigned char>(value[i]))) {
+          valid = false;
+          break;
+        }
+      }
+      if (valid) {
+        safeCopy(self->firmwareSha256, sizeof(self->firmwareSha256), value, len);
+        self->sha256Found = true;
+      }
+    }
   }
   self->lastKey = LastKey::NONE;
 }

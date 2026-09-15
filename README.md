@@ -52,18 +52,31 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested. **X4 Pro firmware distribution is withdrawn** because locked devices do not have a confirmed recovery path. |
-| Current release (CPR-vCodex) build | [`1.6.0.33-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.33-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.6.0.34-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.34-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc), with runtime X3/X4 panel detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff), including the FreeInkUI activity/input architecture and complete X4 Pro support, merged while retaining CPR-vCodex settings, statistics, bookmarks/highlights, dictionaries, themes, SD fonts, and release tooling. |
-| Current release focus | More reliable text and image reading under fragmented memory, effective image-cache contrast upgrades, cleaner wake, and more responsive short button presses. |
-| Latest release notes | - Rebuilds legacy EPUB image caches once so the contrast correction from [#215](https://github.com/franssjz/cpr-vcodex/issues/215) reaches existing books.<br>- Retries transient image failures after revisiting a page instead of pinning placeholders for the session ([#217](https://github.com/franssjz/cpr-vcodex/issues/217)).<br>- Reduces reader heap fragmentation and repeated SD-font reads in text-only and illustrated books.<br>- Improves short-button detection and cleans retained sleep-screen pixels after splashless wake. |
+| Current release focus | Reliable ESP32-C3 Wi-Fi OTA after the `0 B / 0%` regression, with authenticated direct-slot streaming and a documented cable-free recovery path. |
+| Latest release notes | - Fixes OTA firmware downloads that stopped before receiving the first byte on releases 1.6.0.31-1.6.0.33 ([#219](https://github.com/franssjz/cpr-vcodex/issues/219)).<br>- Keeps the manifest certificate-verified and requires an exact SHA-256 match before activating the downloaded image.<br>- Validates size, chip, board tag, digest, and ESP image structure while streaming directly to the inactive OTA slot.<br>- Devices already on an affected release need the one-time Wi-Fi File Transfer bridge below; future OTA updates then work normally. |
 | Base firmware line | `CrossPoint Reader 1.6.0` (upstream `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff)) |
 | Latest official commit reviewed | `develop` through [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff) |
 | Latest official commit incorporated | Release `1.6.0.31` adopted the FreeInkUI integration from [PR #206](https://github.com/franssjz/cpr-vcodex/pull/206), including freeink-sdk [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc); X4 Pro distribution is now withdrawn. |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
+
+## OTA shows 0 B / 0% — one-time Wi-Fi recovery
+
+CPR-vCodex 1.6.0.31 through 1.6.0.33 can find a new release but fail before downloading its first byte. The failure is inside the updater already installed on the device, so publishing a corrected BIN cannot make that old updater repair itself. No USB cable or microSD removal is required: use the device's Wi-Fi File Transfer once to place 1.6.0.34 on the card, then run the local firmware updater.
+
+1. Download `1.6.0.34-cpr-vcodex.bin` from the [1.6.0.34 release](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.34-cpr-vcodex) to a phone or computer on the same Wi-Fi network.
+2. On the reader, open `File Transfer`, choose `Join Network`, and connect to Wi-Fi.
+3. Open the address shown by the reader in the phone/computer browser and upload the BIN to the root of the microSD card.
+4. Exit File Transfer and open `Settings > System > SD Card Firmware Update`.
+5. Select `1.6.0.34-cpr-vcodex.bin`, confirm, and do not power off the reader during validation or flashing.
+6. After 1.6.0.34 boots, later releases can again be installed from the normal OTA update option.
+
+The 1.6.0.34 updater keeps the release manifest on certificate-verified HTTPS, requires the manifest SHA-256, streams the BIN into the inactive partition, and selects it only after size, digest, ESP chip, board tag, and image validation succeed. The direct-slot flow follows CrossPoint's low-memory OTA architecture from [`3e627112`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3e627112), with CPR-vCodex's additional release and board checks.
 
 ## Froze in Update Complete (Soft Bricked?) — X3 recovery
 
@@ -634,7 +647,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CrossPoint Reader 1.6.0`
-- current release build style: `1.6.0.33-cpr-vcodex`
+- current release build style: `1.6.0.34-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -717,10 +730,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.6.0.33-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.6.0.34-cpr-vcodex
 ```
 
-- push a stable tag named like `1.6.0.33-cpr-vcodex`
+- push a stable tag named like `1.6.0.34-cpr-vcodex`
 - `pre_release_check.py` dry-runs `gh_release`, checks it against the 6,553,600
   byte X4 OTA slot, validates the artifact pair, and rejects any X4 Pro entry
   or stale X4 Pro browser binary

@@ -46,6 +46,15 @@ class HttpDownloader {
                        const std::string& password = "");
 
   /**
+   * Stream an OTA image through the pre-1.6.0.31 Arduino TLS transport. Peer
+   * verification is intentionally skipped here to avoid the C3 certificate
+   * heap spike; callers MUST authenticate the bytes against a SHA-256 obtained
+   * from a separately verified manifest before activating the OTA partition.
+   */
+  static DownloadError fetchOtaImage(const std::string& url, const DataCallback& onData,
+                                     ProgressCallback progress = nullptr);
+
+  /**
    * Download a file to the SD card with optional credentials.
    *
    * downgradeRedirectsToHttp rewrites followed redirect targets from https to

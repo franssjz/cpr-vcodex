@@ -1,6 +1,10 @@
 #include "HttpDownloader.h"
 
 #include <Arduino.h>
+#if !defined(FREEINK_NET_WOLFSSL)
+#include <HTTPClient.h>
+#include <NetworkClientSecure.h>
+#endif
 #include <Logging.h>
 #include <Memory.h>
 #include <base64.h>
@@ -48,9 +52,80 @@ struct Sink {
   size_t downloaded = 0;
 };
 
+#if !defined(FREEINK_NET_WOLFSSL)
+class CallbackWriteStream final : public Stream {
+ public:
+  explicit CallbackWriteStream(Sink& sink) : sink_(sink) {}
+
+  size_t write(uint8_t byte) override { return write(&byte, 1); }
+  size_t write(const uint8_t* data, size_t len) override {
+    if ((sink_.cancelFlag && *sink_.cancelFlag) || !sink_.write(data, len)) {
+      callbackOk_ = false;
+      return 0;
+    }
+    sink_.downloaded += len;
+    if (sink_.progress && sink_.total > 0) sink_.progress(sink_.downloaded, sink_.total);
+    return len;
+  }
+  int available() override { return 0; }
+  int read() override { return -1; }
+  int peek() override { return -1; }
+  void flush() override {}
+
+  bool callbackOk() const { return callbackOk_; }
+
+ private:
+  Sink& sink_;
+  bool callbackOk_ = true;
+};
+
 bool isRedirect(int status) {
   return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
 }
+
+// Compatibility path for the OTA payload only. This is the transport used by
+// working releases through 1.6.0.30: it avoids CA-chain allocation during the
+// second HTTPS handshake. The manifest still travels through verified
+// esp_http_client, and OtaUpdater authenticates every payload byte against the
+// manifest SHA-256 before selecting the new boot partition.
+HttpDownloader::DownloadError runOtaGetCompat(const std::string& url, Sink& sink) {
+  NetworkClientSecure tls;
+  tls.setInsecure();
+  HTTPClient http;
+  if (!http.begin(tls, url.c_str())) {
+    LOG_ERR("HTTP", "OTA begin failed: %s", url.c_str());
+    return HttpDownloader::HTTP_ERROR;
+  }
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  const std::string userAgent = userAgentString();
+  http.addHeader("User-Agent", userAgent.c_str());
+
+  const int status = http.GET();
+  if (status != HTTP_CODE_OK) {
+    LOG_ERR("HTTP", "OTA GET failed: %d", status);
+    http.end();
+    return HttpDownloader::HTTP_ERROR;
+  }
+
+  const int64_t reportedLength = http.getSize();
+  sink.total = reportedLength > 0 ? static_cast<size_t>(reportedLength) : 0;
+  CallbackWriteStream output(sink);
+  const int written = http.writeToStream(&output);
+  http.end();
+
+  if (!output.callbackOk()) return HttpDownloader::FILE_ERROR;
+  if (written < 0 || sink.downloaded == 0) {
+    LOG_ERR("HTTP", "OTA body failed after %zu bytes: %d", sink.downloaded, written);
+    return HttpDownloader::HTTP_ERROR;
+  }
+  if (sink.total > 0 && sink.downloaded != sink.total) {
+    LOG_ERR("HTTP", "OTA body incomplete: %zu of %zu", sink.downloaded, sink.total);
+    return HttpDownloader::HTTP_ERROR;
+  }
+  return HttpDownloader::OK;
+}
+#endif
 
 // OtaUpdater.cpp already disables WiFi power-save for firmware downloads, but
 // OPDS feed/book fetches never did despite being able to run just as long for
@@ -294,6 +369,19 @@ bool HttpDownloader::fetchUrl(const std::string& url, const DataCallback& onData
   Sink sink;
   sink.write = onData;
   return runGetSecure(url, username, password, sink) == OK;
+}
+
+HttpDownloader::DownloadError HttpDownloader::fetchOtaImage(const std::string& url, const DataCallback& onData,
+                                                            ProgressCallback progress) {
+  LOG_DBG("HTTP", "OTA compatibility GET: %s", url.c_str());
+  Sink sink;
+  sink.write = onData;
+  sink.progress = std::move(progress);
+#if defined(FREEINK_NET_WOLFSSL)
+  return runGetSecure(url, "", "", sink);
+#else
+  return runOtaGetCompat(url, sink);
+#endif
 }
 
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,

@@ -808,6 +808,7 @@ TEST(FirmwareManifestJsonParser, ParsesManifest) {
       "firmwareUrl": "firmware/firmware.bin",
       "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.9-cpr-vcodex/1.3.0.9-cpr-vcodex.bin",
       "size": 6192336,
+      "sha256": "2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098",
       "source": {
         "type": "github-release",
         "tag": "1.3.0.9-cpr-vcodex"
@@ -825,13 +826,26 @@ TEST(FirmwareManifestJsonParser, ParsesManifest) {
   EXPECT_STREQ(p.getDownloadUrl(),
                "https://github.com/franssjz/cpr-vcodex/releases/download/1.3.0.9-cpr-vcodex/1.3.0.9-cpr-vcodex.bin");
   EXPECT_EQ(p.getFirmwareSize(), 6192336u);
+  EXPECT_STREQ(p.getFirmwareSha256(), "2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098");
 }
 
 TEST(FirmwareManifestJsonParser, MissingDownloadUrl) {
-  const char* json = R"({"version":"1.3.0.9-cpr-vcodex","size":6192336})";
+  const char* json = R"({"version":"1.3.0.9-cpr-vcodex","size":6192336,"sha256":"2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098"})";
 
   FirmwareManifestJsonParser p;
   p.feed(json, strlen(json));
 
   EXPECT_FALSE(p.foundManifest());
+}
+
+TEST(FirmwareManifestJsonParser, RejectsMissingOrInvalidSha256) {
+  const char* missing = R"({"version":"1.3.0.9-cpr-vcodex","downloadUrl":"https://example.com/fw.bin","size":6192336})";
+  FirmwareManifestJsonParser noSha;
+  noSha.feed(missing, strlen(missing));
+  EXPECT_FALSE(noSha.foundManifest());
+
+  const char* invalid = R"({"version":"1.3.0.9-cpr-vcodex","downloadUrl":"https://example.com/fw.bin","size":6192336,"sha256":"not-a-sha256"})";
+  FirmwareManifestJsonParser badSha;
+  badSha.feed(invalid, strlen(invalid));
+  EXPECT_FALSE(badSha.foundManifest());
 }

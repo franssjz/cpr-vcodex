@@ -19,6 +19,7 @@ class FirmwareManifestJsonParser {
   const char* getVersion() const;
   const char* getDownloadUrl() const;
   size_t getFirmwareSize() const;
+  const char* getFirmwareSha256() const;
 
  private:
   enum class LastKey : uint8_t {
@@ -26,6 +27,7 @@ class FirmwareManifestJsonParser {
     VERSION,
     DOWNLOAD_URL,
     SIZE,
+    SHA256,
   };
 
   static void sOnKey(void* ctx, const char* key, size_t len);
@@ -44,7 +46,9 @@ class FirmwareManifestJsonParser {
 
   char version[40];
   char downloadUrl[512];
+  char firmwareSha256[65];
   size_t firmwareSize;
   bool versionFound;
   bool downloadUrlFound;
+  bool sha256Found;
 };
