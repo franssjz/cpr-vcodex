@@ -86,6 +86,24 @@ DEVICE_ENTRIES: tuple[tuple[str, FirmwareTarget, int], ...] = (
 )
 
 
+def pages_firmware_url(repo: str, target: FirmwareTarget = C3_TARGET) -> str:
+    """Return the redirect-free GitHub Pages URL used by installed C3 firmware.
+
+    Existing CPR-vCodex builds read the flat top-level ``downloadUrl`` from the
+    manifest.  Pointing that field at a GitHub release adds a signed CDN
+    redirect and a second TLS host, both of which are avoidable because the
+    Pages deployment already carries the byte-identical, SHA-checked image.
+    Device entries retain their immutable release URLs for browser downloads.
+    """
+    try:
+        owner, project = repo.split("/", 1)
+    except ValueError as exc:
+        raise ValueError(f"GitHub repository must be OWNER/REPO, got {repo!r}") from exc
+    if not owner or not project:
+        raise ValueError(f"GitHub repository must be OWNER/REPO, got {repo!r}")
+    return f"https://{owner}.github.io/{project}/firmware/{target.local_name}"
+
+
 def request_json(url: str, token: str | None) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -247,8 +265,10 @@ def build_manifest(
     "downloadUrl": str}. Only the C3 entry ("x4") is distributable.
 
     The top level keeps the historic flat C3 fields (version/firmwareUrl/
-    downloadUrl/size/sha256/source) so older page copies keep working, and adds
-    a `devices` object keyed x4/x3 plus an ESP Web Tools style `builds` list.
+    downloadUrl/size/sha256/source) so older page and installed-firmware copies
+    keep working. Its downloadUrl is the redirect-free Pages copy used by OTA;
+    immutable GitHub release URLs remain in `devices`. The manifest also adds a
+    `devices` object keyed x4/x3 plus an ESP Web Tools style `builds` list.
     """
     tag = str(release["tag_name"])
     c3 = images[C3_TARGET.key]
@@ -287,7 +307,7 @@ def build_manifest(
         "name": "CPR-vCodex",
         "version": tag,
         "firmwareUrl": f"firmware/{C3_TARGET.local_name}",
-        "downloadUrl": c3["downloadUrl"],
+        "downloadUrl": pages_firmware_url(repo),
         "size": c3["size"],
         "sha256": c3["sha256"],
         "source": {

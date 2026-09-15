@@ -2,7 +2,7 @@
   "name": "CPR-vCodex",
   "version": "1.6.0.33-cpr-vcodex",
   "firmwareUrl": "firmware/firmware.bin",
-  "downloadUrl": "https://github.com/franssjz/cpr-vcodex/releases/download/1.6.0.33-cpr-vcodex/1.6.0.33-cpr-vcodex.bin",
+  "downloadUrl": "https://franssjz.github.io/cpr-vcodex/firmware/firmware.bin",
   "size": 6391952,
   "sha256": "2746e493e84c3f350c09cec43ce11f5f1267ed60af7bdd94b9d73db99466e098",
   "source": {

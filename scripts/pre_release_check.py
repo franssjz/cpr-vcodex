@@ -323,6 +323,9 @@ def validate_autoflash_manifest(project_dir: Path) -> None:
     c3_size, c3_digest = _sha256_file(c3_path)
     if manifest.get("firmwareUrl") != f"firmware/{c3_target.local_firmware}":
         fail(f"Auto-flash manifest must use local firmware/{c3_target.local_firmware}")
+    expected_ota_url = f"https://franssjz.github.io/cpr-vcodex/firmware/{c3_target.local_firmware}"
+    if manifest.get("downloadUrl") != expected_ota_url:
+        fail(f"Auto-flash manifest OTA downloadUrl must use the redirect-free Pages copy: {expected_ota_url}")
     if manifest.get("size") != c3_size:
         fail("Auto-flash manifest size does not match docs/firmware/firmware.bin")
     if manifest.get("sha256") != c3_digest:
