@@ -37,6 +37,7 @@
 #include "ShortcutLocationActivity.h"
 #include "ShortcutOrderActivity.h"
 #include "ShortcutVisibilityActivity.h"
+#include "SilentRestart.h"
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
 #include "TimeZoneSelectActivity.h"
@@ -880,7 +881,9 @@ void SettingsActivity::runAction(const SettingInfo& setting) {
       startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
       break;
     case SettingAction::CheckForUpdates:
-      startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
+      // CrossInk enters OTA through a fresh network boot, keeping Settings and
+      // previously visited screens out of the C3's TLS heap.
+      silentRestartToOta();
       break;
     case SettingAction::SdFirmwareUpdate:
       startActivityForResult(std::make_unique<SdFirmwareUpdateActivity>(renderer, mappedInput), resultHandler);

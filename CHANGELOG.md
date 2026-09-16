@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.6.0.38 — OTA and EPUB image fixes
+
+- Fix progressive JPEGs whose luminance and color components use separate
+  scans, and select the correct Huffman tables when skipping the last color
+  component during grayscale decoding (Crosspoint #2925, `6230eba2`). Keep the
+  existing MCU_SKIP memory/write guards. Add five pixel-exact regression cases
+  using the real firmware decoder, including the two previously failing cases.
+
+- Keep EPUB image grayscale enabled when text anti-aliasing is off. Previously,
+  light-mode reading displayed only the black/white image base, hiding diagram
+  labels and gray backgrounds. Adapt upstream Crosspoint `d1abcc00` (#2393)
+  while preserving the fork's dark-mode refresh and image polarity behavior.
+  Existing image caches remain valid; no settings reset or cache deletion is
+  needed. Verified with the reported JPEG and generated PNG render regressions
+  in the desktop simulator; physical e-ink confirmation remains pending.
+
+- Fix the update check failing on .37 with "Could not connect to update server".
+  The X4 ran out of memory while verifying the HTTPS certificate signature.
+  Adopt CrossInk's fresh network boot for OTA: Settings shows Loading and
+  restarts directly into Update, without retaining its lists or loading SD
+  reader fonts. Keep CPR-vCodex's settings, language, manifest and binary URLs,
+  certificate verification and firmware SHA-256 checks.
+- Reproduce the original TLS allocation failure on a USB-recoverable X4, then
+  verify the corrected check, complete 6,103,328-byte firmware download,
+  OTA installation and reboot. Verify the flashed image against the public BIN
+  over USB. See the stability audit for the hardware
+  record and remaining X3 validation.
+- If the installed updater cannot connect, install this C3 release through
+  SD Card Firmware Update or, on a USB-recoverable device, the browser flasher.
+  Keep settings and reading data; a factory reset is unnecessary.
+
 ## 1.6.0.37 — X3/X4 stability and OTA status
 
 - Show the installed and published versions after a successful update check.
@@ -59,6 +90,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.0.38` | - Fix .37's update-check failure caused by insufficient RAM during HTTPS certificate signature verification on X4.<br>- Adapt CrossInk's fresh network boot to CPR-vCodex: Settings briefly shows Loading, then enters Update without retaining the Settings screen or SD reader fonts.<br>- Keep the fork's settings, languages, repository, manifest, C3 binary naming, certificate verification and SHA-256 validation.<br>- Reproduced the original failure and verified the corrected query, complete download, OTA installation and reboot on a USB-recoverable X4; the flashed image matches the public BIN. X3 hardware validation remains pending; see the stability audit.<br>- Devices whose installed OTA client cannot connect need this release through SD Card Firmware Update or a supported USB flash. Preserve settings and reading data. X4 Pro distribution remains withdrawn.<br>- Restore EPUB image grayscale with text anti-aliasing off (#215), without clearing existing caches or settings.<br>- Fix progressive JPEG decoding with separate component scans and chroma Huffman tables (Crosspoint #2925); retain existing memory guards.<br>- All 274 native tests pass, including five real-decoder JPEG cases. Simulator regressions cover image grayscale and existing caches. The development build booted twice and confirmed its OTA slot on X4; physical EPUB rendering and X3 validation remain pending. |
 | `1.6.0.37` | - X3/X4 stabilization release; X4 Pro distribution remains withdrawn.<br>- OTA status shows installed and published versions, reports equal/newer builds as up to date, and distinguishes failed checks from failed installations. Certificate-verified manifest fallback improves resilience when Pages is unreachable.<br>- Repair OTA payload transport; require a complete authenticated manifest and verify size, SHA-256, chip and board before activating the inactive slot.<br>- Preserve saved ISO language codes and migrate historical language indices without deleting the original settings. Keep all 24 UI languages, including Spanish.<br>- Handle image allocation failures and recover about 326 KiB of font-table flash without changing glyphs, metrics or spacing.<br>- Validate packaged image size, chip and embedded application version, including cached builds.<br>- Automated fault-injection and simulator checks are documented in the stability audit. End-to-end OTA/reboot on physical X3 and X4 remains unverified; an installed client stuck at 0 B may need the SD Card Firmware Update path described in README. |
 | `1.6.0.34` | - Fixed Wi-Fi OTA downloads stopping at `0 B / 0%` on X3/X4, reported in [#219](https://github.com/franssjz/cpr-vcodex/issues/219). The regression entered with the 1.6.0.31 network migration: after the verified manifest request, the ESP32-C3 could fail to allocate the certificate-backed second TLS session before receiving any firmware bytes.<br>- Restored the proven low-fragmentation Arduino TLS transport for the firmware payload only. The manifest remains certificate-verified, its SHA-256 is now mandatory, and the downloaded image is activated only after its exact size, SHA-256, ESP chip, CPR-vCodex board tag, and ESP image structure all validate.<br>- Streams the image directly into the inactive OTA partition and aborts without selecting it on any network, write, identity, size, or digest failure. This follows CrossPoint's direct-slot OTA design from [`3e627112`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3e627112) while retaining CPR-vCodex's stronger board and release-manifest checks.<br>- Documented the one-time Wi-Fi File Transfer bridge required by devices already running 1.6.0.31-1.6.0.33: their faulty updater cannot repair itself until 1.6.0.34 is installed through `SD Card Firmware Update`; later OTA updates use the repaired path normally.<br>- Passed the firmware-manifest regressions and the `gh_release` ESP32-C3 build. The packaged image is 6,433,776 bytes and fits the 6,553,600-byte X4/X3 OTA slot with 119,824 bytes remaining; physical X3/X4 OTA confirmation is still requested. |
 | `1.6.0.33` | - Hardened EPUB image rendering for [#217](https://github.com/franssjz/cpr-vcodex/issues/217): `.pxc` caches now carry a format and calibration version, so old quantized pixels rebuild once and the contrast correction from [#215](https://github.com/franssjz/cpr-vcodex/issues/215) is applied to existing books. Image failures are scoped to the loaded page instead of the reader session, allowing later visits to recover from transient SD or low-memory failures.<br>- Reduced fragmentation during text and image reading by releasing rebuildable font caches before section construction, making full-page SD-font prewarm replace the prior page, reserving growing bitmap arenas before rebuilding their smaller metadata, and giving page elements unique ownership. These changes selectively adapt CrossPoint [`c4d8c395`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c4d8c395), [`c80c537f`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c80c537f), and [`c33a8b0e`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c33a8b0e).<br>- Made short button presses harder to miss during the idle wait by following CrossPoint [`9ba16086`](https://github.com/crosspoint-reader/crosspoint-reader/commit/9ba16086), and forced one clean splashless X4 wake refresh to avoid retained sleep-screen pixels, mirroring freeink-sdk [`6644bf2`](https://github.com/Free-Ink/freeink-sdk/commit/6644bf2).<br>- Passed 43 reader regressions, six SD-font cache regressions, and both `default` and `gh_release` ESP32-C3 builds. The published release image is 6,391,952 bytes and fits the 6,553,600-byte X4 OTA slot; the hardware-specific wake and short-press paths still require confirmation on a physical device. |

@@ -70,6 +70,7 @@ add_subdirectory(reader_position)
 add_subdirectory(reader_regressions)
 add_subdirectory(language_settings)
 add_subdirectory(ota_update)
+add_subdirectory(jpegdec)
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)

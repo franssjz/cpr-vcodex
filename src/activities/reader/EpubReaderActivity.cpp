@@ -2345,11 +2345,15 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
   }
 
   const bool enableTextAA = SETTINGS.textAntiAliasing && !renderer.isDarkMode();
-  const bool enableImageGrayscaleOnly = renderer.isDarkMode() && page->hasImages();
+  // Images always need their gray planes, independently of text AA (upstream
+  // d1abcc00, #2393). Their BW base maps every non-white level to black; leaving
+  // it without the gray passes hides diagram labels and shadow detail (#215).
+  const bool enableImageGrayscaleOnly = !enableTextAA && page->hasImages();
   const bool forceFullRefresh = pendingForceFullRefresh;
   pendingForceFullRefresh = false;
-  // Force special handling for pages with images when anti-aliasing is on
-  const bool imagePageWithAA = page->hasImages() && enableTextAA;
+  // Give light-mode images the same clean base with text AA on or off.
+  // Keep the existing dark-mode refresh path and image polarity handling.
+  const bool imagePageInLightMode = page->hasImages() && !renderer.isDarkMode();
   HalDisplay::RefreshMode configuredRefreshMode = HalDisplay::FAST_REFRESH;
   const bool hasConfiguredRefreshMode = ReaderUtils::getConfiguredReaderRefreshMode(configuredRefreshMode);
   const bool needsGrayscale = enableTextAA || enableImageGrayscaleOnly;
@@ -2373,7 +2377,7 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
   } else if (hasConfiguredRefreshMode) {
     renderer.displayBuffer(configuredRefreshMode);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
-  } else if (imagePageWithAA) {
+  } else if (imagePageInLightMode) {
     // Double FAST_REFRESH with selective image blanking (pablohc's technique):
     // HALF_REFRESH sets particles too firmly for the grayscale LUT to adjust.
     // Instead, blank only the image area and do two fast refreshes.

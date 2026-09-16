@@ -74,6 +74,17 @@ logical display pixels. Screenshots are BMP at the host's drawable resolution
 and `CROSSPOINT_SIM_MAX_ALLOC_HEAP` fake low-memory conditions. The web server
 binds `http://127.0.0.1:8080/` (`CROSSPOINT_SIM_HTTP_PORT` to move it).
 
+## EPUB image grayscale regression
+
+Run `python3 test/simulator/epub_image_grayscale.py /absolute/path/to/program`
+with an X4 simulator binary. It generates a synthetic EPUB and isolated SDs,
+then checks actual screenshot pixels across ten boots: text AA on/off, light
+and dark modes, decoded and cached images, and a text-only page. It also checks
+that disabling text AA keeps the paragraph monochrome without losing image
+grays. The script reports its artifact directory; `--output-parent` can place
+it under the gitignored `artifacts/`. It uses only the Python standard library.
+This checks composition, not physical panel tones or refresh waveforms.
+
 ## When the simulator stops compiling
 
 - A missing `Hal*` method or a fork-only ESP-IDF include belongs in the fork's

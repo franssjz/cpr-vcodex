@@ -40,6 +40,7 @@
 #include "UiFontSelection.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "activities/settings/OtaUpdateActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -197,6 +198,7 @@ RTC_NOINIT_ATTR uint32_t silentRebootTarget;
 constexpr uint32_t SILENT_REBOOT_MAGIC = 0xC1EAB007;
 constexpr uint32_t SILENT_REBOOT_TARGET_HOME = 0;
 constexpr uint32_t SILENT_REBOOT_TARGET_READER = 1;
+constexpr uint32_t SILENT_REBOOT_TARGET_OTA = 2;
 
 // How the device is coming back to life, resolved once at boot. Both resume
 // flows suppress the splash and leave the panel holding its pre-boot frame; a
@@ -269,6 +271,17 @@ void restartToHomeAfterStorageHandoff() {
   GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
   delay(50);
   handoffUsbOtgToSerialJtag();
+  ESP.restart();
+}
+
+void silentRestartToOta() {
+  if (deepSleepInProgress) return;
+  // Adapted from CrossInk's silentRestartToNetwork(OTA). The token is consumed
+  // once in setup(), so an interrupted boot cannot loop back into the updater.
+  silentRebootTarget = SILENT_REBOOT_TARGET_OTA;
+  silentRebootMagic = SILENT_REBOOT_MAGIC;
+  GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+  delay(50);
   ESP.restart();
 }
 
@@ -371,7 +384,7 @@ void ensureSdFontLoaded() {
   }
 }
 
-void setupDisplayAndFonts(bool seamless = false) {
+void setupDisplayAndFonts(bool seamless = false, bool loadReaderResources = true) {
 #if !FREEINK_MCU_C3
   // C3 resolves its controller in HalGPIO::begin() before SPI claims the
   // display pins. X4 Pro skips that C3-only path, so probe here before
@@ -413,7 +426,7 @@ void setupDisplayAndFonts(bool seamless = false) {
   refreshUiFontsForCurrentLanguage();
 
   // Discover and load SD card fonts
-  if (Storage.ready()) {
+  if (loadReaderResources && Storage.ready()) {
     sdFontSystem.begin(renderer);
   }
 
@@ -444,7 +457,7 @@ void setup() {
   // Bound the target range too — RTC_NOINIT memory is uninitialized on cold boot.
   const bool isSilentReboot = (silentRebootMagic == SILENT_REBOOT_MAGIC);
   const uint32_t snapshotTarget =
-      (isSilentReboot && silentRebootTarget <= SILENT_REBOOT_TARGET_READER) ? silentRebootTarget : 0;
+      (isSilentReboot && silentRebootTarget <= SILENT_REBOOT_TARGET_OTA) ? silentRebootTarget : 0;
   silentRebootMagic = 0;
   silentRebootTarget = 0;
 
@@ -615,6 +628,8 @@ void setup() {
   const bool skipFlashcardsLoad = manualSafeBoot || BootRecovery::shouldSkipFlashcards();
   const bool skipAchievementsLoad = manualSafeBoot || BootRecovery::shouldSkipAchievements();
   const bool forceHomeBoot = manualSafeBoot || BootRecovery::shouldForceHome();
+  const bool otaBoot = isSilentReboot && snapshotTarget == SILENT_REBOOT_TARGET_OTA && !forceHomeBoot &&
+                       !recoveryFirmwareMode && !rebootedFromPanic;
 
   // App state is needed before the boot-presentation decision (showBootScreen).
   if (skipStateLoad) {
@@ -639,7 +654,9 @@ void setup() {
   bool needsWakeRefresh = false;
 
   BootRecovery::enterStage(BootRecovery::BootStage::DisplayAndFonts);
-  setupDisplayAndFonts(resume != BootResume::Splash);
+  // Like CrossInk's minimal network boot, OTA needs UI fonts but no SD reader
+  // fonts. The normal exit already restarts Home and loads reader resources.
+  setupDisplayAndFonts(resume != BootResume::Splash, !otaBoot);
 
   // Firmware-side equivalent of FreeInk SDK 6644bf2: a sunlight-fading
   // refresh powers the X4 panel down afterwards, but its first paint after a
@@ -747,6 +764,8 @@ void setup() {
   } else if (rebootedFromPanic && !forceHomeBoot) {
     // If we rebooted from a panic, go to crash report screen to show the panic info
     activityManager.goToCrashReport();
+  } else if (otaBoot) {
+    activityManager.replaceActivity(std::make_unique<OtaUpdateActivity>(renderer, mappedInputManager));
   } else if (resume == BootResume::Silent && snapshotTarget == SILENT_REBOOT_TARGET_READER &&
              !APP_STATE.openEpubPath.empty()) {
     activityManager.goToReader(APP_STATE.openEpubPath);

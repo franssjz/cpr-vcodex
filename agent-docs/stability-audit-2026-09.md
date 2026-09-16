@@ -246,3 +246,93 @@ Pendiente para validar físicamente la release y cerrar #217/#219:
 
 No afirmar «cero errores» por pruebas nativas o por un solo arranque. Anotar
 exactamente qué dispositivo, versión inicial, BIN y recorrido se comprobaron.
+
+## Seguimiento físico de OTA — 16/09/2026
+
+La .37 publicada seguía fallando al consultar actualizaciones desde Ajustes.
+Se reprodujo en el X4 ESP32-C3 rev. 0.4 del mantenedor, verificando primero
+por USB que `app1` contenía exactamente el BIN público de .37. Los diagnósticos
+privados se cargaron en `app0`; no se modificaron bootloader, particiones ni eFuses.
+
+- La conexión falló tanto con el transporte manual de .37 como con
+  `esp_http_client_perform` configurado como en .30, con y sin comprobación
+  del nombre del certificado. El error fue `PK verify failed 0x4290` seguido
+  de `mbedtls_ssl_handshake -0x3000`. Los headers del SDK descomponen 0x4290
+  en `MBEDTLS_ERR_RSA_PUBLIC_FAILED` + `MBEDTLS_ERR_MPI_ALLOC_FAILED`:
+  falta memoria durante la verificación de la firma, no falta una release.
+- Referencia aplicada: CrossInk `7a092e8822c9c90e8beecacd317acc13d3e24dfb`,
+  `SettingsActivity::runAction` y `silentRestartToNetwork(OTA)` / arranque
+  de red en `main.cpp`. Se adapta como `silentRestartToOta()` al token RTC
+  existente del fork, consumido una sola vez, respetando arranque de recuperación
+  y errores. OTA arranca sin la actividad Ajustes retenida ni fuentes SD de lectura.
+  Se conservan idioma, stores JSON del fork, URLs, manifiesto, BIN y SHA-256.
+- Con esa adaptación, el X4 pasó de unos 67 KB libres / 45 KB contiguos a
+  88 KB libres / 73 KB contiguos antes de consultar. `checkForUpdate()` devolvió
+  `OK`, con `1.6.0.37-cpr-vcodex` como versión publicada y certificado verificado.
+- La descarga real completa devolvió `OK`: 6.103.328 bytes, SHA-256
+  `4ce7d7da54dcfcbaec8ad76a33705c5f19425d774763027137788d9cb9fc0c56`,
+  idéntico al manifiesto y al BIN público. Esta primera prueba no instaló el
+  firmware descargado. Se restauraron y verificaron los selectores originales
+  de .37 (secuencias 47/48).
+
+Evidencia local: `artifacts/ota37-probe-serial.log` (fallo reproducido),
+`artifacts/ota-network-boot-serial.log` (consulta y descarga correctas).
+Los hooks de arranque automático y las capturas son privados y no forman
+parte del firmware distribuible. X3 todavía requiere verificación física.
+
+### Instalación OTA completa
+
+Se ejecutó `OtaUpdateActivity::runUpdateInstall()` sin modificar su política
+de validación ni el código de escritura, desde el diagnóstico privado
+`1.6.0.37.dev4-fddda85c` con el arranque de red corregido hacia el BIN público
+`1.6.0.37-cpr-vcodex`. El X4 descargó y escribió 6.103.328/6.103.328 bytes,
+`installUpdate()` devolvió `OK` y la captura registró el reinicio posterior.
+La verificación USB de `app1` contra el BIN público dio digest coincidente.
+Después se restauraron y verificaron ambos selectores OTA originales.
+
+El primer intento salió del selector Wi-Fi antes de consultar; no inició
+ninguna instalación y no se cuenta como prueba satisfactoria. La repetición
+con el mismo diagnóstico completó el recorrido. Evidencia:
+`artifacts/ota-install-serial.log` y `ota-install-verify-installed.log`.
+
+El candidato normal .38, sin hooks de diagnóstico, compila en `default` y
+`gh_release`; supera las 269 pruebas nativas y el pre-release check. Su BIN
+local tiene 6.103.744 bytes (449.856 libres en el slot X4) y SHA-256
+`99262b0dc0433e193be7a8f7397db5bfbf3fb32bedd709f3e01f183967f61856`.
+Esto valida un X4 concreto; no sustituye pruebas físicas de X3 ni de todas
+las redes, tarjetas, bibliotecas y estados de memoria de los usuarios.
+
+Al terminar, el X4 quedó con ese BIN normal .38 en `app0` (0x10000),
+verificado por digest antes de seleccionarlo. `app1` conserva la .37 pública,
+también verificada. El selector de .38 (secuencia 49) y la permanencia del
+selector anterior (48) se comprobaron por lectura; el equipo volvió a aparecer
+por USB. Logs locales: `artifacts/ota38-final-*.log`. La publicación de .38
+y la sincronización de Pages quedan pendientes; estos resultados no convierten
+un BIN local en un asset ya publicado.
+
+### Instalación física de las correcciones de imágenes — 16/09/2026
+
+Antes de instalar el candidato con #215 y JPEG progresivos #2925 se volvió
+a leer la tabla y ambos selectores del X4 del mantenedor. La secuencia 49 de
+la instalación anterior estaba en estado `ABORTED` (4); la secuencia 48 de
+.37 seguía `VALID` (2). La comprobación anterior de aparición por USB no
+demostraba que .38 hubiera quedado confirmada. No se ha determinado la causa
+del aborto; interrumpir la primera inicialización para leer por esptool puede
+provocar rollback, por lo que esta vez se dejó completar antes de reiniciar.
+
+Se verificó por digest la .37 pública en `app1` y se escribió únicamente
+`app0` con `1.6.0.38.dev3-fddda85c-cpr-vcodex.bin` (6.166.944 bytes;
+SHA-256 `07501529ea4b84fd79227850cccae75712c46e6821c58688b457e86eb5fd1e97`).
+Después de verificar el BIN en flash se activó su selector como `NEW` y
+se dejó arrancar. La lectura posterior confirmó que el propio firmware lo
+había pasado a `VALID` (2), con CRC correcto. La tabla y el sector completo
+del selector de recuperación permanecen idénticos. No se escribió bootloader,
+NVS ni la partición de recuperación.
+
+Los dos arranques observados por serie detectaron X4 y SD y completaron los
+refrescos de pantalla. Esto no verifica todavía la apariencia física de los
+dos EPUB. Windows no expone la SD como volumen montado: los archivos del
+escritorio no se copiaron al lector por USB. Evidencia local:
+`artifacts/x4-images-*.log`, `x4-images-before-layout.bin` y
+`x4-images-after-layout.bin`. Esta es una instalación de desarrollo local,
+no una release publicada.

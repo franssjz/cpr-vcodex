@@ -58,19 +58,33 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff), including the FreeInkUI activity/input architecture, merged while retaining CPR-vCodex settings, statistics, bookmarks/highlights, dictionaries, themes, SD fonts, and release tooling. X4 Pro distribution remains withdrawn. |
 | Current work | Stabilize X3/X4 OTA, language persistence, image allocation failures and sleep/wake. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | Automated OTA fault-injection, language migration and font equivalence tests are in place. End-to-end OTA/reboot on physical X3 and X4 remains unverified; see the audit for the exact evidence and remaining checks. |
+| Release validation | The .38 fix has passed update lookup, complete download, OTA installation and reboot on a USB-recoverable X4, plus USB image verification. Physical X3 validation remains pending. See the audit for the exact diagnostic build, target image and remaining checks. |
 | Base firmware line | `CrossPoint Reader 1.6.0` (upstream `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff)) |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | Release `1.6.0.31` adopted the FreeInkUI integration from [PR #206](https://github.com/franssjz/cpr-vcodex/pull/206), including freeink-sdk [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc); X4 Pro distribution is now withdrawn. |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
+## EPUB images in 1.6.0.38
+
+EPUB diagrams and gray backgrounds now retain their gray levels when text
+anti-aliasing is disabled ([#215](https://github.com/franssjz/cpr-vcodex/issues/215)).
+Progressive JPEGs with separate component scans are also corrected using
+CrossPoint's #2925 fix. Existing image caches and settings remain valid.
+The image changes passed simulator regressions and tests against the actual
+JPEG decoder. The development build booted twice on X4; the two reported
+EPUBs still need visual confirmation on the physical screen.
+
 ## OTA shows 0 B / 0% — recovery status
 
 CPR-vCodex 1.6.0.31 through 1.6.0.33 can find a new release but fail before
 receiving firmware bytes ([#219](https://github.com/franssjz/cpr-vcodex/issues/219)).
-The 1.6.0.37 stabilization release includes the transport repair and clearer
-update status. A successful check shows the installed and published versions;
+Version 1.6.0.37 still had a separate update-check failure: on X4, HTTPS
+certificate signature verification could run out of memory while Settings
+remained on the activity stack. Version 1.6.0.38 adapts CrossInk's fresh network
+boot: opening Update briefly shows Loading, then opens the updater with a clean
+heap and without SD reader fonts. It retains certificate verification.
+A successful check shows the installed and published versions;
 an equal or newer installed version is reported as up to date. A failed network
 or manifest check is reported separately and can be retried. The updater also
 retries the certificate-verified manifest through GitHub's raw host if Pages fails.
