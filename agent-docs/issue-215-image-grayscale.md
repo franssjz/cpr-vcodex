@@ -64,5 +64,9 @@ reader likewise separates `needsImageGrayscale` from `needsTextGrayscale`.
 
 The simulator validates the missing gray-plane composition, not physical
 e-ink tones, refresh residue or ESP32 memory pressure. Physical X4/X3 image
-confirmation remains pending. This correction has not been flashed or
-published, and the issue has not been closed or marked hardware-verified.
+confirmation remains pending. The issue has not been closed or marked
+hardware-verified. The subsequent combined development candidate
+`1.6.0.38.dev3-fddda85c` (also containing JPEG #2925) was installed on the
+maintainer's X4: its flash digest, two boots and the confirmed OTA selector
+were verified. The reported EPUBs have not yet been visually checked on that
+device. See the stability audit for the installation and release record.

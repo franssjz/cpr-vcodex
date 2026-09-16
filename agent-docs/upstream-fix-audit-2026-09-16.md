@@ -31,7 +31,10 @@ variante `-no-pie`, con límite de tiempo por caso, completó los cinco sin erro
 BIN de desarrollo: `artifacts/1.6.0.38.dev3-fddda85c-cpr-vcodex.bin`.
 La compilación de producción se hizo con `-t buildprog` sin empaquetar ni
 sobrescribir el candidato .38 anterior: 6.103.776 bytes, 449.824 libres en
-el slot X4. Logs en `artifacts/jpeg2925/`. No se ha flasheado ni publicado.
+el slot X4. Logs en `artifacts/jpeg2925/`. En esa fase no se había flasheado
+ni publicado. Posteriormente se instaló el candidato dev3 en el X4 del
+mantenedor y se verificaron dos arranques y el selector OTA confirmado;
+el seguimiento consta en la auditoría de estabilidad.
 
 | Orden | Corrección de Crosspoint | Evidencia en CPR-vCodex | Comprobación necesaria al adaptarla |
 |---|---|---|---|

@@ -336,3 +336,26 @@ escritorio no se copiaron al lector por USB. Evidencia local:
 `artifacts/x4-images-*.log`, `x4-images-before-layout.bin` y
 `x4-images-after-layout.bin`. Esta es una instalación de desarrollo local,
 no una release publicada.
+
+### Publicación de 1.6.0.38 — 16/09/2026
+
+A petición del mantenedor se publicó el tag `1.6.0.38-cpr-vcodex` desde
+`2c738dfa52300d352e3529abccff3da2e05e1f4c`, que reúne las correcciones de
+memoria OTA, gris de imágenes #215 y JPEG progresivos #2925. El pre-release
+check local pasó. CI pasó formato, cppcheck, las 274 pruebas nativas y las
+compilaciones; el build X4 Pro fue únicamente una comprobación interna.
+
+La release contiene exactamente los cuatro assets C3 previstos. El BIN
+construido por GitHub tiene 6.103.600 bytes, 450.000 bytes libres en el slot
+X4, versión interna `1.6.0.38` y SHA-256
+`9c539a72cfde90c743714feeab8b776ebb9c1f3958d57fc766f010b5ac1be4f6`.
+El build local de Windows mide 6.103.776 bytes; Pages se sincroniza con el
+asset publicado por GitHub, que es la referencia de distribución.
+
+- [CI del código publicado](https://github.com/franssjz/cpr-vcodex/actions/runs/35074472473).
+- [Compilación y publicación de la release](https://github.com/franssjz/cpr-vcodex/actions/runs/35074573352).
+- [Release y notas](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.38-cpr-vcodex).
+
+Se mantienen las limitaciones de validación física descritas arriba: los dos
+arranques observados corresponden al candidato de desarrollo dev3; la
+apariencia de los EPUB en e-ink y el hardware X3 siguen pendientes.
