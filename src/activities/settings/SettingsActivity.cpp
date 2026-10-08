@@ -3,10 +3,12 @@
 #include <Arduino.h>
 #include <BoardConfig.h>
 #include <GfxRenderer.h>
+#include <HalClock.h>
 #include <HalDisplay.h>
 #include <HalFrontlight.h>
 #include <HalStorage.h>
 #include <HalTiltSensor.h>
+#include <LibraryBuilder.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <WiFi.h>
@@ -16,13 +18,16 @@
 #include <cstring>
 #include <iterator>
 
+#include "AboutActivity.h"
 #include "AchievementsStore.h"
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
+#include "ClockSettingsActivity.h"
 #include "ClockSyncActivity.h"
 #include "CrossPointSettings.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
+#include "HomeButtonSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "KeyboardLayoutsActivity.h"
 #include "LanguageSelectActivity.h"
@@ -30,17 +35,19 @@
 #include "OpdsServerListActivity.h"
 #include "OtaUpdateActivity.h"
 #include "ReaderFontSizes.h"
+#include "ReaderSettingLabels.h"
 #include "ReadingStatsImportActivity.h"
 #include "ReadingStatsStore.h"
 #include "SdCardFontGlobals.h"
 #include "SdFirmwareUpdateActivity.h"
+#include "SettingsList.h"
 #include "ShortcutLocationActivity.h"
 #include "ShortcutOrderActivity.h"
 #include "ShortcutVisibilityActivity.h"
 #include "SilentRestart.h"
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
-#include "TimeZoneSelectActivity.h"
+#include "TimezonePickerActivity.h"
 #include "activities/apps/AchievementsActivity.h"
 #include "activities/apps/BookmarksAppActivity.h"
 #include "activities/apps/FavoritesAppActivity.h"
@@ -53,6 +60,7 @@
 #include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/plugins/PluginCatalogActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
@@ -105,6 +113,7 @@ std::vector<StrId> buildUiThemeValues() {
   values[CrossPointSettings::CLASSIC] = StrId::STR_THEME_CLASSIC;
   values[CrossPointSettings::ROUNDEDRAFF] = StrId::STR_THEME_ROUNDEDRAFF;
   values[CrossPointSettings::LYRA_3_COVERS] = StrId::STR_THEME_LYRA_EXTENDED;
+  values[CrossPointSettings::COVER_GRID] = StrId::STR_THEME_COVER_GRID;
   return values;
 }
 
@@ -126,9 +135,7 @@ std::vector<StrId> buildShortPwrBtnValues() {
 std::vector<StrId> buildLongPressMenuValues() {
   static constexpr StrId VALUES[] = {StrId::STR_KOSYNC, StrId::STR_DISABLED, StrId::STR_BOOKMARK_OPTION,
                                      StrId::STR_DICTIONARY, StrId::STR_READER_MENU};
-  // The Reader Menu option is only offered on boards with a Home key.
-  const size_t count = BoardConfig::hasHomeKey() ? std::size(VALUES) : std::size(VALUES) - 1;
-  return {VALUES, VALUES + count};
+  return {VALUES, VALUES + std::size(VALUES)};
 }
 
 // Reader font size: the options are the point sizes the active family actually
@@ -174,8 +181,7 @@ std::vector<SettingInfo> buildDisplaySettings() {
       SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                         {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}),
       SettingInfo::Enum(StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
-                        {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15,
-                         StrId::STR_PAGES_30, StrId::STR_NEVER}),
+                        {ReaderSettingLabels::refresh.begin(), ReaderSettingLabels::refresh.end()}),
       SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme, buildUiThemeValues()),
       SettingInfo::Enum(StrId::STR_HOME_BOOK_SOURCE, &CrossPointSettings::homeBookSource,
                         {StrId::STR_RECENTS, StrId::STR_FAVORITES}),
@@ -217,11 +223,18 @@ std::vector<SettingInfo> buildReaderSettings(const SdCardFontRegistry* registry)
       SettingInfo::Toggle(StrId::STR_EMBEDDED_STYLE, &CrossPointSettings::embeddedStyle),
       SettingInfo::Toggle(StrId::STR_HYPHENATION, &CrossPointSettings::hyphenationEnabled),
       SettingInfo::Enum(StrId::STR_BIONIC_READING, &CrossPointSettings::bionicReading,
-                        {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE}),
+                        {ReaderSettingLabels::bionic.begin(), ReaderSettingLabels::bionic.end()}),
       SettingInfo::Enum(StrId::STR_ORIENTATION, &CrossPointSettings::orientation,
                         {StrId::STR_PORTRAIT, StrId::STR_LANDSCAPE_CW, StrId::STR_INVERTED, StrId::STR_LANDSCAPE_CCW}),
       SettingInfo::Toggle(StrId::STR_EXTRA_SPACING, &CrossPointSettings::extraParagraphSpacing),
       SettingInfo::Toggle(StrId::STR_FORCE_PARAGRAPH_INDENTS, &CrossPointSettings::forceParagraphIndents),
+      SettingInfo::Value(StrId::STR_PARAGRAPH_INDENTATION, &CrossPointSettings::paragraphIndentSpaces, {0, 5, 1}),
+      SettingInfo::Value(StrId::STR_WORD_SPACING, &CrossPointSettings::wordSpacing,
+                         {CrossPointSettings::WORD_SPACING_MIN, CrossPointSettings::WORD_SPACING_MAX,
+                          CrossPointSettings::WORD_SPACING_STEP}),
+      SettingInfo::Enum(StrId::STR_CHARACTER_SPACING, &CrossPointSettings::characterSpacing,
+                        {StrId::STR_SPACING_MINUS_2, StrId::STR_SPACING_MINUS_1, StrId::STR_SPACING_ZERO,
+                         StrId::STR_SPACING_PLUS_1, StrId::STR_SPACING_PLUS_2}),
       SettingInfo::Toggle(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing),
       SettingInfo::Enum(StrId::STR_TEXT_DARKNESS, &CrossPointSettings::textDarkness,
                         {StrId::STR_NORMAL, StrId::STR_LEGACY_BW, StrId::STR_DARK, StrId::STR_EXTRA_DARK}),
@@ -233,12 +246,8 @@ std::vector<SettingInfo> buildReaderSettings(const SdCardFontRegistry* registry)
   };
   // No dictionary row here: the fork's dictionary picker lives in the
   // Dictionary app (DICTIONARIES is authoritative, not SETTINGS.dictionaryName).
-  if (BoardConfig::hasTouch()) {
-    // The toolbar reader menu is touch-first chrome: button boards keep the
-    // classic list menu, so the style choice is hidden there.
-    v.push_back(SettingInfo::Enum(StrId::STR_READER_MENU_STYLE, &CrossPointSettings::readerMenuStyle,
-                                  {StrId::STR_MENU_STYLE_LIST, StrId::STR_MENU_STYLE_TOOLBAR}));
-  }
+  v.push_back(SettingInfo::Enum(StrId::STR_READER_MENU_STYLE, &CrossPointSettings::readerMenuStyle,
+                                {StrId::STR_MENU_STYLE_LIST, StrId::STR_MENU_STYLE_TOOLBAR}));
   v.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
   return v;
 }
@@ -248,17 +257,23 @@ std::vector<SettingInfo> buildControlsSettings() {
   if (!BoardConfig::hasTouch()) {
     v.push_back(SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
   }
-  v.push_back(SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
-                                {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV, StrId::STR_DISABLED}));
+  v.push_back(SettingInfo::Enum(
+      StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
+      {StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV, StrId::STR_DISABLED, StrId::STR_NEXT_NEXT, StrId::STR_PREV_PREV}));
   if (BoardConfig::hasTouch()) {
-    v.push_back(SettingInfo::Enum(
-        StrId::STR_TOUCH_READER_CONTROLS, &CrossPointSettings::touchReaderControls,
-        {StrId::STR_STATE_OFF, StrId::STR_STATE_TAP, StrId::STR_STATE_SWIPE, StrId::STR_STATE_INVERTED_TAP}));
+    v.push_back(SettingInfo::Toggle(StrId::STR_TOUCH_READER_CONTROLS, &CrossPointSettings::touchReaderControls));
+    v.push_back(SettingInfo::Enum(StrId::STR_NEXT_PAGE_GESTURE, &CrossPointSettings::pageTurnGesture,
+                                  {StrId::STR_TAP_AND_SWIPE, StrId::STR_TAP_ONLY, StrId::STR_SWIPE_ONLY,
+                                   StrId::STR_INVERTED_TAP, StrId::STR_DISABLED}));
+    v.push_back(SettingInfo::Enum(StrId::STR_PREV_PAGE_GESTURE, &CrossPointSettings::previousPageGesture,
+                                  {StrId::STR_TAP_AND_SWIPE, StrId::STR_TAP_ONLY, StrId::STR_SWIPE_ONLY,
+                                   StrId::STR_INVERTED_TAP, StrId::STR_DISABLED}));
   }
   // The reader-menu gesture choice only makes sense where the menu stays
   // reachable without the tap and the bottom edge is free (the capacitive
   // Home key); everywhere else the setting stays at its Tap default.
   if (BoardConfig::hasHomeKey()) {
+    v.push_back(SettingInfo::Action(StrId::STR_HOME_BUTTON, SettingAction::HomeButton));
     v.push_back(SettingInfo::Enum(StrId::STR_SHOW_READER_MENU, &CrossPointSettings::showReaderMenu,
                                   {StrId::STR_STATE_OFF, StrId::STR_STATE_TAP, StrId::STR_STATE_SWIPE_UP}));
   }
@@ -283,6 +298,12 @@ std::vector<SettingInfo> buildControlsSettings() {
     v.push_back(SettingInfo::Enum(StrId::STR_TILT_PAGE_TURN, &CrossPointSettings::tiltPageTurn,
                                   {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_INVERTED}));
   }
+  if (BoardConfig::hasHaptics()) {
+    v.push_back(SettingInfo::Enum(StrId::STR_VIBRATION, &CrossPointSettings::vibration,
+                                  {StrId::STR_VIBRATION_TOUCH, StrId::STR_VIBRATION_TOUCH_PAGE, StrId::STR_STATE_OFF}));
+    v.push_back(SettingInfo::Enum(StrId::STR_HAPTIC_INTENSITY, &CrossPointSettings::hapticIntensity,
+                                  {StrId::STR_HAPTIC_LOW, StrId::STR_HAPTIC_MEDIUM, StrId::STR_HAPTIC_HIGH}));
+  }
   return v;
 }
 
@@ -294,6 +315,7 @@ std::vector<SettingInfo> buildSystemSettings() {
           {CrossPointSettings::MIN_SLEEP_TIMEOUT_MINUTES, CrossPointSettings::MAX_SLEEP_TIMEOUT_MINUTES, 1}),
       SettingInfo::Toggle(StrId::STR_SHOW_HIDDEN_FILES, &CrossPointSettings::showHiddenFiles),
       SettingInfo::Toggle(StrId::STR_HIDE_FILE_EXTENSION, &CrossPointSettings::hideFileExtension),
+      SettingInfo::Toggle(StrId::STR_LIBRARY_USE_METADATA, &CrossPointSettings::libraryUseMetadata),
       SettingInfo::Toggle(StrId::STR_REMOVE_READ_FROM_RECENTS, &CrossPointSettings::removeReadBooksFromRecents),
       SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network),
       SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync),
@@ -307,6 +329,9 @@ std::vector<SettingInfo> buildSystemSettings() {
       SettingInfo::Action(StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate),
       SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language),
       SettingInfo::Action(StrId::STR_KEYBOARD_LAYOUTS, SettingAction::KeyboardLayouts),
+      SettingInfo::Action(StrId::STR_CLOCK, SettingAction::ClockSettings),
+      SettingInfo::Action(StrId::STR_PLUGINS, SettingAction::Plugins),
+      SettingInfo::Action(StrId::STR_ABOUT, SettingAction::About),
   };
 }
 
@@ -699,7 +724,7 @@ bool SettingsActivity::handleButtons() {
       requestUpdate();
     } else {
       SETTINGS.saveToFile();
-      onGoHome();
+      activityManager.goBack();
     }
     return true;
   }
@@ -724,7 +749,8 @@ void SettingsActivity::showTransientPopup(const char* message, const int progres
 }
 
 void SettingsActivity::toggleCurrentSetting() {
-  const int selectedSetting = ringPos() - 1;
+  mappedInput.resetHomeButtonInput();
+  int selectedSetting = ringPos() - 1;
   if (selectedSetting < 0 || selectedSetting >= settingsCount) {
     return;
   }
@@ -759,22 +785,23 @@ void SettingsActivity::toggleCurrentSetting() {
       return;
     }
     const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
-    if (setting.enumValues.size() > 2) {
+    const auto enumLabels = setting.enumLabels();
+    if (enumLabels.size() > 2) {
       const auto valuePtr = setting.valuePtr;
-      optionPopup.show(
-          setting.nameId, setting.enumValues.data(), static_cast<int>(setting.enumValues.size()), currentValue,
-          [this, setting, valuePtr, previousReadingStatsAutoBackup, sleepScreenChanged,
-           quickResumeTimeoutChanged](int idx) {
-            SETTINGS.*valuePtr = idx;
-            afterSettingChanged(setting, previousReadingStatsAutoBackup, sleepScreenChanged, quickResumeTimeoutChanged);
-          });
+      optionPopup.show(setting.nameId, enumLabels.data(), static_cast<int>(enumLabels.size()), currentValue,
+                       [this, setting, valuePtr, previousReadingStatsAutoBackup, sleepScreenChanged,
+                        quickResumeTimeoutChanged](int idx) {
+                         SETTINGS.*valuePtr = idx;
+                         afterSettingChanged(setting, previousReadingStatsAutoBackup, sleepScreenChanged,
+                                             quickResumeTimeoutChanged);
+                       });
       requestUpdate();
       return;
     }
-    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(enumLabels.size());
   } else if (setting.type == SettingType::ENUM && setting.valueGetter && setting.valueSetter) {
     const uint8_t totalValues = setting.enumStringValues.empty()
-                                    ? static_cast<uint8_t>(setting.enumValues.size())
+                                    ? static_cast<uint8_t>(setting.enumLabels().size())
                                     : static_cast<uint8_t>(setting.enumStringValues.size());
     if (totalValues == 0) return;
     const uint8_t cur = setting.valueGetter();
@@ -787,7 +814,8 @@ void SettingsActivity::toggleCurrentSetting() {
       if (!setting.enumStringValues.empty()) {
         optionPopup.show(setting.nameId, setting.enumStringValues, cur, std::move(onSelect));
       } else {
-        optionPopup.show(setting.nameId, setting.enumValues.data(), static_cast<int>(setting.enumValues.size()), cur,
+        const auto enumLabels = setting.enumLabels();
+        optionPopup.show(setting.nameId, enumLabels.data(), static_cast<int>(enumLabels.size()), cur,
                          std::move(onSelect));
       }
       requestUpdate();
@@ -925,7 +953,19 @@ void SettingsActivity::runAction(const SettingInfo& setting) {
       startActivityForResult(std::make_unique<ClockSyncActivity>(renderer, mappedInput), rebuildingHandler);
       break;
     case SettingAction::TimeZone:
-      startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput), rebuildingHandler);
+      startActivityForResult(std::make_unique<TimezonePickerActivity>(renderer, mappedInput), rebuildingHandler);
+      break;
+    case SettingAction::ClockSettings:
+      startActivityForResult(std::make_unique<ClockSettingsActivity>(renderer, mappedInput), rebuildingHandler);
+      break;
+    case SettingAction::HomeButton:
+      startActivityForResult(std::make_unique<HomeButtonSettingsActivity>(renderer, mappedInput), rebuildingHandler);
+      break;
+    case SettingAction::Plugins:
+      activityManager.goToPlugins(false);
+      break;
+    case SettingAction::About:
+      startActivityForResult(std::make_unique<AboutActivity>(renderer, mappedInput), resultHandler);
       break;
     case SettingAction::ReadingStats:
       startActivityForResult(std::make_unique<ReadingStatsActivity>(renderer, mappedInput), resultHandler);
@@ -1104,16 +1144,18 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) const
     // Guard like the valueGetter branch below: a corrupt/migrated settings
     // byte must not index past the enum table.
     const uint8_t value = SETTINGS.*(setting.valuePtr);
-    if (value >= setting.enumValues.size()) return "";
-    return I18N.get(setting.enumValues[value]);
+    const auto enumLabels = setting.enumLabels();
+    if (value >= enumLabels.size()) return "";
+    return I18N.get(enumLabels[value]);
   }
   if (setting.type == SettingType::ENUM && setting.valueGetter) {
     const uint8_t value = setting.valueGetter();
     if (!setting.enumStringValues.empty() && value < setting.enumStringValues.size()) {
       return setting.enumStringValues[value];
     }
-    if (value < setting.enumValues.size()) {
-      return I18N.get(setting.enumValues[value]);
+    const auto enumLabels = setting.enumLabels();
+    if (value < enumLabels.size()) {
+      return I18N.get(enumLabels[value]);
     }
     return "";
   }
@@ -1150,8 +1192,19 @@ void SettingsActivity::buildScreen(UiScreen& screen) {
   // render.
   const auto& settings = *currentSettings;
   for (size_t i = 0; i < settings.size(); i++) {
-    rowValues_[i] = settings[i].type == SettingType::SECTION ? std::string() : settingValueText(settings[i]);
-    rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
+    const auto& setting = settings[i];
+    const auto labels = setting.enumLabels();
+    const bool checkbox = setting.type == SettingType::TOGGLE ||
+                          (setting.type == SettingType::ENUM && setting.enumStringValues.empty() &&
+                           labels.size() == 2 && labels[0] == StrId::STR_STATE_OFF && labels[1] == StrId::STR_STATE_ON);
+    if (checkbox && (setting.valuePtr || setting.valueGetter)) {
+      const bool checked = setting.valuePtr ? SETTINGS.*(setting.valuePtr) != 0 : setting.valueGetter() != 0;
+      rowValues_[i].clear();
+      GUI.setCheckboxRow(rowItems_[i], checked);
+    } else {
+      rowValues_[i] = settingValueText(setting);
+      rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
+    }
   }
 
   fui::ListProps props;
@@ -1171,11 +1224,7 @@ void SettingsActivity::buildScreen(UiScreen& screen) {
   screen.list(props);
 }
 
-void SettingsActivity::render(RenderLock&&) {
-  if (optionPopup.processRender(renderer, mappedInput)) return;
-
-  renderer.clearScreen();
-
+void SettingsActivity::drawChrome() {
   const auto pageWidth = renderer.getScreenWidth();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
@@ -1187,9 +1236,9 @@ void SettingsActivity::render(RenderLock&&) {
                  CROSSPOINT_VERSION);
   // Fork: date/time in the top line when the user enabled it.
   HeaderDateUtils::drawTopLine(renderer, HeaderDateUtils::getDisplayDateText());
+}
 
-  renderUi();
-
+void SettingsActivity::drawFooter() {
   const int ring = ringPos();
   const char* confirmLabel = I18N.get(categoryNames[(selectedCategoryIndex + 1) % categoryCount]);
   if (ring > 0 && ring <= settingsCount) {
@@ -1202,7 +1251,9 @@ void SettingsActivity::render(RenderLock&&) {
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+}
 
-  // Always use standard refresh for settings screen
-  renderer.displayBuffer();
+void SettingsActivity::render(RenderLock&& lock) {
+  if (optionPopup.processRender(renderer, mappedInput)) return;
+  UiListActivity::render(std::move(lock));
 }

@@ -207,6 +207,18 @@ bool HalClock::writeUtcTm(const struct tm& utc) {
   return writeUtcTmToChip(utc);
 }
 
+void HalClock::setTimezone(const char* posixTz) {
+  setenv("TZ", posixTz && posixTz[0] != '\0' ? posixTz : "UTC0", 1);
+  tzset();
+}
+
+bool HalClock::localTime(struct tm& out) const {
+  uint32_t epoch = 0;
+  if (!readUtcEpoch(epoch)) return false;
+  const time_t utc = epoch;
+  return localtime_r(&utc, &out) != nullptr;
+}
+
 bool HalClock::getUtcTime(uint8_t& hour, uint8_t& minute, const bool forceRefresh) const {
   struct tm utc{};
   if (!readUtcTm(utc, forceRefresh)) {
@@ -217,29 +229,26 @@ bool HalClock::getUtcTime(uint8_t& hour, uint8_t& minute, const bool forceRefres
   return true;
 }
 
-bool HalClock::formatTime(char* buf, size_t bufSize, uint8_t utcOffsetQuarterHoursBiased, bool use12Hour) const {
+bool HalClock::getTime(uint8_t& hour, uint8_t& minute) const {
+  struct tm local;
+  if (!localTime(local)) return false;
+  hour = static_cast<uint8_t>(local.tm_hour);
+  minute = static_cast<uint8_t>(local.tm_min);
+  return true;
+}
+
+bool HalClock::formatTime(char* buf, size_t bufSize, bool use12Hour) const {
   if (bufSize < (use12Hour ? 9u : 6u)) return false;
-  uint8_t h, m;
-  if (!getUtcTime(h, m)) return false;
+  struct tm local;
+  if (!localTime(local)) return false;
 
-  // Apply UTC offset: convert biased value to signed quarter-hours.
-  // Clamp against corrupted persisted values so display time can't drift outside [-12:00, +14:00].
-  if (utcOffsetQuarterHoursBiased > 104) utcOffsetQuarterHoursBiased = 104;
-  int offsetQuarterHours = static_cast<int>(utcOffsetQuarterHoursBiased) - 48;
-  int totalMinutes = static_cast<int>(h) * 60 + static_cast<int>(m) + offsetQuarterHours * 15;
-
-  // Wrap around 24 hours
-  totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
-
-  const int hour24 = totalMinutes / 60;
-  const int min = totalMinutes % 60;
   if (use12Hour) {
-    const bool pm = hour24 >= 12;
-    int hour12 = hour24 % 12;
+    const bool pm = local.tm_hour >= 12;
+    int hour12 = local.tm_hour % 12;
     if (hour12 == 0) hour12 = 12;
-    snprintf(buf, bufSize, "%d:%02d %s", hour12, min, pm ? "PM" : "AM");
+    snprintf(buf, bufSize, "%d:%02d %s", hour12, local.tm_min, pm ? "PM" : "AM");
   } else {
-    snprintf(buf, bufSize, "%02d:%02d", hour24, min);
+    snprintf(buf, bufSize, "%02d:%02d", local.tm_hour, local.tm_min);
   }
   return true;
 }

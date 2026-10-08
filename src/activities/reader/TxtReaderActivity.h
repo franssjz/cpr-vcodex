@@ -9,9 +9,12 @@
 
 #include "CrossPointSettings.h"
 #include "EndOfBookOptions.h"
+#include "ReaderPluginSession.h"
 #include "activities/Activity.h"
 
 class TxtReaderActivity final : public Activity {
+  ReaderPluginSession pluginSession;
+
  public:
   struct TextLine {
     struct TextSpan {
@@ -88,6 +91,7 @@ class TxtReaderActivity final : public Activity {
                              bool allowFastInitialRefresh = false);
   void onEnter() override;
   void onExit() override;
+  void prepareForSleep() override;
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }

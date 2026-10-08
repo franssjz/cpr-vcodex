@@ -9,6 +9,7 @@ constexpr esp_err_t ESP_OK = 0;
 constexpr size_t OTA_SIZE_UNKNOWN = SIZE_MAX;
 struct esp_partition_t {
   size_t size = 6553600;
+  uint32_t address = 0x650000;
 };
 constexpr int WIFI_PS_NONE = 0;
 constexpr int WIFI_PS_MIN_MODEM = 1;

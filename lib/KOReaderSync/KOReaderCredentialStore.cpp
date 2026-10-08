@@ -263,6 +263,22 @@ std::string KOReaderCredentialStore::resolveBaseUrl(const std::string& serverUrl
   return url;
 }
 
+void KOReaderCredentialStore::setServerType(KOReaderServerType type) {
+  if (activeIndex < 0) return;
+  const auto value = static_cast<uint8_t>(type);
+  profiles[static_cast<size_t>(activeIndex)].serverType = value <= static_cast<uint8_t>(KOReaderServerType::OTHER)
+                                                              ? value
+                                                              : static_cast<uint8_t>(KOReaderServerType::KOSYNC);
+}
+
+KOReaderServerType KOReaderCredentialStore::getServerType() const {
+  if (activeIndex >= 0) {
+    const auto value = profiles[static_cast<size_t>(activeIndex)].serverType;
+    if (value <= static_cast<uint8_t>(KOReaderServerType::OTHER)) return static_cast<KOReaderServerType>(value);
+  }
+  return usesCrossPointSyncServer() ? KOReaderServerType::CROSSPOINT : KOReaderServerType::KOSYNC;
+}
+
 void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) {
   if (activeIndex < 0) {
     KOReaderProfile profile;

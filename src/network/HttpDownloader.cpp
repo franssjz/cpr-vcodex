@@ -1,7 +1,15 @@
 #include "HttpDownloader.h"
 
 #include <Arduino.h>
-#if !defined(FREEINK_NET_WOLFSSL)
+// Plugin TLS is available on every board; preserve the verified C3 download path.
+#if defined(FREEINK_NET_WOLFSSL) && !defined(FREEINK_DEVICE_X4) && !defined(FREEINK_DEVICE_X3)
+#define CPR_DOWNLOADER_WOLFSSL 1
+#endif
+#if defined(FREEINK_NET_WOLFSSL)
+#include <Logging.h>
+extern "C" void wolfSSL_Arduino_Serial_Print(const char* const msg) { LOG_DBG("WOLFSSL", "%s", msg); }
+#endif
+#if !defined(CPR_DOWNLOADER_WOLFSSL)
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
 #endif
@@ -15,17 +23,16 @@
 
 #include "version.h"
 
-#if defined(FREEINK_NET_WOLFSSL)
+#if defined(CPR_DOWNLOADER_WOLFSSL)
 #include <SecureHttpClient.h>
 
-extern "C" void wolfSSL_Arduino_Serial_Print(const char* const msg) { LOG_DBG("WOLFSSL", "%s", msg); }
 #else
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 #endif
 
 namespace {
-#if !defined(FREEINK_NET_WOLFSSL)
+#if !defined(CPR_DOWNLOADER_WOLFSSL)
 // RX holds the response headers. Smaller buffers leave enough contiguous heap
 // for mbedTLS on redirect-heavy OPDS feeds while still preserving the headers
 // we read directly (Location, Content-Length).
@@ -47,12 +54,13 @@ std::string userAgentString() { return std::string("CrossPoint-ESP32-") + CROSSP
 struct Sink {
   std::function<bool(const uint8_t*, size_t)> write;  // returns false to abort the transfer
   HttpDownloader::ProgressCallback progress;
-  bool* cancelFlag = nullptr;
+  const bool* cancelFlag = nullptr;
+  const std::vector<HttpDownloader::Header>* headers = nullptr;
   size_t total = 0;
   size_t downloaded = 0;
 };
 
-#if !defined(FREEINK_NET_WOLFSSL)
+#if !defined(CPR_DOWNLOADER_WOLFSSL)
 class CallbackWriteStream final : public Stream {
  public:
   explicit CallbackWriteStream(Sink& sink) : sink_(sink) {}
@@ -144,7 +152,7 @@ struct WifiPowerSaveGuard {
   }
 };
 
-#if defined(FREEINK_NET_WOLFSSL)
+#if defined(CPR_DOWNLOADER_WOLFSSL)
 HttpDownloader::DownloadError runGetWolf(const std::string& startUrl, const std::string& username,
                                          const std::string& password, Sink& sink, bool downgradeRedirectsToHttp) {
   WifiPowerSaveGuard psGuard;
@@ -162,6 +170,9 @@ HttpDownloader::DownloadError runGetWolf(const std::string& startUrl, const std:
     // append a second User-Agent header, which strict servers reject (aiohttp
     // answers 400 "Duplicate 'User-Agent' header found").
     http.setUserAgent(userAgentString());
+    if (sink.headers) {
+      for (const auto& header : *sink.headers) http.addHeader(header.first, header.second);
+    }
     if (!username.empty() && !password.empty()) {
       const std::string credentials = username + ":" + password;
       const String encoded = base64::encode(credentials.c_str());
@@ -202,7 +213,7 @@ HttpDownloader::DownloadError runGetWolf(const std::string& startUrl, const std:
     }
     if (status != 200) {
       LOG_ERR("HTTP", "wolfSSL unexpected status: %d", status);
-      return HttpDownloader::HTTP_ERROR;
+      return status == 401 || status == 403 ? HttpDownloader::UNAUTHORIZED : HttpDownloader::HTTP_ERROR;
     }
     if (http.callbackAborted()) return HttpDownloader::FILE_ERROR;
     if (!http.responseComplete()) {
@@ -216,7 +227,7 @@ HttpDownloader::DownloadError runGetWolf(const std::string& startUrl, const std:
 }
 #endif
 
-#if !defined(FREEINK_NET_WOLFSSL)
+#if !defined(CPR_DOWNLOADER_WOLFSSL)
 // Streams a GET body through sink.write in READ_CHUNK pieces. Uses the manual
 // open/fetch_headers/read path rather than esp_http_client_perform(): perform()
 // pushes the whole body through an event callback and reports a chunked body
@@ -247,6 +258,10 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
 
   const std::string userAgent = userAgentString();
   esp_http_client_set_header(client, "User-Agent", userAgent.c_str());
+  if (sink.headers) {
+    for (const auto& header : *sink.headers)
+      esp_http_client_set_header(client, header.first.c_str(), header.second.c_str());
+  }
   if (!username.empty() && !password.empty()) {
     // Preemptive Basic auth, like the prior addHeader; don't wait for a 401.
     const std::string credentials = username + ":" + password;
@@ -281,7 +296,7 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
   if (status != 200) {
     LOG_ERR("HTTP", "unexpected status: %d", status);
     esp_http_client_cleanup(client);
-    return HttpDownloader::HTTP_ERROR;
+    return status == 401 || status == 403 ? HttpDownloader::UNAUTHORIZED : HttpDownloader::HTTP_ERROR;
   }
 
   // fetch_headers returns 0 for a chunked response (no Content-Length); leave
@@ -332,7 +347,7 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
 HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::string& username,
                                            const std::string& password, Sink& sink,
                                            bool downgradeRedirectsToHttp = false) {
-#if defined(FREEINK_NET_WOLFSSL)
+#if defined(CPR_DOWNLOADER_WOLFSSL)
   return runGetWolf(url, username, password, sink, downgradeRedirectsToHttp);
 #else
   // esp_http_client follows redirects internally; the downgrade only exists on
@@ -377,7 +392,7 @@ HttpDownloader::DownloadError HttpDownloader::fetchOtaImage(const std::string& u
   Sink sink;
   sink.write = onData;
   sink.progress = std::move(progress);
-#if defined(FREEINK_NET_WOLFSSL)
+#if defined(CPR_DOWNLOADER_WOLFSSL)
   return runGetSecure(url, "", "", sink);
 #else
   return runOtaGetCompat(url, sink);
@@ -385,8 +400,9 @@ HttpDownloader::DownloadError HttpDownloader::fetchOtaImage(const std::string& u
 }
 
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
-                                                             ProgressCallback progress, bool* cancelFlag,
+                                                             ProgressCallback progress, const bool* cancelFlag,
                                                              const std::string& username, const std::string& password,
+                                                             const std::vector<Header>& headers,
                                                              bool downgradeRedirectsToHttp) {
   LOG_DBG("HTTP", "Downloading: %s -> %s", url.c_str(), destPath.c_str());
 
@@ -402,6 +418,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   Sink sink;
   sink.progress = std::move(progress);
   sink.cancelFlag = cancelFlag;
+  sink.headers = &headers;
   sink.write = [&file](const uint8_t* data, size_t len) { return file.write(data, len) == len; };
 
   const DownloadError result = runGetSecure(url, username, password, sink, downgradeRedirectsToHttp);

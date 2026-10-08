@@ -24,6 +24,7 @@ void restoreMemoryAfterAuthNetwork(GfxRenderer& renderer, const char* stage) {
   NetworkMemory::restoreAfterNetwork(renderer, "KOSync", stage);
 }
 }  // namespace
+#include "network/WifiPowerSaveGuard.h"
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
@@ -35,9 +36,6 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
     requestUpdate();
     return;
   }
-
-  WiFi.setSleep(false);
-  LOG_DBG("KOAuth", "WiFi sleep disabled for authentication");
 
   {
     RenderLock lock(*this);
@@ -61,6 +59,7 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
 
 void KOReaderAuthActivity::performAuthentication() {
   prepareMemoryBeforeAuthNetwork(renderer, "before_authenticate");
+  WifiPowerSaveGuard psGuard;
   const auto result =
       mode == Mode::SIGN_UP
           ? KOReaderSyncClient::registerUser(profile.username, KOReaderCredentialStore::hashPassword(profile.password),

@@ -98,6 +98,7 @@ class KOReaderSyncActivity final : public Activity, private UiAppHost {
   bool remotePositionMapped = false;
   KOReaderProgress remoteProgress;
   CrossPointPosition remotePosition;
+  CrossPointPosition localPosition{};
 
   // Local progress as KOReader format (for display / upload)
   bool hasLocalProgress = false;
@@ -125,7 +126,8 @@ class KOReaderSyncActivity final : public Activity, private UiAppHost {
   void releaseEpubForMapping();
   bool computeLocalProgressAndChapter();
   void computeRemoteChapter();
-  bool ensureRemotePositionMapped(bool closeSessionBeforeMapping = true);
+  bool ensureRemotePositionMapped(bool closeSessionBeforeMapping = true, const KOReaderProgress* alternate = nullptr,
+                                  const std::string& alternateHash = std::string());
   bool retryWithBinaryDocumentHash();
   AppliedPosition remoteAppliedPosition() const;
   void applyRemoteFromChooser();

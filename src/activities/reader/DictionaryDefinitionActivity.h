@@ -30,7 +30,7 @@ class DictionaryDefinitionActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
-  bool isReaderActivity() const override { return true; }
+  bool isReaderActivity() const override { return renderPageBackground; }
 
  private:
   std::shared_ptr<Page> page;

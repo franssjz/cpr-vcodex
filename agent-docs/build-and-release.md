@@ -21,9 +21,12 @@ The C3 envs link against `partitions.csv`, whose OTA app slots are 0x640000
 (6,553,600 bytes). That is the real slot on the X4 (the X3 slot is 0x770000).
 The `x4pro*` envs link against `partitions_x4pro.csv`, which mirrors the stock
 X4 Pro table (0x7E0000 = 8,257,536-byte slots), so PlatformIO reports the real
-slot for both families. The X4 Pro envs also enable upstream's wolfSSL TLS 1.3
-stack (`-DFREEINK_NET_WOLFSSL=1`, SecureNet, `patch_wolfssl.py`); the C3 envs
-stay on the core mbedTLS because wolfSSL does not fit their slot.
+slot for both families. X4 Pro envs use upstream's wolfSSL TLS 1.3 downloader.
+After the October integration, all firmware envs also build wolfSSL for SDK
+plugin networking and protected content (`-DFREEINK_NET_WOLFSSL=1`, SecureNet,
+`patch_wolfssl.py`). C3 firmware/manifest downloads retain the fork's mbedTLS
+paths; LTO keeps the combined image inside the C3 slot. Do not switch that
+downloader merely because the wolfSSL build flag is now present on C3.
 
 Common commands:
 

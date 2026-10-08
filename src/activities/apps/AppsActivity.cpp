@@ -2,6 +2,7 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Memory.h>
 
 #include <algorithm>
 
@@ -19,7 +20,15 @@
 #include "ScreenCleanActivity.h"
 #include "SleepAppActivity.h"
 #include "SyncDayActivity.h"
+#include "activities/browser/OpdsBookBrowserActivity.h"
+#include "activities/home/FileBrowserActivity.h"
+#include "activities/home/RecentBooksActivity.h"
+#include "activities/library/LibraryListActivity.h"
+#include "activities/network/CrossPointWebServerActivity.h"
+#include "activities/plugins/PluginCatalogActivity.h"
 #include "activities/settings/ClockSyncActivity.h"
+#include "activities/settings/OpdsServerListActivity.h"
+#include "activities/settings/SettingsActivity.h"
 #include "components/UITheme.h"
 #include "components/UiAppHelpers.h"
 #include "util/HeaderDateUtils.h"
@@ -42,6 +51,15 @@ std::string buildAppsHeaderSubtitle(const int selectedIndex, const int totalItem
 
 void AppsActivity::loadShortcuts() {
   appShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_APPS);
+  if (UITheme::getInstance().hasCoverGridHome()) {
+    // Cover Grid has fixed navigation tabs; retain access to configured Home apps here.
+    const auto homeShortcuts = getConfiguredShortcuts(CrossPointSettings::SHORTCUT_HOME);
+    appShortcuts.insert(appShortcuts.end(), homeShortcuts.begin(), homeShortcuts.end());
+    std::stable_sort(appShortcuts.begin(), appShortcuts.end(),
+                     [](const ShortcutDefinition* lhs, const ShortcutDefinition* rhs) {
+                       return getShortcutOrder(*lhs) < getShortcutOrder(*rhs);
+                     });
+  }
   if (!OPDS_STORE.hasServers()) {
     appShortcuts.erase(std::remove_if(appShortcuts.begin(), appShortcuts.end(),
                                       [](const ShortcutDefinition* definition) {
@@ -127,7 +145,7 @@ void AppsActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;  // title/description hierarchy; also the caller-owned marker
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }
 
@@ -144,8 +162,8 @@ void AppsActivity::openApp(const int index) {
   std::unique_ptr<Activity> activity;
   switch (appShortcuts[index]->id) {
     case ShortcutId::BrowseFiles:
-      activityManager.goToFileBrowser();
-      return;
+      activity = std::make_unique<FileBrowserActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::ReadingStats:
       activity = std::make_unique<ReadingStatsActivity>(renderer, mappedInput);
       break;
@@ -157,8 +175,8 @@ void AppsActivity::openApp(const int index) {
       }
       break;
     case ShortcutId::Settings:
-      activityManager.goToSettings();
-      return;
+      activity = std::make_unique<SettingsActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::ReadingHeatmap:
       activity = std::make_unique<ReadingHeatmapActivity>(renderer, mappedInput);
       break;
@@ -172,8 +190,8 @@ void AppsActivity::openApp(const int index) {
       activity = std::make_unique<IfFoundActivity>(renderer, mappedInput);
       break;
     case ShortcutId::RecentBooks:
-      activityManager.goToRecentBooks();
-      return;
+      activity = makeUniqueNoThrow<RecentBooksActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::Bookmarks:
       activity = std::make_unique<BookmarksAppActivity>(renderer, mappedInput);
       break;
@@ -187,8 +205,8 @@ void AppsActivity::openApp(const int index) {
       activity = std::make_unique<DictionaryActivity>(renderer, mappedInput);
       break;
     case ShortcutId::FileTransfer:
-      activityManager.goToFileTransfer();
-      return;
+      activity = std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput);
+      break;
     case ShortcutId::ScreenClean:
       activity = std::make_unique<ScreenCleanActivity>(renderer, mappedInput);
       break;
@@ -196,21 +214,36 @@ void AppsActivity::openApp(const int index) {
       activity = std::make_unique<SleepAppActivity>(renderer, mappedInput);
       break;
     case ShortcutId::OpdsBrowser:
-      activityManager.goToBrowser();
-      return;
+      if (OPDS_STORE.getCount() == 1) {
+        activity = std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, OPDS_STORE.getServers()[0]);
+      } else {
+        activity = std::make_unique<OpdsServerListActivity>(renderer, mappedInput, true);
+      }
+      break;
+    case ShortcutId::Library:
+      activity = makeUniqueNoThrow<LibraryListActivity>(renderer, mappedInput);
+      break;
+    case ShortcutId::Plugins:
+      activity = std::make_unique<PluginCatalogActivity>(renderer, mappedInput, OPDS_STORE.hasServers());
+      break;
   }
 
+  if (!activity) {
+    LOG_ERR("APPS", "Could not create app activity");
+    return;
+  }
   startActivityForResult(std::move(activity), [this](const ActivityResult&) {
     // The shortcut set can change underneath (Settings > Shortcuts); the
     // interaction table still indexes the old rows until the next render.
     closeRouting();
     {
       RenderLock lock(*this);
+      resetUi();  // Settings may have changed the shared theme while Apps was suspended.
       loadShortcuts();
       if (appShortcuts.empty()) {
         nav.selected = 0;
       } else {
-        nav.selected = std::min(nav.selected, listCount() - 1);
+        nav.selected = std::min(nav.selected.load(), listCount() - 1);
       }
       nav.follow(listCount());
     }

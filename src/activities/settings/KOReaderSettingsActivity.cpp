@@ -24,6 +24,7 @@ enum Row : int {
   ROW_USERNAME,
   ROW_PASSWORD,
   ROW_SERVER_URL,
+  ROW_SERVER_TYPE,
   ROW_DOCUMENT_MATCHING,
   ROW_SEND_METADATA,
   ROW_SYNC_BEHAVIOR,
@@ -34,17 +35,11 @@ enum Row : int {
 };
 static_assert(ROW_AUTHENTICATE + 1 == KOReaderSettingsActivity::MENU_ITEMS, "row table out of sync");
 
-const StrId menuNames[KOReaderSettingsActivity::MENU_ITEMS] = {StrId::STR_KOREADER_PROFILES,
-                                                               StrId::STR_USERNAME,
-                                                               StrId::STR_PASSWORD,
-                                                               StrId::STR_SYNC_SERVER_URL,
-                                                               StrId::STR_DOCUMENT_MATCHING,
-                                                               StrId::STR_SEND_METADATA,
-                                                               StrId::STR_SYNC_BEHAVIOR,
-                                                               StrId::STR_KO_AUTO_PULL_ON_OPEN,
-                                                               StrId::STR_KO_AUTO_PUSH_ON_CLOSE,
-                                                               StrId::STR_SIGN_UP,
-                                                               StrId::STR_AUTHENTICATE};
+const StrId menuNames[KOReaderSettingsActivity::MENU_ITEMS] = {
+    StrId::STR_KOREADER_PROFILES,     StrId::STR_USERNAME,      StrId::STR_PASSWORD,
+    StrId::STR_SYNC_SERVER_URL,       StrId::STR_SERVER_TYPE,   StrId::STR_DOCUMENT_MATCHING,
+    StrId::STR_SEND_METADATA,         StrId::STR_SYNC_BEHAVIOR, StrId::STR_KO_AUTO_PULL_ON_OPEN,
+    StrId::STR_KO_AUTO_PUSH_ON_CLOSE, StrId::STR_SIGN_UP,       StrId::STR_AUTHENTICATE};
 }  // namespace
 
 KOReaderSettingsActivity::KOReaderSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
@@ -107,8 +102,18 @@ void KOReaderSettingsActivity::activateIndex(const int index) {
                                KOREADER_STORE.saveToFile();
                              }
                            });
+  } else if (index == ROW_SERVER_TYPE) {
+    const auto current = KOREADER_STORE.getServerType();
+    KOReaderServerType next = KOReaderServerType::CROSSPOINT;
+    if (current == KOReaderServerType::CROSSPOINT) {
+      next = KOReaderServerType::KOSYNC;
+    } else if (current == KOReaderServerType::KOSYNC) {
+      next = KOReaderServerType::OTHER;
+    }
+    KOREADER_STORE.setServerType(next);
+    KOREADER_STORE.saveToFile();
+    requestUpdate();
   } else if (index == ROW_DOCUMENT_MATCHING) {
-    // Document Matching (active profile) - toggle between Filename and Binary
     const auto current = KOREADER_STORE.getMatchMethod();
     const auto newMethod =
         (current == DocumentMatchMethod::FILENAME) ? DocumentMatchMethod::BINARY : DocumentMatchMethod::FILENAME;
@@ -190,14 +195,16 @@ void KOReaderSettingsActivity::buildScreen(UiScreen& screen) {
     } else if (i == ROW_SERVER_URL) {
       rowValues_[i] = KOREADER_STORE.getServerUrl();
       if (rowValues_[i].empty()) {
-        // Show which server the default actually is, scheme stripped for space
         std::string defaultUrl = KOREADER_STORE.getBaseUrl();
         const auto schemeEnd = defaultUrl.find("://");
-        if (schemeEnd != std::string::npos) {
-          defaultUrl.erase(0, schemeEnd + 3);
-        }
+        if (schemeEnd != std::string::npos) defaultUrl.erase(0, schemeEnd + 3);
         rowValues_[i] = std::string(tr(STR_DEFAULT_VALUE)) + ": " + defaultUrl;
       }
+    } else if (i == ROW_SERVER_TYPE) {
+      const auto type = KOREADER_STORE.getServerType();
+      rowValues_[i] = type == KOReaderServerType::CROSSPOINT ? tr(STR_CROSSPOINT)
+                      : type == KOReaderServerType::KOSYNC   ? tr(STR_KOSYNC)
+                                                             : tr(STR_OTHER);
     } else if (i == ROW_DOCUMENT_MATCHING) {
       rowValues_[i] =
           KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::FILENAME ? tr(STR_FILENAME) : tr(STR_BINARY);
@@ -215,6 +222,7 @@ void KOReaderSettingsActivity::buildScreen(UiScreen& screen) {
     }
     rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
   }
+  GUI.setCheckboxRow(rowItems_[ROW_SEND_METADATA], KOREADER_STORE.getSendMetadata());
 
   fui::ListProps props;
   props.items = rowItems_;

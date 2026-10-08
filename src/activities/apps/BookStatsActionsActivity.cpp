@@ -158,10 +158,7 @@ void BookStatsActionsActivity::buildScreen(UiScreen& screen) {
   props.labelText = screen.theme().smallText;
   props.labelText.maxLines = 2;
   syncListViewport(screen, props);
-  const int16_t rowHeight = props.rowHeight > 0 ? props.rowHeight : screen.theme().rowHeight;
-  const int16_t rowGap = props.rowGap >= 0 ? props.rowGap : screen.theme().listRowGap;
-  const int16_t listHeight = static_cast<int16_t>(rowHeight * ACTION_COUNT + rowGap * (ACTION_COUNT - 1));
-  screen.list(props, listHeight);
+  screen.list(props, measureActionListHeight(screen, props));
 
   if (startDateApplyFailed) {
     screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));

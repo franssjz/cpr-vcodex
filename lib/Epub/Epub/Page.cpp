@@ -3,9 +3,8 @@
 #include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Serialization.h>
-
-#include <new>
 
 namespace {
 constexpr uint8_t MAX_TABLE_ROWS_PER_FRAGMENT = 64;
@@ -43,13 +42,13 @@ std::unique_ptr<PageLine> PageLine::deserialize(HalFile& file) {
     LOG_ERR("PGE", "Deserialization failed: invalid text block");
     return nullptr;
   }
-  std::shared_ptr<TextBlock> sharedBlock(std::move(tb));
-  auto* line = new (std::nothrow) PageLine(std::move(sharedBlock), xPos, yPos);
+
+  auto line = makeUniqueNoThrow<PageLine>(std::move(tb), xPos, yPos);
   if (!line) {
     LOG_ERR("PGE", "Deserialization failed: could not allocate PageLine");
     return nullptr;
   }
-  return std::unique_ptr<PageLine>(line);
+  return line;
 }
 
 void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
@@ -81,16 +80,15 @@ std::unique_ptr<PageImage> PageImage::deserialize(HalFile& file) {
 
   auto ib = ImageBlock::deserialize(file);
   if (!ib) {
-    LOG_ERR("PGE", "Deserialization failed: invalid image block");
+    LOG_ERR("PGE", "Deserialization failed: null ImageBlock");
     return nullptr;
   }
-  std::shared_ptr<ImageBlock> sharedBlock(std::move(ib));
-  auto* image = new (std::nothrow) PageImage(std::move(sharedBlock), xPos, yPos);
+  auto image = makeUniqueNoThrow<PageImage>(std::move(ib), xPos, yPos);
   if (!image) {
     LOG_ERR("PGE", "Deserialization failed: could not allocate PageImage");
     return nullptr;
   }
-  return std::unique_ptr<PageImage>(image);
+  return image;
 }
 
 void PageHorizontalRule::render(GfxRenderer& renderer, const int fontId, const int xOffset, const int yOffset,
@@ -127,12 +125,12 @@ std::unique_ptr<PageHorizontalRule> PageHorizontalRule::deserialize(HalFile& fil
     return nullptr;
   }
 
-  auto* rule = new (std::nothrow) PageHorizontalRule(width, thickness, xPos, yPos);
+  auto rule = makeUniqueNoThrow<PageHorizontalRule>(width, thickness, xPos, yPos);
   if (!rule) {
     LOG_ERR("PGE", "Deserialization failed: could not allocate PageHorizontalRule");
     return nullptr;
   }
-  return std::unique_ptr<PageHorizontalRule>(rule);
+  return rule;
 }
 
 bool TableFragmentCell::serialize(HalFile& file) const {
@@ -433,9 +431,9 @@ bool Page::serialize(HalFile& file) const {
 }
 
 std::unique_ptr<Page> Page::deserialize(HalFile& file) {
-  auto page = std::unique_ptr<Page>(new (std::nothrow) Page());
+  auto page = makeUniqueNoThrow<Page>();
   if (!page) {
-    LOG_ERR("PGE", "Deserialization failed: could not allocate page");
+    LOG_ERR("PGE", "Deserialization failed: could not allocate Page");
     return nullptr;
   }
 

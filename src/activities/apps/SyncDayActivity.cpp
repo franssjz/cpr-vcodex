@@ -13,7 +13,7 @@
 #include "ManualDateActivity.h"
 #include "ReadingStatsStore.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "activities/settings/TimeZoneSelectActivity.h"
+#include "activities/settings/TimezonePickerActivity.h"
 #include "components/UITheme.h"
 #include "components/UiAppHelpers.h"
 #include "fontIds.h"
@@ -47,9 +47,7 @@ std::string getObtainedDateLabel() {
   return TimeUtils::formatDate(displayInfo.timestamp, displayInfo.usedFallback);
 }
 
-std::string getTimeZoneLabel() {
-  return TimeZoneRegistry::getPresetLabel(TimeZoneRegistry::clampPresetIndex(SETTINGS.timeZonePreset));
-}
+std::string getTimeZoneLabel() { return TimeUtils::getCurrentTimeZoneLabel(); }
 
 const char* getDateFormatLabel() {
   switch (static_cast<CrossPointSettings::DATE_FORMAT>(SETTINGS.dateFormat)) {
@@ -184,12 +182,9 @@ void SyncDayActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   // The list takes exactly its rows; the help text lives underneath.
-  const int16_t rowHeight = props.rowHeight > 0 ? props.rowHeight : screen.theme().rowHeight;
-  const int16_t rowGap = props.rowGap >= 0 ? props.rowGap : screen.theme().listRowGap;
-  const int16_t listHeight = static_cast<int16_t>(rowHeight * ACTION_COUNT + rowGap * (ACTION_COUNT - 1));
-  screen.list(props, listHeight);
+  screen.list(props, measureActionListHeight(screen, props));
 
   screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
   const int16_t sidePadding = static_cast<int16_t>(metrics.contentSidePadding);
@@ -229,7 +224,7 @@ std::string SyncDayActivity::getStatusMessage() const {
 }
 
 void SyncDayActivity::openTimeZoneSelection() {
-  startActivityForResult(std::make_unique<TimeZoneSelectActivity>(renderer, mappedInput),
+  startActivityForResult(std::make_unique<TimezonePickerActivity>(renderer, mappedInput),
                          [this](const ActivityResult&) { requestUpdate(); });
 }
 

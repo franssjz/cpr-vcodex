@@ -30,6 +30,7 @@ class RecentBooksStore {
   friend bool JsonSettingsIO::loadRecentBooks(RecentBooksStore&, const char*);
 
  public:
+  static constexpr int MAX_RECENT_BOOKS = 10;
   ~RecentBooksStore() = default;
 
   // Get singleton instance

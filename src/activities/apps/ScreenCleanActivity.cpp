@@ -143,7 +143,7 @@ bool ScreenCleanActivity::handleCustomInput() {
   // Back (button or edge swipe) or a tap anywhere stops the cycle early.
   int tapX = 0;
   int tapY = 0;
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back) || mappedInput.wasScreenTapped(tapX, tapY)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) || mappedInput.wasScreenTapped(tapX, tapY)) {
     finishCleaning(false);
     return true;
   }
@@ -197,7 +197,7 @@ void ScreenCleanActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }
 

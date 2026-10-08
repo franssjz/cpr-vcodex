@@ -88,6 +88,71 @@ and `src/activities/reader/EpubReaderActivity.cpp`.
 
 ## Checks After Sync
 
+### 2026-10-07 Integration
+
+Integration branch: `integration/crosspoint-2026-10-07`, from fork `a4ae01a7`
+and upstream `develop` `28971493` (139 commits since `233f93ff`). The SDK is
+`9729236ce7b730b81b8fcceec4aa77051b6dfae3`. No history rewrite, commit, push,
+release or device flashing is part of this work.
+
+Preservation decisions:
+
+- Keep the September JSON stores and aliases, named KOReader profiles,
+  StarDict/history, BookmarkStore v5, stable `bookdata` progress/highlights,
+  statistics/Sync Day/achievements, favorites, flashcards and custom shortcuts.
+- Keep the fork's TXT/Markdown reader: upstream's virtual-EPUB conversion
+  would lose its styled Markdown rendering. The new EPUB word/character
+  spacing controls apply to EPUB; TXT retains its existing layout path.
+- Keep Lyra Carousel and its custom thumbnail sizing, Bionic Reading, text
+  darkness, night-mode composition and framebuffer-loan memory handling.
+- Add Library and Plugins to configurable shortcuts. The PSRAM-only cover
+  grid retains access to custom shortcuts through Apps.
+- Migrate old touch gesture values, paragraph indentation and timezone
+  presets. Persist the new independent gestures, Home actions, haptics,
+  spacing, library metadata and header clock settings in JSON.
+- Keep fork OTA/SD validation, CA-verified C3 manifests, SHA-256-verified downloads, partition
+  tables and withdrawn X4 Pro distribution. Plugin networking and content
+  crypto now require wolfSSL on C3 too; this does not replace the OTA TLS path.
+  The user explicitly authorized the upstream plugin network/SD web APIs.
+- Compile the same 24 built-in UI languages and existing built-in font set.
+  Keep all upstream translation YAMLs available to custom builds. German
+  Liang patterns remain opt-in as before. LTO saves approximately 396 KB of
+  linked flash relative to the unoptimized integration.
+- Reader plugin events use a separate session tracker, never the persistent
+  statistics store. Device rename preserves legacy caches and metadata
+  sidecars and updates recent/favorite/statistics paths and cover references.
+  Refuse a book rename if no content identity can be obtained safely.
+
+Validation: 560 native tests pass, including new plugin lifecycle,
+inserted-hyphen and header date/clock/battery layout tests. All 181 pre-sync
+JSON output keys remain (203 now); the core statistics, favorites, flashcards,
+achievements and dictionary stores have no semantic changes.
+Default C3, production C3 and X4 Pro compile successfully. Final resource
+measurements are recorded in `artifacts/upstream-sync/firmware-final-header.log`.
+The release builds use `VCODEX_RELEASE_DRY_RUN=1`, so no release counter is
+advanced. Ten simulator grayscale boots pass and the fork's Lyra Custom and
+Carousel home screens were inspected. See `simulator.md` for the reproducible
+HAL snapshot and `test/simulator/cpr-hal-097f44e.patch`.
+
+Final resource measurements (bytes):
+
+| Profile | Static RAM | Linked flash | Final BIN | OTA slot |
+| --- | ---: | ---: | ---: | ---: |
+| default (X3/X4) | 61,544 | 6,335,429 | 6,349,648 | 6,553,600 |
+| gh_release (X3/X4) | 61,544 | 6,258,095 | 6,272,320 | 6,553,600 |
+| x4pro (compile-only) | 105,976 | 6,457,490 | 6,462,672 | 8,257,536 |
+
+The C3 release budget report passes at 95.49% linked flash (97.5% limit).
+Use the extracted `firmware-release-final.log` for the budget script: the
+combined log ends with X4 Pro, so its last size line is not the C3 measurement.
+The final BIN also fits the same budget. Syntax checks, staged diff checks,
+SDK cleanliness and a no-conflicts Git index pass. `master` remains at
+`a4ae01a7`; the integration is staged with `MERGE_HEAD=28971493`, uncommitted.
+
+This is not physical-device validation: test OTA/SD updates,
+Wi-Fi/plugin peak heap, sleep/wake and e-ink behavior on recoverable hardware
+before publishing, following the stability audit's X3/X4 matrix.
+
 Run at minimum:
 
 ```bash
@@ -96,3 +161,19 @@ pio run -e default
 ```
 
 Use `pio run -e gh_release` before any release-facing change.
+
+### 2026-10-08 release handoff
+
+The user subsequently authorized publishing `1.6.5.1-cpr-vcodex`, including
+the integration and the popup, list-selection, reader-setting and Back
+navigation fixes recorded in `experience-debugging-2026-10-08.md` and
+`stability-audit-2026-09.md`. The uncommitted state and build sizes above are
+historical integration checkpoints, not the final release measurements.
+
+The final release uses the `gh_release` C3 profile and the 1.6.5 version base.
+The release workflow runs native regressions and budget checks before
+publishing; Auto Flash is then synchronized from the published GitHub asset.
+The public release budget assets are authoritative for its final BIN size.
+Physical X3 and end-to-end OTA validation of this release remain pending;
+the earlier dev35 USB installation on one original X4 is not equivalent.
+X4 Pro distribution stays withdrawn, and the C3 BIN is not for X4 Classic/X4C.

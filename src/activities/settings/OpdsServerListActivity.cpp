@@ -109,7 +109,7 @@ bool OpdsServerListActivity::handleCustomInput() {
 
 void OpdsServerListActivity::onBackButton() {
   if (pickerMode) {
-    activityManager.goHome(HomeMenuItem::OPDS_BROWSER);
+    activityManager.goBack(HomeMenuItem::OPDS_BROWSER);
   } else {
     finish();
   }
@@ -134,7 +134,7 @@ void OpdsServerListActivity::handleSelection() {
     if (nav.selected < serverCount) {
       const auto* server = OPDS_STORE.getServer(static_cast<size_t>(nav.selected));
       if (server) {
-        activityManager.replaceActivity(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, *server));
+        startActivityForResult(std::make_unique<OpdsBookBrowserActivity>(renderer, mappedInput, *server), nullptr);
       }
     } else {
       auto editor = makeUniqueNoThrow<OpdsSettingsActivity>(renderer, mappedInput, -1);
@@ -231,7 +231,7 @@ void OpdsServerListActivity::buildScreen(UiScreen& screen) {
   props.count = static_cast<uint16_t>(rowItems_.size());
   props.action = ACTION_ROW;
   props.inputMask = fui::InputTouch;  // physical buttons stay in loop()
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }
 

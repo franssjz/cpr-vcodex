@@ -9,6 +9,7 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "ReaderFontSizes.h"
+#include "ReaderSettingLabels.h"
 #include "SdCardFontGlobals.h"
 #include "activities/settings/FontSelectionActivity.h"
 #include "components/UITheme.h"
@@ -31,8 +32,7 @@ const char* fontFamilyText() {
   if (SETTINGS.sdFontFamilyName[0] != '\0') {
     return SETTINGS.sdFontFamilyName;
   }
-  static const std::vector<StrId> builtInLabels = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS};
-  return enumValueText(SETTINGS.fontFamily, builtInLabels);
+  return I18N.get(ReaderSettingLabels::builtinFonts[SETTINGS.fontFamily % ReaderSettingLabels::builtinFonts.size()]);
 }
 
 }  // namespace
@@ -43,7 +43,7 @@ const std::vector<ReaderQuickSettingsActivity::QuickSetting>& ReaderQuickSetting
       {StrId::STR_REFRESH_FREQ,
        QuickSettingType::Enum,
        &CrossPointSettings::refreshFrequency,
-       {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30}},
+       {ReaderSettingLabels::refresh.begin(), ReaderSettingLabels::refresh.end()}},
       {StrId::STR_SUNLIGHT_FADING_FIX, QuickSettingType::Toggle, &CrossPointSettings::fadingFix},
       {StrId::STR_FONT_FAMILY, QuickSettingType::FontFamily},
       {StrId::STR_FONT_SIZE, QuickSettingType::FontSize, &CrossPointSettings::fontPointSize},
@@ -61,7 +61,7 @@ const std::vector<ReaderQuickSettingsActivity::QuickSetting>& ReaderQuickSetting
       {StrId::STR_BIONIC_READING,
        QuickSettingType::Enum,
        &CrossPointSettings::bionicReading,
-       {StrId::STR_STATE_OFF, StrId::STR_NORMAL, StrId::STR_SUBTLE}},
+       {ReaderSettingLabels::bionic.begin(), ReaderSettingLabels::bionic.end()}},
       {StrId::STR_ORIENTATION,
        QuickSettingType::Enum,
        &CrossPointSettings::orientation,

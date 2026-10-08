@@ -2,6 +2,8 @@
 
 #include <HalGPIO.h>
 
+#include "util/HomeButtonInput.h"
+
 class GfxRenderer;
 namespace freeink {
 namespace ui {
@@ -39,8 +41,12 @@ class MappedInputManager {
 
   MappedInputManager(HalGPIO& gpio, const GfxRenderer& renderer) : gpio(gpio), renderer(renderer) {}
 
-  void update() const;
+  // Blocking transfer loops pump physical input themselves. Defer configured
+  // Home-key actions so the next main-loop pass can dispatch them, while the
+  // current action remains available for immediate Home cancellation.
+  void update(bool deferHomeButtonAction = false) const;
   void armConfirmReleaseGuard() const;
+  void armBackReleaseGuard() const;
 #if FREEINK_CAP_TOUCH
   // X4 Pro delays a single power click until its frontlight double-click window
   // expires. The main loop supplies that one-frame event here.
@@ -89,8 +95,12 @@ class MappedInputManager {
   // is intentionally unused. Other boards retain the bottom-edge Home gesture.
   // The reader menu remains on its existing top-edge gesture and middle tap.
   bool wasHomeGesture() const;
-  // A Home-key hold runs the configured long-press action in the reader.
-  bool wasHomeKeyHold() const;
+  // Configured one-frame action, independent of the gesture that triggered it.
+  HomeButtonAction homeButtonAction() const { return homeAction; }
+  void resetHomeButtonInput() const {
+    homeButtonInput.reset();
+    deferredHomeAction = HomeButtonAction::Ignore;
+  }
   bool wasMenuGesture() const;
   // Bottom-edge up-swipe as the reader-menu gesture (SHOW_READER_MENU's Swipe
   // Up option). Only meaningful on home-key boards, where Home lives on the
@@ -100,8 +110,6 @@ class MappedInputManager {
   // Top-edge down-swipe opens the light panel when the active board actually
   // has a frontlight. ActivityManager consumes it before activity input.
   bool wasLightPanelGesture() const;
-  bool wasAnyPressed() const;
-  bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
   const GfxRenderer& getRenderer() const { return renderer; }
   Labels mapLabels(const char* back, const char* confirm, const char* previous, const char* next) const;
@@ -119,6 +127,7 @@ class MappedInputManager {
  private:
   HalGPIO& gpio;
   mutable bool suppressConfirmReleaseUntilButtonUp = false;
+  mutable bool suppressBackUntilButtonUp = false;
   // Logical-to-physical button mapping depends on what the user is actually looking at: when the
   // screen is rendered rotated, the directional buttons must flip to match. The renderer is the only
   // authority on the *live* orientation (the reader rotates it and restores portrait on exit), so we
@@ -142,6 +151,9 @@ class MappedInputManager {
   void rememberTouchHeldTime() const;
   void suppressNextRelease(Button button) const;
 
+  mutable HomeButtonInput homeButtonInput;
+  mutable HomeButtonAction homeAction = HomeButtonAction::Ignore;
+  mutable HomeButtonAction deferredHomeAction = HomeButtonAction::Ignore;
   mutable bool touchHeldOverrideValid = false;
   mutable unsigned long touchHeldOverrideMs = 0;
   mutable unsigned long touchHeldOverrideAt = 0;

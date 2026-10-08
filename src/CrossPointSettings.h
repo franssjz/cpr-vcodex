@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <iosfwd>
 
+#include "util/HomeButtonInput.h"
+
 class CrossPointSettings {
  private:
   // Private constructor for singleton
@@ -83,6 +85,10 @@ class CrossPointSettings {
   };
   using STATUS_BAR_CLOCK_MODE = STATUS_BAR_CLOCK;  // upstream name
 
+  // Auto follows the timezone's baked DST rule; On/Off override it — the
+  // escape hatch for a zone whose law changed before the firmware caught up.
+  enum CLOCK_DST_MODE { CLOCK_DST_AUTO = 0, CLOCK_DST_ON = 1, CLOCK_DST_OFF = 2, CLOCK_DST_MODE_COUNT };
+
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
     LANDSCAPE_CW = 1,   // 800x480 logical coordinates, rotated 180° (swap top/bottom)
@@ -112,9 +118,16 @@ class CrossPointSettings {
   };
 
   // Side button layout options
-  // Default: Previous, Next
-  // Swapped: Next, Previous
-  enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTONS_DISABLED = 2, SIDE_BUTTON_LAYOUT_COUNT };
+  // Default: Up = Previous, Down = Next. NEXT_NEXT / PREV_PREV assign both
+  // buttons to the same direction for one-handed reading.
+  enum SIDE_BUTTON_LAYOUT {
+    PREV_NEXT = 0,
+    NEXT_PREV = 1,
+    SIDE_BUTTONS_DISABLED = 2,
+    NEXT_NEXT = 3,
+    PREV_PREV = 4,
+    SIDE_BUTTON_LAYOUT_COUNT
+  };
 
   // Font family options (built-in fonts only; SD card fonts use sdFontFamilyName).
   // NOTOSERIF is upstream's name for slot 0 (the fork ships Bookerly there).
@@ -238,6 +251,7 @@ class CrossPointSettings {
     CLASSIC = 3,
     ROUNDEDRAFF = 4,
     LYRA_3_COVERS = 5,
+    COVER_GRID = 6,
     UI_THEME_COUNT
   };
   enum DATE_FORMAT { DATE_DD_MM_YYYY = 0, DATE_MM_DD_YYYY = 1, DATE_YYYY_MM_DD = 2, DATE_FORMAT_COUNT };
@@ -312,6 +326,22 @@ class CrossPointSettings {
     TOUCH_READER_INVERTED_TAP = 3,
     TOUCH_READER_CONTROLS_COUNT
   };
+  enum VIBRATION { VIBRATION_TOUCH = 0, VIBRATION_TOUCH_PAGE = 1, VIBRATION_OFF = 2, VIBRATION_COUNT };
+  uint8_t vibration = VIBRATION_OFF;
+  enum HAPTIC_INTENSITY { HAPTIC_LOW = 0, HAPTIC_MEDIUM = 1, HAPTIC_HIGH = 2 };
+  uint8_t hapticIntensity = HAPTIC_HIGH;
+
+  // Per-direction reader page-turn gestures. INVERTED_TAP is tap-only; either
+  // direction set to it swaps both directions' shared tap zones (see
+  // ReaderUtils::detectTouchPageTurn).
+  enum PAGE_TURN_GESTURE {
+    TAP_AND_SWIPE = 0,
+    TAP_ONLY = 1,
+    SWIPE_ONLY = 2,
+    INVERTED_TAP = 3,
+    PAGE_TURN_GESTURE_DISABLED = 4,
+    PAGE_TURN_GESTURE_COUNT
+  };
 
   // How the reader menu opens on touch boards. Persisted under the legacy
   // "tapForReaderMenu" key: 0/1 keep their old Off/Tap meaning.
@@ -350,7 +380,7 @@ class CrossPointSettings {
   uint8_t statusBarTitle = CHAPTER_TITLE;
   uint8_t statusBarBattery = 1;
   uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
-  // Clock display in status bar (X3 only, requires DS3231 RTC)
+  // Clock display in status bar (any board whose RTC probe succeeds)
   uint8_t statusBarClock = STATUS_BAR_CLOCK_HIDE;
   // Clock UTC offset in quarter-hour steps, biased by 48 so it fits in uint8_t
   // (48 = UTC+0, 0 = UTC-12:00, 104 = UTC+14:00). The fork's Sync Day timezone
@@ -359,18 +389,39 @@ class CrossPointSettings {
   uint8_t clockUtcOffsetQ = 48;
   // Clock display format: 0 = 24-hour, 1 = 12-hour
   uint8_t clockFormat = 0;
+  // Index into the timezone table (src/util/Timezones.cpp, append-only).
+  // 255 = never chosen; falls back to the legacy UTC offset, then UTC.
+  uint8_t clockTimezone = 255;
+  // CLOCK_DST_MODE: follow the zone's DST rule, or force it on/off.
+  uint8_t clockDst = CLOCK_DST_AUTO;
+  // Show the clock opposite the battery in every header band that draws one.
+  uint8_t clockShowInHeader = 0;
   // Set once an NTP sync succeeds. Used to skip re-syncing on every WiFi connect.
   // Resetting to 0 (e.g. via the web UI) forces a re-sync on next WiFi connect.
   uint8_t clockHasBeenSynced = 0;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t forceParagraphIndents = 0;
+  uint8_t paragraphIndentSpaces = 2;
+  static constexpr uint8_t WORD_SPACING_MIN = 50;
+  static constexpr uint8_t WORD_SPACING_MAX = 200;
+  static constexpr uint8_t WORD_SPACING_STEP = 25;
+  uint8_t wordSpacing = 100;                              // percent of the font's space advance
+  static constexpr uint8_t CHARACTER_SPACING_OFFSET = 2;  // stored 0..4 maps to -2..+2 px
+  uint8_t characterSpacing = CHARACTER_SPACING_OFFSET;
+  int8_t getCharacterSpacing() const { return static_cast<int8_t>(characterSpacing - CHARACTER_SPACING_OFFSET); }
   uint8_t textAntiAliasing = 1;
   uint8_t textDarkness = TEXT_DARKNESS_NORMAL;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // Tilt-based page turning (X3 only, requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
+  // X4 Pro: double-click power toggles the frontlight. Disabling frees the
+  // power button for shortPwrBtn actions without the double-click wait.
+  uint8_t doubleClickPwrLight = 1;
+  uint8_t homeButtonTapAction = static_cast<uint8_t>(HomeButtonAction::Home);
+  uint8_t homeButtonDoubleTapAction = static_cast<uint8_t>(HomeButtonAction::ToggleFrontlight);
+  uint8_t homeButtonLongPressAction = static_cast<uint8_t>(HomeButtonAction::ReaderMenu);
   // EPUB reading orientation settings
   // 0 = portrait (default), 1 = landscape clockwise, 2 = inverted, 3 = landscape counter-clockwise
   uint8_t orientation = PORTRAIT;
@@ -492,6 +543,10 @@ class CrossPointSettings {
   uint8_t sleepShortcutOrder = 18;
   uint8_t opdsBrowserShortcut = SHORTCUT_HOME;
   uint8_t opdsBrowserShortcutOrder = 19;
+  uint8_t libraryShortcut = SHORTCUT_APPS;
+  uint8_t libraryShortcutOrder = 20;
+  uint8_t pluginsShortcut = SHORTCUT_APPS;
+  uint8_t pluginsShortcutOrder = 21;
   uint8_t browseFilesShortcutVisible = 1;
   // Legacy Stats shortcut visibility retained for settings.json migration to readingStatsShortcut.
   uint8_t statsShortcutVisible = 1;
@@ -512,6 +567,8 @@ class CrossPointSettings {
   uint8_t screenCleanShortcutVisible = 1;
   uint8_t sleepShortcutVisible = 1;
   uint8_t opdsBrowserShortcutVisible = 1;
+  uint8_t libraryShortcutVisible = 1;
+  uint8_t pluginsShortcutVisible = 1;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Power button return from footnotes (1 = enabled, 0 = disabled)
@@ -523,14 +580,20 @@ class CrossPointSettings {
   uint8_t showHiddenFiles = 0;
   // Hide the file-browser extension value so long titles get more row width.
   uint8_t hideFileExtension = 0;
+  // Show the title and author read from inside each book rather than its
+  // filename. Users can disable this to make index rebuilds skip EPUB parsing.
+  uint8_t libraryUseMetadata = 1;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)
   uint8_t removeReadBooksFromRecents = 0;
   // Short press Back goes to file browser instead of home (0 = disabled, 1 = enabled)
   uint8_t backShortToFileBrowser = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
-  // Touch screen reader zones/gestures on boards with a touch controller.
-  uint8_t touchReaderControls = TOUCH_READER_SWIPE;
+  // Master reader-touch toggle on boards with a touch controller.
+  uint8_t touchReaderControls = TOUCH_READER_ON;
+  // Which gestures turn the page in each direction (PAGE_TURN_GESTURE).
+  uint8_t pageTurnGesture = SWIPE_ONLY;
+  uint8_t previousPageGesture = SWIPE_ONLY;
   // Reader menu open gesture (SHOW_READER_MENU: off / center tap / bottom-edge
   // up-swipe). Only surfaced on home-key boards; elsewhere it stays at the Tap default.
   uint8_t showReaderMenu = READER_MENU_TAP;
@@ -590,7 +653,6 @@ class CrossPointSettings {
     bool showBatteryPercent = false;
     uint8_t clockMode = STATUS_BAR_CLOCK_HIDE;  // STATUS_BAR_CLOCK
     bool clock12h = false;
-    uint8_t clockUtcOffsetQ = 48;             // 48 = UTC+0
     uint8_t progressBarMode = HIDE_PROGRESS;  // STATUS_BAR_PROGRESS_BAR
     uint8_t progressBarHeightPx = 0;          // (thickness+1)*2; 0 when the bar is hidden
     uint8_t xtcMode = XTC_STATUS_BAR_HIDE;    // XTC_STATUS_BAR_MODE

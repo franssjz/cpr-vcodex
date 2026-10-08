@@ -1,23 +1,21 @@
 #include "TimeUtils.h"
 
-#include <HalClock.h>
-
-#include "CrossPointSettings.h"
-#include "CrossPointState.h"
-
 #include <Arduino.h>
+#include <HalClock.h>
 #include <esp_sntp.h>
+#include <sys/time.h>
 
 #include <algorithm>
 #include <ctime>
-#include <sys/time.h>
 
+#include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "util/TimeZoneRegistry.h"
+#include "util/Timezones.h"
 
 namespace {
 constexpr uint32_t VALID_CLOCK_THRESHOLD = 1704067200UL;  // 2024-01-01 UTC
 bool syncedThisBoot = false;
-uint8_t configuredTimeZonePreset = UINT8_MAX;
 int lastBridgedRtcUtcHour = -1;
 
 bool writeRtcFromUtcEpoch(const uint32_t epochSeconds) {
@@ -86,12 +84,7 @@ void civilFromDays(int z, int& year, unsigned& month, unsigned& day) {
 }
 }  // namespace
 
-void TimeUtils::configureTimezone() {
-  const uint8_t preset = TimeZoneRegistry::clampPresetIndex(SETTINGS.timeZonePreset);
-  setenv("TZ", TimeZoneRegistry::getPresetPosixTz(preset), 1);
-  tzset();
-  configuredTimeZonePreset = preset;
-}
+void TimeUtils::configureTimezone() { timezones::applyToClock(); }
 
 void TimeUtils::stopNtp() {
   if (esp_sntp_enabled()) {
@@ -242,9 +235,8 @@ uint32_t TimeUtils::getLocalDayOrdinal(const uint32_t epochSeconds) {
     return epochSeconds / 86400UL;
   }
 
-  return static_cast<uint32_t>(
-      daysFromCivil(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
-                    static_cast<unsigned>(localTime.tm_mday)));
+  return static_cast<uint32_t>(daysFromCivil(localTime.tm_year + 1900, static_cast<unsigned>(localTime.tm_mon + 1),
+                                             static_cast<unsigned>(localTime.tm_mday)));
 }
 
 uint32_t TimeUtils::getDayOrdinalForDate(const int year, const unsigned month, const unsigned day) {
@@ -258,9 +250,7 @@ bool TimeUtils::getDateFromDayOrdinal(const uint32_t dayOrdinal, int& year, unsi
 
 bool TimeUtils::wasTimeSyncedThisBoot() { return syncedThisBoot; }
 
-const char* TimeUtils::getCurrentTimeZoneLabel() {
-  return TimeZoneRegistry::getPresetLabel(TimeZoneRegistry::clampPresetIndex(SETTINGS.timeZonePreset));
-}
+const char* TimeUtils::getCurrentTimeZoneLabel() { return timezones::table()[timezones::activeIndex()].name; }
 
 std::string TimeUtils::formatDate(const uint32_t epochSeconds, const bool appendBang) {
   if (!isClockValid(epochSeconds)) {
@@ -296,7 +286,8 @@ std::string TimeUtils::formatDateTime(const uint32_t epochSeconds, const bool ap
          (localTime.tm_min < 10 ? "0" : "") + std::to_string(localTime.tm_min);
 }
 
-std::string TimeUtils::formatDateParts(const int year, const unsigned month, const unsigned day, const bool appendBang) {
+std::string TimeUtils::formatDateParts(const int year, const unsigned month, const unsigned day,
+                                       const bool appendBang) {
   return formatDateBuffer(year, month, day, appendBang);
 }
 

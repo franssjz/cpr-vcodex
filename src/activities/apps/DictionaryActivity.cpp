@@ -188,6 +188,6 @@ void DictionaryActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/entryCount > 0);
+  syncListViewport(screen, props);
   screen.list(props);
 }

@@ -18,7 +18,7 @@
 class Activity;    // forward declaration
 class RenderLock;  // forward declaration
 
-enum class HomeMenuItem { NONE, FILE_BROWSER, RECENTS, OPDS_BROWSER, FILE_TRANSFER, SETTINGS_MENU };
+enum class HomeMenuItem { NONE, FILE_BROWSER, LIBRARY, OPDS_BROWSER, FILE_TRANSFER, SETTINGS_MENU, RECENTS };
 
 /**
  * ActivityManager
@@ -86,15 +86,18 @@ class ActivityManager {
 
   // goTo... functions are convenient wrapper for replaceActivity()
   void goToFileTransfer();
+  void goToJoinNetwork();  // File Transfer straight into Join Network (post heap-defrag reboot)
   void goToUsbDrive();
   void goToSettings();
   void goToApps();
   void goToFileBrowser(std::string path = {});
+  void goToLibrary();
   void goToRecentBooks();
   void goToBrowser();
   void goToKOReaderSync();
   void goToEpubBookmark(std::string path, int spineIndex, uint32_t page, bool hasVisibleTextOffset = false,
                         uint32_t visibleTextOffset = 0);
+  void goToPlugins(bool showOpds);
   void goToReader(std::string path, bool allowFastInitialRefresh = false);
   void goToSleep(bool fromTimeout = false);
   void goToBoot();
@@ -108,6 +111,9 @@ class ActivityManager {
   // Remove the currentActivity, returning the last one on stack
   // Note: if popActivity() on last activity on the stack, we will goHome()
   void popActivity();
+  // Return to the caller when pushed, retaining the root screen's Home focus otherwise.
+  void goBack(HomeMenuItem initialMenuItem = HomeMenuItem::NONE);
+  bool hasParentActivity() const { return !stackActivities.empty(); }
 
   bool preventAutoSleep() const;
   bool requiresExclusiveStorageLoop() const;
@@ -115,6 +121,7 @@ class ActivityManager {
   bool handleForcedRefresh();
   bool skipLoopDelay() const;
   ScreenshotInfo getScreenshotInfo() const;
+  void prepareForSleep();
 
   // If immediate is true, the update will be triggered immediately.
   // Otherwise, it will be deferred until the end of the current loop iteration.

@@ -44,13 +44,14 @@ class HalClock {
   bool getUtcTime(uint8_t& hour, uint8_t& minute, bool forceRefresh = false) const;
 
   // Upstream-compatible accessor: current UTC hour (0-23) and minute (0-59).
-  bool getTime(uint8_t& hour, uint8_t& minute) const { return getUtcTime(hour, minute); }
+  bool getTime(uint8_t& hour, uint8_t& minute) const;
+  void setTimezone(const char* posixTz);
+  bool localTime(struct tm& out) const;
 
-  // Format time into a caller-provided buffer.
+  // Format the local time into a caller-provided buffer.
   // 24h mode produces "HH:MM" (needs >=6 bytes); 12h mode produces "H:MM AM"/"HH:MM PM" (needs >=9 bytes).
-  // utcOffsetQuarterHoursBiased: biased quarter-hour offset (48 = UTC+0, 0 = UTC-12, 104 = UTC+14).
   // Returns false if RTC is not available.
-  bool formatTime(char* buf, size_t bufSize, uint8_t utcOffsetQuarterHoursBiased = 48, bool use12Hour = false) const;
+  bool formatTime(char* buf, size_t bufSize, bool use12Hour = false) const;
 
   // Sync the RTC from an NTP server. Requires WiFi to be connected.
   // Writes full UTC date/time and blocks for up to ~5s while waiting for SNTP.

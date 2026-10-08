@@ -1,5 +1,6 @@
 """Every language must remain identifiable in the built-in language picker."""
 from pathlib import Path
+import configparser
 import re
 import sys
 import unittest
@@ -11,8 +12,13 @@ from gen_i18n import parse_yaml_file
 
 class BuiltinLanguageGlyphsTest(unittest.TestCase):
     def test_ui_faces_cover_all_language_names(self):
-        names = [parse_yaml_file(str(path))["_language_name"]
-                 for path in (ROOT / "lib/I18n/translations").glob("*.yaml")]
+        config = configparser.ConfigParser(interpolation=None)
+        config.read(ROOT / "platformio.ini", encoding="utf-8")
+        builtins = {code.strip().upper() for code in config["base"]["custom_i18n_builtin_langs"].split(",")}
+        translations = [parse_yaml_file(str(path))
+                        for path in (ROOT / "lib/I18n/translations").glob("*.yaml")]
+        names = [data["_language_name"] for data in translations
+                 if "ALL" in builtins or data["_language_code"].upper() in builtins]
         self.assertGreaterEqual(len(names), 24)
         for font in ("ubuntu_10_regular", "ubuntu_10_bold", "ubuntu_12_regular",
                      "ubuntu_12_bold", "notosans_8_regular"):

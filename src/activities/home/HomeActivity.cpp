@@ -8,7 +8,10 @@
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <LibraryBuilder.h>
+#include <LibraryIndexFile.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <Txt.h>
 #include <Utf8.h>
 #include <Xtc.h>
@@ -24,6 +27,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FavoritesStore.h"
+#include "HapticFeedback.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "ReadingStatsStore.h"
@@ -37,8 +41,10 @@
 #include "activities/apps/ReadingHeatmapActivity.h"
 #include "activities/apps/ReadingProfileActivity.h"
 #include "activities/apps/ReadingStatsActivity.h"
+#include "activities/apps/ScreenCleanActivity.h"
 #include "activities/apps/SleepAppActivity.h"
 #include "activities/apps/SyncDayActivity.h"
+#include "activities/plugins/PluginCatalogActivity.h"  // anyPluginInstalled()
 #include "activities/settings/ClockSyncActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
@@ -377,6 +383,8 @@ bool shortcutMatchesMenuItem(const HomeShortcutEntry& entry, const HomeMenuItem 
       return entry.definition->id == ShortcutId::BrowseFiles;
     case HomeMenuItem::RECENTS:
       return entry.definition->id == ShortcutId::RecentBooks;
+    case HomeMenuItem::LIBRARY:
+      return entry.definition->id == ShortcutId::Library;
     case HomeMenuItem::OPDS_BROWSER:
       return entry.definition->id == ShortcutId::OpdsBrowser;
     case HomeMenuItem::FILE_TRANSFER:
@@ -391,6 +399,9 @@ bool shortcutMatchesMenuItem(const HomeShortcutEntry& entry, const HomeMenuItem 
 }  // namespace
 
 int HomeActivity::getMenuItemCount() const {
+  if (coverGridUi) {
+    return static_cast<int>(recentBooks.size()) + (hasLibrarySlot() ? 6 : 5);
+  }
   auto entries = getHomeShortcutEntries(hasOpdsServers);
   if (isLyraCarouselTheme()) {
     entries = buildCarouselEntries(entries);
@@ -428,7 +439,7 @@ void HomeActivity::loadRecentBooks(const int maxBooks) {
   }
 
   const auto& books = RECENT_BOOKS.getBooks();
-  recentBooks.reserve(std::min(static_cast<int>(books.size()), maxBooks));
+  recentBooks.reserve(coverGridUi ? maxBooks : std::min(static_cast<int>(books.size()), maxBooks));
 
   for (const RecentBook& book : books) {
     if (static_cast<int>(recentBooks.size()) >= maxBooks) {
@@ -473,6 +484,109 @@ bool HomeActivity::needsRecentCoverLoad(const int coverHeight) const {
   return false;
 }
 
+void HomeActivity::fillCoverGridFromLibrary() {
+  if (recentBooks.size() >= CoverGridHomeUi::MAX_BOOKS) return;
+  // Keep the index and record together off the task stack; reuse for every row.
+  struct LibraryReader {
+    library::LibraryIndexFile index;
+    library::ClixRecord record;
+  };
+  auto reader = makeUniqueNoThrow<LibraryReader>();
+  if (!reader) {
+    LOG_ERR("HOME", "OOM: library index");
+    return;
+  }
+  auto& index = reader->index;
+  auto& record = reader->record;
+  if (!index.open(library::libraryIndexPath())) {
+    index.close();
+    GUI.drawPopup(renderer, tr(STR_LIBRARY_REBUILDING));
+    library::BuildStats stats;
+    if (!library::buildLibraryIndex("/", stats, SETTINGS.libraryUseMetadata != 0) ||
+        !index.open(library::libraryIndexPath())) {
+      LOG_ERR("HOME", "Cannot populate cover grid from library");
+      return;
+    }
+  }
+  for (uint16_t row = 0; row < index.bookCount() && recentBooks.size() < CoverGridHomeUi::MAX_BOOKS; ++row) {
+    RecentBook book;
+    if (!index.readRecord(index.ordinalForRow(library::SortOrder::RecentDesc, row), record) ||
+        !index.readPath(record, book.path))
+      continue;
+    if (std::any_of(recentBooks.begin(), recentBooks.end(),
+                    [&](const RecentBook& existing) { return existing.path == book.path; }) ||
+        RecentBooksStore::isMissing(book))
+      continue;
+    if (!index.readTitle(record, book.title) && !index.readName(record, book.title)) continue;
+    index.readAuthor(record, book.author);
+    if (index.ioFailed()) break;
+    recentBooks.push_back(std::move(book));
+  }
+}
+
+void HomeActivity::resolveGridCoverPaths() {
+  for (auto& book : recentBooks) {
+    if (!book.coverBmpPath.empty()) continue;
+    // Constructors only derive cache paths; no metadata parsing or image generation.
+    // Keep these large objects off the task stack and release each before the next book.
+    if (FsHelpers::hasReflowableBookExtension(book.path)) {
+      auto epub = makeUniqueNoThrow<Epub>(book.path, "/.crosspoint");
+      if (!epub) {
+        LOG_ERR("HOME", "OOM: EPUB thumbnail path");
+        continue;
+      }
+      book.coverBmpPath = epub->getThumbBmpPath();
+    } else if (FsHelpers::hasXtcExtension(book.path)) {
+      auto xtc = makeUniqueNoThrow<Xtc>(book.path, "/.crosspoint");
+      if (!xtc) {
+        LOG_ERR("HOME", "OOM: XTC thumbnail path");
+        continue;
+      }
+      book.coverBmpPath = xtc->getThumbBmpPath();
+    }
+  }
+}
+
+void HomeActivity::loadGridCover(RecentBook& book, int height, bool& showingLoading, Rect& popupRect) {
+  if (!book.coverBmpPath.empty() && Storage.exists(UITheme::getCoverThumbPath(book.coverBmpPath, height).c_str()))
+    return;
+  // Only one parser lives at a time; EPUB/XTC objects exceed the stack budget.
+  if (FsHelpers::hasReflowableBookExtension(book.path)) {
+    auto epub = makeUniqueNoThrow<Epub>(book.path, "/.crosspoint");
+    if (!epub) {
+      LOG_ERR("HOME", "OOM: cover EPUB");
+      return;
+    }
+    book.coverBmpPath = epub->getThumbBmpPath();
+    if (Storage.exists(epub->getThumbBmpPath(height).c_str())) return;
+    if (!showingLoading) {
+      showingLoading = true;
+      popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+      GUI.fillPopupProgress(renderer, popupRect, 0);
+    }
+    if (epub->generateThumbBmpFromSource(height)) {
+      return;
+    }
+  } else if (FsHelpers::hasXtcExtension(book.path)) {
+    auto xtc = makeUniqueNoThrow<Xtc>(book.path, "/.crosspoint");
+    if (!xtc) {
+      LOG_ERR("HOME", "OOM: cover XTC");
+      return;
+    }
+    book.coverBmpPath = xtc->getThumbBmpPath();
+    if (Storage.exists(xtc->getThumbBmpPath(height).c_str())) return;
+    if (!showingLoading) {
+      showingLoading = true;
+      popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+      GUI.fillPopupProgress(renderer, popupRect, 0);
+    }
+    if (xtc->load() && xtc->generateThumbBmp(height)) {
+      return;
+    }
+  }
+  book.coverBmpPath.clear();
+}
+
 void HomeActivity::loadRecentCovers(int coverHeight) {
   recentsLoading = true;
   // The first home render can cache a placeholder while thumbnails are still missing.
@@ -501,6 +615,15 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
     }
     if (!canLoadHomeCover(book.path)) {
       progress++;
+      continue;
+    }
+    // The cover grid shares one slot size; generating at any other height
+    // would rescale the dithered thumb at draw time and alias badly.
+    const int thumbHeight = coverGridUi ? coverGridUi->thumbHeightFor() : coverHeight;
+    if (coverGridUi) {
+      loadGridCover(book, thumbHeight, showingLoading, popupRect);
+      ++progress;
+      if (showingLoading) GUI.fillPopupProgress(renderer, popupRect, progress * 100 / recentBooks.size());
       continue;
     }
 
@@ -618,6 +741,7 @@ void HomeActivity::onEnter() {
   Activity::onEnter();
 
   hasOpdsServers = OPDS_STORE.hasServers();
+  hasPlugins = anyPluginInstalled();
 
   selectorIndex = 0;
   firstRenderDone = false;
@@ -630,7 +754,18 @@ void HomeActivity::onEnter() {
   carouselCoverLoadAttemptPath.clear();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  reloadHomeBooks(metrics.homeRecentBooksCount);
+  if (UITheme::getInstance().hasCoverGridHome()) {
+    // Screen-lifetime interaction tables and component properties exceed the stack budget.
+    coverGridUi = makeUniqueNoThrow<CoverGridHomeUi>(renderer);
+    if (!coverGridUi) LOG_ERR("HOME", "OOM: cover grid UI; using standard home");
+  }
+  reloadHomeBooks(coverGridUi ? CoverGridHomeUi::MAX_BOOKS : metrics.homeRecentBooksCount);
+  hasContinueReading = !recentBooks.empty();
+  if (coverGridUi) {
+    fillCoverGridFromLibrary();
+    resolveGridCoverPaths();
+    coverGridUi->begin(recentBooks, hasLibrarySlot(), hasContinueReading);
+  }
 
   // Land on the shortcut the user came back from (ActivityManager::goHome).
   if (initialMenuItem != HomeMenuItem::NONE) {
@@ -647,6 +782,24 @@ int HomeActivity::indexForMenuItem(const HomeMenuItem item) const {
   if (item == HomeMenuItem::NONE) {
     return 0;
   }
+  if (coverGridUi) {
+    const int base = static_cast<int>(recentBooks.size());
+    const int plugins = hasLibrarySlot() ? 1 : 0;
+    switch (item) {
+      case HomeMenuItem::FILE_BROWSER:
+        return base;
+      case HomeMenuItem::LIBRARY:
+        return base + 1;
+      case HomeMenuItem::OPDS_BROWSER:
+        return hasLibrarySlot() ? base + 2 : base + 3;
+      case HomeMenuItem::FILE_TRANSFER:
+        return base + 2 + plugins;
+      case HomeMenuItem::SETTINGS_MENU:
+        return base + 4 + plugins;
+      default:
+        return 0;
+    }
+  }
   auto entries = getHomeShortcutEntries(hasOpdsServers);
   if (isLyraCarouselTheme()) {
     entries = buildCarouselEntries(entries);
@@ -662,6 +815,10 @@ int HomeActivity::indexForMenuItem(const HomeMenuItem item) const {
 
 void HomeActivity::onExit() {
   Activity::onExit();
+
+  coverGridUi.reset();
+
+  // Free the stored cover buffer if any
   freeCoverBuffer();
 }
 
@@ -884,6 +1041,55 @@ void HomeActivity::loop() {
   const int homeCount = std::max(0, menuCount - recentCount);
   const int shortcutPageSize = getHomeShortcutPageSize();
 
+  // Back is otherwise unused on Home: resume the most recent book directly
+  // (recentBooks is most-recent-first and already pruned of missing files).
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && !recentBooks.empty() &&
+      mappedInput.getHeldTime() < RECENT_BOOK_LONG_PRESS_MS) {
+    onSelectBook(recentBooks[0].path);
+    return;
+  }
+
+  if (coverGridUi) {
+    const int touched = coverGridUi->selectedAction(mappedInput);
+    if (touched >= 0 && touched < menuCount) {
+      selectorIndex = touched;
+      activateSelection();
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+      activateSelection();
+      return;
+    }
+    // Side page buttons walk the covers, front Left/Right walk the tabs
+    // (selectorIndex is flat: books first, then the tab items). A press while
+    // selection sits in the other band jumps into this band first.
+    const int bookCount = static_cast<int>(recentBooks.size());
+    const auto cycleBand = [this](const int base, const int count, const int dir) {
+      if (count <= 0) return;
+      int idx = selectorIndex - base;
+      if (idx < 0 || idx >= count) {
+        idx = dir > 0 ? 0 : count - 1;
+      } else {
+        idx = (idx + count + dir) % count;
+      }
+      selectorIndex = base + idx;
+      requestUpdate();
+    };
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Up},
+                                         [&cycleBand, bookCount] { cycleBand(0, bookCount, -1); });
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Down},
+                                         [&cycleBand, bookCount] { cycleBand(0, bookCount, +1); });
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Left}, [this, &cycleBand] {
+      const int bookCount = static_cast<int>(recentBooks.size());
+      cycleBand(bookCount, getMenuItemCount() - bookCount, -1);
+    });
+    buttonNavigator.onPressAndContinuous({MappedInputManager::Button::Right}, [this, &cycleBand] {
+      const int bookCount = static_cast<int>(recentBooks.size());
+      cycleBand(bookCount, getMenuItemCount() - bookCount, +1);
+    });
+    return;
+  }
+
   if (isLyraCarouselTheme()) {
     // Carousel navigation: Left/Right move within the focused row;
     // Up/Down toggle between the carousel row and the shortcuts row.
@@ -967,14 +1173,6 @@ void HomeActivity::loop() {
 
   // Touch: swipes move the selection, taps select/open covers and shortcuts.
   if (handleTouch()) {
-    return;
-  }
-
-  // Back is otherwise unused on Home: resume the most recent book directly
-  // (recentBooks is most-recent-first and already pruned of missing files).
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && !recentBooks.empty() &&
-      mappedInput.getHeldTime() < RECENT_BOOK_LONG_PRESS_MS) {
-    onSelectBook(recentBooks[0].path);
     return;
   }
 
@@ -1122,6 +1320,7 @@ bool HomeActivity::handleTouch() {
       pageHeight - (metrics.homeTopPadding + metrics.homeCoverTileHeight + metrics.verticalSpacing +
                     metrics.buttonHintsHeight + metrics.verticalSpacing)};
   const int shortcutPageSize = getHomeShortcutPageSize();
+
   int listTop = shortcutsRect.y;
   int listHeight = shortcutsRect.height;
   int pageStart = 0;
@@ -1207,6 +1406,32 @@ void HomeActivity::activateSelection() {
     return;
   }
 
+  if (coverGridUi) {
+    int tab = selectorIndex - static_cast<int>(recentBooks.size());
+    if (!hasLibrarySlot() && tab >= 2) ++tab;
+    switch (tab) {
+      case 0:
+        onFileBrowserOpen();
+        break;
+      case 1:
+        onLibraryOpen();
+        break;
+      case 2:
+        onPluginsOpen();
+        break;
+      case 3:
+        activityManager.goToFileTransfer();
+        break;
+      case 4:
+        onAppsOpen();
+        break;
+      case 5:
+        activityManager.goToSettings();
+        break;
+    }
+    return;
+  }
+
   auto homeEntries = getHomeShortcutEntries(hasOpdsServers);
   if (isLyraCarouselTheme()) {
     homeEntries = buildCarouselEntries(homeEntries);
@@ -1275,12 +1500,22 @@ void HomeActivity::activateSelection() {
       case ShortcutId::FileTransfer:
         activityManager.goToFileTransfer();
         break;
+      case ShortcutId::ScreenClean:
+        startActivityForResult(std::make_unique<ScreenCleanActivity>(renderer, mappedInput),
+                               [this](const ActivityResult&) { requestFreshHomeRender(true); });
+        break;
       case ShortcutId::Sleep:
         startActivityForResult(std::make_unique<SleepAppActivity>(renderer, mappedInput),
                                [this](const ActivityResult&) { requestFreshHomeRender(true); });
         break;
       case ShortcutId::OpdsBrowser:
         onOpdsBrowserOpen();
+        break;
+      case ShortcutId::Library:
+        onLibraryOpen();
+        break;
+      case ShortcutId::Plugins:
+        onPluginsOpen();
         break;
     }
   }
@@ -1290,6 +1525,40 @@ void HomeActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
+  // Content columns clear the bezel insets on rounded panels. The header
+  // self-insets in drawHeader, so only the cover/menu need it here.
+  const Rect content = UITheme::getInstance().getContentArea(renderer);
+
+  renderer.clearScreen();
+  if (coverGridUi) {
+    coverGridUi->setSelection(selectorIndex);
+    UITheme::getInstance().drawCoverGridHome(*coverGridUi);
+    // Front Left/Right walk the tabs, so their hints read Left/Right; the
+    // side page buttons (unhinted) walk the covers.
+    const auto labels = mappedInput.mapLabels(hasContinueReading ? tr(STR_RESUME) : "", tr(STR_SELECT),
+                                              tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH
+                                                                   : HalDisplay::FAST_REFRESH);
+    // Slot heights are recorded during the draw above; a change (first layout
+    // pass, orientation switch) means the paths must point at those sizes and
+    // any missing thumbs must be generated. Refreshing the paths right away
+    // lets the next pass draw already-cached thumbs before generation runs.
+    const bool coverSpecChanged = coverGridUi->takeThumbHeightChanged();
+    if (coverSpecChanged) {
+      coverGridUi->refreshCoverPaths();
+      recentsLoaded = false;
+    }
+    if (!firstRenderDone) {
+      firstRenderDone = true;
+      requestUpdate();
+    } else if (!recentsLoaded && !recentsLoading) {
+      loadRecentCovers(CoverGridHomeUi::THUMB_HEIGHT);
+      coverGridUi->refreshCoverPaths();
+      requestUpdate();
+    }
+    return;
+  }
   const int recentCount = static_cast<int>(recentBooks.size());
   const bool carouselTheme = isLyraCarouselTheme();
   const bool wasFirstRenderDone = firstRenderDone;
@@ -1422,7 +1691,8 @@ void HomeActivity::render(RenderLock&&) {
     }
   } else if (!recentsLoaded && !recentsLoading) {
     recentsLoading = true;
-    loadRecentCovers(metrics.homeCoverHeight);
+    const int themeThumbHeight = GUI.homeCoverThumbHeight(renderer);
+    loadRecentCovers(themeThumbHeight > 0 ? themeThumbHeight : metrics.homeCoverHeight);
   }
 }
 
@@ -1431,6 +1701,7 @@ void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToR
 void HomeActivity::onFileBrowserOpen() { activityManager.goToFileBrowser(); }
 
 void HomeActivity::onAppsOpen() { activityManager.goToApps(); }
+void HomeActivity::onLibraryOpen() { activityManager.goToLibrary(); }
 
 void HomeActivity::onReadingStatsOpen() {
   activityManager.replaceActivity(std::make_unique<ReadingStatsActivity>(renderer, mappedInput));
@@ -1445,3 +1716,5 @@ void HomeActivity::onSyncDayOpen() {
 }
 
 void HomeActivity::onOpdsBrowserOpen() { activityManager.goToBrowser(); }
+
+void HomeActivity::onPluginsOpen() { activityManager.goToPlugins(hasOpdsServers); }

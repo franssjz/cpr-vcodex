@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "activities/Activity.h"
+#include "components/OptionPopup.h"
 
 class Epub;
 class Xtc;
@@ -33,6 +34,10 @@ class ReaderActivity final : public Activity {
   // clean HALF refresh so the boot screen transitions quickly. Forwarded to the
   // format reader, which owns the refresh counter.
   bool allowFastInitialRefresh = false;
+  OptionPopup loadFailurePopup;
+  std::string loadProtectionError;
+  bool handleLoadFailure();
+  void beginLoanTimeSync();
 
   std::unique_ptr<Epub> loadEpub(const std::string& path, bool& uncached);
   static std::unique_ptr<Xtc> loadXtc(const std::string& path);
@@ -65,5 +70,7 @@ class ReaderActivity final : public Activity {
                                                 std::string path, bool allowFastInitialRefresh);
 
   void onEnter() override;
+  void loop() override;
+  void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }
 };

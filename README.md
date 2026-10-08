@@ -51,21 +51,39 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Item | Value |
 |---|---|
 | Project | `CPR-vCodex` |
-| Device | `Xteink X4` (personally tested); `Xteink X3` UC8253/UC8279d runtime support, with broader physical feedback requested. **X4 Pro firmware distribution is withdrawn** because locked devices do not have a confirmed recovery path. |
+| Device | `Xteink X4` original (ESP32-C3, personally tested); `Xteink X3` UC8253/UC8279d runtime support, with physical validation of this integration pending. **Not for X4 Classic/X4C (ESP32-S3). X4 Pro firmware distribution remains withdrawn.** |
 | Current release (CPR-vCodex) build | [`1.6.0.38-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.0.38-cpr-vcodex) |
-| Release hardware stack | `freeink-sdk` [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc), with runtime X3/X4 panel detection. |
+| Release hardware stack | `freeink-sdk` [`9729236c`](https://github.com/Free-Ink/freeink-sdk/commit/9729236ce7b730b81b8fcceec4aa77051b6dfae3), with runtime X3/X4 panel detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
-| Current release sync | CrossPoint Reader `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff), including the FreeInkUI activity/input architecture, merged while retaining CPR-vCodex settings, statistics, bookmarks/highlights, dictionaries, themes, SD fonts, and release tooling. X4 Pro distribution remains withdrawn. |
-| Current work | Stabilize X3/X4 OTA, language persistence, image allocation failures and sleep/wake. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | The .38 fix has passed update lookup, complete download, OTA installation and reboot on a USB-recoverable X4, plus USB image verification. Physical X3 validation remains pending. See the audit for the exact diagnostic build, target image and remaining checks. |
-| Base firmware line | `CrossPoint Reader 1.6.0` (upstream `develop` [`233f93ff`](https://github.com/crosspoint-reader/crosspoint-reader/commit/233f93ff)) |
+| Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
+| Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
+| Release validation | 643 native tests, including 81 OTA cases, and simulator navigation/reader regressions pass. The dev35 candidate booted twice after USB installation on one X4. End-to-end OTA of this integration and physical X3 validation remain pending; early boot confirmation is not a full rollback guarantee. |
+| Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
-| Latest official commit incorporated | Release `1.6.0.31` adopted the FreeInkUI integration from [PR #206](https://github.com/franssjz/cpr-vcodex/pull/206), including freeink-sdk [`cb9167d5`](https://github.com/Free-Ink/freeink-sdk/commit/cb9167d541c0f6e9d57cf8eae1f564a939883ecc); X4 Pro distribution is now withdrawn. |
+| Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## EPUB images in 1.6.0.38
+## What's new in 1.6.5.1
+
+The upstream integration adds library indexing, SD plugins and their web/event
+APIs, TTF fonts and reader layout improvements while preserving the fork's
+reading statistics, Sync Day, highlights, dictionaries, flashcards and themes.
+Apps and Sync Day now open the selected item; oversized popups scroll, and one
+Back press returns one screen instead of accidentally skipping to Home.
+Reader font previews and quick-setting labels have also been corrected.
+
+> [!IMPORTANT]
+> Use only the shared ESP32-C3 BIN for the original X4 or X3. Do not use it on
+> X4 Classic/X4C or X4 Pro. Physical OTA/SD validation of this integration on
+> X3 remains pending. Keep a backup and a known recovery path; passing tests
+> or an OTA `VALID` flag does not guarantee recovery from every boot failure.
+> Existing books, settings and reading data do not require a factory reset.
+
+See [the release changes](CHANGELOG.md) and the [validation audit](agent-docs/stability-audit-2026-09.md).
+
+## EPUB images fixed since 1.6.0.38
 
 EPUB diagrams and gray backgrounds now retain their gray levels when text
 anti-aliasing is disabled ([#215](https://github.com/franssjz/cpr-vcodex/issues/215)).
@@ -674,7 +692,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 
 Practical values to look at:
 
-- base firmware line: `CrossPoint Reader 1.6.0`
+- base firmware line: `CPR-vCodex 1.6.5` (CrossPoint develop integration)
 - current release build style: `1.6.0.38-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
@@ -748,8 +766,8 @@ artifacts/<version>-cpr-vcodex.bin
 
 Versioning rules:
 
-- release builds: `1.6.0.<release>-cpr-vcodex.bin`
-- dev builds: `1.6.0.<release>.dev<build>-<sha>-cpr-vcodex.bin`
+- release builds: `1.6.5.<release>-cpr-vcodex.bin`
+- dev builds: `1.6.5.<release>.dev<build>-<sha>-cpr-vcodex.bin`
 - internal maintainer-only X4 Pro builds carry `-x4pro`; these artifacts must
   not be distributed while the safety withdrawal remains active
 
@@ -758,10 +776,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.6.0.38-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.6.5.1-cpr-vcodex
 ```
 
-- push a stable tag named like `1.6.0.38-cpr-vcodex`
+- push a stable tag named like `1.6.5.1-cpr-vcodex`
 - `pre_release_check.py` dry-runs `gh_release`, checks it against the 6,553,600
   byte X4 OTA slot, validates the artifact pair, and rejects any X4 Pro entry
   or stale X4 Pro browser binary

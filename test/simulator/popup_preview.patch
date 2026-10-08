@@ -1,0 +1,14 @@
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -37,1 +37,2 @@
+ #include "MappedInputManager.h"
++#include "../test/simulator/PopupPreviewActivity.h"
+@@ -938,1 +939,7 @@
+ void loop() {
++  static bool popupPreviewStarted = false;
++  if (!popupPreviewStarted && std::getenv("CPR_POPUP_PREVIEW")) {
++    popupPreviewStarted = true;
++    activityManager.replaceActivity(std::make_unique<PopupPreviewActivity>(renderer, mappedInputManager));
++  }
++

@@ -18,6 +18,9 @@
 
 namespace textsettings {
 
+PreviewLayout::PreviewLayout() = default;
+PreviewLayout::~PreviewLayout() = default;
+
 namespace {
 
 // Map the paragraph-alignment setting to the engine's CssTextAlign (BOOK_STYLE = justified)
@@ -34,8 +37,9 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
   style.alignment = toCssAlign(SETTINGS.paragraphAlignment);
   style.textAlignDefined = true;  // honor the user's choice; RTL auto-detected from text
 
-  ParsedText parsed(SETTINGS.extraParagraphSpacing != 0, SETTINGS.forceParagraphIndents != 0,
-                    SETTINGS.hyphenationEnabled != 0, SETTINGS.focusReadingEnabled != 0, style);
+  ParsedText parsed(
+      SETTINGS.extraParagraphSpacing != 0, SETTINGS.forceParagraphIndents != 0, SETTINGS.hyphenationEnabled != 0,
+      SETTINGS.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL, style, SETTINGS.paragraphIndentSpaces);
 
   // Feed one space-separated word at a time; addWord handles NFC/CJK/RTL/focus splitting
   const char* text = I18N.get(StrId::STR_FONT_PREVIEW_TEXT);
@@ -54,7 +58,8 @@ void relayout(PreviewLayout& layout, const GfxRenderer& renderer, int fontId, in
 
   parsed.layoutAndExtractLines(
       renderer, fontId, static_cast<uint16_t>(textWidth),
-      [&layout](std::shared_ptr<TextBlock> line, uint32_t) { layout.lines.push_back(std::move(line)); });
+      [&layout](std::unique_ptr<TextBlock> line, uint32_t) { layout.lines.push_back(std::move(line)); }, true,
+      SETTINGS.getCharacterSpacing(), SETTINGS.wordSpacing);
 }
 
 }  // namespace
@@ -89,7 +94,7 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
 
   // Re-lay-out (and re-prewarm glyphs) only when a layout-affecting setting or the
   // geometry changed; else reuse the cache. The prewarm inputs are (fontId, constant
-  // sample text, styleMask<-focusReading), all of which are key fields, so a matching
+  // sample text, styleMask from bionicReading), all of which are key fields, so a matching
   // key means an identical prewarm call. This relies on nothing else evicting the SD
   // glyph cache while this activity is up — true today: the only evictor is
   // FontCacheManager::PrewarmScope, used solely by the reader/dictionary activities.
@@ -100,11 +105,16 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
                        .lineCompression = compression,
                        .alignment = SETTINGS.paragraphAlignment,
                        .extraParagraphSpacing = SETTINGS.extraParagraphSpacing != 0,
-                       .focusReading = SETTINGS.focusReadingEnabled != 0,
+                       .forceParagraphIndents = SETTINGS.forceParagraphIndents != 0,
+                       .paragraphIndentSpaces = SETTINGS.paragraphIndentSpaces,
+                       .characterSpacing = SETTINGS.getCharacterSpacing(),
+                       .wordSpacingPercent = SETTINGS.wordSpacing,
+                       .bionicReading = SETTINGS.bionicReading,
                        .hyphenation = SETTINGS.hyphenationEnabled != 0};
   if (key != layout.key) {
     if (auto* fcm = renderer.getFontCacheManager()) {
-      fcm->prewarmCache(fontId, I18N.get(StrId::STR_FONT_PREVIEW_TEXT), SETTINGS.focusReadingEnabled ? 0x03 : 0x01);
+      fcm->prewarmCache(fontId, I18N.get(StrId::STR_FONT_PREVIEW_TEXT),
+                        SETTINGS.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL ? 0x03 : 0x01);
     }
     relayout(layout, renderer, fontId, textWidth);
     layout.key = key;
@@ -116,7 +126,7 @@ void renderPreview(const GfxRenderer& renderer, PreviewLayout& layout, int previ
   for (int paragraph = 0; paragraph < 2; paragraph++) {
     for (const auto& line : layout.lines) {
       if (y + lineH > textBottomLimit) return;
-      line->render(renderer, fontId, textLeft, y);
+      line->render(renderer, fontId, textLeft, y, SETTINGS.bionicReading);
       y += lineAdvance;
     }
     y += paragraphGap;

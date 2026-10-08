@@ -34,6 +34,8 @@ class Activity {
   virtual ~Activity() = default;
   virtual void onEnter();
   virtual void onExit();
+  // Last chance to queue activity-owned state before sleep events are drained.
+  virtual void prepareForSleep() {}
   virtual void loop() {}
 
   virtual void render(RenderLock&&) {}
@@ -66,10 +68,10 @@ class Activity {
   void setResult(ActivityResult&& result);
 
   // Finish this activity and return to the previous one on the stack (if any)
-  void finish();
+  static void finish();
 
   // Convenience method to facilitate API transition to ActivityManager
   // TODO: remove this in near future
-  void onGoHome(HomeMenuItem item = HomeMenuItem::NONE);
-  void onSelectBook(const std::string& path);
+  static void onGoHome(HomeMenuItem item = HomeMenuItem::NONE);
+  static void onSelectBook(const std::string& path);
 };

@@ -4,6 +4,8 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Memory.h>
+#include <TrustedTime.h>
+#include <WiFi.h>
 
 #include <optional>
 
@@ -12,10 +14,12 @@
 #include "Epub.h"
 #include "EpubReaderActivity.h"
 #include "KOReaderCredentialStore.h"
+#include "SilentRestart.h"
 #include "Txt.h"
 #include "TxtReaderActivity.h"
 #include "Xtc.h"
 #include "XtcReaderActivity.h"
+#include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/BmpViewerActivity.h"
 #include "components/UITheme.h"
 
@@ -33,8 +37,7 @@ std::unique_ptr<ReaderActivity> ReaderActivity::create(GfxRenderer& renderer, Ma
 bool ReaderActivity::isXtcFile(const std::string& path) { return FsHelpers::hasXtcExtension(path); }
 
 bool ReaderActivity::isTxtFile(const std::string& path) {
-  return FsHelpers::hasTxtExtension(path) ||
-         FsHelpers::hasMarkdownExtension(path);  // Treat .md as txt files (until we have a markdown reader)
+  return FsHelpers::hasTxtExtension(path) || FsHelpers::hasMarkdownExtension(path);
 }
 
 bool ReaderActivity::isBmpFile(const std::string& path) {
@@ -60,6 +63,7 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path, bool& un
   }
 
   LOG_ERR("READER", "Failed to load EPUB");
+  loadProtectionError = epub->getProtectionError();
   return nullptr;
 }
 
@@ -204,6 +208,7 @@ void ReaderActivity::onEnter() {
     bool uncached = false;
     auto epub = loadEpub(initialBookPath, uncached);
     if (!epub) {
+      if (handleLoadFailure()) return;
       goToLibrary(initialBookPath);
       return;
     }
@@ -211,4 +216,68 @@ void ReaderActivity::onEnter() {
     // first refresh is only for the boot -> last-book handoff on a cached book.
     onGoToEpubReader(std::move(epub), allowFastInitialRefresh && !uncached);
   }
+}
+
+bool ReaderActivity::handleLoadFailure() {
+  if (loadProtectionError.empty()) return false;
+  StrId message = StrId::STR_DRM_PROTECTED_FILE;
+  const bool offerSync = loadProtectionError == "loan date unverified";
+  if (loadProtectionError == "access expired") message = StrId::STR_LOAN_EXPIRED;
+  if (offerSync) message = StrId::STR_LOAN_TIME_UNVERIFIED;
+  const char* options[] = {offerSync ? tr(STR_CLOCK_SYNC_NOW) : tr(STR_OK_BUTTON), tr(STR_OK_BUTTON)};
+  loadFailurePopup.showMessage("", I18N.get(message), options, offerSync ? 2 : 1, 0, [this, offerSync](int index) {
+    if (offerSync && index == 0)
+      beginLoanTimeSync();
+    else
+      goToLibrary(initialBookPath);
+  });
+  requestUpdate();
+  return true;
+}
+
+void ReaderActivity::beginLoanTimeSync() {
+  auto wifi = makeUniqueNoThrow<WifiSelectionActivity>(renderer, mappedInput);
+  if (!wifi) {
+    goToLibrary(initialBookPath);
+    return;
+  }
+  startActivityForResult(std::move(wifi), [this](const ActivityResult& result) {
+    if (result.isCancelled || WiFi.status() != WL_CONNECTED) {
+      goToLibrary(initialBookPath);
+      return;
+    }
+    GUI.drawPopup(renderer, tr(STR_SYNCING_TIME));
+    const bool synced = trustedtime::syncNow(5000);
+    WiFi.disconnect(false);
+    delay(30);
+    if (!synced) {
+      const char* options[] = {tr(STR_RETRY), tr(STR_OK_BUTTON)};
+      loadFailurePopup.showMessage("", tr(STR_CLOCK_SYNC_FAIL), options, 2, 0, [this](int index) {
+        if (index == 0)
+          beginLoanTimeSync();
+        else
+          goToLibrary(initialBookPath);
+      });
+      requestUpdate();
+      return;
+    }
+    APP_STATE.openEpubPath = initialBookPath;
+    APP_STATE.saveToFile();
+    silentRestartToReader();
+    activityManager.goToReader(initialBookPath);
+  });
+}
+
+void ReaderActivity::loop() {
+  if (loadFailurePopup.isActive()) {
+    loadFailurePopup.handleInput(mappedInput, [this] { requestUpdate(); });
+    return;
+  }
+  goToLibrary(initialBookPath);
+}
+
+void ReaderActivity::render(RenderLock&&) {
+  if (!loadFailurePopup.isActive()) return;
+  renderer.clearScreen();
+  loadFailurePopup.processRender(renderer, mappedInput);
 }

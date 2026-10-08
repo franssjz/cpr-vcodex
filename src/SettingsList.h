@@ -1,11 +1,20 @@
 #pragma once
 
+#include <BoardConfig.h>
+#include <HalClock.h>
+#include <HalFrontlight.h>
+#include <HalTiltSensor.h>
 #include <I18n.h>
 #include <SdCardFontRegistry.h>
 
 #include <vector>
 
+#include "CrossPointSettings.h"
+#include "HomeButtonSettings.h"
+#include "KOReaderCredentialStore.h"
+#include "ReaderFontSizes.h"
 #include "activities/settings/SettingsActivity.h"
+#include "components/UITheme.h"
 
 // Shared settings list used by the web settings API and settings persistence.
 // Each entry has a key (for JSON API) and category (for grouping).

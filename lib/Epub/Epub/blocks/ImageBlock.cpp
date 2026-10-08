@@ -56,8 +56,7 @@ bool readValidCacheHeader(HalFile& cacheFile, const int expectedWidth, const int
 
   // Old four-byte headers begin with the image width and are intentionally
   // rejected. Their payload already contains the previous contrast curve.
-  if (magic != PXC_MAGIC || version != PXC_VERSION ||
-      variant > static_cast<uint8_t>(PixelCacheVariant::FactoryLut)) {
+  if (magic != PXC_MAGIC || version != PXC_VERSION || variant > static_cast<uint8_t>(PixelCacheVariant::FactoryLut)) {
     return false;
   }
   if (expectedVariant && static_cast<PixelCacheVariant>(variant) != *expectedVariant) {
@@ -73,6 +72,12 @@ bool readValidCacheHeader(HalFile& cacheFile, const int expectedWidth, const int
   return cacheFile.size() >= pxcExpectedSize(cachedWidth, cachedHeight);
 }
 
+// Suppress repeated failures across the BW/grayscale passes of one page render.
+// Clear before the next page render so transient memory/storage failures retry.
+constexpr size_t MAX_RENDER_IMAGE_FAILURES = 16;
+uint64_t failedImageHashes[MAX_RENDER_IMAGE_FAILURES];
+size_t failedImageCount = 0;
+
 uint64_t imagePathHash(const std::string& path) {
   uint64_t hash = 14695981039346656037ull;
   for (const char c : path) {
@@ -80,6 +85,19 @@ uint64_t imagePathHash(const std::string& path) {
     hash *= 1099511628211ull;
   }
   return hash;
+}
+
+bool imageFailedThisRender(const std::string& path) {
+  const uint64_t hash = imagePathHash(path);
+  for (size_t i = 0; i < failedImageCount; i++) {
+    if (failedImageHashes[i] == hash) return true;
+  }
+  return false;
+}
+
+void rememberImageFailure(const std::string& path) {
+  if (failedImageCount == MAX_RENDER_IMAGE_FAILURES || imageFailedThisRender(path)) return;
+  failedImageHashes[failedImageCount++] = imagePathHash(path);
 }
 
 // --- Per-page-render RAM slot for the pixel cache ----------------------------
@@ -200,10 +218,6 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
     return false;
   }
 
-  // Use cached dimensions for rendering (they're the actual decoded size)
-  expectedWidth = cachedWidth;
-  expectedHeight = cachedHeight;
-
   LOG_DBG("IMG", "Loading from cache: %s (%dx%d)", cachePath.c_str(), cachedWidth, cachedHeight);
 
   const int bytesPerRow = (cachedWidth + 3) / 4;  // 2 bits per pixel, 4 pixels per byte
@@ -297,7 +311,9 @@ bool ImageBlock::hasValidCache() const {
   return readValidCacheHeader(cacheFile, width, height, /*expectedVariant=*/nullptr, cachedWidth, cachedHeight);
 }
 
-bool ImageBlock::needsDecode() const { return !renderFailed && !hasValidCache(); }
+bool ImageBlock::needsDecode() const { return !imageFailedThisRender(imagePath) && !hasValidCache(); }
+
+void ImageBlock::clearRenderFailures() { failedImageCount = 0; }
 
 void ImageBlock::releaseRenderCache() { releasePxcSlot(); }
 
@@ -339,7 +355,7 @@ void ImageBlock::render(GfxRenderer& renderer, const int x, const int y) {
     return;
   }
 
-  if (renderFailed) {
+  if (imageFailedThisRender(imagePath)) {
     renderPlaceholder(renderer, x, y);
     return;
   }

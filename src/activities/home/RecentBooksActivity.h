@@ -19,7 +19,7 @@ class RecentBooksActivity final : public UiListActivity {
   void activateIndex(int index) override;
   void onRowLongPress(int index) override;
   // Confirm activates on RELEASE here (a hold is "remove from list"), and Back
-  // goes home rather than finishing.
+  // returns to its caller (Home for a root launch).
   bool handleButtons() override;
   const char* headerTitle() const override { return tr(STR_MENU_RECENT_BOOKS); }
   void drawFooter() override;

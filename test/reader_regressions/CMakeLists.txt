@@ -10,6 +10,7 @@ add_executable(reader_regressions_test
   ReadingSessionLogTest.cpp
   RubyCjkLayoutTest.cpp
   TextBlockSerializationTest.cpp
+  TextSettingsPreviewKeyTest.cpp
   TokenBoundaryTest.cpp
   ${REPO_ROOT}/lib/Epub/Epub/blocks/TextBlock.cpp
   ${REPO_ROOT}/lib/Epub/Epub/converters/ImageDimsProbe.cpp

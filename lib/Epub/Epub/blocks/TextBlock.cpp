@@ -5,6 +5,7 @@
 #include <GfxRenderer.h>
 #include <Logging.h>
 #include <Memory.h>
+#include <MemoryManager.h>
 #include <Serialization.h>
 
 #include <algorithm>
@@ -120,8 +121,16 @@ TextBlock::TextBlock(const std::vector<std::string>& words, const std::vector<in
   const size_t size = arenaSize(numWords, focusPresent, rubyPresent, layoutFlagsPresent, textBytes, rubyTextBytes);
   arena = makeUniqueNoThrow<uint8_t[]>(size);
   if (!arena) {
-    LOG_ERR("TXB", "OOM: text arena %u bytes", static_cast<uint32_t>(size));
-    numWords = textBytes = rubyTextBytes = 0;
+    // Evict rebuildable caches (SD-font mini data, render glyph cache) and
+    // retry once before declaring the line lost.
+    freeink::MemoryManager::instance().ensureFree(size + 4 * 1024);
+    arena = makeUniqueNoThrow<uint8_t[]>(size);
+  }
+  if (!arena) {
+    LOG_ERR("TXB", "OOM: arena %u bytes", static_cast<uint32_t>(size));
+    numWords = 0;
+    textBytes = rubyTextBytes = 0;
+    focusPresent = false;
     isValid = false;
     return;
   }
@@ -185,6 +194,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     LOG_ERR("TXB", "Render skipped: invalid block");
     return;
   }
+  const int8_t tracking = blockStyle.characterSpacing;
 
   const bool scanning = renderer.isFontCacheScanning();
   const int ascender = renderer.getFontAscenderSize(fontId);
@@ -208,9 +218,9 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
         }
         int groupActualWidth = 0;
         for (int k = 0; k < groupWordCount; ++k) {
-          groupActualWidth += renderer.getTextAdvanceX(fontId, wordText(i + k), wordStyle(i + k));
+          groupActualWidth += renderer.getTextAdvanceX(fontId, wordText(i + k), wordStyle(i + k), tracking);
         }
-        const int rubyWidth = renderer.getTextAdvanceX(fontId, rubyText(i), EpdFontFamily::SUP);
+        const int rubyWidth = renderer.getTextAdvanceX(fontId, rubyText(i), EpdFontFamily::SUP, tracking);
         const int leaderWordX = xposArr[i] + x;
         const auto baseDir =
             static_cast<BidiUtils::BidiBaseDir>(BidiUtils::detectParagraphLevel(wordText(i), blockStyle.isRtl ? 1 : 0));
@@ -282,7 +292,7 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
     // Horizontal ruby text rendering
     if (blockHasRuby && rubyText(i)[0] != '\0' && (currentStyle & EpdFontFamily::RUBY_CONTINUE) == 0) {
       renderer.drawText(fontId, rubies[i].x, wordY - ascender, rubies[i].text, true, EpdFontFamily::SUP,
-                        rubies[i].baseDir);
+                        rubies[i].baseDir, tracking);
     }
 
     // Normal uses layout-time focus annotations; Subtle remains render-only.
@@ -302,16 +312,17 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           memcpy(buf, w, splitByte);
           buf[splitByte] = '\0';
           const EpdFontFamily::Style boldStyle = static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-          renderer.drawText(fontId, wordX, wordY, buf, true, boldStyle, baseDir);
-          renderer.drawText(fontId, wordX + focusSuffixX(i), wordY, w + splitByte, true, currentStyle, baseDir);
+          renderer.drawText(fontId, wordX, wordY, buf, true, boldStyle, baseDir, tracking);
+          renderer.drawText(fontId, wordX + focusSuffixX(i), wordY, w + splitByte, true, currentStyle, baseDir,
+                            tracking);
         } else {
-          renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir);
+          renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir, tracking);
         }
       } else {
-        renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir);
+        renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir, tracking);
       }
     } else if (bionicReadingMode == BIONIC_READING_OFF || !bionicEnabled || alreadyBold || wLen >= 128) {
-      renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir);
+      renderer.drawText(fontId, wordX, wordY, w, true, currentStyle, baseDir, tracking);
     } else {
       // Stack slice buffer (<128 bytes, well within CLAUDE.md <256 byte rule).
       char buf[128];
@@ -326,8 +337,8 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           const size_t n = j - i0;
           memcpy(buf, w + i0, n);
           buf[n] = '\0';
-          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir);
-          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir, tracking);
+          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle, tracking);
           i0 = j;
           if (i0 >= wLen) break;
         }
@@ -358,14 +369,14 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           memcpy(buf, w + i0, n);
           buf[n] = '\0';
           if (bionicReadingMode == BIONIC_READING_SUBTLE) {
-            renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir);
-            renderer.drawText(fontId, cursorX + 1, wordY, buf, true, currentStyle, baseDir);
-            cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+            renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir, tracking);
+            renderer.drawText(fontId, cursorX + 1, wordY, buf, true, currentStyle, baseDir, tracking);
+            cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle, tracking);
           } else {
             const EpdFontFamily::Style boldStyle =
                 static_cast<EpdFontFamily::Style>(currentStyle | EpdFontFamily::BOLD);
-            renderer.drawText(fontId, cursorX, wordY, buf, true, boldStyle, baseDir);
-            cursorX += renderer.getTextAdvanceX(fontId, buf, boldStyle);
+            renderer.drawText(fontId, cursorX, wordY, buf, true, boldStyle, baseDir, tracking);
+            cursorX += renderer.getTextAdvanceX(fontId, buf, boldStyle, tracking);
           }
         }
 
@@ -374,8 +385,8 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
           const size_t n = k - splitByte;
           memcpy(buf, w + splitByte, n);
           buf[n] = '\0';
-          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir);
-          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle);
+          renderer.drawText(fontId, cursorX, wordY, buf, true, currentStyle, baseDir, tracking);
+          cursorX += renderer.getTextAdvanceX(fontId, buf, currentStyle, tracking);
         }
 
         i0 = k;
@@ -388,24 +399,17 @@ void TextBlock::render(const GfxRenderer& renderer, const int fontId, const int 
 
     if (EpdFontFamily::hasTextDecoration(currentStyle)) {
       int lineStartX = wordX;
-      int lineWidth = renderer.getTextWidth(fontId, w, currentStyle, baseDir);
-
-      // SUP/SUB glyphs are rendered at 50% scale, while the font metrics above
-      // report their full-size width. Keep underline/strikethrough aligned with
-      // the visible glyphs instead of drawing them roughly twice as long.
-      if ((currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
-        lineWidth = (lineWidth + 1) / 2;
-      }
+      int lineWidth =
+          renderer.getTextAdvanceX(fontId, w, currentStyle, tracking, baseDir, GfxRenderer::TextMeasureMode::Rendered);
 
       // Do not decorate the synthetic em-space used for paragraph indentation.
       if (wLen >= 3 && static_cast<uint8_t>(w[0]) == 0xE2 && static_cast<uint8_t>(w[1]) == 0x80 &&
           static_cast<uint8_t>(w[2]) == 0x83) {
         const char* visibleText = w + 3;
-        lineStartX += renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle);
-        lineWidth = renderer.getTextWidth(fontId, visibleText, currentStyle, baseDir);
-        if ((currentStyle & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0) {
-          lineWidth = (lineWidth + 1) / 2;
-        }
+        lineStartX += renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", currentStyle, tracking, baseDir,
+                                               GfxRenderer::TextMeasureMode::Rendered);
+        lineWidth = renderer.getTextAdvanceX(fontId, visibleText, currentStyle, tracking, baseDir,
+                                             GfxRenderer::TextMeasureMode::Rendered);
       }
 
       for (auto& line : decorationLines) {
@@ -468,6 +472,7 @@ bool TextBlock::serialize(HalFile& file) const {
   serialization::writePod(file, blockStyle.textIndentDefined);
   serialization::writePod(file, blockStyle.isRtl);
   serialization::writePod(file, blockStyle.directionDefined);
+  serialization::writePod(file, blockStyle.characterSpacing);
 
   return true;
 }
@@ -561,6 +566,7 @@ std::unique_ptr<TextBlock> TextBlock::deserialize(HalFile& file) {
   serialization::readPod(file, blockStyle.textIndentDefined);
   serialization::readPod(file, blockStyle.isRtl);
   serialization::readPod(file, blockStyle.directionDefined);
+  serialization::readPod(file, blockStyle.characterSpacing);
 
   return block;
 }

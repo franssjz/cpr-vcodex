@@ -30,7 +30,7 @@ void ShortcutOrderActivity::reloadEntries() {
   if (entries.empty()) {
     nav.selected = 0;
   } else {
-    nav.selected = std::clamp(nav.selected, 0, static_cast<int>(entries.size()) - 1);
+    nav.selected = std::clamp(nav.selected.load(), 0, static_cast<int>(entries.size()) - 1);
   }
   rebuildRowItems();
 }

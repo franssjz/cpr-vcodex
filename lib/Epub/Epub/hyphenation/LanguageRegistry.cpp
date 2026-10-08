@@ -9,6 +9,7 @@
 #include "generated/hyph-fr.trie.h"
 #include "generated/hyph-it.trie.h"
 #include "generated/hyph-pl.trie.h"
+#include "generated/hyph-pt.trie.h"
 #include "generated/hyph-ru.trie.h"
 #include "generated/hyph-sv.trie.h"
 #include "generated/hyph-tr.trie.h"
@@ -34,16 +35,18 @@ LanguageHyphenator turkishHyphenator(tr_patterns, isLatinLetter, toLowerTurkish)
 LanguageHyphenator ukrainianHyphenator(uk_patterns, isCyrillicLetter, toLowerCyrillic);
 LanguageHyphenator polishHyphenator(pl_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator finnishHyphenator(fi_patterns, isLatinLetter, toLowerLatin);
+LanguageHyphenator portugueseHyphenator(pt_patterns, isLatinLetter, toLowerLatin);
 
 static const LanguageEntry kEntries[] = {
-    {"english", "en", &englishHyphenator},     {"french", "fr", &frenchHyphenator},
+    {"english", "en", &englishHyphenator},       {"french", "fr", &frenchHyphenator},
 #if CPR_ENABLE_GERMAN_HYPHENATION
     {"german", "de", &germanHyphenator},
 #endif
-    {"russian", "ru", &russianHyphenator},     {"spanish", "es", &spanishHyphenator},
-    {"italian", "it", &italianHyphenator},     {"polish", "pl", &polishHyphenator},
-    {"swedish", "sv", &swedishHyphenator},     {"turkish", "tr", &turkishHyphenator},
-    {"ukrainian", "uk", &ukrainianHyphenator}, {"finnish", "fi", &finnishHyphenator},
+    {"russian", "ru", &russianHyphenator},       {"spanish", "es", &spanishHyphenator},
+    {"italian", "it", &italianHyphenator},       {"polish", "pl", &polishHyphenator},
+    {"swedish", "sv", &swedishHyphenator},       {"turkish", "tr", &turkishHyphenator},
+    {"ukrainian", "uk", &ukrainianHyphenator},   {"finnish", "fi", &finnishHyphenator},
+    {"portuguese", "pt", &portugueseHyphenator},
 };
 
 }  // namespace

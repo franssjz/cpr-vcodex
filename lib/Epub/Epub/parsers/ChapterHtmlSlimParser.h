@@ -35,7 +35,11 @@ class ChapterHtmlSlimParser {
     uint32_t visibleTextOffset = 0;
   };
 
+#ifdef CROSSPOINT_PARSER_TEST
+ public:
+#else
  private:
+#endif
   static constexpr uint8_t MAX_SIMPLE_TABLE_COLUMNS = 8;
   static constexpr uint16_t MAX_SIMPLE_TABLE_ROWS = 64;
   static constexpr uint16_t MAX_SIMPLE_TABLE_CELLS = 64;
@@ -47,7 +51,8 @@ class ChapterHtmlSlimParser {
   const std::string& filepath;
   GfxRenderer& renderer;
   std::function<void(std::unique_ptr<Page>, ParagraphLutEntry)> completePageFn;
-  std::function<void()> popupFn;      // Popup callback
+  std::function<void()> popupFn;  // Popup callback
+  bool imagePopupFired = false;
   XML_Parser activeParser = nullptr;  // Expat parser used to capture byte offsets for sync LUT hints
   XML_Parser xmlParser_ = nullptr;
   HalFile parseFile_;
@@ -74,6 +79,9 @@ class ChapterHtmlSlimParser {
   float lineCompression;
   bool extraParagraphSpacing;
   bool forceParagraphIndents;
+  uint8_t paragraphIndentSpaces = 2;
+  int8_t characterSpacing = 0;
+  uint8_t wordSpacingPercent = 100;
   uint8_t paragraphAlignment;
   uint16_t viewportWidth;
   uint16_t viewportHeight;
@@ -156,6 +164,20 @@ class ChapterHtmlSlimParser {
   std::unique_ptr<BufferedTable> currentTableBuffer = nullptr;
   bool listItemBulletOnly = false;  // true when currentTextBlock has only the <li> bullet
 
+  // Tracks the innermost open <ul>/<ol> so <li> knows whether to number itself,
+  // bullet itself, or (list-style-type: none) emit no marker at all. Pushed on
+  // <ul>/<ol> open, popped on close, so nested lists restart their own counter
+  // without disturbing the parent list's.
+  struct ListContext {
+    bool ordered = false;    // true for <ol>, false for <ul>
+    bool styleNone = false;  // true when list-style-type: none is set on this list
+    int counter = 0;         // incremented before each direct <li>; used as its number when ordered
+    int depth = 0;           // parser depth at open time; matches the depth seen in endElement
+                             // for the same tag, so a hidden nested list's close can't pop
+                             // an outer list's context
+  };
+  std::vector<ListContext> listStack;
+
   // Anchor-to-page mapping: tracks which page each HTML id attribute lands on
   int completedPageCount = 0;
   std::deque<std::pair<std::string, uint16_t>> anchorData;
@@ -184,6 +206,10 @@ class ChapterHtmlSlimParser {
   int currentFootnoteLinkTextLen = 0;
   std::vector<std::pair<int, FootnoteEntry>> pendingFootnotes;  // <wordIndex, entry>
   int wordsExtractedInBlock = 0;
+  // Latched when a ParsedText could not be created (OOM). Together with
+  // ParsedText::hadDroppedWords() this turns layout OOM into ParseStatus::Error
+  // so the section build fails readably instead of emitting pages with holes.
+  bool layoutOom = false;
 
   void updateEffectiveInlineStyle();
   static void applyDirectionToEntry(StyleStackEntry& entry, const CssStyle& css);
@@ -202,7 +228,7 @@ class ChapterHtmlSlimParser {
   void flushPartWordBuffer();
   void flushLongTextBlockIfNeeded();
   void setCurrentPageVisibleOffset(uint32_t offset);
-  void makePages();
+  void makePages(bool includeLastLine = true);
   void emitPage(uint32_t xhtmlByteOffset);
   void emitHorizontalRule(const BlockStyle& blockStyle);
   void finalizeCurrentTableCell();
@@ -251,6 +277,13 @@ class ChapterHtmlSlimParser {
         tocAnchors(std::move(tocAnchors)) {}
 
   ~ChapterHtmlSlimParser();
+  void setTextSpacing(const int8_t character, const uint8_t wordPercent) {
+    characterSpacing = character;
+    wordSpacingPercent = wordPercent;
+  }
+  void setParagraphIndentSpaces(const uint8_t spaces) { paragraphIndentSpaces = spaces; }
+
+  // One-shot parse: builds every page before returning (begin + step* + finish).
   bool parseAndBuildPages();
   enum class ParseStatus { More, Done, Error };
   bool beginParse();
@@ -259,7 +292,7 @@ class ChapterHtmlSlimParser {
   void abortParse();
   size_t parseBytesConsumed() { return parseFile_ ? parseFile_.position() : 0; }
   size_t parseTotalBytes() { return parseFile_ ? parseFile_.size() : 0; }
-  void addLineToPage(std::shared_ptr<TextBlock> line, uint32_t visibleOffset);
+  void addLineToPage(std::unique_ptr<TextBlock> line, uint32_t visibleOffset);
   const std::deque<std::pair<std::string, uint16_t>>& getAnchors() const { return anchorData; }
   bool wasLowMemoryFallbackTriggered() const { return lowMemoryImageFallback; }
   bool wasLowMemoryAbortTriggered() const { return lowMemoryAbort; }

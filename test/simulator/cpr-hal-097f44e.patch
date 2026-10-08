@@ -1,0 +1,456 @@
+diff --git a/src/BatteryMonitor.h b/src/BatteryMonitor.h
+index 3ee8422..d0a1871 100644
+--- a/src/BatteryMonitor.h
++++ b/src/BatteryMonitor.h
+@@ -3,6 +3,7 @@ class BatteryMonitor {
+ public:
+   BatteryMonitor(int pin, int factor = -1) {}
+   void begin() {}
++  static bool loadDesignCapacity() { return true; }
+   int getVoltage() { return 4200; }
+   int getPercentage() { return 100; }
+ };
+diff --git a/src/BoardConfig.h b/src/BoardConfig.h
+index 062696e..07efca2 100644
+--- a/src/BoardConfig.h
++++ b/src/BoardConfig.h
+@@ -275,10 +275,12 @@ inline bool selectDevice(Board board) {
+ }
+ 
+ inline bool isX4Pro() { return ACTIVE.board == Board::XteinkX4Pro; }
++inline bool isEegoA4() { return false; }
+ inline bool isX4Classic() { return ACTIVE.board == Board::XteinkX4Classic; }
+ inline bool isSticky() { return ACTIVE.board == Board::Sticky; }
+ inline bool isPaperMono() { return ACTIVE.board == Board::PaperMono; }
+ inline bool isMetalioEInk4() { return ACTIVE.board == Board::MetalioEInk4; }
++inline bool hasHaptics() { return isMetalioEInk4(); }
+ inline bool hasTouch() {
+   return isX4Pro() || isSticky() || isPaperMono() || isMetalioEInk4();
+ }
+diff --git a/src/ContentProtection.h b/src/ContentProtection.h
+index a5b0526..12a4d00 100644
+--- a/src/ContentProtection.h
++++ b/src/ContentProtection.h
+@@ -1,24 +1,3 @@
+ #pragma once
+-
+-#include <cstddef>
+-#include <cstdint>
+-#include <memory>
+-#include <string>
+-
+-namespace freeink {
+-namespace content {
+-
+-using ContentChunkSink = bool (*)(void* context, const uint8_t* data, size_t size);
+-
+-class ContentDecryptor {
+- public:
+-  virtual ~ContentDecryptor() = default;
+-  virtual bool isEncrypted(const std::string& itemPath) const = 0;
+-  virtual size_t decryptedSize(const std::string& itemPath) const = 0;
+-  virtual bool decryptToSink(const std::string& itemPath, ContentChunkSink sink, void* context) = 0;
+-};
+-
+-std::unique_ptr<ContentDecryptor> openProtectedBook(const std::string& epubPath, std::string& err);
+-
+-}  // namespace content
+-}  // namespace freeink
++// The firmware now links the real SDK interface in native builds too.
++#include_next <ContentProtection.h>
+diff --git a/src/Esp.h b/src/Esp.h
+new file mode 100644
+index 0000000..bdf70e0
+--- /dev/null
++++ b/src/Esp.h
+@@ -0,0 +1,5 @@
++#pragma once
++// Arduino-ESP32 exposes the ESP object through <Esp.h>; the simulator's
++// Arduino.h already defines the ESPMock instance.
++#include <Arduino.h>
++
+diff --git a/src/HTTPClient.h b/src/HTTPClient.h
+index bf65bed..32efe32 100644
+--- a/src/HTTPClient.h
++++ b/src/HTTPClient.h
+@@ -47,13 +47,14 @@ public:
+   HTTPClient() {}
+   ~HTTPClient() {}
+ 
+-  void begin(NetworkClient &client, const char *url) {
++  bool begin(NetworkClient &client, const char *url) {
+     (void)client;
+     url_ = url ? url : "";
+     responseBody_.s.clear();
+     responseStream_.reset();
+     statusCode_ = 0;
+     responseComplete_ = false;
++    return !url_.empty();
+   }
+   void setFollowRedirects(int mode) { (void)mode; }
+   void setReuse(bool reuse) { (void)reuse; }
+diff --git a/src/HalClock.cpp b/src/HalClock.cpp
+index 5dcd50d..d9d5063 100644
+--- a/src/HalClock.cpp
++++ b/src/HalClock.cpp
+@@ -153,3 +153,24 @@ bool HalClock::formatDate(char *buf, size_t bufSize,
+ }
+ 
+ bool HalClock::syncFromNTP() { return _available; }
++
++bool HalClock::readUtcTmFromChip(struct tm& outUtc, bool) const {
++  if (!_available) return false;
++  const time_t now = time(nullptr);
++  return gmtime_r(&now, &outUtc) != nullptr;
++}
++bool HalClock::writeUtcTmToChip(const struct tm&) const { return _available; }
++bool HalClock::readUtcTm(struct tm& outUtc, bool forceRefresh) const { return readUtcTmFromChip(outUtc, forceRefresh); }
++bool HalClock::readUtcEpoch(uint32_t& epochSeconds, bool) const {
++  if (!_available) return false;
++  epochSeconds = static_cast<uint32_t>(time(nullptr));
++  return true;
++}
++bool HalClock::writeUtcTm(const struct tm& utc) { return writeUtcTmToChip(utc); }
++bool HalClock::getUtcTime(uint8_t& hour, uint8_t& minute, bool forceRefresh) const {
++  struct tm utc {};
++  if (!readUtcTmFromChip(utc, forceRefresh)) return false;
++  hour = static_cast<uint8_t>(utc.tm_hour);
++  minute = static_cast<uint8_t>(utc.tm_min);
++  return true;
++}
+diff --git a/src/HalClock.h b/src/HalClock.h
+index 638cffc..e906715 100644
+--- a/src/HalClock.h
++++ b/src/HalClock.h
+@@ -26,4 +26,10 @@ class HalClock {
+   bool formatDate(char* buf, size_t bufSize,
+                   uint8_t utcOffsetQuarterHoursBiased = 48) const;
+   bool syncFromNTP();
++  bool readUtcTmFromChip(struct tm& outUtc, bool forceRefresh) const;
++  bool writeUtcTmToChip(const struct tm& utc) const;
++  bool readUtcTm(struct tm& outUtc, bool forceRefresh = false) const;
++  bool readUtcEpoch(uint32_t& epochSeconds, bool forceRefresh = false) const;
++  bool writeUtcTm(const struct tm& utc);
++  bool getUtcTime(uint8_t& hour, uint8_t& minute, bool forceRefresh = false) const;
+ };
+diff --git a/src/HalGPIO.h b/src/HalGPIO.h
+index 4a060f9..19dd2f4 100644
+--- a/src/HalGPIO.h
++++ b/src/HalGPIO.h
+@@ -97,6 +97,7 @@ public:
+   // Verify power button was held long enough after wakeup.
+   // The host wake path is synthetic, so verification always succeeds.
+   bool verifyPowerButtonWakeup();
++  bool coldBootImpliesPowerButton() const { return false; }
+ 
+   // Check if USB is connected
+   bool isUsbConnected() const;
+diff --git a/src/HalTiltSensor.h b/src/HalTiltSensor.h
+index 9401a60..5ac7838 100644
+--- a/src/HalTiltSensor.h
++++ b/src/HalTiltSensor.h
+@@ -52,6 +52,10 @@ public:
+   }
+ 
+   bool isAvailable() const { return _available; }
++  bool readGyro(float& gx, float& gy, float& gz) const {
++    gx = gy = gz = 0.0f;
++    return false;
++  }
+   // Support both firmware HAL shapes while the repos are out of sync.
+   void update(const uint8_t /*mode*/, const uint8_t /*orientation*/, const bool /*inReader*/) {}
+   void update(const uint8_t mode, const uint8_t /*direction*/, const uint8_t orientation, const bool inReader) {
+diff --git a/src/MD5Builder_linux.h b/src/MD5Builder_linux.h
+index bd70e7d..fce1732 100644
+--- a/src/MD5Builder_linux.h
++++ b/src/MD5Builder_linux.h
+@@ -55,6 +55,14 @@ public:
+     return String(hex);
+   }
+ 
++  // Arduino-ESP32 MD5Builder accessors for the raw digest.
++  void getBytes(uint8_t *output) const { memcpy(output, digest_, sizeof(digest_)); }
++  void getChars(char *output) const {
++    for (int i = 0; i < 16; i++) {
++      snprintf(output + i * 2, 3, "%02x", digest_[i]);
++    }
++  }
++
+ private:
+ #if defined(__APPLE__)
+   CC_MD5_CTX ctx_{};
+diff --git a/src/MD5Builder_mac.h b/src/MD5Builder_mac.h
+index 8c82a49..604c12d 100644
+--- a/src/MD5Builder_mac.h
++++ b/src/MD5Builder_mac.h
+@@ -47,6 +47,14 @@ public:
+     return String(hex);
+   }
+ 
++  // Arduino-ESP32 MD5Builder accessors for the raw digest.
++  void getBytes(uint8_t *output) const { memcpy(output, digest_, sizeof(digest_)); }
++  void getChars(char *output) const {
++    for (int i = 0; i < 16; i++) {
++      snprintf(output + i * 2, 3, "%02x", digest_[i]);
++    }
++  }
++
+ private:
+   CC_MD5_CTX ctx_{};
+   uint8_t digest_[16];
+diff --git a/src/WiFi.h b/src/WiFi.h
+index 8058d48..e45c27b 100644
+--- a/src/WiFi.h
++++ b/src/WiFi.h
+@@ -166,6 +166,14 @@ class WiFiClass {
+   }
+ 
+ public:
++  // Arduino-ESP32 overload: targeted connect to a channel/BSSID pair.
++  wl_status_t begin(const char *ssid, const char *pass, int32_t channel,
++                    const uint8_t *bssid, bool connect = true) {
++    (void)channel;
++    (void)bssid;
++    (void)connect;
++    return begin(ssid, pass);
++  }
+   wl_status_t begin(const char *ssid = nullptr, const char *pass = nullptr) {
+     (void)pass;
+     currentMode = WIFI_STA;
+@@ -230,6 +238,16 @@ public:
+     return true;
+   }
+   IPAddress softAPIP() { return IPAddress(127, 0, 0, 1); }
++  bool softAPConfig(IPAddress local_ip, IPAddress gateway, IPAddress subnet,
++                    IPAddress dhcp_lease_start = IPAddress(),
++                    IPAddress dns = IPAddress()) {
++    (void)local_ip;
++    (void)gateway;
++    (void)subnet;
++    (void)dhcp_lease_start;
++    (void)dns;
++    return true;
++  }
+ 
+   String macAddress() { return String("02:00:00:00:00:01"); }
+   uint8_t *macAddress(uint8_t *mac) {
+@@ -286,6 +304,19 @@ public:
+     return currentBssid.data();
+   }
+   int32_t channel() { return currentStatus == WL_CONNECTED ? 1 : 0; }
++  // Per-scan-result channel: every fake network sits on channel 1.
++  int32_t channel(int i) {
++    (void)i;
++    return 1;
++  }
++  // Per-scan-result BSSID: derive a stable fake MAC from the result index.
++  uint8_t *BSSID(int i, uint8_t *bssid) {
++    if (bssid) {
++      const uint8_t mac[6] = {0x02, 0x00, 0x00, 0x00, 0x00, static_cast<uint8_t>(0x10 + i)};
++      memcpy(bssid, mac, sizeof(mac));
++    }
++    return bssid;
++  }
+   String getHostname() { return String("crosspoint-simulator"); }
+   int softAPgetStationNum() { return 0; }
+ };
+diff --git a/src/common/FsDateTime.h b/src/common/FsDateTime.h
+new file mode 100644
+index 0000000..86b7c2e
+--- /dev/null
++++ b/src/common/FsDateTime.h
+@@ -0,0 +1,41 @@
++#pragma once
++// Host shim for SdFat's common/FsDateTime.h: the FAT timestamp packing macros
++// and a no-op callback registry. The simulator's HalStorage is a POSIX
++// directory, so file timestamps come from the host filesystem.
++#include <cstdint>
++
++#define FS_DATE(year, month, day) \
++  static_cast<uint16_t>((((year) - 1980) << 9) | ((month) << 5) | (day))
++#define FS_TIME(hour, minute, second) \
++  static_cast<uint16_t>(((hour) << 11) | ((minute) << 5) | ((second) >> 1))
++#define FS_YEAR(fatDate) static_cast<uint16_t>(1980 + ((fatDate) >> 9))
++#define FS_MONTH(fatDate) static_cast<uint8_t>(((fatDate) >> 5) & 0XF)
++#define FS_DAY(fatDate) static_cast<uint8_t>((fatDate) & 0X1F)
++#define FS_HOUR(fatTime) static_cast<uint8_t>((fatTime) >> 11)
++#define FS_MINUTE(fatTime) static_cast<uint8_t>(((fatTime) >> 5) & 0X3F)
++#define FS_SECOND(fatTime) static_cast<uint8_t>(2 * ((fatTime) & 0X1F))
++
++// SdFat's common/CompileDateTime.h helpers (build date from __DATE__ "Mmm dd yyyy").
++constexpr uint16_t compileYear() {
++  return static_cast<uint16_t>((__DATE__[7] - '0') * 1000 + (__DATE__[8] - '0') * 100 + (__DATE__[9] - '0') * 10 +
++                               (__DATE__[10] - '0'));
++}
++constexpr uint8_t compileDay() {
++  return static_cast<uint8_t>((__DATE__[4] == ' ' ? 0 : (__DATE__[4] - '0') * 10) + (__DATE__[5] - '0'));
++}
++constexpr uint8_t compileMonth() {
++  return __DATE__[0] == 'J' ? (__DATE__[1] == 'a' ? 1 : (__DATE__[2] == 'n' ? 6 : 7))
++         : __DATE__[0] == 'F' ? 2
++         : __DATE__[0] == 'M' ? (__DATE__[2] == 'r' ? 3 : 5)
++         : __DATE__[0] == 'A' ? (__DATE__[1] == 'p' ? 4 : 8)
++         : __DATE__[0] == 'S' ? 9
++         : __DATE__[0] == 'O' ? 10
++         : __DATE__[0] == 'N' ? 11
++                              : 12;
++}
++
++namespace FsDateTime {
++using Callback = void (*)(uint16_t* date, uint16_t* time, uint8_t* ms10);
++inline void setCallback(Callback /*callback*/) {}
++inline void clearCallback() {}
++}  // namespace FsDateTime
+diff --git a/src/esp_heap_caps.h b/src/esp_heap_caps.h
+index 01712a4..bd9c839 100644
+--- a/src/esp_heap_caps.h
++++ b/src/esp_heap_caps.h
+@@ -1,37 +1,25 @@
+ #pragma once
++// Host shim for ESP-IDF heap_caps: every capability maps onto the single
++// simulated heap reported by ESPMock (see Arduino.h), so CROSSPOINT_SIM_FREE_HEAP
++// and CROSSPOINT_SIM_MAX_ALLOC_HEAP steer these too.
++#include <Arduino.h>
+ 
+-#include <cstddef>
++#include <cstdint>
+ #include <cstdlib>
+ 
+-#include "Arduino.h"
+-
+-constexpr unsigned MALLOC_CAP_DEFAULT = 1U << 0;
+-constexpr unsigned MALLOC_CAP_SPIRAM = 1U << 1;
+-constexpr unsigned MALLOC_CAP_INTERNAL = 1U << 2;
+-constexpr unsigned MALLOC_CAP_8BIT = 1U << 3;
+-
+-inline size_t simulatorPsramBytes() {
+-#if defined(BOARD_HAS_PSRAM)
+-  return 8U * 1024U * 1024U;
+-#else
+-  return 0;
+-#endif
+-}
+-
+-inline size_t heap_caps_get_free_size(const unsigned caps) {
+-  return (caps & MALLOC_CAP_SPIRAM) ? simulatorPsramBytes() : ESP.getFreeHeap();
+-}
+-
+-inline size_t heap_caps_get_largest_free_block(const unsigned caps) { return heap_caps_get_free_size(caps); }
+-
+-inline size_t heap_caps_get_minimum_free_size(const unsigned caps) { return heap_caps_get_free_size(caps); }
+-
+-inline size_t heap_caps_get_total_size(const unsigned caps) {
+-  return (caps & MALLOC_CAP_SPIRAM) ? simulatorPsramBytes() : ESP.getHeapSize();
+-}
+-
+-inline void* heap_caps_malloc(const size_t size, unsigned /*caps*/) { return std::malloc(size); }
+-
+-inline void* heap_caps_realloc(void* ptr, const size_t size, unsigned /*caps*/) { return std::realloc(ptr, size); }
+-
++#define MALLOC_CAP_EXEC (1 << 0)
++#define MALLOC_CAP_32BIT (1 << 1)
++#define MALLOC_CAP_8BIT (1 << 2)
++#define MALLOC_CAP_DMA (1 << 3)
++#define MALLOC_CAP_SPIRAM (1 << 10)
++#define MALLOC_CAP_INTERNAL (1 << 11)
++#define MALLOC_CAP_DEFAULT (1 << 12)
++
++inline size_t heap_caps_get_free_size(uint32_t /*caps*/) { return ESP.getFreeHeap(); }
++inline size_t heap_caps_get_minimum_free_size(uint32_t /*caps*/) { return ESP.getMinFreeHeap(); }
++inline size_t heap_caps_get_largest_free_block(uint32_t /*caps*/) { return ESP.getMaxAllocHeap(); }
++inline size_t heap_caps_get_total_size(uint32_t /*caps*/) { return ESP.getHeapSize(); }
++inline void* heap_caps_malloc(size_t size, uint32_t /*caps*/) { return std::malloc(size); }
++inline void* heap_caps_calloc(size_t n, size_t size, uint32_t /*caps*/) { return std::calloc(n, size); }
++inline void* heap_caps_realloc(void* ptr, size_t size, uint32_t /*caps*/) { return std::realloc(ptr, size); }
+ inline void heap_caps_free(void* ptr) { std::free(ptr); }
+diff --git a/src/esp_http_client.h b/src/esp_http_client.h
+index 5195290..f215b3e 100644
+--- a/src/esp_http_client.h
++++ b/src/esp_http_client.h
+@@ -7,7 +7,32 @@
+ #include "SimHttpFetch.h"
+ #include "esp_err.h"
+ 
+-enum http_event { HTTP_EVENT_ON_DATA, HTTP_EVENT_ON_HEADER };
++// ESP-IDF declaration order (esp_http_client_event_id_t).
++enum http_event {
++  HTTP_EVENT_ERROR = 0,
++  HTTP_EVENT_ON_CONNECTED,
++  HTTP_EVENT_HEADERS_SENT,
++  HTTP_EVENT_HEADER_SENT = HTTP_EVENT_HEADERS_SENT,
++  HTTP_EVENT_ON_HEADER,
++  HTTP_EVENT_ON_DATA,
++  HTTP_EVENT_ON_FINISH,
++  HTTP_EVENT_DISCONNECTED,
++  HTTP_EVENT_REDIRECT,
++};
++
++// esp_http_client error codes (ESP_ERR_HTTP_BASE = 0x7000 in ESP-IDF).
++#ifndef ESP_ERR_HTTP_BASE
++#define ESP_ERR_HTTP_BASE 0x7000
++#define ESP_ERR_HTTP_MAX_REDIRECT (ESP_ERR_HTTP_BASE + 1)
++#define ESP_ERR_HTTP_CONNECT (ESP_ERR_HTTP_BASE + 2)
++#define ESP_ERR_HTTP_WRITE_DATA (ESP_ERR_HTTP_BASE + 3)
++#define ESP_ERR_HTTP_FETCH_HEADER (ESP_ERR_HTTP_BASE + 4)
++#define ESP_ERR_HTTP_INVALID_TRANSPORT (ESP_ERR_HTTP_BASE + 5)
++#define ESP_ERR_HTTP_CONNECTING (ESP_ERR_HTTP_BASE + 6)
++#define ESP_ERR_HTTP_EAGAIN (ESP_ERR_HTTP_BASE + 7)
++#define ESP_ERR_HTTP_CONNECTION_CLOSED (ESP_ERR_HTTP_BASE + 8)
++#define ESP_ERR_HTTP_INCOMPLETE_DATA (ESP_ERR_HTTP_BASE + 9)
++#endif
+ 
+ // Values must stay in ESP-IDF's declaration order so a partial stub keeps the
+ // same numbering as the real esp_http_client_method_t. Add new methods in
+@@ -57,12 +82,15 @@ struct esp_http_client_config_t {
+   const char *username = nullptr;
+   const char *password = nullptr;
+   esp_http_client_auth_type_t auth_type = HTTP_AUTH_TYPE_NONE;
++  int max_redirection_count = 0;
++  bool disable_auto_redirect = false;
+ };
+ 
+ struct SimEspHttpClient {
+   esp_http_client_config_t config{};
+   std::map<std::string, std::string> headers;
+   std::string postField;
++  std::string urlStorage;  // backing store for esp_http_client_set_url
+   int statusCode = 0;
+   int contentLength = -1;
+   std::string responseBody;
+@@ -97,6 +125,23 @@ inline esp_err_t esp_http_client_set_header(esp_http_client_handle_t handle,
+   return ESP_OK;
+ }
+ 
++inline esp_err_t esp_http_client_set_url(esp_http_client_handle_t handle,
++                                         const char *url) {
++  if (!handle || !url)
++    return ESP_FAIL;
++  handle->urlStorage = url;
++  handle->config.url = handle->urlStorage.c_str();
++  return ESP_OK;
++}
++
++inline esp_err_t esp_http_client_set_method(esp_http_client_handle_t handle,
++                                            esp_http_client_method_t method) {
++  if (!handle)
++    return ESP_FAIL;
++  handle->config.method = method;
++  return ESP_OK;
++}
++
+ inline esp_err_t esp_http_client_set_post_field(esp_http_client_handle_t handle,
+                                                 const char *data, int len) {
+   if (!handle)
+diff --git a/src/esp_sntp.h b/src/esp_sntp.h
+index 6c6938a..e39719f 100644
+--- a/src/esp_sntp.h
++++ b/src/esp_sntp.h
+@@ -1,4 +1,8 @@
+ #pragma once
++#include <sys/time.h>
++// A simulated device must never set the host's system clock.
++inline int simulatorSetTimeOfDay(const timeval*, const void*) { return 0; }
++#define settimeofday simulatorSetTimeOfDay
+ inline bool esp_sntp_enabled() { return true; }
+ inline void esp_sntp_setoperatingmode(int) {}
+ inline void esp_sntp_setservername(int, const char *) {}

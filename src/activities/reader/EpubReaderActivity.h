@@ -10,9 +10,11 @@
 #include <vector>
 
 #include "BookmarkStore.h"
+#include "ChapterPosition.h"
 #include "EndOfBookOptions.h"
 #include "EpubReaderMenuActivity.h"
 #include "ProgressMapper.h"
+#include "ReaderPluginSession.h"
 #include "ReaderToolbarUi.h"
 #include "activities/Activity.h"
 #include "components/OptionPopup.h"
@@ -20,6 +22,8 @@
 class Page;
 
 class EpubReaderActivity final : public Activity {
+  ReaderPluginSession pluginSession;
+  int getProgressBasisPoints() const;
   std::shared_ptr<Epub> epub;
   std::unique_ptr<Section> section = nullptr;
   int currentSpineIndex = 0;
@@ -54,6 +58,7 @@ class EpubReaderActivity final : public Activity {
   int8_t pendingManualTurn = 0;
   // Signals that the next render should reposition within the newly loaded section
   // based on a cross-book percentage jump.
+  bool pendingManualTurnTouch = false;
   bool pendingPercentJump = false;
   // Normalized 0.0-1.0 progress within the target spine item, computed from book percentage.
   float pendingSpineProgress = 0.0f;
@@ -121,6 +126,16 @@ class EpubReaderActivity final : public Activity {
   // overlay, letting panel->toolbar steps restore the page without a full
   // re-render. Discarded on close / whenever the page under the overlay changes.
   bool overlayPageStored = false;
+  // A background build step lent the framebuffer: it came back white while the panel still shows the
+  // page. Until renderBook() redraws, nothing may be painted straight onto it. Set by the loop task,
+  // cleared by the render task.
+  std::atomic<bool> pageBufferStale{false};
+  // True while a deferred overlay chrome refresh (pushOverlayRefresh) may still
+  // be running on the panel. settleOverlayRefresh() must run before the
+  // framebuffer is touched or another differential refresh is pushed.
+  bool overlayRefreshPending = false;
+  void pushOverlayRefresh();
+  void settleOverlayRefresh();
   int autoTurnOption = 0;  // current auto page-turn rate index (More panel)
   std::vector<EpubReaderMenuActivity::MenuItem> moreItems;
 
@@ -139,6 +154,9 @@ class EpubReaderActivity final : public Activity {
     uint8_t orientation = 0;
     uint8_t extraParagraphSpacing = 0;
     uint8_t forceParagraphIndents = 0;
+    uint8_t paragraphIndentSpaces = 0;
+    uint8_t wordSpacing = 0;
+    uint8_t characterSpacing = 0;
     uint8_t textAntiAliasing = 0;
     uint8_t textDarkness = 0;
     uint8_t readerRefreshMode = 0;
@@ -158,6 +176,11 @@ class EpubReaderActivity final : public Activity {
   static constexpr int MAX_FOOTNOTE_DEPTH = 3;
   SavedPosition savedPositions[MAX_FOOTNOTE_DEPTH] = {};
   int footnoteDepth = 0;
+  // The back-stack outlives the reader (sleep, home) in links.bin so Back
+  // still returns to where a followed link was tapped.
+  void saveLinkStack() const;
+  void loadLinkStack();
+
   int lastSavedSpineIndex = -1;
   int lastSavedPage = -1;
   int lastSavedPageCount = -1;
@@ -168,6 +191,8 @@ class EpubReaderActivity final : public Activity {
 
   static constexpr int BUILD_PAGES_PER_CHUNK = 8;
   static constexpr int BACKGROUND_BUILD_PAGES_PER_TICK = 2;
+  // Requires the render lock; heap admission is checked separately by the build tick.
+  bool backgroundBuildWanted() const;
   static constexpr int BUILD_WINDOW_AHEAD = 5;
   static constexpr int PARTIAL_REBUILD_START_MARGIN = 15;
   static constexpr size_t BACKGROUND_BUILD_MIN_FREE_HEAP = 32 * 1024;
@@ -190,6 +215,10 @@ class EpubReaderActivity final : public Activity {
   bool saveProgress(int spineIndex, int currentPage, int pageCount);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
+  // Live section position, or the values cached before a child screen
+  // released the section.
+  ChapterPosition chapterPosition() const;
+  int bookPercentFor(const ChapterPosition& position) const;
   void openReaderMenu();
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
   ReaderSettingsSnapshot captureReaderSettingsSnapshot() const;
@@ -243,6 +272,7 @@ class EpubReaderActivity final : public Activity {
   std::string moreRowName(int row) const;
   std::string moreRowValue(int row) const;
   void activateMoreRow(int row);
+  void openFootnoteSelect(bool reopenMenuOnCancel);
 
   // Footnote navigation
   void navigateToHref(const std::string& href, bool savePosition = false);
@@ -266,6 +296,7 @@ class EpubReaderActivity final : public Activity {
   ~EpubReaderActivity() override;
   void onEnter() override;
   void onExit() override;
+  void prepareForSleep() override;
   void loop() override;
   void render(RenderLock&& lock) override;
   bool skipLoopDelay() override {

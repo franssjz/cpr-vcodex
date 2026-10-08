@@ -134,7 +134,7 @@ bool RecentBooksActivity::handleButtons() {
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    onGoHome();
+    activityManager.goBack();
     return true;
   }
 
@@ -197,14 +197,15 @@ void RecentBooksActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }
 
 void RecentBooksActivity::drawFooter() {
   // No rows: blank the row-action hints, same as FileBrowserActivity.
   const bool empty = recentBooks.empty();
-  const auto labels = mappedInput.mapLabels(tr(STR_HOME), empty ? "" : tr(STR_OPEN), empty ? "" : tr(STR_DIR_UP),
-                                            empty ? "" : tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(activityManager.hasParentActivity() ? tr(STR_BACK) : tr(STR_HOME),
+                            empty ? "" : tr(STR_OPEN), empty ? "" : tr(STR_DIR_UP), empty ? "" : tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }

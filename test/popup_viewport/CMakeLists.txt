@@ -1,0 +1,4 @@
+add_executable(PopupViewportTest PopupViewportTest.cpp)
+target_include_directories(PopupViewportTest PRIVATE ${REPO_ROOT}/src/components)
+target_link_libraries(PopupViewportTest PRIVATE crosspoint_test_common GTest::gtest_main)
+gtest_discover_tests(PopupViewportTest)

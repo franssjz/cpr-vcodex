@@ -1,8 +1,9 @@
 #include "HeaderDateUtils.h"
 
+#include <FreeInkUIGfxRenderer.h>
 #include <GfxRenderer.h>
-#include <HalPowerManager.h>
 #include <I18n.h>
+#include <components/controls/header.h>
 
 #include <ctime>
 
@@ -11,34 +12,56 @@
 #include "ReadingStatsStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/HeaderStatusLayout.h"
 #include "util/TimeUtils.h"
 
 namespace {
 void drawHeaderTopLine(const GfxRenderer& renderer, const ThemeMetrics& metrics, const int pageWidth,
                        const std::string& dateText, const std::string& reminderText) {
-  const bool showBatteryPercentage =
-      SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
-  const int batteryX = pageWidth - 12 - metrics.batteryWidth;
-  int rightEdge = batteryX - 8;
+  namespace fui = freeink::ui;
+  fui::HeaderProps props;
+  BaseTheme::applyHeaderStatus(renderer, props);
+  const auto& status = props.status;
+  int top, right, bottom, left;
+  renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
+  const int batteryWidth =
+      status.showBattery
+          ? status.battery.glyphWidth + 2 +
+                (status.battery.label ? status.battery.gap + renderer.getTextWidth(SMALL_FONT_ID, status.battery.label)
+                                      : 0)
+          : 0;
+  const int clockWidth = status.clockText ? renderer.getTextWidth(SMALL_FONT_ID, status.clockText) : 0;
+  const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, dateText.c_str());
+  const auto available =
+      headerstatus::freeInterval(left, pageWidth - right, std::max<int>(metrics.contentSidePadding, status.edgeInset),
+                                 batteryWidth, status.batteryLeft, clockWidth, status.clockCentered, dateWidth);
+  if (available.width() == 0) return;
+  fui::GfxRendererTarget target(renderer);
+  target.setFont(fui::GfxRendererTarget::FONT_LABEL, SMALL_FONT_ID);
+  const auto drawText = [&](int x, const std::string& text) {
+    const auto ink = target.inkBounds(fui::GfxRendererTarget::FONT_LABEL, text.c_str(), status.battery.text);
+    const int y = metrics.topPadding + (status.stripHeight - ink.height) / 2 - ink.y;
+    renderer.drawText(SMALL_FONT_ID, x, y, text.c_str());
+  };
 
-  if (showBatteryPercentage) {
-    const std::string batteryText = std::to_string(powerManager.getBatteryPercentage()) + "%";
-    rightEdge -= renderer.getTextWidth(SMALL_FONT_ID, batteryText.c_str()) + 4;
-  }
-
-  int dateX = rightEdge;
+  int dateX = available.right;
   if (!dateText.empty()) {
-    const int dateWidth = renderer.getTextWidth(SMALL_FONT_ID, dateText.c_str());
-    dateX = std::max(metrics.contentSidePadding, rightEdge - dateWidth);
-    renderer.drawText(SMALL_FONT_ID, dateX, metrics.topPadding + 5, dateText.c_str());
+    if (dateWidth <= available.width()) {
+      dateX -= dateWidth;
+      drawText(dateX, dateText);
+    } else {
+      const std::string fitted = renderer.truncatedText(SMALL_FONT_ID, dateText.c_str(), available.width());
+      dateX -= renderer.getTextWidth(SMALL_FONT_ID, fitted.c_str());
+      drawText(dateX, fitted);
+    }
   }
 
   if (!reminderText.empty()) {
-    const int reminderX = metrics.contentSidePadding;
+    const int reminderX = available.left;
     const int maxReminderWidth = std::max(0, dateX - reminderX - 12);
     if (maxReminderWidth > 0) {
       const std::string truncated = renderer.truncatedText(SMALL_FONT_ID, reminderText.c_str(), maxReminderWidth);
-      renderer.drawText(SMALL_FONT_ID, reminderX, metrics.topPadding + 5, truncated.c_str());
+      drawText(reminderX, truncated);
     }
   }
 }

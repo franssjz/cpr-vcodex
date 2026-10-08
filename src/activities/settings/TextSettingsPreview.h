@@ -18,14 +18,21 @@ struct PreviewKey {
   float lineCompression = -1.0f;
   uint8_t alignment = 0xFF;
   bool extraParagraphSpacing = false;
-  bool focusReading = false;
+  bool forceParagraphIndents = false;
+  uint8_t paragraphIndentSpaces = 2;
+  int8_t characterSpacing = 0;
+  uint8_t wordSpacingPercent = 100;
+  uint8_t bionicReading = 0;
   bool hyphenation = false;
   bool operator==(const PreviewKey&) const = default;
 };
 
 // Cached engine preview lines + the key that produced them
 struct PreviewLayout {
-  std::vector<std::shared_ptr<TextBlock>> lines;
+  PreviewLayout();
+  ~PreviewLayout();
+
+  std::vector<std::unique_ptr<TextBlock>> lines;
   PreviewKey key;
 };
 

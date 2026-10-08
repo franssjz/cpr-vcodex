@@ -359,3 +359,72 @@ asset publicado por GitHub, que es la referencia de distribución.
 Se mantienen las limitaciones de validación física descritas arriba: los dos
 arranques observados corresponden al candidato de desarrollo dev3; la
 apariencia de los EPUB en e-ink y el hardware X3 siguen pendientes.
+
+### Auditoría OTA tras integración y corrección de Atrás (08/10/2026)
+
+Alcance: X4 original ESP32-C3 y X3, no X4 Classic/X4C ESP32-S3 ni X4 Pro.
+Árbol integrado con CrossPoint `28971493`; SDK
+`9729236ce7b730b81b8fcceec4aa77051b6dfae3`, idéntico al upstream integrado.
+La instalación física anterior dejó `1.6.0.38.dev35-a4ae01a7` en el X4.
+Esta auditoría no instala ni publica firmware ni modifica código de producción.
+
+Resultados comprobados:
+
+- `OtaUpdater.cpp`, `FirmwareFlasher.cpp`, `OtaBootSwitch.cpp` y
+  `partitions.csv` no cambian respecto al HEAD anterior a la integración.
+  Las URLs siguen siendo de `franssjz/cpr-vcodex`: Pages y respaldo del
+  manifiesto de `master` en raw.githubusercontent.com.
+- Ambos manifiestos y la API de releases, consultados en vivo, coinciden en
+  `1.6.0.38-cpr-vcodex`, 6.103.600 bytes y el SHA-256 publicado arriba.
+  El BIN descargado de Pages al PC coincide íntegramente en SHA y tamaño.
+  La release contiene los cuatro assets C3 y ningún firmware S3.
+- Ajustes conserva `silentRestartToOta()`, sin retener Ajustes ni fuentes SD
+  de lectura en el updater. Atrás no sustituye este camino por una actividad
+  apilada. C3 mantiene el manifiesto con CA verificada y la autenticación del
+  BIN por SHA-256; wolfSSL para plugins no cambia ese downloader.
+- OTA consulta la partición inactiva real mediante ESP-IDF, no offsets fijos
+  de X4. Rechaza tamaño excesivo, transferencia incompleta, SHA incorrecto,
+  chip incompatible y etiqueta de otra placa antes de activar el arranque.
+- 643 tests nativos aprobados, incluidos 81 casos OTA entre X4, X3 y el
+  binario combinado con versión dev35: ambos tamaños/direcciones de slot,
+  límite exacto y exceso, reintento, manifiesto inválido, rutas del fork,
+  orden validación/activación, fallos de flash y etiquetas X4C/X4 Pro.
+  Los dobles simulan red, SHA y flash; no prueban TLS, criptografía ni cortes
+  eléctricos reales. Pasan también parser, empaquetado, manifiesto y las
+  restricciones existentes del flasheador web.
+- Build `gh_release`, `VCODEX_RELEASE_DRY_RUN=1`, tag de ensayo
+  `1.6.0.39-cpr-vcodex`: correcto, BIN de 6.275.264 bytes y margen real X4
+  de 278.336 bytes sobre su slot 0x640000. Cabe en el slot 0x770000 de X3.
+  No se avanzó el contador de release. Es un ensayo local, no un asset
+  publicado ni un sustituto autorizado del BIN de Pages.
+
+Límites y riesgos que impiden afirmar «sin bricks»:
+
+1. **Confirmación temprana.** Arduino tiene `CONFIG_APP_ROLLBACK_ENABLE=y`;
+   `verifyOta()` por defecto devuelve true y confirma antes de `setup()`.
+   `main.cpp` también confirma antes de cargar ajustes y pantalla. `VALID`
+   no prueba toda la UI: un fallo posterior no garantiza rollback automático
+   aunque la versión anterior siga intacta. Es una limitación existente.
+   Cambiarla exige pruebas separadas de arranque, reinicios intencionados y
+   recuperación con bootloaders originales; no se modifica a ciegas aquí.
+2. **Versiones de desarrollo.** La comparación considera `.38` estable
+   superior a `.38.dev35`: aceptar ahora OTA vuelve al código publicado en
+   septiembre y pierde las mejoras locales. No es corrupción de flash.
+   Una futura `.39` sigue siendo alcanzable. Conservar dev35 hasta una
+   release posterior validada si se quieren mantener estos cambios.
+3. **Hardware pendiente.** Dos arranques físicos de dev35 por USB no son
+   una instalación OTA. El X4 no estaba enumerado por USB en esta auditoría.
+   No hay prueba física nueva de TLS, instalación completa OTA/SD en X3 ni
+   de sus variantes UC8253/UC8279d. No interpretar estos resultados como
+   validación para distribución general en X3.
+
+Antes de publicar: consulta/descarga OTA reales, instalación en ambos sentidos
+de slot con copia previa y firmware anterior conservado, segundo arranque,
+lectura/suspensión/despertar, recuperación SD y ajustes en X4 y X3.
+No provocar cortes de alimentación sin recuperación independiente comprobada.
+Mantener retirada la distribución X4 Pro.
+
+Evidencia: `artifacts/upstream-sync/ota-audit-native-{build,tests}.log`,
+`ota-audit-release-build.log`, `ota-audit-budget.{json,md}`,
+`ota-audit-published.bin` y
+`artifacts/x4-install-2026-10-08-back/boot-validation.json` (USB anterior).

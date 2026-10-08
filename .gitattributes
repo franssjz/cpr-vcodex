@@ -1,0 +1,2 @@
+# Blank context lines in unified patch fixtures contain a required space.
+test/simulator/*.patch whitespace=-blank-at-eol

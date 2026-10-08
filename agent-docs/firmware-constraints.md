@@ -69,10 +69,12 @@ Two firmware targets share this source tree. Shared code must fit the C3.
 - `platformio.ini`: build flags and environments.
 - `partitions.csv`: C3 app partition sizes and OTA layout;
   `partitions_x4pro.csv`: the stock X4 Pro table used by the `x4pro*` envs.
-- TLS: the `x4pro*` envs build wolfSSL (`FREEINK_NET_WOLFSSL`, TLS 1.3, accepts
-  self-signed servers via `setInsecure()`); the C3 envs use the core mbedTLS CA
-  bundle through `esp_http_client` (TLS 1.2, public CAs only). Keep
-  `src/network/HttpDownloader.cpp` compiling on both paths.
+- TLS: all firmware envs now build wolfSSL for SDK plugin networking and
+  protected content. The C3 firmware/manifest downloader still uses the core
+  mbedTLS CA bundle through `esp_http_client` (TLS 1.2, public CAs only);
+  `x4pro*` downloads use SecureNet. Keep `src/network/HttpDownloader.cpp`
+  compiling on both paths. Do not weaken OTA certificate/digest validation
+  to save space. LTO is required to fit the combined C3 image.
 - `src/main.cpp`: activity lifetime and global setup.
 - `src/MappedInputManager.cpp`: logical button mapping.
 - `lib/hal/`: storage, display, and GPIO wrappers.

@@ -128,13 +128,17 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
 
   const int existingIndex = findBookIndex(normalizedPath, resolvedBookId);
   if (existingIndex >= 0) {
-    recentBooks.erase(recentBooks.begin() + existingIndex);
-  }
-
-  recentBooks.insert(recentBooks.begin(), {resolvedBookId, normalizedPath, title, author, coverBmpPath});
-
-  if (recentBooks.size() > MAX_RECENT_BOOKS) {
-    recentBooks.resize(MAX_RECENT_BOOKS);
+    auto it = recentBooks.begin() + existingIndex;
+    std::rotate(recentBooks.begin(), it, it + 1);
+    RecentBook& book = recentBooks.front();
+    if (book.bookId != resolvedBookId) book.bookId = resolvedBookId;
+    if (book.path != normalizedPath) book.path = normalizedPath;
+    if (book.title != title) book.title = title;
+    if (book.author != author) book.author = author;
+    if (book.coverBmpPath != coverBmpPath) book.coverBmpPath = coverBmpPath;
+  } else {
+    recentBooks.insert(recentBooks.begin(), {resolvedBookId, normalizedPath, title, author, coverBmpPath});
+    if (recentBooks.size() > MAX_RECENT_BOOKS) recentBooks.resize(MAX_RECENT_BOOKS);
   }
 
   saveToFile();

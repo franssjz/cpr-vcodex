@@ -7,6 +7,8 @@
 #include <Memory.h>
 #include <Serialization.h>
 
+#include <algorithm>
+
 #include "Epub/css/CssParser.h"
 #include "Page.h"
 #include "VisibleTextPageLookup.h"
@@ -39,7 +41,9 @@ namespace {
 // v49: merged upstream develop (BiDi/RTL layout, per-page internal-link rectangles,
 //      direction in serialized BlockStyle); strictly above both lineages (fork 48,
 //      upstream 45) so every existing cache rebuilds once.
-constexpr uint8_t SECTION_FILE_VERSION = 49;
+// v53: upstream spacing, indentation and paragraph continuity, retaining fork
+//      table fragments, ruby storage and highlight layout flags.
+constexpr uint8_t SECTION_FILE_VERSION = 53;
 // Written into the version field while a build is in progress; patched to
 // SECTION_FILE_VERSION only when the build is finalized. An abandoned /
 // crash-interrupted .bin therefore carries version 0, which loadSectionFile rejects
@@ -60,7 +64,8 @@ constexpr uint8_t SECTION_FILE_PARTIAL_VERSION = 0xFE - (SECTION_FILE_VERSION - 
 constexpr uint32_t HEADER_SIZE = sizeof(uint8_t) + sizeof(int) + sizeof(float) + sizeof(bool) + sizeof(bool) +
                                  sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) + sizeof(uint16_t) +
                                  sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(bool) + sizeof(uint32_t) +
-                                 sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+                                 sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+                                 sizeof(int8_t) + sizeof(uint8_t) + sizeof(uint8_t);
 }  // namespace
 
 // Out-of-line so the unique_ptr<ChapterHtmlSlimParser> in BuildContext can be
@@ -105,11 +110,12 @@ void Section::writeSectionFileHeader(const ReaderRenderSpec& spec) {
   }
   static_assert(HEADER_SIZE == sizeof(SECTION_FILE_VERSION) + sizeof(spec.fontId) + sizeof(spec.lineCompression) +
                                    sizeof(spec.extraParagraphSpacing) + sizeof(spec.forceParagraphIndents) +
-                                   sizeof(spec.paragraphAlignment) + sizeof(spec.viewportWidth) +
-                                   sizeof(spec.viewportHeight) + sizeof(pageCount) + sizeof(spec.hyphenationEnabled) +
-                                   sizeof(spec.embeddedStyle) + sizeof(spec.imageRendering) +
-                                   sizeof(spec.focusReadingEnabled) + sizeof(uint32_t) + sizeof(uint32_t) +
-                                   sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
+                                   sizeof(spec.paragraphIndentSpaces) + sizeof(spec.paragraphAlignment) +
+                                   sizeof(spec.viewportWidth) + sizeof(spec.viewportHeight) + sizeof(pageCount) +
+                                   sizeof(spec.hyphenationEnabled) + sizeof(spec.embeddedStyle) +
+                                   sizeof(spec.imageRendering) + sizeof(spec.focusReadingEnabled) +
+                                   sizeof(spec.characterSpacing) + sizeof(spec.wordSpacingPercent) + sizeof(uint32_t) +
+                                   sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t),
                 "Header size mismatch");
   // Written as the incomplete sentinel; finalizeBuild() patches it to
   // SECTION_FILE_VERSION as the last step, committing the file.
@@ -118,6 +124,7 @@ void Section::writeSectionFileHeader(const ReaderRenderSpec& spec) {
   serialization::writePod(file, spec.lineCompression);
   serialization::writePod(file, spec.extraParagraphSpacing);
   serialization::writePod(file, spec.forceParagraphIndents);
+  serialization::writePod(file, spec.paragraphIndentSpaces);
   serialization::writePod(file, spec.paragraphAlignment);
   serialization::writePod(file, spec.viewportWidth);
   serialization::writePod(file, spec.viewportHeight);
@@ -125,6 +132,8 @@ void Section::writeSectionFileHeader(const ReaderRenderSpec& spec) {
   serialization::writePod(file, spec.embeddedStyle);
   serialization::writePod(file, spec.imageRendering);
   serialization::writePod(file, spec.focusReadingEnabled);
+  serialization::writePod(file, spec.characterSpacing);
+  serialization::writePod(file, spec.wordSpacingPercent);
   serialization::writePod(file, pageCount);  // Placeholder for page count (will be initially 0, patched later)
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for LUT offset (patched later)
   serialization::writePod(file, static_cast<uint32_t>(0));  // Placeholder for anchor map offset (patched later)
@@ -157,15 +166,19 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
     float fileLineCompression;
     bool fileExtraParagraphSpacing;
     bool fileForceParagraphIndents;
+    uint8_t fileParagraphIndentSpaces;
     uint8_t fileParagraphAlignment;
     bool fileHyphenationEnabled;
     bool fileEmbeddedStyle;
     uint8_t fileImageRendering;
     bool fileFocusReadingEnabled;
+    int8_t fileCharacterSpacing;
+    uint8_t fileWordSpacingPercent;
     serialization::readPod(file, fileFontId);
     serialization::readPod(file, fileLineCompression);
     serialization::readPod(file, fileExtraParagraphSpacing);
     serialization::readPod(file, fileForceParagraphIndents);
+    serialization::readPod(file, fileParagraphIndentSpaces);
     serialization::readPod(file, fileParagraphAlignment);
     serialization::readPod(file, fileViewportWidth);
     serialization::readPod(file, fileViewportHeight);
@@ -173,13 +186,17 @@ bool Section::loadSectionFile(const ReaderRenderSpec& spec) {
     serialization::readPod(file, fileEmbeddedStyle);
     serialization::readPod(file, fileImageRendering);
     serialization::readPod(file, fileFocusReadingEnabled);
+    serialization::readPod(file, fileCharacterSpacing);
+    serialization::readPod(file, fileWordSpacingPercent);
 
     if (spec.fontId != fileFontId || spec.lineCompression != fileLineCompression ||
         spec.extraParagraphSpacing != fileExtraParagraphSpacing ||
         spec.forceParagraphIndents != fileForceParagraphIndents || spec.paragraphAlignment != fileParagraphAlignment ||
-        spec.viewportWidth != fileViewportWidth || spec.viewportHeight != fileViewportHeight ||
-        spec.hyphenationEnabled != fileHyphenationEnabled || spec.embeddedStyle != fileEmbeddedStyle ||
-        spec.imageRendering != fileImageRendering || spec.focusReadingEnabled != fileFocusReadingEnabled) {
+        spec.paragraphIndentSpaces != fileParagraphIndentSpaces || spec.viewportWidth != fileViewportWidth ||
+        spec.viewportHeight != fileViewportHeight || spec.hyphenationEnabled != fileHyphenationEnabled ||
+        spec.embeddedStyle != fileEmbeddedStyle || spec.imageRendering != fileImageRendering ||
+        spec.focusReadingEnabled != fileFocusReadingEnabled || spec.characterSpacing != fileCharacterSpacing ||
+        spec.wordSpacingPercent != fileWordSpacingPercent) {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: Parameters do not match");
       clearCache();
@@ -254,9 +271,7 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
     LOG_ERR("SCT", "startBuild called while a build is already active");
     return false;
   }
-  // CrossPoint c4d8c395: section layout is allocation-heavy and every SD font
-  // cache below is rebuildable. Reclaim it before CSS/parser/page arenas so a
-  // large retained glyph bitmap cannot split the remaining C3 heap.
+  // Reclaim rebuildable font caches before CSS and layout allocations.
   if (auto* fontCache = renderer.getFontCacheManager()) {
     fontCache->releaseSdFontCaches();
   }
@@ -430,6 +445,8 @@ bool Section::startBuild(const ReaderRenderSpec& spec, const std::function<void(
     return false;
   }
 
+  ctx->parser->setTextSpacing(spec.characterSpacing, spec.wordSpacingPercent);
+  ctx->parser->setParagraphIndentSpaces(spec.paragraphIndentSpaces);
   Hyphenator::setPreferredLanguage(epub->getLanguage());
   build_ = std::move(ctx);
 
@@ -626,8 +643,10 @@ bool Section::commitBuildFile(const uint8_t version, const uint32_t bytesConsume
 
 bool Section::finalizeBuild() {
   // Flush the trailing page (emits the last page via the completePageFn into the LUT).
+  // A false return means layout dropped content (OOM); committing would persist a
+  // section cache with holes in the text, so abandon the build instead.
   if (!build_->parser->finishParse()) {
-    LOG_ERR("SCT", "Failed to finish section parse");
+    LOG_ERR("SCT", "Parse finalize failed; abandoning section build");
     abandonBuild();
     return false;
   }
@@ -1082,16 +1101,27 @@ std::optional<uint16_t> Section::getPageForVisibleTextOffset(const uint32_t offs
     return std::nullopt;
   }
 
-  f.seek(visibleLutOffset);
+  if (!f.seek(visibleLutOffset)) {
+    LOG_ERR("SCT", "Failed to seek visible-text LUT");
+    return std::nullopt;
+  }
   uint16_t result = 0;
   uint32_t lastPageStart = 0;
-  for (uint16_t page = 0; page < count; ++page) {
-    uint32_t pageStart = 0;
-    serialization::readPod(f, pageStart);
-    lastPageStart = pageStart;
-    if (preferFirstAtOffset && pageStart == offset) return page;
-    if (pageStart > offset) break;
-    result = page;
+  constexpr uint32_t BATCH_PAGE_COUNT = 32;
+  uint32_t starts[BATCH_PAGE_COUNT];  // 128-byte stack buffer; offsets stay in file order for ties.
+  for (uint32_t base = 0; base < count; base += BATCH_PAGE_COUNT) {
+    const uint32_t batch = std::min<uint32_t>(BATCH_PAGE_COUNT, count - base);
+    const size_t bytes = batch * sizeof(uint32_t);
+    if (f.read(starts, bytes) != static_cast<int>(bytes)) {
+      LOG_ERR("SCT", "Failed to read visible-text LUT batch");
+      return std::nullopt;
+    }
+    for (uint32_t i = 0; i < batch; ++i) {
+      lastPageStart = starts[i];
+      if (lastPageStart > offset) return result;
+      result = static_cast<uint16_t>(base + i);
+      if (preferFirstAtOffset && lastPageStart == offset) return result;
+    }
   }
   if (partial && offset > lastPageStart) return std::nullopt;
   return result;

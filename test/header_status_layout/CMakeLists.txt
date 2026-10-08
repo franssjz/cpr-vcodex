@@ -1,0 +1,4 @@
+add_executable(HeaderStatusLayoutTest HeaderStatusLayoutTest.cpp)
+target_include_directories(HeaderStatusLayoutTest PRIVATE ${REPO_ROOT}/src/util)
+target_link_libraries(HeaderStatusLayoutTest PRIVATE crosspoint_test_common GTest::gtest_main)
+gtest_discover_tests(HeaderStatusLayoutTest)

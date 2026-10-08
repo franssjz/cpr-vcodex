@@ -143,6 +143,7 @@ void XtcReaderActivity::onEnter() {
 
 void XtcReaderActivity::onExit() {
   Activity::onExit();
+  if (xtc) pluginSession.exit(xtc->getPath());
 
   ReaderUtils::requestReaderUiTransitionRefresh(renderer);
 
@@ -158,6 +159,10 @@ void XtcReaderActivity::onExit() {
 bool XtcReaderActivity::endOfBookMenuActive() const {
   return isAtEndOfBook() && endOfBookOptionsReady.load(std::memory_order_acquire) && endOfBookOptions &&
          endOfBookOptions->menuActive();
+}
+
+void XtcReaderActivity::prepareForSleep() {
+  if (xtc) pluginSession.flush(xtc->getPath());
 }
 
 void XtcReaderActivity::clearEndOfBookOptionsIfNeeded() {
@@ -242,6 +247,7 @@ bool XtcReaderActivity::handleBackNavigation() {
 }
 
 void XtcReaderActivity::loop() {
+  if (xtc) pluginSession.openOnceRendered(xtc->getPath());
   READING_STATS.tickActiveSession();
   if (!xtc) {
     return;
@@ -311,6 +317,8 @@ void XtcReaderActivity::loop() {
   const bool skipPages = !fromTilt && SETTINGS.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP &&
                          heldMs >= ReaderUtils::SKIP_HOLD_MS;
   const int skipAmount = skipPages ? 10 : 1;
+  RenderLock turnLock(*this);
+  const uint32_t previousPage = currentPage;
 
   if (prevTriggered) {
     READING_STATS.noteActivity();
@@ -328,6 +336,7 @@ void XtcReaderActivity::loop() {
     }
     requestUpdate();
   }
+  pluginSession.noteTurn(!skipPages && !prevTriggered, previousPage != currentPage);
 }
 
 void XtcReaderActivity::requestCurrentPageFullRefresh() {
@@ -354,7 +363,11 @@ std::string XtcReaderActivity::moveCompletedBookIfEnabled() {
   const std::string title = xtc->getTitle();
   const std::string author = xtc->getAuthor();
   const std::string coverBmpPath = xtc->getCoverBmpPath();
-  xtc.reset();
+  {
+    RenderLock lock(*this);
+    pluginSession.exit(sourcePath);
+    xtc.reset();
+  }
 
   const auto moveResult =
       CompletedBookMover::moveCompletedBookIfEnabled(sourcePath, title, author, coverBmpPath, stableBookId);
@@ -394,6 +407,7 @@ void XtcReaderActivity::render(RenderLock&&) {
   // Bounds check
   if (isAtEndOfBook()) {
     renderEndOfBook();
+    pluginSession.rendered(10000);
     return;
   }
 
@@ -548,6 +562,7 @@ void XtcReaderActivity::renderPage() {
     drawStatusBarOverlays();
     ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh, forceFullRefresh);
     LOG_DBG("XTR", "Rendered page %lu/%lu (1-bit streaming)", currentPage + 1, xtc->getPageCount());
+    pluginSession.rendered(static_cast<int>(static_cast<uint64_t>(currentPage) * 10000 / xtc->getPageCount()));
     return;
   }
 
@@ -556,7 +571,7 @@ void XtcReaderActivity::renderPage() {
   // XTH (2-bit): Two bit planes, column-major, ((width * height + 7) / 8) * 2 bytes
   size_t pageBufferSize;
   if (bitDepth == 2) {
-    pageBufferSize = ((static_cast<size_t>(pageWidth) * pageHeight + 7) / 8) * 2;
+    pageBufferSize = static_cast<size_t>(pageWidth) * ((static_cast<size_t>(pageHeight) + 7) / 8) * 2;
   } else {
     pageBufferSize = ((pageWidth + 7) / 8) * pageHeight;
   }
@@ -600,7 +615,7 @@ void XtcReaderActivity::renderPage() {
     // - Pixel value = (bit1 << 1) | bit2
     // - Grayscale: 0=White, 1=Dark Grey, 2=Light Grey, 3=Black
 
-    const size_t planeSize = (static_cast<size_t>(pageWidth) * pageHeight + 7) / 8;
+    const size_t planeSize = static_cast<size_t>(pageWidth) * ((static_cast<size_t>(pageHeight) + 7) / 8);
     const uint8_t* plane1 = pageBuffer;              // Bit1 plane
     const uint8_t* plane2 = pageBuffer + planeSize;  // Bit2 plane
     const size_t colBytes = (pageHeight + 7) / 8;    // Bytes per column (100 for 800 height)
@@ -640,7 +655,7 @@ void XtcReaderActivity::renderPage() {
       const auto mode = forceFullRefresh           ? HalDisplay::FULL_REFRESH
                         : hasConfiguredRefreshMode ? configuredRefreshMode
                                                    : HalDisplay::HALF_REFRESH;
-      if (renderer.combinesGrayscaleBase()) {
+      if (renderer.grayscaleCapabilities().base == HalDisplay::GrayscaleBase::Combined) {
         renderer.displayGrayscaleBase(mode);
       } else {
         renderer.displayBuffer(mode);
@@ -696,6 +711,7 @@ void XtcReaderActivity::renderPage() {
     free(pageBuffer);
 
     LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit grayscale)", currentPage + 1, xtc->getPageCount());
+    pluginSession.rendered(static_cast<int>(currentPage * 10000ULL / xtc->getPageCount()));
     return;
   } else {
     // 1-bit mode: 8 pixels per byte, MSB first
@@ -727,6 +743,7 @@ void XtcReaderActivity::renderPage() {
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh, forceFullRefresh);
 
   LOG_DBG("XTR", "Rendered page %lu/%lu (%u-bit)", currentPage + 1, xtc->getPageCount(), bitDepth);
+  pluginSession.rendered(static_cast<int>(static_cast<uint64_t>(currentPage) * 10000 / xtc->getPageCount()));
 }
 
 void XtcReaderActivity::saveProgress() const {

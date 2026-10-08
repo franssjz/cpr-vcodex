@@ -64,6 +64,7 @@ void EpubReaderMenuActivity::buildMenuItems(std::vector<MenuItem>& items, const 
   items.push_back({MenuAction::GO_HOME, StrId::STR_GO_HOME_BUTTON});
   items.push_back({MenuAction::SYNC, StrId::STR_SYNC_PROGRESS});
   items.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
+  items.push_back({MenuAction::TEXT_SETTINGS, StrId::STR_TEXT_SETTINGS});
 }
 
 void EpubReaderMenuActivity::closeCancelled() {
@@ -96,6 +97,8 @@ void EpubReaderMenuActivity::activateIndex(const int index) {
                        // SETTINGS.orientation stays unchanged so the reader's
                        // result handler still detects the change and reflows.
                        ReaderUtils::applyOrientation(renderer, pendingOrientation);
+                       // The shorter viewport must keep the selected row visible.
+                       nav.requestSelection(nav.selected.load());
                        app.setDevice(uiTarget.deviceContext());  // hit rects follow the new frame
                        requestUpdate(true);
                      });
@@ -187,9 +190,9 @@ void EpubReaderMenuActivity::buildScreen(UiScreen& screen) {
     } else if (action == MenuAction::AUTO_PAGE_TURN) {
       menuRowItems[i].value = pageTurnLabels[selectedPageTurnOption];
     } else if (action == MenuAction::NIGHT_MODE) {
-      menuRowItems[i].value = I18N.get(SETTINGS.darkMode ? StrId::STR_STATE_ON : StrId::STR_STATE_OFF);
+      GUI.setCheckboxRow(menuRowItems[i], SETTINGS.darkMode);
     } else if (action == MenuAction::FRONTLIGHT) {
-      menuRowItems[i].value = I18N.get(Frontlight.isOn() ? StrId::STR_STATE_ON : StrId::STR_STATE_OFF);
+      GUI.setCheckboxRow(menuRowItems[i], Frontlight.isOn());
     }
   }
 
@@ -217,14 +220,7 @@ void EpubReaderMenuActivity::drawChrome() {
                  title.c_str());
 }
 
-void EpubReaderMenuActivity::render(RenderLock&&) {
+void EpubReaderMenuActivity::render(RenderLock&& lock) {
   if (optionPopup.processRender(renderer, mappedInput)) return;
-
-  renderer.clearScreen();
-  drawChrome();
-
-  renderUi();
-
-  drawFooter();
-  renderer.displayBuffer();
+  UiListActivity::render(std::move(lock));
 }

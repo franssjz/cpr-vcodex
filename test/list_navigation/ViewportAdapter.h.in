@@ -1,0 +1,14 @@
+#pragma once
+#include <FreeInkApp.h>
+namespace fui = freeink::ui;
+using UiScreen = fui::Screen<32>;
+
+struct UiListActivity {
+  fui::ListNav nav;
+  int count = 0;
+  fui::ListNav& activeNav() { return nav; }
+  int listCount() const { return count; }
+  @VIEWPORT_DECLARATIONS@
+};
+
+@VIEWPORT_METHOD@

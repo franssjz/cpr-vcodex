@@ -155,7 +155,7 @@ void ReadingStatsActivity::openEntry(const int index) {
     {
       RenderLock lock(*this);
       rebuildRows();
-      nav.selected = std::min(nav.selected, std::max(0, listCount() - 1));
+      nav.selected = std::min(nav.selected.load(), std::max(0, listCount() - 1));
       nav.follow(listCount());
     }
     guardBackReturn();
@@ -268,7 +268,7 @@ void ReadingStatsActivity::drawChrome() {
   const int count = listCount();
   const int pageRows = std::max(1, nav.pageRowsFor(count));
   const int totalPages = std::max(1, (count + pageRows - 1) / pageRows);
-  const int currentPage = std::clamp(nav.selected, 0, std::max(0, count - 1)) / pageRows + 1;
+  const int currentPage = std::clamp(nav.selected.load(), 0, std::max(0, count - 1)) / pageRows + 1;
   const std::string bookCountLabel = std::to_string(currentPage) + "/" + std::to_string(totalPages);
   const std::string startedBooksLabel =
       std::string(tr(STR_STARTED_BOOKS)) + " (" + std::to_string(READING_STATS.getBooksStartedCount()) + ")";
@@ -299,6 +299,6 @@ void ReadingStatsActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }

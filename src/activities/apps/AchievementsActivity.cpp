@@ -209,7 +209,7 @@ void AchievementsActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncTabListViewport(screen, props, /*hasSubtitle=*/true);
+  syncTabListViewport(screen, props);
   screen.list(props);
 }
 

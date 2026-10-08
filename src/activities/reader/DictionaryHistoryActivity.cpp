@@ -90,7 +90,7 @@ void DictionaryHistoryActivity::activateIndex(const int index) {
                            closeRouting();
                            history = DICTIONARIES.getHistory();
                            rebuildRowItems();
-                           nav.selected = std::min(nav.selected, std::max(0, listCount() - 1));
+                           nav.selected = std::min(nav.selected.load(), std::max(0, listCount() - 1));
                            nav.follow(listCount());
                            requestUpdate();
                          });

@@ -268,7 +268,7 @@ void FavoritesBrowserActivity::activateIndex(const int index) {
     if (files.empty()) {
       nav.selected = 0;
     } else {
-      nav.selected = std::min(nav.selected, listCount() - 1);
+      nav.selected = std::min(nav.selected.load(), listCount() - 1);
     }
   }
   requestUpdate(true);

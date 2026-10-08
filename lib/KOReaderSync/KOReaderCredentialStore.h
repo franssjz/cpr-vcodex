@@ -14,8 +14,16 @@ enum class KOReaderSyncBehavior : uint8_t {
   SMART = 1,
 };
 
+// Protocol family/capability profile selected for the configured sync server.
+enum class KOReaderServerType : uint8_t {
+  CROSSPOINT = 0,  // CrossPoint protocol extensions, including rich position.
+  KOSYNC = 1,      // Strict standard KOSync payloads.
+  OTHER = 2,       // Compatible custom servers that accept CrossPoint-style extensions.
+};
+
 // One saved KoReader server credential set.
 struct KOReaderProfile {
+  uint8_t serverType = 255;  // Legacy profiles infer protocol from the configured URL.
   std::string name;
   std::string username;
   std::string password;   // Plaintext in memory; obfuscated with hardware key on disk
@@ -104,6 +112,10 @@ class KOReaderCredentialStore {
   // extensions (rich `position` payloads). Upstream parity; the fork default stays
   // sync.koreader.rocks, so this is only true for an explicitly configured profile.
   bool usesCrossPointSyncServer() const;
+  void setServerType(KOReaderServerType type);
+  KOReaderServerType getServerType() const;
+  bool supportsRichProgress() const { return getServerType() != KOReaderServerType::KOSYNC; }
+  bool supportsExtendedMetadata() const { return getServerType() == KOReaderServerType::OTHER; }
 
   static std::string hashPassword(const std::string& password);
   static std::string resolveBaseUrl(const std::string& serverUrl);

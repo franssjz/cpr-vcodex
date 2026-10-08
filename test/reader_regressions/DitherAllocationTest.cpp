@@ -14,23 +14,19 @@ void* operator new[](std::size_t size, const std::nothrow_t&) noexcept {
   return ::operator new[](size);
 }
 
-TEST(DitherAllocation, ReportsEveryPartialRowAllocationFailure) {
-  for (int row = 0; row < 3; ++row) {
-    rowAllocationToFail = row;
-    AtkinsonDitherer atkinson(8);
-    rowAllocationToFail = -1;
-    EXPECT_FALSE(atkinson.isValid());
-    rowAllocationToFail = row;
-    Atkinson1BitDitherer oneBit(8);
-    rowAllocationToFail = -1;
-    EXPECT_FALSE(oneBit.isValid());
-  }
-  for (int row = 0; row < 2; ++row) {
-    rowAllocationToFail = row;
-    FloydSteinbergDitherer floyd(8);
-    rowAllocationToFail = -1;
-    EXPECT_FALSE(floyd.isValid());
-  }
+TEST(DitherAllocation, ReportsArenaAllocationFailure) {
+  rowAllocationToFail = 0;
+  AtkinsonDitherer atkinson(8);
+  rowAllocationToFail = -1;
+  EXPECT_FALSE(atkinson.isValid());
+  rowAllocationToFail = 0;
+  Atkinson1BitDitherer oneBit(8);
+  rowAllocationToFail = -1;
+  EXPECT_FALSE(oneBit.isValid());
+  rowAllocationToFail = 0;
+  FloydSteinbergDitherer floyd(8);
+  rowAllocationToFail = -1;
+  EXPECT_FALSE(floyd.isValid());
 }
 
 TEST(DitherAllocation, SuccessfulBuffersRemainUsableAfterFailures) {

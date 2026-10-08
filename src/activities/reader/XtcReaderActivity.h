@@ -15,9 +15,11 @@
 #include <utility>
 
 #include "EndOfBookOptions.h"
+#include "ReaderPluginSession.h"
 #include "activities/Activity.h"
 
 class XtcReaderActivity final : public Activity {
+  ReaderPluginSession pluginSession;
   std::shared_ptr<Xtc> xtc;
   std::string stableBookId;
 
@@ -61,6 +63,7 @@ class XtcReaderActivity final : public Activity {
                              bool allowFastInitialRefresh = false);
   void onEnter() override;
   void onExit() override;
+  void prepareForSleep() override;
   void loop() override;
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }

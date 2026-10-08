@@ -1,5 +1,6 @@
 #include "SleepActivity.h"
 
+#include <BitmapHelpers.h>
 #include <Epub.h>
 #include <Epub/converters/PngToFramebufferConverter.h>
 #include <FontCacheManager.h>
@@ -43,6 +44,29 @@ namespace {
 bool canUseSleepCache(const Bitmap& bitmap) {
   return !(bitmap.hasGreyscale() &&
            SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
+}
+// Metalio: B/W sleep images use the full 0xF7 waveform instead of HALF (two
+// 0xFC partials), matching the clean pass before absolute gray below.
+#if FREEINK_DEVICE_METALIO_EINK4
+constexpr auto kSleepClean = HalDisplay::FULL_REFRESH;
+#else
+constexpr auto kSleepClean = HalDisplay::HALF_REFRESH;
+#endif
+
+// The absolute gray paint has no base pass. On Metalio the prior screen shows
+// through it after the panel sits unpowered, so clean with 0xF7 first.
+void cleanBeforeAbsoluteGray(GfxRenderer& renderer) {
+#if FREEINK_DEVICE_METALIO_EINK4
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+#else
+  (void)renderer;
+#endif
+}
+
+HalDisplay::GrayscaleMode sleepGrayscaleMode(const GfxRenderer& renderer) {
+  return renderer.grayscaleCapabilities(HalDisplay::GrayscaleMode::Direct).supported()
+             ? HalDisplay::GrayscaleMode::Direct
+             : HalDisplay::GrayscaleMode::Absolute;
 }
 
 bool usesCustomSleepImages() {
@@ -687,11 +711,12 @@ bool renderTransparentOverlayPass(HalFile& file, const OverlayBmpInfo& info, con
           renderer.drawPixel(screenX, screenY, level < 3);
           break;
         case TransparentOverlayPass::GrayscaleLsb:
-          if (level == 1) renderer.drawPixel(screenX, screenY, false);
+        case TransparentOverlayPass::GrayscaleMsb: {
+          const auto planePixel =
+              grayPlanePixel(level, pass == TransparentOverlayPass::GrayscaleMsb, renderer.grayPlanesAreAbsolute());
+          if (planePixel.write) renderer.drawPixel(screenX, screenY, planePixel.black);
           break;
-        case TransparentOverlayPass::GrayscaleMsb:
-          if (level == 1 || level == 2) renderer.drawPixel(screenX, screenY, false);
-          break;
+        }
       }
     }
   }
@@ -746,19 +771,26 @@ AlphaOverlayResult tryRenderTransparentOverlayBmp(HalFile& file, GfxRenderer& re
 
   if (!renderTransparentOverlayPass(file, info, placement, renderer, row.get(), TransparentOverlayPass::BW))
     return AlphaOverlayResult::Error;
-  displaySleepGrayscaleBase(renderer);
+  const bool absolute = renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported();
+  if (absolute) {
+    cleanBeforeAbsoluteGray(renderer);
+    if (!renderer.displayGrayscaleBase(sleepGrayscaleMode(renderer))) return AlphaOverlayResult::Error;
+  } else {
+    renderer.displayGrayscaleBase(HalDisplay::HALF_REFRESH);
+  }
 
-  renderer.clearScreen(0x00);
+  // Absolute planes retain B/W background bits; each visible overlay pixel is rewritten in both passes.
+  if (!absolute) renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
   if (!renderTransparentOverlayPass(file, info, placement, renderer, row.get(), TransparentOverlayPass::GrayscaleLsb)) {
     renderer.setRenderMode(GfxRenderer::BW);
-    // The BW composite is already on the panel. Keep it instead of falling
-    // through to another overlay with this grayscale work buffer cleared.
+    // Keep the current display instead of trying another overlay with a
+    // framebuffer that now contains an incomplete gray plane.
     return AlphaOverlayResult::Rendered;
   }
   renderer.copyGrayscaleLsbBuffers();
 
-  renderer.clearScreen(0x00);
+  if (!absolute) renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
   if (!renderTransparentOverlayPass(file, info, placement, renderer, row.get(), TransparentOverlayPass::GrayscaleMsb)) {
     renderer.setRenderMode(GfxRenderer::BW);
@@ -1287,7 +1319,10 @@ void SleepActivity::renderCustomSleepScreen() const {
   HalFile file;
   if (Storage.openFileForRead("SLP", "/sleep.bmp", file)) {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-    Bitmap bitmap(file, true);
+    Bitmap bitmap(file, true,
+                  renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported() &&
+                      display.getController() == HalDisplay::Controller::SSD1677 &&
+                      SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
     if (bitmap.parseHeaders() == BmpReaderError::Ok) {
       LOG_DBG("SLP", "Loading: /sleep.bmp");
       if (SleepScreenCache::load(renderer, "/sleep.bmp")) {
@@ -1381,7 +1416,10 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap, const std::str
       bitmap.hasGreyscale() && (preserveBackground || SETTINGS.sleepScreenCoverFilter ==
                                                           CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER);
 
-  renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY);
+  if (!renderer.drawBitmap(bitmap, x, y, pageWidth, pageHeight, cropX, cropY, preserveBackground)) {
+    renderer.displayBuffer(kSleepClean);
+    return;
+  }
 
   if (!preserveBackground &&
       SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE) {
@@ -1452,9 +1490,15 @@ bool SleepActivity::renderTransparentOverlayPng(const std::string& path) const {
   LOG_DBG("SLP", "Rendering transparent PNG overlay: %s (%dx%d)", path.c_str(), dimensions.width, dimensions.height);
 
   if (!converter.decodeToFramebuffer(path, renderer, config)) return false;
-  displaySleepGrayscaleBase(renderer);
+  const bool absolute = renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported();
+  if (absolute) {
+    if (!renderer.displayGrayscaleBase(sleepGrayscaleMode(renderer))) return false;
+  } else {
+    renderer.displayGrayscaleBase(HalDisplay::HALF_REFRESH);
+  }
 
-  renderer.clearScreen(0x00);
+  // Absolute planes retain B/W background bits; each visible overlay pixel is rewritten in both passes.
+  if (!absolute) renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
   if (!converter.decodeToFramebuffer(path, renderer, config)) {
     renderer.setRenderMode(GfxRenderer::BW);
@@ -1462,7 +1506,7 @@ bool SleepActivity::renderTransparentOverlayPng(const std::string& path) const {
   }
   renderer.copyGrayscaleLsbBuffers();
 
-  renderer.clearScreen(0x00);
+  if (!absolute) renderer.clearScreen(0x00);
   renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
   if (!converter.decodeToFramebuffer(path, renderer, config)) {
     renderer.setRenderMode(GfxRenderer::BW);
@@ -1505,12 +1549,13 @@ void SleepActivity::renderTransparentCustomSleepScreen() const {
 void SleepActivity::renderLastScreenSleepScreen() const {
   const auto pageHeight = renderer.getScreenHeight();
   renderer.drawImage(MoonIcon, 0, pageHeight - MOONICON_HEIGHT, MOONICON_WIDTH, MOONICON_HEIGHT);
+  // Only the moon differs from the displayed frame, so a differential FAST
+  // update adds it without the flashing clean pass (which sweeps the panel
+  // through the inverse — a full white flash on a night-mode page).
   if (gpio.deviceIsX3()) {
-    // The controller still holds the displayed page, so its differential base
-    // waveform can add the moon without a full-screen flash.
     renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
   } else {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   }
 }
 

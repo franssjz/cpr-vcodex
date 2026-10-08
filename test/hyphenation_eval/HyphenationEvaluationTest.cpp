@@ -260,3 +260,4 @@ TEST(HyphenationEval, TurkishCasefoldRegression) {
         << " equivalent=" << positionsToHyphenated(expectedEquivalent, equivalentBreaks);
   }
 }
+TEST(HyphenationEval, Portuguese) { runLanguageEval("portuguese", "pt", "portuguese_hyphenation_tests.txt", 98.21); }

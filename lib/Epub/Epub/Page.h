@@ -36,12 +36,12 @@ class PageElement {
 
 // a line from a block element
 class PageLine final : public PageElement {
-  std::shared_ptr<TextBlock> block;
+  std::unique_ptr<TextBlock> block;
 
  public:
-  PageLine(std::shared_ptr<TextBlock> block, const int16_t xPos, const int16_t yPos)
+  PageLine(std::unique_ptr<TextBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), block(std::move(block)) {}
-  const std::shared_ptr<TextBlock>& getBlock() const { return block; }
+  const TextBlock* getBlock() const { return block.get(); }
   void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, uint8_t bionicReadingMode = 0) override;
   bool serialize(HalFile& file) override;
   PageElementTag getTag() const override { return TAG_PageLine; }
@@ -50,10 +50,10 @@ class PageLine final : public PageElement {
 
 // New PageImage class
 class PageImage final : public PageElement {
-  std::shared_ptr<ImageBlock> imageBlock;
+  std::unique_ptr<ImageBlock> imageBlock;
 
  public:
-  PageImage(std::shared_ptr<ImageBlock> block, const int16_t xPos, const int16_t yPos)
+  PageImage(std::unique_ptr<ImageBlock> block, const int16_t xPos, const int16_t yPos)
       : PageElement(xPos, yPos), imageBlock(std::move(block)) {}
   void render(GfxRenderer& renderer, int fontId, int xOffset, int yOffset, uint8_t bionicReadingMode = 0) override;
   void renderPlaceholder(GfxRenderer& renderer, int xOffset, int yOffset) const;
@@ -128,9 +128,6 @@ class PageTableFragment final : public PageElement {
 class Page {
  public:
   // the list of block index and line numbers on this page
-  // Elements have one owner (the page). unique_ptr avoids a separate shared
-  // control-block allocation per line/image/rule, a major source of EPUB heap
-  // fragmentation on the C3 (adapted from CrossPoint c33a8b0e).
   std::vector<std::unique_ptr<PageElement>> elements;
   std::vector<FootnoteEntry> footnotes;
   static constexpr uint16_t MAX_FOOTNOTES_PER_PAGE = 16;

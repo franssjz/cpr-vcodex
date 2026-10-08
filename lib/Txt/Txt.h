@@ -4,6 +4,9 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
+
+class BookMetadataCache;
 
 class Txt {
   std::string filepath;
@@ -13,6 +16,15 @@ class Txt {
   size_t fileSize = 0;
 
  public:
+  static bool isTxtOrMd(std::string_view path);
+  static bool validateCache(const std::string& filepath, const std::string& cachePath, size_t cachedSize);
+  static void invalidateCache(const std::string& cachePath);
+  static bool streamTxtToHtml(const std::string& filepath, Print& out);
+  static std::string findCompanionCoverImage(const std::string& filepath);
+  static bool convertCoverImageToBmp(const std::string& imagePath, const std::string& destBmpPath, int thumbHeight = 0,
+                                     bool cropped = false, bool originalThresholds = false);
+  static bool buildTxtCache(const std::string& filepath, const std::string& cachePath,
+                            std::unique_ptr<BookMetadataCache>& bookMetadataCache);
   explicit Txt(std::string path, std::string cacheBasePath);
 
   bool load();

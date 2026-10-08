@@ -1,0 +1,25 @@
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -37,1 +37,2 @@
+ #include "MappedInputManager.h"
++#include "../test/simulator/NavigationFixture.h"
+@@ -938,1 +939,7 @@
+ void loop() {
++  static bool navFixtureStarted = false;
++  if (!navFixtureStarted && std::getenv("CPR_NAV_SCREEN")) {
++    navFixtureStarted = true;
++    startNavigationFixture(renderer, mappedInputManager);
++  }
++
+diff --git a/src/activities/UiListActivity.cpp b/src/activities/UiListActivity.cpp
+--- a/src/activities/UiListActivity.cpp
++++ b/src/activities/UiListActivity.cpp
+@@ -126,1 +126,3 @@
+   screen.syncListViewport(n, props, listCount(), selectionOffset);
++  printf("NAV|%s|%d|%d|%d|%d\n", name.c_str(), n.selected.load(), props.selectedIndex, listCount(), selectionOffset);
++
+@@ -197,1 +199,3 @@
+   renderer.displayBuffer();
++  printf("DRAW|%s|%d|%d|%d\n", name.c_str(), activeNav().selected.load(), activeNav().top, activeNav().drawnRows);
++

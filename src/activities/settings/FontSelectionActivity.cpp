@@ -8,6 +8,7 @@
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "ReaderFontSizes.h"
+#include "ReaderSettingLabels.h"
 #include "components/UITheme.h"
 
 namespace fui = freeink::ui;
@@ -58,8 +59,9 @@ void FontSelectionActivity::onEnter() {
   fonts_.clear();
   fonts_.reserve(CrossPointSettings::BUILTIN_FONT_COUNT + (registry_ ? registry_->getFamilyCount() : 0));
 
-  fonts_.push_back({I18N.get(StrId::STR_BOOKERLY), true, CrossPointSettings::BOOKERLY});
-  fonts_.push_back({I18N.get(StrId::STR_NOTO_SANS), true, CrossPointSettings::NOTOSANS});
+  for (size_t i = 0; i < ReaderSettingLabels::builtinFonts.size(); ++i) {
+    fonts_.push_back({I18N.get(ReaderSettingLabels::builtinFonts[i]), true, static_cast<uint8_t>(i)});
+  }
 
   if (registry_) {
     const auto& families = registry_->getFamilies();

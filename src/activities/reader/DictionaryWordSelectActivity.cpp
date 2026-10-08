@@ -15,6 +15,7 @@
 #include "DictionaryDefinitionActivity.h"
 #include "DictionaryStore.h"
 #include "DictionarySuggestionsActivity.h"
+#include "HapticFeedback.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -64,7 +65,7 @@ void DictionaryWordSelectActivity::extractWords() {
     if (!element || element->getTag() != TAG_PageLine) continue;
     const auto& line = static_cast<const PageLine&>(*element);
     const auto& block = line.getBlock();
-    if (!block) continue;
+    if (!block || !block->valid()) continue;
 
     const int rubyShift = block->getRubyShift(renderer.getFontAscenderSize(readerFontId));
     const size_t count = block->wordCount();
@@ -564,6 +565,7 @@ void DictionaryWordSelectActivity::loop() {
   if (!rows.empty() && mappedInput.wasScreenTapped(tx, ty)) {
     const int hit = wordAt(tx, ty);
     if (hit >= 0) {
+      haptic_feedback::touchAction();
       selectWordIndex(hit);
       if (highlightPhraseMode) {
         confirmHighlightSelection();

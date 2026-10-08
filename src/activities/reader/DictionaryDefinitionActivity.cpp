@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "CrossPointSettings.h"
+#include "HapticFeedback.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"

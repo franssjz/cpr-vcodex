@@ -45,7 +45,7 @@ void FavoritesOrderActivity::reloadEntries() {
   if (entries.empty()) {
     nav.selected = 0;
   } else {
-    nav.selected = std::clamp(nav.selected, 0, static_cast<int>(entries.size()) - 1);
+    nav.selected = std::clamp(nav.selected.load(), 0, static_cast<int>(entries.size()) - 1);
   }
   rebuildRowItems();
 }
@@ -205,6 +205,6 @@ void FavoritesOrderActivity::buildScreen(UiScreen& screen) {
   fui::TextStyle label = screen.theme().smallText;
   label.bold = true;
   props.labelText = label;
-  syncListViewport(screen, props, /*hasSubtitle=*/true);
+  syncListViewport(screen, props);
   screen.list(props);
 }

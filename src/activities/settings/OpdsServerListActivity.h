@@ -24,7 +24,7 @@ class OpdsServerListActivity final : public UiListActivity {
   void activateIndex(int index) override;
   // Popup input goes first; while it is open it consumes the pass.
   bool handleCustomInput() override;
-  // Picker mode backs out to the home menu rather than finishing.
+  // Picker mode returns to its caller, or the OPDS Home entry when launched at root.
   void onBackButton() override;
   const char* headerTitle() const override;
 

@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <HalMemory.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_crt_bundle.h>
@@ -671,7 +672,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       outProgress.deviceId = doc["device_id"].as<std::string>();
       outProgress.timestamp = doc["timestamp"].as<int64_t>();
       outProgress.position.reset();
-      if (KOREADER_STORE.usesCrossPointSyncServer()) {
+      if (KOREADER_STORE.supportsRichProgress()) {
         // CrossPoint-specific extension (upstream parity): only crosspoint-sync servers send it.
         const JsonObjectConst pos = doc["position"].as<JsonObjectConst>();
         if (!pos.isNull()) {
@@ -722,17 +723,36 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
   JsonDocument doc;
   doc["document"] = progress.document;
   if (progress.metadata.has_value()) {
-    auto metadata = doc["metadata"].to<JsonObject>();
-    metadata["filename"] = progress.metadata->filename;
-    metadata["title"] = progress.metadata->title;
-    metadata["authors"] = progress.metadata->authors;
+    auto meta = doc["metadata"].to<JsonObject>();
+    meta["filename"] = progress.metadata->filename;
+    meta["title"] = progress.metadata->title;
+    meta["authors"] = progress.metadata->authors;
+    if (KOREADER_STORE.supportsExtendedMetadata()) {
+      if (!progress.metadata->isbn.empty()) meta["isbn"] = progress.metadata->isbn;
+      if (!progress.metadata->asin.empty()) meta["asin"] = progress.metadata->asin;
+      if (!progress.metadata->series.empty()) meta["series"] = progress.metadata->series;
+      if (progress.metadata->seriesIndex.has_value()) meta["series_index"] = *progress.metadata->seriesIndex;
+    }
+
+    JsonDocument extra;
+    if (KOREADER_STORE.supportsExtendedMetadata() && !progress.metadata->extraJson.empty() &&
+        deserializeJson(extra, progress.metadata->extraJson) == DeserializationError::Ok) {
+      for (JsonPairConst kv : extra.as<JsonObjectConst>()) {
+        // Flat strings, numbers, and booleans keep their JSON type; null and
+        // nested values are skipped, and the reserved keys above always win.
+        const JsonVariantConst value = kv.value();
+        if (!(value.is<const char*>() || value.is<bool>() || value.is<long long>() || value.is<double>())) continue;
+        if (!meta[kv.key().c_str()].isNull()) continue;
+        meta[kv.key().c_str()] = value;
+      }
+    }
   }
   doc["progress"] = progress.progress;
   doc["percentage"] = progress.percentage;
   doc["device"] = DEVICE_NAME;
   doc["device_id"] = DEVICE_ID;
-  if (progress.position.has_value() && KOREADER_STORE.usesCrossPointSyncServer()) {
-    // CrossPoint-specific extension: do not send it to third-party KOSync servers.
+  if (progress.position.has_value() && KOREADER_STORE.supportsRichProgress()) {
+    // Enhanced position is opt-in by server type; strict KOSync never receives it.
     const auto& p = *progress.position;
     auto pos = doc["position"].to<JsonObject>();
     pos["pctQ"] = p.pctQ;

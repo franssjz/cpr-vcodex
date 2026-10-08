@@ -2,6 +2,7 @@
 .idea
 .DS_Store
 .vscode
+.zed
 open-x4-sdk
 fs_
 lib/EpdFont/fontsrc
@@ -35,4 +36,5 @@ build
 /dependencies.lock
 /sdkconfig.*
 sdkconfig.sticky
+sdkconfig.x4pro
 flake.*

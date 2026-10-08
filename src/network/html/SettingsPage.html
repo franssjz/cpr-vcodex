@@ -304,6 +304,7 @@
 
   <div id="wifi-container"></div>
   <div id="opds-container"></div>
+  <div id="plugin-container"></div>
 
   <div class="card">
     <p style="text-align: center; color: #95a5a6; margin: 0;">
@@ -365,12 +366,13 @@
     }
 
     if (setting.type === 'string') {
-      const isPassword = setting.key === 'koPassword' || setting.name.toLowerCase().includes('password');
+      const isPassword = setting.key === 'koPassword' || 'hasPassword' in setting || setting.name.toLowerCase().includes('password');
       const inputType = isPassword ? 'password' : 'text';
       const val = setting.value || '';
-      const placeholder = isPassword && setting.configured ? ' placeholder="(unchanged)"' : '';
       return '<input type="' + inputType + '" id="' + id + '" value="' + escapeHtml(val) + '"' +
-        placeholder + ' oninput="handleSettingChanged(\'' + setting.key + '\')">';
+        ' placeholder="' + (setting.hasPassword ? '(unchanged)' : '') + '"' +
+        ' oninput="this.dataset.changed=\'true\';handleSettingChanged(\'' + setting.key + '\')">' +
+        (setting.hasPassword ? ' <button class="btn-small btn-delete" type="button" onclick="clearPassword(\'' + setting.key + '\')">Clear</button>' : '');
     }
 
     return '';
@@ -390,6 +392,7 @@
       return parseInt(el.value, 10);
     }
     if (setting.type === 'string') {
+      if ('hasPassword' in setting && !el.dataset.changed) return undefined;
       return el.value;
     }
     return undefined;
@@ -397,6 +400,13 @@
 
   function markChanged() {
     document.getElementById('saveBtn').disabled = false;
+  }
+
+  function clearPassword(key) {
+    const el = getControl(key);
+    el.value = '';
+    el.dataset.changed = 'true';
+    handleSettingChanged(key);
   }
 
   function findSetting(key) {
@@ -569,7 +579,7 @@
     const changes = {};
     allSettings.forEach(function(s) {
       const current = getValue(s);
-      if (current !== undefined && current !== originalValues[s.key]) {
+      if (current !== undefined && (current !== originalValues[s.key] || 'hasPassword' in s)) {
         changes[s.key] = current;
       }
     });
@@ -599,11 +609,12 @@
           const passwordInput = document.getElementById('setting-' + key);
           if (passwordInput) {
             passwordInput.value = '';
-            passwordInput.placeholder = '(unchanged)';
+            passwordInput.placeholder = changes[key] ? '(unchanged)' : '';
+            delete passwordInput.dataset.changed;
           }
           originalValues[key] = '';
           const setting = allSettings.find(function(s) { return s.key === key; });
-          if (setting) setting.configured = true;
+          if (setting) setting.hasPassword = changes[key].length > 0;
         } else {
           originalValues[key] = changes[key];
         }
@@ -845,13 +856,16 @@
     }
   }
 
+<!--#include file="shared/PluginHost.js.inc" -->
+
   // Sequential, not concurrent: the device's web server handles one client
-  // connection at a time, and three simultaneous fetches on page load can
+  // connection at a time, and simultaneous fetches on page load can
   // stall long enough inside a single response to trip the firmware watchdog.
   (async () => {
     await loadSettings();
     await loadWifiNetworks();
     await loadOpdsServers();
+    await loadPlugins('settings');
   })();
 </script>
 </body>
