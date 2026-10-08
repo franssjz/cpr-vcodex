@@ -177,3 +177,11 @@ The public release budget assets are authoritative for its final BIN size.
 Physical X3 and end-to-end OTA validation of this release remain pending;
 the earlier dev35 USB installation on one original X4 is not equivalent.
 X4 Pro distribution stays withdrawn, and the C3 BIN is not for X4 Classic/X4C.
+
+The first clean GitHub build exposed a DRAM section-type conflict in ESP-IDF
+when the global `-flto` flag reached its custom SDK rebuild. Local builds had
+reused already-built SDK libraries and did not expose it. `enable_lto.py` now
+uses a pre-build middleware for application objects and excludes the SDK-only
+pass; LTO is no longer a global build flag. Five host checks cover that boundary
+and linker configuration in the `firmware_lto_regressions` suite. This brings
+the full native CTest count to 644. No BIN was published by the failed attempt.

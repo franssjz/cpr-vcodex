@@ -99,6 +99,8 @@ if(Python3_Interpreter_FOUND)
   set_tests_properties(autoflash_manifest_regressions PROPERTIES WORKING_DIRECTORY ${REPO_ROOT})
   add_test(NAME firmware_packaging_regressions
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/release_tools/FirmwarePackagingTest.py)
+  add_test(NAME firmware_lto_regressions
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/release_tools/FirmwareLtoTest.py)
   add_test(
     NAME web_optimizer_regressions
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/web_optimizer_regressions/EpubOptimizerFallbackTest.py
