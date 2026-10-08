@@ -15,8 +15,6 @@ def application_lto(build_env, node):
 
 def configure_lto(env):
     env.AddBuildMiddleware(application_lto)
-    # The platform builds LINKFLAGS separately from the per-object CCFLAGS.
-    env.AppendUnique(LINKFLAGS=["-flto", "-fuse-linker-plugin"])
 
 
 if "Import" in globals():

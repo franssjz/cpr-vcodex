@@ -183,5 +183,7 @@ when the global `-flto` flag reached its custom SDK rebuild. Local builds had
 reused already-built SDK libraries and did not expose it. `enable_lto.py` now
 uses a pre-build middleware for application objects and excludes the SDK-only
 pass; LTO is no longer a global build flag. Five host checks cover that boundary
-and linker configuration in the `firmware_lto_regressions` suite. This brings
+and linker configuration in the `firmware_lto_regressions` suite. The separate
+`post:scripts/link_lto.py` hook overrides the framework's late `-fno-lto` only
+for the application link, not the SDK-only pass. This brings
 the full native CTest count to 644. No BIN was published by the failed attempt.

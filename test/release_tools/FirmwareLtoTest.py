@@ -7,6 +7,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("enable_lto", ROOT / "scripts" / "enable_lto.py")
 LTO = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(LTO)
+LINK_SPEC = importlib.util.spec_from_file_location("link_lto", ROOT / "scripts" / "link_lto.py")
+LINKER = importlib.util.module_from_spec(LINK_SPEC)
+LINK_SPEC.loader.exec_module(LINKER)
 
 
 class FakeEnvironment(dict):
@@ -16,10 +19,8 @@ class FakeEnvironment(dict):
     def AddBuildMiddleware(self, callback):
         self["middleware"] = callback
 
-    def AppendUnique(self, **values):
-        for key, flags in values.items():
-            current = self.setdefault(key, [])
-            current.extend(flag for flag in flags if flag not in current)
+    def Replace(self, **values):
+        self.update(values)
 
 
 class FirmwareLtoTest(unittest.TestCase):
@@ -46,11 +47,15 @@ class FirmwareLtoTest(unittest.TestCase):
             self.assertIs(LTO.application_lto(env, node), node)
 
     def test_linker_support_is_enabled_without_global_compiler_flags(self):
-        env = FakeEnvironment(CCFLAGS=["-Os"], LINKFLAGS=["-Wl,--gc-sections", "-flto"])
+        env = FakeEnvironment(CCFLAGS=["-Os"], LINKFLAGS=["-Wl,--gc-sections", "-flto", "-fno-lto"])
         LTO.configure_lto(env)
         self.assertIs(env["middleware"], LTO.application_lto)
+        LINKER.configure_linker(env)
         self.assertEqual(env["CCFLAGS"], ["-Os"])
         self.assertEqual(env["LINKFLAGS"], ["-Wl,--gc-sections", "-flto", "-fuse-linker-plugin"])
+        sdk_env = FakeEnvironment(ARDUINO_LIB_COMPILE_FLAG="Build", LINKFLAGS=["-fno-lto"])
+        LINKER.configure_linker(sdk_env)
+        self.assertEqual(sdk_env["LINKFLAGS"], ["-fno-lto"])
 
     def test_global_build_flags_do_not_leak_lto_into_sdk(self):
         import configparser
@@ -60,6 +65,7 @@ class FirmwareLtoTest(unittest.TestCase):
         flags = [line.strip() for line in config["base"]["build_flags"].splitlines()]
         self.assertFalse(any(flag.startswith("-flto") for flag in flags))
         self.assertIn("pre:scripts/enable_lto.py", config["base"]["extra_scripts"])
+        self.assertIn("post:scripts/link_lto.py", config["base"]["extra_scripts"])
 
 
 if __name__ == "__main__":
