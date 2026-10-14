@@ -915,6 +915,7 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["showBootScreen"] = s.showBootScreen;
   doc["readerActivityLoadCount"] = s.readerActivityLoadCount;
   doc["lastSleepFromReader"] = s.lastSleepFromReader;
+  doc["flashcardResumePath"] = s.flashcardResumePath;
   doc["lastKnownValidTimestamp"] = s.lastKnownValidTimestamp;
   doc["lastReadingStatsBackupDayOrdinal"] = s.lastReadingStatsBackupDayOrdinal;
   doc["syncDayReminderStartCount"] = s.syncDayReminderStartCount;
@@ -997,6 +998,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
       static_cast<uint8_t>(std::min(static_cast<int>(s.recentOverlaySleepFill), actualOverlayCount));
   s.readerActivityLoadCount = doc["readerActivityLoadCount"] | (uint8_t)0;
   s.lastSleepFromReader = doc["lastSleepFromReader"] | false;
+  s.flashcardResumePath = doc["flashcardResumePath"] | std::string("");
   s.showBootScreen = doc["showBootScreen"] | true;
   s.lastKnownValidTimestamp = doc["lastKnownValidTimestamp"] | static_cast<uint32_t>(0);
   s.lastReadingStatsBackupDayOrdinal = doc["lastReadingStatsBackupDayOrdinal"] | static_cast<uint32_t>(0);

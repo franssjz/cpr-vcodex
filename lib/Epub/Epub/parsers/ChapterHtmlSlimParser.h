@@ -95,6 +95,7 @@ class ChapterHtmlSlimParser {
   int imageCounter = 0;
   bool lowMemoryImageFallback = false;
   bool lowMemoryAbort = false;
+  bool attemptedLayoutCacheReclaim = false;
   bool attemptedTextLayoutFontCacheRelease = false;
   bool loggedSoftLowMemoryContinuation = false;
 

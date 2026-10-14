@@ -58,21 +58,26 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | 644 native tests, including 81 OTA cases and clean-build LTO flag regressions, and simulator navigation/reader regressions pass. The dev35 candidate booted twice after USB installation on one X4. End-to-end OTA of this integration and physical X3 validation remain pending; early boot confirmation is not a full rollback guarantee. |
+| Release validation | 664 native tests pass, including OTA, wake navigation and flashcard persistence regressions. Six simulator sleep/resume scenarios pass for EPUB, TXT and flashcards, covering manual sleep and Quick Resume after timeout. Physical validation of 1.6.5.2, end-to-end OTA and X3 validation remain pending. [Results and limits](agent-docs/issues-223-226-2026-10.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## What's new in 1.6.5.1
+## What's new in 1.6.5.2
 
-The upstream integration adds library indexing, SD plugins and their web/event
-APIs, TTF fonts and reader layout improvements while preserving the fork's
-reading statistics, Sync Day, highlights, dictionaries, flashcards and themes.
-Apps and Sync Day now open the selected item; oversized popups scroll, and one
-Back press returns one screen instead of accidentally skipping to Home.
-Reader font previews and quick-setting labels have also been corrected.
+- Waking from sleep restores the book instead of accidentally returning to its
+  folder or Home.
+- Flashcards resume the current session after sleep, preserving card order,
+  the displayed side, scroll position and session counts. Ratings are also
+  saved when leaving review; failed writes preserve the previous progress file.
+- EPUB chapter loading reclaims caches under memory pressure before giving up.
+  This may reduce the reported large-X error; its exact cause still needs
+  confirmation with an affected book or device log.
+
+Locked-X3 OTA compatibility and the reported SD-card mounting failure remain
+under investigation; this release does not claim to resolve them.
 
 > [!IMPORTANT]
 > Use only the shared ESP32-C3 BIN for the original X4 or X3. Do not use it on

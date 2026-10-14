@@ -76,6 +76,8 @@ class CrossPointState {
   uint8_t recentOverlaySleepFill = 0;
   uint8_t readerActivityLoadCount = 0;
   bool lastSleepFromReader = false;
+  // One-shot wake target; only set after the active flashcard session is saved.
+  std::string flashcardResumePath;
   // Cleared once the boot screen has been shown; set again before a persisted
   // sleep so the next cold boot shows it (upstream Quick Resume / persisted sleep wake).
   bool showBootScreen = true;

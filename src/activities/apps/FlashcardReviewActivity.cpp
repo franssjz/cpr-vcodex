@@ -8,6 +8,7 @@
 #include <iterator>
 
 #include "CrossPointSettings.h"
+#include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "ReaderFontSizes.h"
 #include "components/UITheme.h"
@@ -226,8 +227,15 @@ void FlashcardReviewActivity::loadDeckData() {
   }
   const FlashcardDeckMetrics metrics = FLASHCARDS.buildMetrics(deck, progress);
   FLASHCARDS.registerDeckOpened(deck, metrics);
-  queue = FLASHCARDS.buildSessionQueue(deck, progress);
-  initialSessionSize = static_cast<int>(queue.size());
+  const bool resumed =
+      restoreSession && session.load(deck, progress, SETTINGS.flashcardStudyMode, SETTINGS.flashcardSessionSize);
+  if (!resumed) {
+    session.queue = FLASHCARDS.buildSessionQueue(deck, progress);
+    session.initialSessionSize = static_cast<int>(session.queue.size());
+  }
+  restoreSession = false;
+  LOG_DBG("FCR", "Study session %s: remaining=%zu reviewed=%d side=%s", resumed ? "resumed" : "started",
+          session.queue.size(), session.reviewed, session.showBack ? "back" : "front");
   activeCard = {};
   activeCardIndex = -1;
   activeCardLoaded = false;
@@ -235,21 +243,23 @@ void FlashcardReviewActivity::loadDeckData() {
 }
 
 bool FlashcardReviewActivity::isCurrentCardUnseen() const {
-  if (queueIndex >= queue.size()) {
+  if (session.queueIndex >= session.queue.size()) {
     return false;
   }
-  const int index = queue[queueIndex];
+  const int index = session.queue[session.queueIndex];
   return index >= 0 && index < static_cast<int>(progress.size()) && progress[index].seenCount == 0;
 }
 
-FlashcardCardProgress& FlashcardReviewActivity::currentProgress() { return progress[queue[queueIndex]]; }
+FlashcardCardProgress& FlashcardReviewActivity::currentProgress() {
+  return progress[session.queue[session.queueIndex]];
+}
 
 bool FlashcardReviewActivity::ensureCurrentCardLoaded() {
-  if (queueIndex >= queue.size()) {
+  if (session.queueIndex >= session.queue.size()) {
     return false;
   }
 
-  const int cardIndex = queue[queueIndex];
+  const int cardIndex = session.queue[session.queueIndex];
   if (activeCardLoaded && activeCardIndex == cardIndex) {
     return true;
   }
@@ -264,7 +274,9 @@ bool FlashcardReviewActivity::ensureCurrentCardLoaded() {
 
   activeCardIndex = cardIndex;
   activeCardLoaded = true;
+  const int savedScrollOffset = session.scrollLineOffset;
   invalidateCardLayout();
+  session.scrollLineOffset = savedScrollOffset;
   return true;
 }
 
@@ -276,37 +288,37 @@ void FlashcardReviewActivity::invalidateCardLayout() {
   wrappedFontId = 0;
   wrappedLineHeight = 0;
   visibleLineCount = 1;
-  scrollLineOffset = 0;
+  session.scrollLineOffset = 0;
   maxScrollLineOffset = 0;
 }
 
 void FlashcardReviewActivity::scrollCard(const int direction) {
   const int pageStep = std::max(1, visibleLineCount - 1);
-  const int nextOffset = std::clamp(scrollLineOffset + direction * pageStep, 0, maxScrollLineOffset);
-  if (nextOffset != scrollLineOffset) {
-    scrollLineOffset = nextOffset;
+  const int nextOffset = std::clamp(session.scrollLineOffset + direction * pageStep, 0, maxScrollLineOffset);
+  if (nextOffset != session.scrollLineOffset) {
+    session.scrollLineOffset = nextOffset;
     requestUpdate();
   }
 }
 
 void FlashcardReviewActivity::goToNextCard() {
-  showBack = false;
+  session.showBack = false;
   activeCard = {};
   activeCardIndex = -1;
   activeCardLoaded = false;
   invalidateCardLayout();
-  const int sessionHandled = sessionReviewed + sessionSkipped;
-  if (SETTINGS.flashcardStudyMode != CrossPointSettings::FLASHCARD_STUDY_INFINITE && initialSessionSize > 0 &&
-      sessionHandled >= initialSessionSize) {
+  const int sessionHandled = session.reviewed + session.skipped;
+  if (SETTINGS.flashcardStudyMode != CrossPointSettings::FLASHCARD_STUDY_INFINITE && session.initialSessionSize > 0 &&
+      sessionHandled >= session.initialSessionSize) {
     finishWithSummary();
     return;
   }
-  queueIndex++;
-  if (queueIndex >= queue.size()) {
+  session.queueIndex++;
+  if (session.queueIndex >= session.queue.size()) {
     if (SETTINGS.flashcardStudyMode == CrossPointSettings::FLASHCARD_STUDY_INFINITE) {
-      queue = FLASHCARDS.buildSessionQueue(deck, progress);
-      queueIndex = 0;
-      if (queue.empty()) {
+      session.queue = FLASHCARDS.buildSessionQueue(deck, progress);
+      session.queueIndex = 0;
+      if (session.queue.empty()) {
         finishWithSummary();
         return;
       }
@@ -323,31 +335,33 @@ void FlashcardReviewActivity::markCurrentSuccess() {
   auto& item = currentProgress();
   if (isCurrentCardUnseen() && !hasValue(newlySeenKeys, item.key)) {
     newlySeenKeys.push_back(item.key);
-    sessionNewSeen++;
+    session.newSeen++;
   }
   FLASHCARDS.markCardSuccess(item);
-  sessionReviewed++;
-  sessionCorrect++;
+  progressDirty = true;
+  session.reviewed++;
+  session.correct++;
   goToNextCard();
 }
 
 void FlashcardReviewActivity::markCurrentFailure() {
-  const int cardIndex = queue[queueIndex];
+  const int cardIndex = session.queue[session.queueIndex];
   auto& item = currentProgress();
   if (isCurrentCardUnseen() && !hasValue(newlySeenKeys, item.key)) {
     newlySeenKeys.push_back(item.key);
-    sessionNewSeen++;
+    session.newSeen++;
   }
   FLASHCARDS.markCardFailure(item);
-  queue.push_back(cardIndex);
-  sessionReviewed++;
-  sessionFailed++;
+  progressDirty = true;
+  session.queue.push_back(cardIndex);
+  session.reviewed++;
+  session.failed++;
   goToNextCard();
 }
 
 void FlashcardReviewActivity::finishWithSummary() {
   if (loaded) {
-    FLASHCARDS.saveDeckProgress(deck, progress);
+    if (FLASHCARDS.saveDeckProgress(deck, progress)) progressDirty = false;
     const FlashcardDeckMetrics metrics = FLASHCARDS.buildMetrics(deck, progress);
     FLASHCARDS.registerSession(deck, metrics);
 
@@ -355,11 +369,11 @@ void FlashcardReviewActivity::finishWithSummary() {
     result.deckId = deck.deckId;
     result.deckPath = deck.path;
     result.deckTitle = deck.title;
-    result.reviewed = sessionReviewed;
-    result.correct = sessionCorrect;
-    result.failed = sessionFailed;
-    result.skipped = sessionSkipped;
-    result.newSeen = sessionNewSeen;
+    result.reviewed = session.reviewed;
+    result.correct = session.correct;
+    result.failed = session.failed;
+    result.skipped = session.skipped;
+    result.newSeen = session.newSeen;
     result.totalCards = metrics.totalCards;
     result.seenCards = metrics.seenCards;
     result.unseenCards = metrics.unseenCards;
@@ -457,7 +471,7 @@ void FlashcardReviewActivity::onSuccessEvent(const fui::ActionEvent&, void* user
 }
 
 void FlashcardReviewActivity::flipCard() {
-  showBack = !showBack;
+  session.showBack = !session.showBack;
   invalidateCardLayout();
   requestUpdate();
 }
@@ -471,7 +485,24 @@ void FlashcardReviewActivity::leave() {
   finishWithSummary();
 }
 
+void FlashcardReviewActivity::prepareForSleep() {
+  if (!loaded || session.queueIndex >= session.queue.size()) return;
+  if (progressDirty && !FLASHCARDS.saveDeckProgress(deck, progress)) {
+    LOG_ERR("FCR", "Could not save ratings before sleep");
+    return;
+  }
+  progressDirty = false;
+  if (session.save(deck, progress, SETTINGS.flashcardStudyMode, SETTINGS.flashcardSessionSize)) {
+    APP_STATE.flashcardResumePath = deckPath;
+  } else {
+    LOG_ERR("FCR", "Could not save study session before sleep");
+  }
+}
+
 void FlashcardReviewActivity::onExit() {
+  // Home and sleep replace the activity without finishWithSummary(). Preserve
+  // ratings without counting a paused/abandoned review as a completed session.
+  if (progressDirty && FLASHCARDS.saveDeckProgress(deck, progress)) progressDirty = false;
   if (orientationApplied) {
     renderer.setOrientation(originalOrientation);
     renderer.requestNextFullRefresh();
@@ -494,7 +525,7 @@ void FlashcardReviewActivity::loop() {
     return;
   }
 
-  if (queue.empty()) {
+  if (session.queue.empty()) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Back) ||
         mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       finishWithSummary();
@@ -558,7 +589,7 @@ void FlashcardReviewActivity::render(RenderLock&&) {
     return;
   }
 
-  if (queue.empty()) {
+  if (session.queue.empty()) {
     renderDismissPage(deck.title.c_str(), tr(STR_NO_DUE_CARDS), tr(STR_NO_DUE_CARDS));
     return;
   }
@@ -571,11 +602,12 @@ void FlashcardReviewActivity::render(RenderLock&&) {
   dismissOnTap = false;
 
   const bool showSessionProgress = SETTINGS.flashcardStudyMode != CrossPointSettings::FLASHCARD_STUDY_INFINITE;
-  const int sessionHandled = sessionReviewed + sessionSkipped;
-  const int completedCards = std::clamp(sessionHandled, 0, initialSessionSize);
-  const std::string headerSubtitle = showSessionProgress && initialSessionSize > 0
-                                         ? std::to_string(completedCards) + "/" + std::to_string(initialSessionSize)
-                                         : std::string();
+  const int sessionHandled = session.reviewed + session.skipped;
+  const int completedCards = std::clamp(sessionHandled, 0, session.initialSessionSize);
+  const std::string headerSubtitle =
+      showSessionProgress && session.initialSessionSize > 0
+          ? std::to_string(completedCards) + "/" + std::to_string(session.initialSessionSize)
+          : std::string();
   const std::string headerTitle =
       showSessionProgress && !headerSubtitle.empty() ? deck.title + " / " + headerSubtitle : deck.title;
   HeaderDateUtils::drawHeaderWithDate(renderer, headerTitle.c_str(), nullptr);
@@ -591,7 +623,7 @@ void FlashcardReviewActivity::render(RenderLock&&) {
 
   renderer.drawRect(cardX, cardY, cardWidth, cardHeight);
 
-  const std::string sideLabel = showBack ? tr(STR_CARD_BACK) : tr(STR_CARD_FRONT);
+  const std::string sideLabel = session.showBack ? tr(STR_CARD_BACK) : tr(STR_CARD_FRONT);
   renderer.drawText(SMALL_FONT_ID, cardX + 10, cardY + 10, sideLabel.c_str(), true, EpdFontFamily::BOLD);
 
   // Touch boards reserve a Fail / Flip / Success button row along the card's
@@ -613,9 +645,9 @@ void FlashcardReviewActivity::render(RenderLock&&) {
     hitSuccessRect = fui::makeRect(bandX + (buttonWidth + TOUCH_ACTION_BUTTON_GAP) * 2, bandY,
                                    bandWidth - (buttonWidth + TOUCH_ACTION_BUTTON_GAP) * 2, TOUCH_ACTION_BAND_HEIGHT);
   }
-  const EpdFontFamily::Style bodyStyle = showBack ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
+  const EpdFontFamily::Style bodyStyle = session.showBack ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
   if (!cardLayoutValid) {
-    const std::string& sourceText = showBack ? currentCard().back : currentCard().front;
+    const std::string& sourceText = session.showBack ? currentCard().back : currentCard().front;
     std::string clippedText;
     const std::string* bodyText = &sourceText;
     if (sourceText.size() > MAX_FLASHCARD_RENDER_TEXT_BYTES) {
@@ -629,11 +661,11 @@ void FlashcardReviewActivity::render(RenderLock&&) {
     visibleLineCount = fitted.visibleLineCount;
     wrappedLines = std::move(fitted.lines);
     maxScrollLineOffset = std::max(0, static_cast<int>(wrappedLines.size()) - std::max(1, visibleLineCount));
-    scrollLineOffset = std::clamp(scrollLineOffset, 0, maxScrollLineOffset);
+    session.scrollLineOffset = std::clamp(session.scrollLineOffset, 0, maxScrollLineOffset);
     cardLayoutValid = true;
   }
 
-  const int firstLine = std::clamp(scrollLineOffset, 0, maxScrollLineOffset);
+  const int firstLine = std::clamp(session.scrollLineOffset, 0, maxScrollLineOffset);
   const int endLine = std::min(static_cast<int>(wrappedLines.size()), firstLine + std::max(1, visibleLineCount));
   int textY = textTop;
   if (maxScrollLineOffset == 0) {
@@ -650,7 +682,8 @@ void FlashcardReviewActivity::render(RenderLock&&) {
 
   const auto labels = mappedInput.mapLabels(tr(STR_EXIT), tr(STR_FLIP), tr(STR_SUCCESS), tr(STR_FAIL));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-  drawReviewScrollHints(renderer, metrics, pageWidth, scrollLineOffset > 0, scrollLineOffset < maxScrollLineOffset);
+  drawReviewScrollHints(renderer, metrics, pageWidth, session.scrollLineOffset > 0,
+                        session.scrollLineOffset < maxScrollLineOffset);
 
   renderer.displayBuffer();
 }

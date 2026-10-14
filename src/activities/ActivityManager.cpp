@@ -126,7 +126,9 @@ void ActivityManager::renderTaskLoop() {
 }
 
 void ActivityManager::loop() {
-  if (mappedInput.consumeSuppressedRelease()) return;
+  // A release guard suppresses input, not an already requested transition.
+  // In particular, goToSleep() must finish teardown and draw its sleep screen.
+  if (mappedInput.consumeSuppressedRelease() && pendingAction == PendingAction::None) return;
 
   if (currentActivity && currentActivity->requiresExclusiveStorageLoop()) {
     currentActivity->loop();
@@ -139,7 +141,10 @@ void ActivityManager::loop() {
     return;
   }
 
-  if (currentActivity) {
+  // onEnter() can queue a replacement before this loop is called (the reader
+  // dispatcher does so on a splashless wake). Do not let that outgoing screen
+  // handle input or overwrite the queued destination with its fallback route.
+  if (currentActivity && pendingAction == PendingAction::None) {
     if (!currentActivity->isHomeActivity() && mappedInput.wasHomeGesture()) {
       if (currentActivity->handleHomeGesture()) {
         return;

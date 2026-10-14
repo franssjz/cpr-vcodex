@@ -136,6 +136,20 @@ bool ChapterHtmlSlimParser::shouldAbortForLowMemory(const char* stage) {
     return false;
   }
 
+  // Incremental pagination alternates with page rendering, which repopulates
+  // glyph caches after startBuild() released them. Reclaim the registered safe
+  // caches before dropping CSS or rejecting layout: the allocation-level OOM
+  // recovery is never reached if this guard aborts first. These sinks preserve
+  // SD-font advance tables used by the paragraph currently being laid out.
+  if (!attemptedLayoutCacheReclaim) {
+    attemptedLayoutCacheReclaim = true;
+    freeink::MemoryManager::instance().clearCaches();
+    heap = MemoryBudget::snapshot();
+    if (MemoryBudget::hasHeap(heap, SOFT_MIN_FREE_HEAP_FOR_TEXT_LAYOUT, SOFT_MIN_MAX_ALLOC_FOR_TEXT_LAYOUT)) {
+      return false;
+    }
+  }
+
   if (!attemptedTextLayoutFontCacheRelease) {
     attemptedTextLayoutFontCacheRelease = true;
     if (renderer.releaseSdCardFontForLowMemory(fontId)) {
@@ -2408,6 +2422,7 @@ bool ChapterHtmlSlimParser::beginParse() {
   htmlEnded_ = false;
   lastLongParseServiceMs = 0;
   lowMemoryAbort = false;
+  attemptedLayoutCacheReclaim = false;
   attemptedTextLayoutFontCacheRelease = false;
   loggedSoftLowMemoryContinuation = false;
 
@@ -2489,6 +2504,9 @@ bool ChapterHtmlSlimParser::beginParse() {
 
 ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
   if (!xmlParser_ || !parseFile_) return ParseStatus::Error;
+  // A later incremental step may follow a render that populated caches again.
+  // Bound reclamation to once per input buffer even if the heap stays low.
+  attemptedLayoutCacheReclaim = false;
   // Layout OOM latched during the previous buffer's callbacks: fail the build
   // instead of emitting pages with silently missing text.
   if (layoutOom || (currentTextBlock && currentTextBlock->hadDroppedWords())) {

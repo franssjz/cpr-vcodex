@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../Activity.h"
+#include "FlashcardReviewSession.h"
 #include "FlashcardsStore.h"
 #include "components/UiAppHost.h"
 
@@ -18,12 +19,11 @@ class FlashcardReviewActivity final : public Activity, private UiAppHost {
   std::string deckPath;
   FlashcardDeck deck;
   std::vector<FlashcardCardProgress> progress;
-  std::vector<int> queue;
+  FlashcardReviewSession session;
   FlashcardCard activeCard;
-  size_t queueIndex = 0;
   int activeCardIndex = -1;
-  int initialSessionSize = 0;
-  bool showBack = false;
+  bool restoreSession = false;
+  bool progressDirty = false;
   bool loaded = false;
   bool activeCardLoaded = false;
   bool cardLayoutValid = false;
@@ -31,17 +31,11 @@ class FlashcardReviewActivity final : public Activity, private UiAppHost {
   int wrappedFontId = 0;
   int wrappedLineHeight = 0;
   int visibleLineCount = 1;
-  int scrollLineOffset = 0;
   int maxScrollLineOffset = 0;
   std::string errorMessage;
   GfxRenderer::Orientation originalOrientation = GfxRenderer::Orientation::Portrait;
   bool orientationApplied = false;
 
-  int sessionReviewed = 0;
-  int sessionCorrect = 0;
-  int sessionFailed = 0;
-  int sessionSkipped = 0;
-  int sessionNewSeen = 0;
   std::vector<std::string> newlySeenKeys;
 
   // Touch targets measured by render() and registered by buildReviewScreen()
@@ -62,7 +56,7 @@ class FlashcardReviewActivity final : public Activity, private UiAppHost {
   static void onFailEvent(const freeink::ui::ActionEvent& event, void* user);
   static void onSuccessEvent(const freeink::ui::ActionEvent& event, void* user);
   void buildReviewScreen(UiScreen& screen);
-  bool hasActiveCard() const { return loaded && queueIndex < queue.size(); }
+  bool hasActiveCard() const { return loaded && session.queueIndex < session.queue.size(); }
   void flipCard();
   void leave();
   // Error / no-cards page: message + the shared dismiss target.
@@ -81,11 +75,16 @@ class FlashcardReviewActivity final : public Activity, private UiAppHost {
   void markCurrentFailure();
 
  public:
-  FlashcardReviewActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string deckPath)
-      : Activity("FlashcardReview", renderer, mappedInput), UiAppHost(renderer), deckPath(std::move(deckPath)) {}
+  FlashcardReviewActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::string deckPath,
+                          bool restoreSession = false)
+      : Activity("FlashcardReview", renderer, mappedInput),
+        UiAppHost(renderer),
+        deckPath(std::move(deckPath)),
+        restoreSession(restoreSession) {}
 
   void onEnter() override;
   void onExit() override;
+  void prepareForSleep() override;
   void loop() override;
   void render(RenderLock&&) override;
 };

@@ -15,6 +15,7 @@
 #include <HalTiltSensor.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <SPI.h>
 #include <TrustedTime.h>
 #include <VectorFontSupport.h>
@@ -45,6 +46,7 @@
 #include "WifiCredentialStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "activities/apps/FlashcardsAppActivity.h"
 #include "activities/settings/OtaUpdateActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
@@ -434,6 +436,7 @@ static void deliverSleepPluginEvents() {
 void enterDeepSleep(bool fromTimeout = false) {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
   APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
+  APP_STATE.flashcardResumePath.clear();
 
   // Sleep may end in a power-off (battery death, latch); persist the clock
   // floor now so a later cold boot resumes from it.
@@ -756,6 +759,14 @@ void setup() {
   }
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
   const bool isPersistedSleepWake = isSleepWake && !skipStateLoad && !APP_STATE.showBootScreen;
+  // Consume before opening the deck: a failed restore or a later reboot must
+  // not keep re-entering flashcards. Recovery, Back and crash routing still win.
+  std::string flashcardResumePath;
+  if (isPersistedSleepWake && !skipFlashcardsLoad) flashcardResumePath = APP_STATE.flashcardResumePath;
+  if (!APP_STATE.flashcardResumePath.empty()) {
+    APP_STATE.flashcardResumePath.clear();
+    APP_STATE.saveToFile();
+  }
 
   // Resolve the single boot-presentation decision. Skipping the splash also
   // skips the panel-clearing pass and the X3 initial-full-sync arming (see
@@ -887,6 +898,20 @@ void setup() {
     // through to the sleep-wake "resume reader" logic, which fires on stale
     // openEpubPath + lastSleepFromReader from a prior session.
     activityManager.goHome();
+  } else if (!forceHomeBoot && !flashcardResumePath.empty() &&
+             !mappedInputManager.isPressed(MappedInputManager::Button::Back)) {
+    if (countUsefulStart) {
+      APP_STATE.recordUsefulStart(syncDayReminderThreshold);
+      APP_STATE.saveToFile();
+    }
+    auto flashcards =
+        makeUniqueNoThrow<FlashcardsAppActivity>(renderer, mappedInputManager, std::move(flashcardResumePath));
+    if (flashcards) {
+      activityManager.replaceActivity(std::move(flashcards));
+    } else {
+      LOG_ERR("MAIN", "OOM: flashcard wake activity");
+      activityManager.goHome(HomeMenuItem::NONE, needsWakeRefresh);
+    }
   } else {
     // Boot to home screen if no book is open, last sleep was not from reader, back button is held, or reader activity
     // crashed (indicated by readerActivityLoadCount > 0)

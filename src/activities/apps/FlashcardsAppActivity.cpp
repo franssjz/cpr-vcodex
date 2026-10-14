@@ -2,9 +2,12 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Memory.h>
 
 #include "FlashcardBrowserActivity.h"
 #include "FlashcardRecentsActivity.h"
+#include "FlashcardReviewActivity.h"
+#include "FlashcardSessionSummaryActivity.h"
 #include "FlashcardSettingsActivity.h"
 #include "FlashcardStatsActivity.h"
 #include "FlashcardsStore.h"
@@ -111,6 +114,28 @@ void FlashcardsAppActivity::onEnter() {
     rowItems[i].actionValue = static_cast<int16_t>(i);
   }
   refreshCounts();
+  if (!resumeDeckPath.empty()) {
+    auto review = makeUniqueNoThrow<FlashcardReviewActivity>(renderer, mappedInput, std::move(resumeDeckPath), true);
+    if (!review) {
+      LOG_ERR("FCR", "OOM: flashcard review resume");
+      return;
+    }
+    startActivityForResult(std::move(review), [this](const ActivityResult& result) {
+      {
+        RenderLock lock(*this);
+        refreshCounts();
+      }
+      if (!result.isCancelled) {
+        if (const auto* summary = std::get_if<FlashcardSessionResult>(&result.data)) {
+          auto activity = makeUniqueNoThrow<FlashcardSessionSummaryActivity>(renderer, mappedInput, *summary);
+          if (activity) {
+            startActivityForResult(std::move(activity), [this](const ActivityResult&) { requestUpdate(); });
+          }
+        }
+      }
+      requestUpdate();
+    });
+  }
 }
 
 void FlashcardsAppActivity::onExit() {

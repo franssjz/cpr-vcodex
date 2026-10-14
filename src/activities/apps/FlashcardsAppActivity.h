@@ -11,6 +11,7 @@ class FlashcardsAppActivity final : public UiListActivity {
 
   int recentCount = 0;
   int deckCount = 0;
+  std::string resumeDeckPath;
   // Row storage: labels/icons are static, subtitles are refreshed into these
   // strings by refreshCounts() (no per-render allocation).
   std::string rowSubtitles[ACTION_COUNT];
@@ -24,8 +25,9 @@ class FlashcardsAppActivity final : public UiListActivity {
   void drawChrome() override;
 
  public:
-  explicit FlashcardsAppActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-      : UiListActivity("FlashcardsApp", renderer, mappedInput) {}
+  explicit FlashcardsAppActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                 std::string resumeDeckPath = {})
+      : UiListActivity("FlashcardsApp", renderer, mappedInput), resumeDeckPath(std::move(resumeDeckPath)) {}
 
   void onEnter() override;
   void onExit() override;

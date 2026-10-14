@@ -1,5 +1,7 @@
+#include <Arduino.h>
 #include <Epub/Page.h>
 #include <GfxRenderer.h>
+#include <MemoryManager.h>
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -45,8 +47,108 @@ class ChapterHtmlSlimParserTest : public ::testing::TestWithParam<const char*> {
                                nullptr,
                                &cssParser};
 
+  std::vector<std::filesystem::path> fixturePaths;
+
+  std::string writeFixture(const char* name, const std::string& contents) {
+    const auto path = std::filesystem::temp_directory_path() / name;
+    fixturePaths.push_back(path);
+    HalFile output;
+    EXPECT_TRUE(output.open(path.string().c_str(), "wb"));
+    EXPECT_EQ(output.write(contents.data(), contents.size()), contents.size());
+    return path.string();
+  }
+
   void SetUp() override { parser.currentTextBlock = std::make_unique<ParsedText>(false); }
+  void TearDown() override {
+    parser.abortParse();
+    ESP = EspHostStub{};
+    auto& memoryManager = freeink::MemoryManager::instance();
+    memoryManager.onClearCaches = {};
+    memoryManager.clearCachesCalls = 0;
+    for (const auto& path : fixturePaths) std::filesystem::remove(path);
+  }
 };
+
+TEST_F(ChapterHtmlSlimParserTest, HealthyLayoutDoesNotEvictCaches) {
+  EXPECT_FALSE(parser.shouldAbortForLowMemory("test"));
+  EXPECT_EQ(freeink::MemoryManager::instance().clearCachesCalls, 0u);
+}
+
+TEST_F(ChapterHtmlSlimParserTest, FragmentedLayoutReclaimsCachesBeforeRejectingTheChapter) {
+  ESP.freeHeap = 96 * 1024;
+  ESP.maxAllocHeap = 12 * 1024;
+  auto& memoryManager = freeink::MemoryManager::instance();
+  memoryManager.onClearCaches = [](size_t) {
+    ESP.freeHeap += 8 * 1024;
+    ESP.maxAllocHeap = 40 * 1024;
+    return 8 * 1024;
+  };
+
+  EXPECT_FALSE(parser.shouldAbortForLowMemory("test"));
+  EXPECT_EQ(memoryManager.clearCachesCalls, 1u);
+  EXPECT_FALSE(parser.lowMemoryAbort);
+}
+
+TEST_F(ChapterHtmlSlimParserTest, UnrecoverableLayoutPressureStillAbortsAndDoesNotRepeatEviction) {
+  ESP.freeHeap = 24 * 1024;
+  ESP.maxAllocHeap = 12 * 1024;
+  EXPECT_TRUE(parser.shouldAbortForLowMemory("test"));
+  EXPECT_TRUE(parser.lowMemoryAbort);
+  EXPECT_TRUE(parser.shouldAbortForLowMemory("test again"));
+  EXPECT_EQ(freeink::MemoryManager::instance().clearCachesCalls, 1u);
+}
+
+TEST_F(ChapterHtmlSlimParserTest, IncrementalLayoutReclaimsRepopulatedCachesWithoutDroppingTextOrCss) {
+  parser.paragraphAlignment = static_cast<uint8_t>(CssTextAlign::None);
+  const auto cssPath = writeFixture("crosspoint-layout-reclaim.css", "p { text-align: center; }");
+  HalFile cssFile;
+  ASSERT_TRUE(cssFile.open(cssPath.c_str(), "rb"));
+  ASSERT_EQ(cssParser.loadFromStream(cssFile), CssParser::ParseResult::Complete);
+  cssFile.close();
+  ASSERT_FALSE(cssParser.empty());
+
+  std::string html = "<html><body>";
+  std::vector<std::string> expected;
+  for (int i = 0; i < 200; ++i) {
+    expected.push_back("word" + std::to_string(i));
+    html += "<p>" + expected.back() + "</p>";
+  }
+  html += "</body></html>";
+  filepath = writeFixture("crosspoint-layout-reclaim.xhtml", html);
+  std::vector<std::string> actual;
+  parser.completePageFn = [&](std::unique_ptr<Page> page, auto) {
+    for (const auto& element : page->elements) {
+      if (element->getTag() != TAG_PageLine) continue;
+      const auto& block = *static_cast<const PageLine&>(*element).getBlock();
+      EXPECT_EQ(block.getBlockStyle().alignment, CssTextAlign::Center);
+      for (uint16_t i = 0; i < block.wordCount(); ++i) actual.emplace_back(block.wordText(i));
+    }
+  };
+
+  ASSERT_TRUE(parser.beginParse());
+  auto& memoryManager = freeink::MemoryManager::instance();
+  memoryManager.onClearCaches = [](size_t) {
+    ESP.freeHeap = 80 * 1024;
+    ESP.maxAllocHeap = 64 * 1024;
+    return 56 * 1024;
+  };
+  unsigned steps = 0;
+  for (;;) {
+    // Simulate rendering having refilled glyph caches between parser buffers.
+    ESP.freeHeap = 24 * 1024;
+    ESP.maxAllocHeap = 12 * 1024;
+    const auto status = parser.parseStep();
+    ++steps;
+    ASSERT_NE(status, ChapterHtmlSlimParser::ParseStatus::Error);
+    ASSERT_FALSE(cssParser.empty());
+    if (status == ChapterHtmlSlimParser::ParseStatus::Done) break;
+    ASSERT_LT(steps, 20u);
+  }
+  EXPECT_GT(steps, 1u);
+  EXPECT_EQ(memoryManager.clearCachesCalls, steps);
+  ASSERT_TRUE(parser.finishParse());
+  EXPECT_EQ(actual, expected);
+}
 
 TEST_F(ChapterHtmlSlimParserTest, RubySurvivesPartialParagraphExtraction) {
   ParsedText text(false);
