@@ -1,5 +1,6 @@
 #include "BookmarksActivity.h"
 
+#include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 
@@ -8,6 +9,7 @@
 
 #include "MappedInputManager.h"
 #include "activities/util/ConfirmationActivity.h"
+#include "components/UIScale.h"
 #include "components/UITheme.h"
 
 namespace fui = freeink::ui;
@@ -48,20 +50,45 @@ std::string BookmarksActivity::getItemLabel(const int index) const {
   return buffer;
 }
 
-// Derives rowLabels/rowItems from bookmarks. Called whenever bookmarks
-// changes (enter, deletion) so buildScreen() reuses the cached rows.
-void BookmarksActivity::rebuildRowItems() {
-  rowItems.clear();
-  rowLabels.clear();
-  rowLabels.reserve(bookmarks.size());
-  rowItems.reserve(bookmarks.size());
-  for (size_t i = 0; i < bookmarks.size(); ++i) {
-    rowLabels.push_back(getItemLabel(static_cast<int>(i)));
+void BookmarksActivity::refreshRowWindow(const int start) {
+  const int first = std::max(0, std::min(start, listCount()));
+  if (first == rowWindowStart) return;
+  rowWindowStart = first;
+  rowWindowCount = std::min(ROW_WINDOW, listCount() - first);
+  for (int i = 0; i < rowWindowCount; ++i) {
+    rowLabels[i] = getItemLabel(first + i);
     fui::ListItem item;
-    item.label = rowLabels.back().c_str();
-    item.actionValue = static_cast<int16_t>(i);
-    rowItems.push_back(item);
+    item.label = rowLabels[i].c_str();
+    item.actionValue = static_cast<int16_t>(first + i);
+    rowItems[i] = item;
   }
+
+  // Wrapped snippets measure many prefixes before drawing. Load their glyphs
+  // together so each prefix does not grow/rebuild the SD font's mini-cache.
+  // Start at the viewport itself, including near the end of the list, so an
+  // off-screen earlier row cannot consume the heap-adaptive glyph budget.
+  renderer.prewarmFallbackText(
+      uiScaleSpec().smallFontId,
+      [](const void* ctx, uint32_t i) -> const char* { return static_cast<const std::string*>(ctx)[i].c_str(); },
+      rowLabels, static_cast<uint32_t>(rowWindowCount));
+}
+
+void BookmarksActivity::provideRow(void* ctx, const uint16_t index, fui::ListItem& item) {
+  auto* self = static_cast<BookmarksActivity*>(ctx);
+  const int slot = static_cast<int>(index) - self->rowWindowStart;
+  if (slot < 0 || slot >= self->rowWindowCount) return;
+  item = self->rowItems[slot];
+  // A dense window can exceed the fallback cache's glyph/heap budget. Ensure
+  // this whole label AND the truncation ellipsis are resident before wrapping
+  // probes prefixes. A single-string prewarm omits the ellipsis; adding it to
+  // an already-full cache would evict the label and restart prefix-by-prefix
+  // loading. The getter overload includes it. Usually this is a cache hit.
+  // On a miss, replace rather than re-reading a growing union of earlier rows:
+  // dense highlights may exceed the cache even within one viewport.
+  self->renderer.prewarmFallbackText(
+      uiScaleSpec().smallFontId,
+      [](const void* label, uint32_t) -> const char* { return static_cast<const char*>(label); }, item.label, 1,
+      EpdFontFamily::REGULAR, /*accumulate=*/false);
 }
 
 const char* BookmarksActivity::headerTitle() const {
@@ -69,15 +96,25 @@ const char* BookmarksActivity::headerTitle() const {
 }
 
 void BookmarksActivity::onEnter() {
+  // Release retained reader glyph arenas under pressure before allocating the
+  // list window, as the chapter list does. The reader rebuilds them on return.
+  if (auto* fcm = renderer.getFontCacheManager()) {
+    fcm->clearCache();
+  }
+  rowWindowStart = -1;
+  rowWindowCount = 0;
   UiListActivity::onEnter();
-  rebuildRowItems();
 }
 
 void BookmarksActivity::onExit() {
   Activity::onExit();
   // rowItems' labels alias rowLabels; drop both together.
-  rowItems.clear();
-  rowLabels.clear();
+  for (int i = 0; i < ROW_WINDOW; ++i) {
+    rowItems[i] = {};
+    rowLabels[i].clear();
+  }
+  rowWindowStart = -1;
+  rowWindowCount = 0;
 }
 
 void BookmarksActivity::finishCancelled() {
@@ -163,7 +200,7 @@ void BookmarksActivity::confirmDeleteBookmark(const int index) {
             return;
           }
 
-          rebuildRowItems();
+          rowWindowStart = -1;
           if (nav.selected >= listCount()) {
             nav.selected = listCount() - 1;
           }
@@ -189,10 +226,8 @@ void BookmarksActivity::buildScreen(UiScreen& screen) {
     return;
   }
 
-  // rowItems is built in rebuildRowItems() and reused here on every repaint.
   fui::ListProps props;
-  props.items = rowItems.data();
-  props.count = static_cast<uint16_t>(rowItems.size());
+  props.count = static_cast<uint16_t>(bookmarks.size());
   props.action = ACTION_ROW;
   // Tap opens; long-press prompts deletion (physical buttons stay in loop()).
   props.inputMask = fui::InputTouch | fui::InputLongPress;
@@ -201,5 +236,19 @@ void BookmarksActivity::buildScreen(UiScreen& screen) {
   props.labelText = screen.theme().smallText;
   props.labelText.maxLines = 2;
   syncListViewport(screen, props);
+  // The shared navigation first estimates using single-line rows. For a jump
+  // to the end of wrapped highlights, start with the measured page size so we
+  // do not paint a whole off-screen window just to discover that the selected
+  // row needs a second build. Layout feedback still corrects varying heights.
+  if (nav.followPending && nav.trusts(listCount()) && props.selectedIndex >= nav.top + nav.drawnRows) {
+    nav.top = props.selectedIndex - nav.drawnRows + 1;
+    props.topIndex = static_cast<uint16_t>(nav.top);
+  }
+  refreshRowWindow(nav.top);
+  props.items = rowItems;
+  props.itemsWindowFirst = static_cast<uint16_t>(rowWindowStart);
+  props.itemsWindowCount = static_cast<uint16_t>(rowWindowCount);
+  props.rowProvider = &BookmarksActivity::provideRow;
+  props.rowProviderCtx = this;
   screen.list(props);
 }

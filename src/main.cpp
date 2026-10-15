@@ -47,10 +47,13 @@
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/apps/FlashcardsAppActivity.h"
+#include "activities/reader/KOReaderSyncActivity.h"
+#include "activities/settings/KOReaderAuthActivity.h"
 #include "activities/settings/OtaUpdateActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "network/KOReaderSyncRecovery.h"
 #include "platform/UsbSerialJtagHandoff.h"
 #include "util/BootRecovery.h"
 #include "util/ButtonNavigator.h"
@@ -214,13 +217,15 @@ void useLanguageSelectionUiFonts() {
 RTC_NOINIT_ATTR uint32_t silentRebootMagic;
 RTC_NOINIT_ATTR uint32_t silentRebootTarget;
 RTC_NOINIT_ATTR uint32_t silentRebootPayload;
+RTC_NOINIT_ATTR KOReaderRecovery::Record koReaderRebootRecord;
 constexpr uint32_t SILENT_REBOOT_MAGIC = 0xC1EAB007;
 constexpr uint32_t SILENT_REBOOT_TARGET_HOME = 0;
 constexpr uint32_t SILENT_REBOOT_TARGET_READER = 1;
 constexpr uint32_t SILENT_REBOOT_TARGET_OTA = 2;
 constexpr uint32_t SILENT_REBOOT_TARGET_SETTINGS = 3;
 constexpr uint32_t SILENT_REBOOT_TARGET_JOIN_NETWORK = 4;
-constexpr uint32_t SILENT_REBOOT_TARGET_MAX = SILENT_REBOOT_TARGET_JOIN_NETWORK;
+constexpr uint32_t SILENT_REBOOT_TARGET_KOREADER = 5;
+constexpr uint32_t SILENT_REBOOT_TARGET_MAX = SILENT_REBOOT_TARGET_KOREADER;
 constexpr uint32_t SILENT_REBOOT_LIGHT_ON = 1U << 0;
 
 // How the device is coming back to life, resolved once at boot. Both resume
@@ -321,6 +326,43 @@ void silentRestartToOta() {
   GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
   delay(50);
   ESP.restart();
+}
+
+static bool supportsKOReaderRecovery() {
+  // Restrict the workaround to the no-PSRAM X3/X4. In particular, a reset must
+  // not cycle the externally powered touch/frontlight rails on other boards.
+  return !BoardConfig::hasTouch() && (BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
+                                      BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4);
+}
+
+static const KOReaderProfile* validatedKOReaderRecoveryProfile(const KOReaderRecoveryRequest& request) {
+  if (!KOReaderRecovery::validRequest(request)) return nullptr;
+  const auto* profile = KOREADER_STORE.getProfile(request.profileIndex);
+  if (!profile || profile->username.empty() || profile->password.empty()) return nullptr;
+  const uint32_t identity =
+      KOReaderRecovery::profileIdentity(profile->username, KOReaderCredentialStore::resolveBaseUrl(profile->serverUrl));
+  return KOReaderRecovery::matchesProfile(request, KOREADER_STORE.getCount(), KOREADER_STORE.getActiveIndex(), identity)
+             ? profile
+             : nullptr;
+}
+
+bool silentRestartToKOReader(const KOReaderRecoveryRequest& request) {
+  koReaderRebootRecord = {};
+  if (deepSleepInProgress || !supportsKOReaderRecovery() || !validatedKOReaderRecoveryProfile(request)) return false;
+  // A restart must never discard an unsaved credential edit. Existing profile
+  // storage owns the password; the RTC record contains only an identity check.
+  if (!KOREADER_STORE.saveToFile()) {
+    LOG_ERR("KOSync", "Cannot save profile before memory recovery; keeping failure screen");
+    return false;
+  }
+  if (!KOReaderRecovery::arm(koReaderRebootRecord, request)) return false;
+  armSilentReboot(SILENT_REBOOT_TARGET_KOREADER);
+  LOG_INF("KOSync", "Restarting once after rejected TLS preflight (operation=%u)",
+          static_cast<unsigned>(request.operation));
+  GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
+  delay(50);
+  ESP.restart();
+  return true;
 }
 
 void toggleFrontlight() {
@@ -531,9 +573,10 @@ void setupDisplayAndFonts(bool seamless = false, bool loadReaderResources = true
 #endif  // OMIT_FONTS
   refreshUiFontsForCurrentLanguage();
 
-  // Discover and load SD card fonts
-  if (loadReaderResources && Storage.ready()) {
-    sdFontSystem.begin(renderer);
+  // Register the resolver even on a network boot, so restoring the selected
+  // font afterward works without another reboot. Defer its SD data until then.
+  if (Storage.ready()) {
+    sdFontSystem.begin(renderer, loadReaderResources);
   }
 
   LOG_DBG("MAIN", "Fonts setup");
@@ -565,6 +608,9 @@ void setup() {
   const uint32_t snapshotTarget =
       (isSilentReboot && silentRebootTarget <= SILENT_REBOOT_TARGET_MAX) ? silentRebootTarget : 0;
   const bool silentRebootLightOn = isSilentReboot && (silentRebootPayload & SILENT_REBOOT_LIGHT_ON) != 0;
+  KOReaderRecoveryRequest koReaderRecoveryRequest{};
+  const bool hasKOReaderRecoveryRequest = KOReaderRecovery::consume(
+      koReaderRebootRecord, isSilentReboot && snapshotTarget == SILENT_REBOOT_TARGET_KOREADER, koReaderRecoveryRequest);
   silentRebootMagic = 0;
   silentRebootTarget = 0;
   silentRebootPayload = 0;
@@ -661,11 +707,12 @@ void setup() {
     }
   }
 
+  bool koReaderCredentialsLoaded = false;
   if (BootRecovery::shouldSkipKOReader()) {
     logSkip("Skipping KOReader credential load due to recovery mode");
   } else {
     BootRecovery::enterStage(BootRecovery::BootStage::KOReader);
-    KOREADER_STORE.loadFromFile();
+    koReaderCredentialsLoaded = KOREADER_STORE.loadFromFile();
   }
 
   if (BootRecovery::shouldSkipOPDS()) {
@@ -751,12 +798,21 @@ void setup() {
                        !recoveryFirmwareMode && !rebootedFromPanic;
 
   // App state is needed before the boot-presentation decision (showBootScreen).
+  bool appStateLoaded = false;
   if (skipStateLoad) {
     logSkip("Skipping app state load due to recovery mode");
   } else {
     BootRecovery::enterStage(BootRecovery::BootStage::State);
-    APP_STATE.loadFromFile();
+    appStateLoaded = APP_STATE.loadFromFile();
   }
+  const bool validManualSyncRecovery = appStateLoaded && KOReaderSyncRecovery::canResume(APP_STATE.koReaderSyncSession);
+  const KOReaderProfile* koReaderRecoveryProfile = hasKOReaderRecoveryRequest && koReaderCredentialsLoaded
+                                                       ? validatedKOReaderRecoveryProfile(koReaderRecoveryRequest)
+                                                       : nullptr;
+  const bool koReaderRecoveryBoot =
+      koReaderRecoveryProfile && supportsKOReaderRecovery() && !forceHomeBoot && !recoveryFirmwareMode &&
+      !rebootedFromPanic &&
+      (koReaderRecoveryRequest.operation != KOReaderRecoveryOperation::ManualSync || validManualSyncRecovery);
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
   const bool isPersistedSleepWake = isSleepWake && !skipStateLoad && !APP_STATE.showBootScreen;
   // Consume before opening the deck: a failed restore or a later reboot must
@@ -781,9 +837,9 @@ void setup() {
   bool needsWakeRefresh = false;
 
   BootRecovery::enterStage(BootRecovery::BootStage::DisplayAndFonts);
-  // Like CrossInk's minimal network boot, OTA needs UI fonts but no SD reader
-  // fonts. The normal exit already restarts Home and loads reader resources.
-  setupDisplayAndFonts(resume != BootResume::Splash, !otaBoot);
+  // Fresh network boots need UI fonts but no SD reader fonts. Normal exits
+  // restore reader resources or restart Home.
+  setupDisplayAndFonts(resume != BootResume::Splash, !otaBoot && !koReaderRecoveryBoot);
 
   // Firmware-side equivalent of FreeInk SDK 6644bf2: a sunlight-fading
   // refresh powers the X4 panel down afterwards, but its first paint after a
@@ -883,6 +939,24 @@ void setup() {
     activityManager.goToCrashReport();
   } else if (otaBoot) {
     activityManager.replaceActivity(std::make_unique<OtaUpdateActivity>(renderer, mappedInputManager));
+  } else if (koReaderRecoveryBoot) {
+    if (koReaderRecoveryRequest.operation == KOReaderRecoveryOperation::ManualSync) {
+      auto activity = KOReaderSyncActivity::resumeAfterMemoryRecovery(renderer, mappedInputManager);
+      if (activity)
+        activityManager.replaceActivity(std::move(activity));
+      else
+        activityManager.goHome();
+    } else {
+      const auto mode = koReaderRecoveryRequest.operation == KOReaderRecoveryOperation::Register
+                            ? KOReaderAuthActivity::Mode::SIGN_UP
+                            : KOReaderAuthActivity::Mode::AUTHENTICATE;
+      auto activity = makeUniqueNoThrow<KOReaderAuthActivity>(
+          renderer, mappedInputManager, mode, *koReaderRecoveryProfile, koReaderRecoveryRequest.profileIndex, true);
+      if (activity)
+        activityManager.replaceActivity(std::move(activity));
+      else
+        activityManager.goHome();
+    }
   } else if (resume == BootResume::Silent && snapshotTarget == SILENT_REBOOT_TARGET_READER &&
              !APP_STATE.openEpubPath.empty()) {
     activityManager.goToReader(APP_STATE.openEpubPath);

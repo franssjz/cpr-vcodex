@@ -1,0 +1,17 @@
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${REPO_ROOT}/src/activities/reader/KOReaderSyncActivity.cpp)
+file(READ ${REPO_ROOT}/src/activities/reader/KOReaderSyncActivity.cpp sync_source)
+string(FIND "${sync_source}" "std::unique_ptr<KOReaderSyncActivity> KOReaderSyncActivity::resumeAfterMemoryRecovery(" start)
+string(FIND "${sync_source}" "void KOReaderSyncActivity::onWifiSelectionComplete(" end)
+math(EXPR length "${end} - ${start}")
+string(SUBSTRING "${sync_source}" ${start} ${length} RECOVERY_METHODS)
+string(FIND "${sync_source}" "bool isAutomaticSyncIntent(" start)
+string(FIND "${sync_source}" "void wifiOff(" end)
+math(EXPR length "${end} - ${start}")
+string(SUBSTRING "${sync_source}" ${start} ${length} AUTOMATIC_INTENT_METHOD)
+configure_file(RecoveryAdapter.h.in RecoveryAdapter.h @ONLY)
+add_executable(KOReaderSyncRecoveryTest KOReaderSyncRecoveryTest.cpp)
+target_include_directories(KOReaderSyncRecoveryTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR} ${REPO_ROOT}/src
+  ${REPO_ROOT}/lib/KOReaderSync)
+target_link_libraries(KOReaderSyncRecoveryTest PRIVATE crosspoint_test_common GTest::gtest_main)
+gtest_discover_tests(KOReaderSyncRecoveryTest)

@@ -71,6 +71,9 @@ std::string sanitizeBackLabel(const char* label) {
 
 void MappedInputManager::update(const bool deferHomeButtonAction) const {
   gpio.update();
+  // A slow render can outlive a tap while this frame still reports pressed.
+  // Sample its duration alongside the edges instead of aging that stale state.
+  sampledButtonHeldMs = gpio.getHeldTime();
   // Keep the guard through the release frame, even if several handlers query
   // Back. A press handled by the outgoing activity must not close its parent.
   if (!mapButton(Button::Back, &HalGPIO::isPressed) && !mapButton(Button::Back, &HalGPIO::wasReleased)) {
@@ -491,7 +494,7 @@ unsigned long MappedInputManager::getHeldTime() const {
     return touchHeldOverrideMs;
   }
   touchHeldOverrideValid = false;
-  return gpio.getHeldTime();
+  return sampledButtonHeldMs;
 }
 
 MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const char* confirm, const char* previous,

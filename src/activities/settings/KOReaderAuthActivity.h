@@ -15,8 +15,12 @@ class KOReaderAuthActivity final : public Activity {
   enum class Mode { AUTHENTICATE, SIGN_UP };
 
   explicit KOReaderAuthActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, Mode mode = Mode::AUTHENTICATE,
-                                KOReaderProfile profile = {})
-      : Activity("KOReaderAuth", renderer, mappedInput), mode(mode), profile(std::move(profile)) {}
+                                KOReaderProfile profile = {}, int profileIndex = -1, bool resumed = false)
+      : Activity("KOReaderAuth", renderer, mappedInput),
+        mode(mode),
+        profile(std::move(profile)),
+        profileIndex(profileIndex),
+        resumedAfterMemoryRecovery(resumed) {}
 
   void onEnter() override;
   void onExit() override;
@@ -30,6 +34,8 @@ class KOReaderAuthActivity final : public Activity {
   Mode mode = Mode::AUTHENTICATE;
   State state = WIFI_SELECTION;
   KOReaderProfile profile;
+  int profileIndex = -1;
+  bool resumedAfterMemoryRecovery = false;
   std::string statusMessage;
   std::string errorMessage;
 

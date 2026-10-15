@@ -27,6 +27,23 @@ class ButtonPressNavigationTest : public ::testing::Test {
     navigator.onNextContinuous([this] { ++pages; });
     navigator.onPreviousContinuous([this] { --pages; });
   }
+
+  // A render/preemption can advance the live hold clock before the same
+  // sampled input frame reaches its long-press query.
+  void navigateOnce(uint32_t elapsedDuringPress = 0) {
+    navigator.onNextPress([&] {
+      selected = ButtonNavigator::nextIndex(selected, 10);
+      testNowMs += elapsedDuringPress;
+      input.frame.heldMs += elapsedDuringPress;
+    });
+    navigator.onPreviousPress([&] {
+      selected = ButtonNavigator::previousIndex(selected, 10);
+      testNowMs += elapsedDuringPress;
+      input.frame.heldMs += elapsedDuringPress;
+    });
+    navigator.onNextLongPressOnce([this] { ++pages; });
+    navigator.onPreviousLongPressOnce([this] { --pages; });
+  }
 };
 
 TEST_F(ButtonPressNavigationTest, PressStepsImmediatelyAndReleaseDoesNotStep) {
@@ -71,6 +88,71 @@ TEST_F(ButtonPressNavigationTest, FastDirectionChangeStartsANewRepeatInterval) {
   input.frame = {0, PREVIOUS, NEXT, PREVIOUS};
   navigate();
   EXPECT_EQ(selected, 9);
+  EXPECT_EQ(pages, 1);
+}
+
+TEST_F(ButtonPressNavigationTest, SlowPressFrameCannotAlsoConsumeLongPress) {
+  input.sample({0, NEXT, 0, NEXT});
+  navigateOnce(700);
+  EXPECT_EQ(selected, 1);
+  EXPECT_EQ(pages, 0);
+  EXPECT_EQ(input.longPressQueries[1], 0u);
+  // A short physical tap can already be up when the next sample is taken.
+  input.sample({80, 0, NEXT, 0});
+  navigateOnce();
+  EXPECT_EQ(pages, 0);
+  EXPECT_EQ(input.longPressQueries[1], 0u);
+}
+
+TEST_F(ButtonPressNavigationTest, LaterHeldFrameFiresOnceAfterSlowPressFrame) {
+  input.sample({0, NEXT, 0, NEXT});
+  navigateOnce(700);
+  EXPECT_EQ(pages, 0);
+  input.sample({700, 0, 0, NEXT});
+  navigateOnce();
+  EXPECT_EQ(pages, 1);
+  EXPECT_EQ(input.longPressQueries[1], 1u);
+  input.sample({1700, 0, 0, NEXT});
+  navigateOnce();
+  EXPECT_EQ(pages, 1);
+}
+
+TEST_F(ButtonPressNavigationTest, SlowReleaseFrameNeverQueriesLongPressLatch) {
+  input.sample({80, 0, NEXT, 0});
+  navigator.onNextRelease([this] {
+    ++selected;
+    testNowMs += 700;
+    input.frame.heldMs += 700;
+  });
+  navigator.onNextLongPressOnce([this] { ++pages; });
+  EXPECT_EQ(selected, 1);
+  EXPECT_EQ(pages, 0);
+  EXPECT_EQ(input.longPressQueries[1], 0u);
+}
+
+TEST_F(ButtonPressNavigationTest, DirectionChangeRearmsEachOneShotHold) {
+  input.sample({0, NEXT, 0, NEXT});
+  navigateOnce();
+  input.sample({700, 0, 0, NEXT});
+  navigateOnce();
+  EXPECT_EQ(pages, 1);
+  const auto previousQueries = input.longPressQueries[0];
+  input.sample({0, PREVIOUS, NEXT, PREVIOUS});
+  navigateOnce(700);
+  EXPECT_EQ(selected, 0);
+  EXPECT_EQ(pages, 1);
+  EXPECT_EQ(input.longPressQueries[0], previousQueries);
+  input.sample({700, 0, 0, PREVIOUS});
+  navigateOnce();
+  EXPECT_EQ(pages, 0);
+  input.sample({1700, 0, 0, PREVIOUS});
+  navigateOnce();
+  EXPECT_EQ(pages, 0);
+  input.sample({0, NEXT, PREVIOUS, NEXT});
+  navigateOnce(700);
+  EXPECT_EQ(pages, 0);
+  input.sample({700, 0, 0, NEXT});
+  navigateOnce();
   EXPECT_EQ(pages, 1);
 }
 

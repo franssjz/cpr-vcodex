@@ -66,7 +66,9 @@ void KOReaderProfileEditActivity::syncRows() {
   rowValues[0] = editProfile.name.empty() ? std::string(tr(STR_NOT_SET)) : editProfile.name;
   rowValues[1] = editProfile.username.empty() ? std::string(tr(STR_NOT_SET)) : editProfile.username;
   rowValues[2] = editProfile.password.empty() ? std::string(tr(STR_NOT_SET)) : std::string("******");
-  rowValues[3] = editProfile.serverUrl.empty() ? std::string(tr(STR_DEFAULT_VALUE)) : editProfile.serverUrl;
+  rowValues[3] = editProfile.serverUrl.empty() ? std::string(tr(STR_DEFAULT_VALUE)) + ": " +
+                                                     KOReaderCredentialStore::resolveBaseUrl(editProfile.serverUrl)
+                                               : KOReaderCredentialStore::resolveBaseUrl(editProfile.serverUrl);
   rowValues[4] = editProfile.matchMethod == DocumentMatchMethod::FILENAME ? std::string(tr(STR_FILENAME))
                                                                           : std::string(tr(STR_BINARY));
   rowValues[5] = editProfile.sendMetadata ? std::string(tr(STR_STATE_ON)) : std::string(tr(STR_STATE_OFF));
@@ -78,7 +80,9 @@ void KOReaderProfileEditActivity::syncRows() {
   rowValues[8] = isActive ? std::string(tr(STR_ACTIVE_PROFILE_TAG)) : std::string();
   rowValues[9].clear();
   for (int i = 0; i < MAX_ITEMS; ++i) {
-    rowItems[i].value = rowValues[i].empty() ? nullptr : rowValues[i].c_str();
+    // Keep the resolved URL below its label so both use the full row width.
+    rowItems[i].subtitle = i == 3 ? rowValues[i].c_str() : nullptr;
+    rowItems[i].value = i == 3 || rowValues[i].empty() ? nullptr : rowValues[i].c_str();
   }
 }
 
@@ -206,9 +210,9 @@ void KOReaderProfileEditActivity::handleSelection(const int selectedIndex) {
   } else if (selectedIndex == 7) {
     if (editProfile.username.empty() || editProfile.password.empty() || !saveProfile()) return;
     syncRows();
-    startActivityForResult(
-        std::make_unique<KOReaderAuthActivity>(renderer, mappedInput, KOReaderAuthActivity::Mode::SIGN_UP, editProfile),
-        [this](const ActivityResult&) { requestUpdate(true); });
+    startActivityForResult(std::make_unique<KOReaderAuthActivity>(
+                               renderer, mappedInput, KOReaderAuthActivity::Mode::SIGN_UP, editProfile, profileIndex),
+                           [this](const ActivityResult&) { requestUpdate(true); });
   } else if (selectedIndex == 8 && !isNewProfile) {
     // Set as Active — persists as the new default for auto-sync and future syncs.
     if (!KOREADER_STORE.setActiveIndex(static_cast<size_t>(profileIndex))) {
@@ -256,6 +260,8 @@ void KOReaderProfileEditActivity::buildScreen(UiScreen& screen) {
   props.valueInset = 8;
   props.labelText = screen.theme().smallText;
   props.labelText.maxLines = 2;
+  props.subtitleText = screen.theme().smallText;
+  props.subtitleText.maxLines = 2;
   syncListViewport(screen, props);
   screen.list(props);
 }

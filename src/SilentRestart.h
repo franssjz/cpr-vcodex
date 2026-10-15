@@ -1,5 +1,7 @@
 #pragma once
 
+#include "network/KOReaderRecovery.h"
+
 // ESP.restart() with an RTC_NOINIT flag that survives the reboot, so setup()
 // skips the boot splash and routes straight to a destination. Used to clear
 // heap fragmentation accumulated during a wifi session. The live frontlight
@@ -16,6 +18,12 @@ void silentRestartToSettings();  // settings screen
 // rails); the caller then proceeds without a reboot.
 void silentRestartToJoinNetwork();
 void silentRestartToOta();
+
+// One fresh-heap retry for an explicitly rejected KOReader TLS preflight.
+// References a saved profile and never stores another copy of its credentials.
+// Returns false if unsupported or the profile cannot be validated/persisted;
+// a successful X3/X4 restart does not return.
+bool silentRestartToKOReader(const KOReaderRecoveryRequest& request);
 
 // Reboots immediately after an activity releases exclusive raw storage. The
 // RTC target ensures setup() lands on Home instead of resuming a reader.

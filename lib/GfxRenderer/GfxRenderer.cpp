@@ -312,7 +312,8 @@ int GfxRenderer::resolveTextFontId(const int fontId, const char* text, const Epd
 }
 
 void GfxRenderer::prewarmFallbackText(const int fontId, const TextGetter getter, const void* ctx,
-                                      const uint32_t textCount, const EpdFontFamily::Style style) const {
+                                      const uint32_t textCount, const EpdFontFamily::Style style,
+                                      const bool accumulate) const {
   if (getter == nullptr || textCount == 0) {
     return;
   }
@@ -346,7 +347,7 @@ void GfxRenderer::prewarmFallbackText(const int fontId, const TextGetter getter,
   };
   // loadKernLig=false: see ensureSdGlyphsResident below.
   sdIt->second->prewarm(withEllipsis, &wrap, textCount + 1, styleMask, /*metadataOnly=*/false,
-                        /*loadKernLig=*/false);
+                        /*loadKernLig=*/false, accumulate);
 }
 
 void GfxRenderer::prewarmFallbackText(const int fontId, const char* text, const EpdFontFamily::Style style) const {

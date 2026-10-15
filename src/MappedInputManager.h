@@ -157,6 +157,8 @@ class MappedInputManager {
   mutable bool touchHeldOverrideValid = false;
   mutable unsigned long touchHeldOverrideMs = 0;
   mutable unsigned long touchHeldOverrideAt = 0;
+  // Keep physical duration consistent with the button states sampled by update().
+  mutable unsigned long sampledButtonHeldMs = 0;
   mutable uint16_t longPressFiredButtons = 0;
   mutable uint16_t suppressedReleaseButtons = 0;
 #if FREEINK_CAP_TOUCH

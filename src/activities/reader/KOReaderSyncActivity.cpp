@@ -4,6 +4,7 @@
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <SdCardFont.h>
 #include <TrustedTime.h>
 #include <WiFi.h>
@@ -23,12 +24,14 @@
 #include "ProgressComparison.h"
 #include "ReaderUtils.h"
 #include "ReadingStatsStore.h"
+#include "SilentRestart.h"
 #include "activities/apps/ReadingStatsDetailActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "components/UiAppHelpers.h"
 #include "components/icons/listIcons.h"  // download/upload icons for the compare rows
 #include "fontIds.h"
+#include "network/KOReaderSyncRecovery.h"
 #include "network/WifiPowerSaveGuard.h"
 #include "util/AchievementPopupUtils.h"
 #include "util/CompletedBookMover.h"
@@ -122,7 +125,8 @@ KOReaderSyncActivity::KOReaderSyncActivity(
     GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& epubPath, const int currentSpineIndex,
     const int currentPage, const int totalPagesInSpine, const uint16_t paragraphIndex, const bool hasParagraphIndex,
     const uint32_t xhtmlSeekHint, const KOReaderSyncIntentState syncIntent, const bool hasPrecomputedLocalProgress,
-    const SavedProgressPosition& precomputedLocalProgress, const std::string& precomputedLocalChapterLabel)
+    const SavedProgressPosition& precomputedLocalProgress, const std::string& precomputedLocalChapterLabel,
+    const bool resumedAfterMemoryRecovery)
     : Activity("KOReaderSync", renderer, mappedInput),
       UiAppHost(renderer),
       epubPath(epubPath),
@@ -137,12 +141,57 @@ KOReaderSyncActivity::KOReaderSyncActivity(
       remotePosition{},
       hasLocalProgress(hasPrecomputedLocalProgress && !precomputedLocalProgress.xpath.empty()),
       localProgress(hasLocalProgress ? precomputedLocalProgress : SavedProgressPosition{}),
-      localChapterLabel(hasLocalProgress ? precomputedLocalChapterLabel : std::string()) {
+      localChapterLabel(hasLocalProgress ? precomputedLocalChapterLabel : std::string()),
+      memoryRecoveryAttempted(resumedAfterMemoryRecovery) {
   localPosition = CrossPointPosition{currentSpineIndex, currentPage, totalPagesInSpine};
   localPosition.paragraphIndex = paragraphIndex;
   localPosition.hasParagraphIndex = hasParagraphIndex;
   localPosition.hasResolvedSpineIndex = currentSpineIndex >= 0;
   localPosition.hasMappedPage = currentPage >= 0 && totalPagesInSpine > 0;
+}
+
+std::unique_ptr<KOReaderSyncActivity> KOReaderSyncActivity::resumeAfterMemoryRecovery(GfxRenderer& renderer,
+                                                                                      MappedInputManager& mappedInput) {
+  const auto& sync = APP_STATE.koReaderSyncSession;
+  if (!KOReaderSyncRecovery::canResume(sync)) {
+    return nullptr;
+  }
+  SavedProgressPosition progress;
+  progress.xpath = sync.localKoReaderProgress;
+  progress.percentage = sync.localKoReaderPercentage;
+  return makeUniqueNoThrow<KOReaderSyncActivity>(renderer, mappedInput, sync.epubPath, sync.spineIndex, sync.page,
+                                                 sync.totalPagesInSpine, sync.paragraphIndex, sync.hasParagraphIndex,
+                                                 sync.xhtmlSeekHint, sync.intent, sync.hasLocalKoReaderPosition,
+                                                 progress, sync.localChapterLabel, true);
+}
+
+bool KOReaderSyncActivity::recoverFromLowMemory(const KOReaderSyncIntentState resumeIntent) {
+  auto& sync = APP_STATE.koReaderSyncSession;
+  if (memoryRecoveryAttempted || isAutomaticSyncIntent(syncIntent) || !KOReaderSyncClient::canRecoverFromLowMemory() ||
+      !KOReaderSyncRecovery::canResume(sync) || sync.epubPath != epubPath) {
+    return false;
+  }
+  const int profileIndex = KOREADER_STORE.getActiveIndex();
+  const auto* profile = profileIndex >= 0 ? KOREADER_STORE.getProfile(profileIndex) : nullptr;
+  if (!profile || profile->username.empty() || profile->password.empty()) {
+    return false;
+  }
+  memoryRecoveryAttempted = true;
+  const auto previousIntent = sync.intent;
+  sync.intent = resumeIntent;
+  sync.hasLocalKoReaderPosition = hasLocalProgress;
+  sync.localKoReaderProgress = localProgress.xpath;
+  sync.localKoReaderPercentage = localProgress.percentage;
+  sync.localChapterLabel = localChapterLabel;
+  if (!APP_STATE.saveToFile()) {
+    sync.intent = previousIntent;
+    return false;
+  }
+  const KOReaderRecoveryRequest request{
+      KOReaderRecoveryOperation::ManualSync, static_cast<uint8_t>(profileIndex), 0,
+      KOReaderRecovery::profileIdentity(profile->username,
+                                        KOReaderCredentialStore::resolveBaseUrl(profile->serverUrl))};
+  return silentRestartToKOReader(request);
 }
 
 void KOReaderSyncActivity::onWifiSelectionComplete(const bool success) {
@@ -239,6 +288,7 @@ void KOReaderSyncActivity::performSync() {
       warmupResult = KOReaderSyncClient::getProgress(documentHash, warmupProgress);
     }
     if (warmupResult != KOReaderSyncClient::OK && warmupResult != KOReaderSyncClient::NOT_FOUND) {
+      if (recoverFromLowMemory(syncIntent)) return;
       KOReaderSyncClient::endPersistentSession();
       {
         RenderLock lock(*this);
@@ -279,10 +329,14 @@ void KOReaderSyncActivity::performSync() {
   LOG_DBG("KOSync", "Primary remote (%s): result=%d http=%d local=%.6f remote=%.6f", matchMethodName(primaryMethod),
           result, KOReaderSyncClient::lastHttpCode, localProgress.percentage, remoteProgress.percentage);
 
+  if (result != KOReaderSyncClient::OK && result != KOReaderSyncClient::NOT_FOUND && recoverFromLowMemory(syncIntent)) {
+    return;
+  }
+
   KOReaderProgress alternateProgress{};
   std::string alternateHash;
   bool hasAlternateProgress = false;
-  if (smartSync) {
+  if (smartSync && (result == KOReaderSyncClient::OK || result == KOReaderSyncClient::NOT_FOUND)) {
     alternateHash = calculateDocumentHashForMethod(epubPath, alternateMatchMethod(primaryMethod));
     if (!alternateHash.empty() && alternateHash != documentHash) {
       hasAlternateProgress =
@@ -531,6 +585,9 @@ void KOReaderSyncActivity::performUpload() {
   {
     WifiPowerSaveGuard psGuard;
     result = KOReaderSyncClient::updateProgress(progress);
+  }
+  if (result != KOReaderSyncClient::OK && recoverFromLowMemory(KOReaderSyncIntentState::PUSH_LOCAL)) {
+    return;
   }
   KOReaderSyncClient::endPersistentSession();
   logSyncMemSnapshot("after_updateProgress");

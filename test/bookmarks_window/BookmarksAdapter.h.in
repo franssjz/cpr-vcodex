@@ -1,0 +1,147 @@
+#pragma once
+#include <FreeInkApp.h>
+
+#include <algorithm>
+#include <cstdio>
+#include <functional>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace fui = freeink::ui;
+using UiScreen = fui::Screen<32>;
+using Rect = fui::Rect;
+
+// Only the platform edges are doubled; all bookmark and viewport methods,
+// cache fields, and the bookmark value type come directly from production.
+struct BookmarkStore { @BOOKMARK_MODEL@ };
+struct Epub {
+  struct TocItem { std::string title; };
+  int getTocIndexForSpineIndex(int) const { return 0; }
+  TocItem getTocItem(int) const { return {"Chapter"}; }
+};
+enum TranslationKey {
+  STR_TEXT_HIGHLIGHT_PREFIX, STR_PAGE_MARK_PREFIX, STR_SECTION_PREFIX,
+  STR_HIGHLIGHTS, STR_NO_HIGHLIGHTS, STR_DELETE_HIGHLIGHT
+};
+inline int formattedLabels = 0;
+inline const char* tr(TranslationKey key) {
+  switch (key) {
+    case STR_TEXT_HIGHLIGHT_PREFIX: ++formattedLabels; return "Highlight: ";
+    case STR_PAGE_MARK_PREFIX: ++formattedLabels; return "Mark: ";
+    case STR_SECTION_PREFIX: return "Section ";
+    default: return "Highlights";
+  }
+}
+struct UIScaleSpec { int smallFontId = 7; };
+inline const UIScaleSpec& uiScaleSpec() { static UIScaleSpec spec; return spec; }
+struct FontCacheManager {
+  int clearCalls = 0;
+  void clearCache() { ++clearCalls; }
+};
+struct EpdFontFamily { enum Style { REGULAR }; };
+struct GfxRenderer {
+  using TextGetter = const char* (*)(const void*, uint32_t);
+  int width = 480;
+  int height = 800;
+  FontCacheManager cache;
+  struct Batch { int font; std::vector<std::string> labels; };
+  std::vector<Batch> batches;
+  std::vector<std::string> individualPrewarms;
+  const void* windowContext = nullptr;
+  std::string currentLabel;
+  bool currentLabelIncludesEllipsis = false;
+  bool currentLabelAccumulates = true;
+  FontCacheManager* getFontCacheManager() { return &cache; }
+  int getScreenWidth() const { return width; }
+  int getScreenHeight() const { return height; }
+  void prewarmFallbackText(int font, TextGetter getter, const void* ctx, uint32_t count,
+                           EpdFontFamily::Style style = EpdFontFamily::REGULAR, bool accumulate = true) {
+    EXPECT_EQ(style, EpdFontFamily::REGULAR);
+    Batch batch{font, {}};
+    for (uint32_t i = 0; i < count; ++i) batch.labels.emplace_back(getter(ctx, i));
+    if (ctx == windowContext) {
+      batches.push_back(std::move(batch));
+      // Simulate a dense window exhausting the shared cache before later rows.
+      currentLabel.clear();
+      currentLabelIncludesEllipsis = false;
+    } else {
+      EXPECT_EQ(font, uiScaleSpec().smallFontId);
+      ASSERT_EQ(count, 1u);
+      EXPECT_FALSE(accumulate);
+      currentLabel = batch.labels.front();
+      currentLabelIncludesEllipsis = true;
+      currentLabelAccumulates = accumulate;
+      individualPrewarms.push_back(currentLabel);
+    }
+  }
+  void prewarmFallbackText(int font, const char* text) {
+    EXPECT_EQ(font, uiScaleSpec().smallFontId);
+    currentLabel = text;
+    currentLabelIncludesEllipsis = false;
+    currentLabelAccumulates = true;
+    individualPrewarms.emplace_back(text);
+  }
+};
+struct UITheme {
+  struct Metrics { int topPadding = 0, headerHeight = 40, verticalSpacing = 8; };
+  static UITheme& getInstance() { static UITheme theme; return theme; }
+  const Metrics& getMetrics() const { static Metrics metrics; return metrics; }
+  Rect getScreenSafeArea(const GfxRenderer& renderer, bool, bool) const {
+    return {0, 0, static_cast<int16_t>(renderer.width), static_cast<int16_t>(renderer.height)};
+  }
+};
+struct MappedInputManager {
+  enum class Button { Confirm, Back };
+  bool confirmReleased = false, backReleased = false;
+  unsigned long heldTime = 0;
+  bool wasReleased(Button button) const { return button == Button::Confirm ? confirmReleased : backReleased; }
+  unsigned long getHeldTime() const { return heldTime; }
+};
+struct ActivityResult { bool isCancelled = false; };
+struct BookmarkResult { int spineIndex, pageNumber; bool hasVisibleTextOffset; uint32_t visibleTextOffset; };
+struct ConfirmationActivity {
+  ConfirmationActivity(GfxRenderer&, MappedInputManager&, const char*, const std::string&) {}
+};
+struct Activity {
+  bool finished = false;
+  ActivityResult activityResult;
+  BookmarkResult bookmarkResult{};
+  virtual ~Activity() = default;
+  virtual void onEnter() {}
+  virtual void onExit() {}
+  void setResult(ActivityResult result) { activityResult = result; }
+  void setResult(BookmarkResult result) { bookmarkResult = result; }
+  void finish() { finished = true; }
+};
+struct UiListActivity : Activity {
+  static constexpr fui::ActionId ACTION_ROW = 1;
+  GfxRenderer& renderer;
+  MappedInputManager& mappedInput;
+  fui::ListNav nav;
+  struct App { void clearTapFlash() {} } app;
+  bool routingClosed = false;
+  std::function<void(const ActivityResult&)> confirmation;
+  UiListActivity(const char*, GfxRenderer& renderer, MappedInputManager& input, bool)
+      : renderer(renderer), mappedInput(input) {}
+  void onEnter() override { nav.reset(); }
+  virtual int listCount() const = 0;
+  virtual void buildScreen(UiScreen&) = 0;
+  virtual void activateIndex(int) = 0;
+  virtual void onRowLongPress(int) = 0;
+  virtual bool handleButtons() = 0;
+  virtual const char* headerTitle() const = 0;
+  fui::ListNav& activeNav() { return nav; }
+  void syncListViewport(UiScreen&, fui::ListProps&, int selectionOffset = 0);
+  void closeRouting() { routingClosed = true; }
+  void requestUpdate(bool = false) {}
+  void startActivityForResult(std::unique_ptr<ConfirmationActivity>,
+                              std::function<void(const ActivityResult&)> callback) {
+    confirmation = std::move(callback);
+  }
+};
+
+@VIEWPORT_METHOD@
+@BOOKMARKS_HEADER@
+@BOOKMARKS_METHODS@

@@ -30,8 +30,8 @@ Welcome to the **CPR-vCodex** firmware. This guide outlines the hardware control
       - [3.6.5 OPDS Servers (Multiple Libraries)](#365-opds-servers-multiple-libraries)
       - [3.6.6 Web Settings (Wi-Fi + OPDS)](#366-web-settings-wi-fi--opds)
       - [3.6.7 KOReader Sync Quick Setup](#367-koreader-sync-quick-setup)
-        - [Option A: CrossPoint Sync Server (`sync.crosspointreader.com`, default)](#option-a-crosspoint-sync-server-synccrosspointreadercom-default)
-        - [Option B: Legacy Public KOReader Server (`sync.koreader.rocks`)](#option-b-legacy-public-koreader-server-synckoreaderrocks)
+        - [Option A: Public KOReader Server (`sync.koreader.rocks`, default)](#option-a-public-koreader-server-synckoreaderrocks-default)
+        - [Option B: CrossPoint Sync Server (`sync.crosspointreader.com`)](#option-b-crosspoint-sync-server-synccrosspointreadercom)
         - [Option C: Self-Hosted Server (Docker Compose)](#option-c-self-hosted-server-docker-compose)
         - [Syncing While Reading](#syncing-while-reading)
     - [3.7 Sleep Screen](#37-sleep-screen)
@@ -427,9 +427,9 @@ Profile options:
 * **Sync Behavior — Smart Sync:** Check both supported document hashes, upload when local progress is farther ahead, apply remote progress when it is farther ahead, and do nothing when both sides match.
 * **Sign Up:** Create the account using this profile's username, password, and server. It neither activates the profile nor changes an already configured server.
 
-##### Option A: CrossPoint Sync Server (`sync.crosspointreader.com`, default)
+##### Option A: Public KOReader Server (`sync.koreader.rocks`, default)
 
-When a profile's **Sync Server URL** is left empty, CPR-vCodex uses the free CrossPoint sync server at `https://sync.crosspointreader.com`. It speaks the standard KOReader sync protocol (so KOReader apps can use it too). Page starts are recorded as chapter-content offsets and sent with the corresponding standard KOReader XPath, so devices with different fonts or layouts can return to the same text.
+When a profile's **Sync Server URL** is left empty, CPR-vCodex uses `https://sync.koreader.rocks:443`. Both the KOReader Sync settings and the profile editor show the resolved address beside **Default**. Page starts are recorded as chapter-content offsets and sent with the corresponding standard KOReader XPath, so devices with different fonts or layouts can return to the same text.
 
 1. On each CPR-vCodex device:
 
@@ -437,40 +437,30 @@ When a profile's **Sync Server URL** is left empty, CPR-vCodex uses the free Cro
 
    - Add or edit a named profile with the same **Username** and **Password** (enter the plain password; CPR-vCodex computes MD5 internally).
 
-   - Leave **Sync Server URL** empty (or set it to `https://sync.crosspointreader.com`).
+   - Leave **Sync Server URL** empty (or set it to `https://sync.koreader.rocks:443`).
 
-   - Choose the metadata and sync behavior preferences, save, and **Set as Active**. On the first device, run **Sign Up** once to create the account directly from the device. On every other device, just run **Authenticate**.
+   - Choose the metadata and sync behavior preferences, save, and **Set as Active**. For an existing account, run **Authenticate**. To create a new account, run **Sign Up** once on the first device; on every other device, run **Authenticate**.
 
-Accounts are per server. Existing `sync.koreader.rocks` credentials do not exist on the CrossPoint server; either sign up again with the same username/password or use Option B to keep using the legacy server.
-
-##### Option B: Legacy Public KOReader Server (`sync.koreader.rocks`)
-
-Use this if you already sync KOReader devices against the official public server.
-
-1. On each CPR-vCodex device:
-
-   - Go to **Settings -> System -> KOReader Sync**.
-
-   - Add or edit a named profile and set its **Sync Server URL** to `https://sync.koreader.rocks` (required; an empty URL now points at the CrossPoint server instead).
-
-   - Set **Username** and **Password** to your existing KOReader Sync credentials.
-
-   - Save, **Set as Active**, and run **Authenticate**.
-
-2. If you do not have an account yet, use the profile's **Sign Up** action on the device, or register once with curl:
+2. The equivalent command-line registration method is:
 
 ```bash
 USERNAME="user"
 PASSWORD="pass"
 PASSWORD_MD5="$(printf '%s' "$PASSWORD" | openssl md5 | awk '{print $2}')"
 
-curl -i "https://sync.koreader.rocks/users/create" \
+curl -i "https://sync.koreader.rocks:443/users/create" \
   -H "Accept: application/vnd.koreader.v1+json" \
   -H "Content-Type: application/json" \
   --data "{\"username\":\"$USERNAME\",\"password\":\"$PASSWORD_MD5\"}"
 ```
 
-When this returns `HTTP 402` with `{"code":2002,"message":"Username is already registered."}`, pick a different username or use that existing account.
+When this returns `HTTP 402` with `{"code":2002,"message":"Username is already registered."}`, pick a different username or authenticate with that existing account.
+
+##### Option B: CrossPoint Sync Server (`sync.crosspointreader.com`)
+
+To use the CrossPoint server, explicitly set the profile's **Sync Server URL** to `https://sync.crosspointreader.com`. Configure the same address and credentials on every device, save, and **Set as Active**. Run **Sign Up** once for a new account, or **Authenticate** for an existing one.
+
+Accounts are specific to each server. KOReader public-server credentials do not automatically create an account on the CrossPoint server, and vice versa. Existing profiles with an explicit server URL continue to use that address; leaving the URL empty selects the public KOReader server above.
 
 ##### Option C: Self-Hosted Server (Docker Compose)
 
@@ -551,6 +541,8 @@ Once any of the options above is set up, press **Confirm** while reading to open
 
 - With **Sync Behavior** set to **Ask every time**, choose **Apply Remote** to jump to remote progress or **Upload Local** to push current progress.
 - With **Sync Behavior** set to **Smart sync**, CrossPoint auto-resolves simple cases: upload when no remote progress exists, confirm and leave both unchanged when local and remote progress are already synchronized, upload when local progress is further ahead, or apply remote when remote progress is further ahead.
+
+If low memory prevents a secure connection from starting on X3/X4, Sign Up, Authenticate, or a manual sync can restart the device and resume once with the same saved profile and book. If the retry fails, the error screen shows the configured server and the available ESP, TLS, and HTTP diagnostics. A sign-up request that may already have reached the server is not automatically replayed by this recovery; authenticate first to check whether the account was created.
 
 ### 3.7 Sleep Screen
 

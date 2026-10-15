@@ -150,10 +150,18 @@ class KOReaderSyncClient {
    */
   static const char* lastFailureDetail();
 
+  // True only when this operation was rejected by the TLS heap preflight
+  // before any request was performed. Safe for a one-shot clean-memory retry.
+  static bool canRecoverFromLowMemory();
+
   /** HTTP status code from the last request (for diagnostics). */
   static int lastHttpCode;
   /** Last esp_err_t from esp_http_client_perform (ESP_OK if request reached the server). */
   static int lastEspError;
+  /** ESP-TLS error, underlying TLS-library code, and certificate flags captured before cleanup. */
+  static int lastTlsError;
+  static int lastTlsCode;
+  static int lastTlsFlags;
   /** Free heap (bytes) captured at the start of the last failing request. */
   static unsigned lastHeapAtFailure;
   /** Largest contiguous free block (bytes) at the start of the last failing request. */

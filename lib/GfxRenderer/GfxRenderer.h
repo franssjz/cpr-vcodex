@@ -168,10 +168,11 @@ class GfxRenderer {
   // The getter form fetches strings one at a time (allocation-free — callers
   // must NOT build a concatenated std::string: its bare-new growth aborts on
   // the heap-tight screens this exists for). A null getter result skips that
-  // index.
+  // index. accumulate=false keeps subset hits, but on a miss replaces the
+  // resident set instead of merging it (useful for dense, disjoint UI rows).
   using TextGetter = const char* (*)(const void* ctx, uint32_t index);
   void prewarmFallbackText(int fontId, TextGetter getter, const void* ctx, uint32_t textCount,
-                           EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
+                           EpdFontFamily::Style style = EpdFontFamily::REGULAR, bool accumulate = true) const;
   void prewarmFallbackText(int fontId, const char* text, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   bool isFontCacheScanning() const;
   const std::map<int, EpdFontFamily>& getFontMap() const { return fontMap; }

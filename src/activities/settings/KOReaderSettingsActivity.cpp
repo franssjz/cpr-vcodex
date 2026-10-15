@@ -152,8 +152,8 @@ void KOReaderSettingsActivity::activateIndex(const int index) {
     if (!activeProfile) {
       return;
     }
-    startActivityForResult(std::make_unique<KOReaderAuthActivity>(renderer, mappedInput,
-                                                                  KOReaderAuthActivity::Mode::SIGN_UP, *activeProfile),
+    startActivityForResult(std::make_unique<KOReaderAuthActivity>(
+                               renderer, mappedInput, KOReaderAuthActivity::Mode::SIGN_UP, *activeProfile, activeIndex),
                            [](const ActivityResult&) {});
   } else if (index == ROW_AUTHENTICATE) {
     // Authenticate (active profile)
@@ -193,13 +193,9 @@ void KOReaderSettingsActivity::buildScreen(UiScreen& screen) {
     } else if (i == ROW_PASSWORD) {
       rowValues_[i] = KOREADER_STORE.getPassword().empty() ? tr(STR_NOT_SET) : "******";
     } else if (i == ROW_SERVER_URL) {
-      rowValues_[i] = KOREADER_STORE.getServerUrl();
-      if (rowValues_[i].empty()) {
-        std::string defaultUrl = KOREADER_STORE.getBaseUrl();
-        const auto schemeEnd = defaultUrl.find("://");
-        if (schemeEnd != std::string::npos) defaultUrl.erase(0, schemeEnd + 3);
-        rowValues_[i] = std::string(tr(STR_DEFAULT_VALUE)) + ": " + defaultUrl;
-      }
+      rowValues_[i] = KOREADER_STORE.getServerUrl().empty()
+                          ? std::string(tr(STR_DEFAULT_VALUE)) + ": " + KOREADER_STORE.getBaseUrl()
+                          : KOREADER_STORE.getBaseUrl();
     } else if (i == ROW_SERVER_TYPE) {
       const auto type = KOREADER_STORE.getServerType();
       rowValues_[i] = type == KOReaderServerType::CROSSPOINT ? tr(STR_CROSSPOINT)
@@ -220,7 +216,10 @@ void KOReaderSettingsActivity::buildScreen(UiScreen& screen) {
     } else {
       rowValues_[i] = KOREADER_STORE.hasCredentials() ? "" : std::string("[") + tr(STR_SET_CREDENTIALS_FIRST) + "]";
     }
-    rowItems_[i].value = rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
+    // The effective URL needs the full row width; a trailing value can hide
+    // the field label and truncate the address on narrow screens.
+    rowItems_[i].subtitle = i == ROW_SERVER_URL ? rowValues_[i].c_str() : nullptr;
+    rowItems_[i].value = i == ROW_SERVER_URL || rowValues_[i].empty() ? nullptr : rowValues_[i].c_str();
   }
   GUI.setCheckboxRow(rowItems_[ROW_SEND_METADATA], KOREADER_STORE.getSendMetadata());
 
@@ -234,6 +233,8 @@ void KOReaderSettingsActivity::buildScreen(UiScreen& screen) {
   // maxLines=2 also marks the style caller-owned (see textStyleUnset).
   props.labelText = screen.theme().smallText;
   props.labelText.maxLines = 2;
+  props.subtitleText = screen.theme().smallText;
+  props.subtitleText.maxLines = 2;
   syncListViewport(screen, props);
   screen.list(props);
 }

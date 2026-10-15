@@ -65,6 +65,18 @@ void KOReaderAuthActivity::performAuthentication() {
           ? KOReaderSyncClient::registerUser(profile.username, KOReaderCredentialStore::hashPassword(profile.password),
                                              KOReaderCredentialStore::resolveBaseUrl(profile.serverUrl))
           : KOReaderSyncClient::authenticate();
+  // Only a rejected preflight is safe to replay: a later transport failure may
+  // already have created the account. The resumed activity cannot re-arm this.
+  if (result == KOReaderSyncClient::NETWORK_ERROR &&
+      KOReaderRecovery::shouldRecover(resumedAfterMemoryRecovery, KOReaderSyncClient::canRecoverFromLowMemory()) &&
+      profileIndex >= 0 && static_cast<size_t>(profileIndex) < KOReaderRecovery::MAX_PROFILES) {
+    const KOReaderRecoveryRequest request{
+        mode == Mode::SIGN_UP ? KOReaderRecoveryOperation::Register : KOReaderRecoveryOperation::Authenticate,
+        static_cast<uint8_t>(profileIndex), 0,
+        KOReaderRecovery::profileIdentity(profile.username,
+                                          KOReaderCredentialStore::resolveBaseUrl(profile.serverUrl))};
+    silentRestartToKOReader(request);
+  }
   restoreMemoryAfterAuthNetwork(renderer, "after_authenticate_restore");
 
   {
@@ -94,6 +106,15 @@ void KOReaderAuthActivity::performAuthentication() {
 
 void KOReaderAuthActivity::onEnter() {
   Activity::onEnter();
+
+  // Authentication uses the active profile; registration may use a different
+  // saved profile supplied by its editor. Pin that identity before networking.
+  if (mode == Mode::AUTHENTICATE && profileIndex < 0) {
+    profileIndex = KOREADER_STORE.getActiveIndex();
+    if (profileIndex >= 0) {
+      if (const auto* saved = KOREADER_STORE.getProfile(static_cast<size_t>(profileIndex))) profile = *saved;
+    }
+  }
 
   // Check if already connected
   if (WiFi.status() == WL_CONNECTED) {

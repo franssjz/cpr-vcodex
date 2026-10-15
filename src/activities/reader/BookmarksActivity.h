@@ -18,12 +18,16 @@ class BookmarksActivity final : public UiListActivity {
   std::string headerTitleText;
   std::function<bool(const BookmarkStore::Bookmark&)> onDeleteBookmark;
 
-  // Row cache, parallel to bookmarks: rowLabels owns the text the ListItems
-  // point at. Rebuilt only when bookmarks changes (rebuildRowItems()), never
-  // from buildScreen().
-  std::vector<std::string> rowLabels;
-  std::vector<freeink::ui::ListItem> rowItems;
-  void rebuildRowItems();
+  // Only materialize the viewport's rows: copying every full highlight into
+  // a label crowds out the SD fallback glyph cache on the X4. Like the TOC,
+  // keep a bounded window and batch-prewarm it when the viewport changes.
+  static constexpr int ROW_WINDOW = 24;
+  std::string rowLabels[ROW_WINDOW];
+  freeink::ui::ListItem rowItems[ROW_WINDOW];
+  int rowWindowStart = -1;
+  int rowWindowCount = 0;
+  void refreshRowWindow(int start);
+  static void provideRow(void* ctx, uint16_t index, freeink::ui::ListItem& item);
 
   std::string getItemLabel(int index) const;
   void confirmDeleteBookmark(int index);

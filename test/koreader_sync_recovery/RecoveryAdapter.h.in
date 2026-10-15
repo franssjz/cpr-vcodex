@@ -1,0 +1,71 @@
+#pragma once
+#include <Memory.h>
+#include "CrossPointState.h"
+#include "KOReaderCredentialStore.h"
+#include "network/KOReaderRecovery.h"
+#include "network/KOReaderSyncRecovery.h"
+
+// Board/UI stand-ins; the recovery methods below are extracted from production.
+struct GfxRenderer {};
+struct MappedInputManager {};
+struct SavedProgressPosition { std::string xpath; float percentage = 0; };
+struct FakeState {
+  KOReaderSyncSessionState koReaderSyncSession;
+  bool saveSucceeds = true;
+  int saveCalls = 0;
+  bool saveToFile() { ++saveCalls; return saveSucceeds; }
+};
+struct FakeStore {
+  std::vector<KOReaderProfile> profiles;
+  int active = 0;
+  int getActiveIndex() const { return active; }
+  const KOReaderProfile* getProfile(size_t index) const {
+    return index < profiles.size() ? &profiles[index] : nullptr;
+  }
+};
+inline FakeState fakeState;
+inline FakeStore fakeStore;
+#undef APP_STATE
+#undef KOREADER_STORE
+#define APP_STATE fakeState
+#define KOREADER_STORE fakeStore
+inline std::string KOReaderCredentialStore::resolveBaseUrl(const std::string& url) {
+  return url.empty() ? "https://sync.koreader.rocks:443" : url;
+}
+struct KOReaderSyncClient {
+  inline static bool eligible = true;
+  static bool canRecoverFromLowMemory() { return eligible; }
+};
+inline int restartCalls = 0;
+inline bool restartSupported = true;
+inline KOReaderRecoveryRequest lastRequest{};
+inline bool silentRestartToKOReader(const KOReaderRecoveryRequest& request) {
+  ++restartCalls;
+  lastRequest = request;
+  return restartSupported;
+}
+class KOReaderSyncActivity {
+ public:
+  std::string epubPath;
+  int currentSpineIndex;
+  int currentPage;
+  int totalPagesInSpine;
+  uint16_t paragraphIndex;
+  bool hasParagraphIndex;
+  uint32_t xhtmlSeekHint;
+  KOReaderSyncIntentState syncIntent;
+  bool hasLocalProgress;
+  SavedProgressPosition localProgress;
+  std::string localChapterLabel;
+  bool memoryRecoveryAttempted;
+  KOReaderSyncActivity(GfxRenderer&, MappedInputManager&, const std::string& path, int spine, int page, int pages,
+                      uint16_t paragraph, bool hasParagraph, uint32_t hint, KOReaderSyncIntentState intent,
+                      bool hasLocal, const SavedProgressPosition& local, const std::string& chapter, bool resumed)
+      : epubPath(path), currentSpineIndex(spine), currentPage(page), totalPagesInSpine(pages),
+        paragraphIndex(paragraph), hasParagraphIndex(hasParagraph), xhtmlSeekHint(hint), syncIntent(intent),
+        hasLocalProgress(hasLocal), localProgress(local), localChapterLabel(chapter), memoryRecoveryAttempted(resumed) {}
+  static std::unique_ptr<KOReaderSyncActivity> resumeAfterMemoryRecovery(GfxRenderer&, MappedInputManager&);
+  bool recoverFromLowMemory(KOReaderSyncIntentState resumeIntent);
+};
+@AUTOMATIC_INTENT_METHOD@
+@RECOVERY_METHODS@

@@ -68,7 +68,7 @@ constexpr UiFontSize kUiFontSizes[] = {
 
 }  // namespace
 
-void SdCardFontSystem::begin(GfxRenderer& renderer) {
+void SdCardFontSystem::begin(GfxRenderer& renderer, const bool loadSelectedFont) {
   // Register this system as the SD font ID resolver in settings.
   // Uses a static trampoline since CrossPointSettings stores a plain function pointer.
   SETTINGS.sdFontIdResolver = [](void* ctx, const char* familyName, uint8_t pointSize) -> int {
@@ -78,7 +78,7 @@ void SdCardFontSystem::begin(GfxRenderer& renderer) {
 
   // Fork: discovery is deferred until an SD family is actually wanted (reader,
   // settings list, web UI). Booting on a built-in font never scans the card.
-  if (SETTINGS.sdFontFamilyName[0] == '\0') {
+  if (!loadSelectedFont || SETTINGS.sdFontFamilyName[0] == '\0') {
     LOG_DBG("SDFS", "SD font resolver ready; discovery deferred until requested");
     return;
   }

@@ -1,0 +1,24 @@
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -36,6 +36,7 @@
+ #include "FlashcardsStore.h"
+ #include "KOReaderCredentialStore.h"
+ #include "MappedInputManager.h"
++#include "../test/simulator/KOReaderNetworkFixture.h"
+ #include "OpdsServerStore.h"
+ #include "ReadingStatsStore.h"
+ #include "RecentBooksStore.h"
+@@ -1034,6 +1035,12 @@
+ }
+ 
+ void loop() {
++  static bool koReaderFixtureStarted = false;
++  if (!koReaderFixtureStarted && std::getenv("CPR_KOREADER_SCREEN")) {
++    koReaderFixtureStarted = true;
++    startKOReaderNetworkFixture(renderer, mappedInputManager);
++  }
++
+   static unsigned long maxLoopDuration = 0;
+   const unsigned long loopStartTime = millis();
+ #ifdef ENABLE_SERIAL_LOG

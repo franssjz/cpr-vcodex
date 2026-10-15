@@ -1,0 +1,77 @@
+#pragma once
+#include <cstdint>
+
+#include "util/HomeButtonInput.h"
+
+inline unsigned long heldTestNowMs = 1000;
+inline unsigned long millis() { return heldTestNowMs; }
+@TOUCH_OVERRIDE_CONSTANT@
+
+struct HalGPIO {
+  uint8_t heldButton = 0;
+  bool pendingHeld = false, held = false, pressed = false, released = false;
+  unsigned long pressStarted = 0, releaseDuration = 0, pendingReleaseDuration = 0;
+  void update() {
+    pressed = pendingHeld && !held;
+    released = held && !pendingHeld;
+    if (pressed) pressStarted = millis();
+    if (released) releaseDuration = pendingReleaseDuration;
+    held = pendingHeld;
+  }
+  unsigned long getHeldTime() const { return held ? millis() - pressStarted : releaseDuration; }
+  bool isPressed(uint8_t button) const { return held && button == heldButton; }
+  bool wasReleased(uint8_t button) const { return released && button == heldButton; }
+  bool wasAnyPressed() const { return pressed; }
+  bool wasAnyReleased() const { return released; }
+  bool isCapacitivePagePressed(uint8_t) const { return false; }
+  bool wasCapacitivePagePressed() const { return false; }
+  bool hasHomeKey() const { return false; }
+  bool wasHomeKeyTapped() const { return false; }
+  bool wasHomeKeyLongPressed() const { return false; }
+  bool wasHomeKeyPressed() const { return false; }
+};
+struct CrossPointSettings {
+  enum { VIBRATION_OFF, VIBRATION_TOUCH_PAGE };
+  int vibration = VIBRATION_OFF;
+  uint8_t hapticIntensity = 0;
+  uint8_t homeButtonTapAction = 0, homeButtonDoubleTapAction = 0, homeButtonLongPressAction = 0;
+};
+inline CrossPointSettings SETTINGS;
+struct HalHaptics {
+  static void feedback(bool, bool, uint8_t) {}
+  static void longPress(bool, uint8_t) {}
+};
+
+// Only platform/mapping edges are doubled. Sampling, duration selection, and
+// one-shot hold behavior below are extracted from MappedInputManager.cpp.
+struct MappedInputManager {
+  @MAPPED_BUTTONS@
+  enum class SwipeDir { None };
+  HalGPIO& gpio;
+  mutable bool suppressBackUntilButtonUp = false;
+  mutable HomeButtonInput homeButtonInput;
+  mutable HomeButtonAction homeAction = HomeButtonAction::Ignore;
+  mutable HomeButtonAction deferredHomeAction = HomeButtonAction::Ignore;
+  mutable bool touchHeldOverrideValid = false;
+  mutable unsigned long touchHeldOverrideMs = 0, touchHeldOverrideAt = 0;
+  @MAPPED_HELD_FIELD@
+  mutable uint16_t longPressFiredButtons = 0, suppressedReleaseButtons = 0;
+  explicit MappedInputManager(HalGPIO& gpio) : gpio(gpio) {
+    gpio.heldButton = static_cast<uint8_t>(Button::NavNext);
+  }
+  bool mapButton(Button button, bool (HalGPIO::*fn)(uint8_t) const) const {
+    return (gpio.*fn)(static_cast<uint8_t>(button));
+  }
+  bool isPressed(Button button) const { return mapButton(button, &HalGPIO::isPressed); }
+  SwipeDir wasSwipe() const { return SwipeDir::None; }
+  void suppressNextRelease(Button button) const {
+    suppressedReleaseButtons |= static_cast<uint16_t>(1u << static_cast<uint8_t>(button));
+  }
+  void update(bool deferHomeButtonAction = false) const;
+  bool wasLongPressed(Button button, unsigned long thresholdMs) const;
+  unsigned long getHeldTime() const;
+};
+
+@MAPPED_UPDATE_METHOD@
+@MAPPED_LONG_PRESS_METHOD@
+@MAPPED_HELD_TIME_METHOD@

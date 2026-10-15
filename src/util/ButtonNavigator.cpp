@@ -84,9 +84,13 @@ void ButtonNavigator::onPreviousLongPressOnce(const Callback& callback) {
 void ButtonNavigator::onLongPressOnce(const Buttons& buttons, const Callback& callback) {
   if (!mappedInput) return;
 
+  // Rendering can advance the live hold clock between handlers for the same
+  // sampled press. Reject both edges before querying the one-shot latch so a
+  // slow frame cannot turn a tap into a page jump or consume a later hold.
   const bool wasLongPressed =
       std::any_of(buttons.begin(), buttons.end(), [this](const MappedInputManager::Button button) {
-        return mappedInput->wasLongPressed(button, continuousStartMs);
+        return !mappedInput->wasPressed(button) && !mappedInput->wasReleased(button) &&
+               mappedInput->wasLongPressed(button, continuousStartMs);
       });
   if (wasLongPressed) callback();
 }

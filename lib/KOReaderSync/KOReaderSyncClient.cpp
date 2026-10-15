@@ -21,6 +21,9 @@
 
 int KOReaderSyncClient::lastHttpCode = 0;
 int KOReaderSyncClient::lastEspError = 0;
+int KOReaderSyncClient::lastTlsError = 0;
+int KOReaderSyncClient::lastTlsCode = 0;
+int KOReaderSyncClient::lastTlsFlags = 0;
 unsigned KOReaderSyncClient::lastHeapAtFailure = 0;
 unsigned KOReaderSyncClient::lastContigHeapAtFailure = 0;
 const char* KOReaderSyncClient::lastOperation = "";
@@ -40,6 +43,12 @@ EndpointProfile g_lastResolvedProfile = EndpointProfile::UNKNOWN;
 // Static buffer for the detail string returned by lastFailureDetail()
 char g_failureDetailBuf[160] = {0};
 char g_lastResponsePreview[160] = {0};
+char g_requestEndpoint[96] = {0};
+bool g_requestUsesTls = false;
+bool g_operationPerformed = false;
+bool g_preflightRejected = false;
+
+void rememberRequestTarget(const char* url);
 
 std::string previewBody(const char* body, const size_t maxLen = 120) {
   if (!body || !*body) {
@@ -71,13 +80,19 @@ void rememberResponsePreview(const char* body) {
   g_lastResponsePreview[sizeof(g_lastResponsePreview) - 1] = '\0';
 }
 
-void beginRequest(const char* operation) {
+void beginRequest(const char* operation, const std::string& target) {
   KOReaderSyncClient::lastOperation = operation;
   KOReaderSyncClient::lastEspError = 0;
   KOReaderSyncClient::lastHttpCode = 0;
+  KOReaderSyncClient::lastTlsError = 0;
+  KOReaderSyncClient::lastTlsCode = 0;
+  KOReaderSyncClient::lastTlsFlags = 0;
   KOReaderSyncClient::lastHeapAtFailure = ESP.getFreeHeap();
   KOReaderSyncClient::lastContigHeapAtFailure = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_DEFAULT);
   g_lastResponsePreview[0] = '\0';
+  g_operationPerformed = false;
+  g_preflightRejected = false;
+  rememberRequestTarget(target.c_str());
 }
 
 // Skip a leading UTF-8 BOM and ASCII whitespace; returns pointer to first content char.
@@ -128,6 +143,41 @@ bool urlUsesTls(const char* url) { return startsWithIgnoreCase(url, "https://");
 
 bool urlUsesTls(const std::string& url) { return urlUsesTls(url.c_str()); }
 
+void rememberRequestTarget(const char* url) {
+  g_requestUsesTls = urlUsesTls(url);
+  // Log the actual origin, never URL user-info, query strings, or document IDs.
+  const char* scheme = strstr(url, "://");
+  const char* host = scheme ? scheme + 3 : url;
+  const char* end = host + strcspn(host, "/?#");
+  for (const char* p = host; p < end; ++p) {
+    if (*p == '@') host = p + 1;
+  }
+  const char* protocol = g_requestUsesTls ? "https" : startsWithIgnoreCase(url, "http://") ? "http" : "unknown";
+  snprintf(g_requestEndpoint, sizeof(g_requestEndpoint), "%s://%.*s", protocol,
+           static_cast<int>(std::min<size_t>(end - host, 80)), host);
+}
+
+esp_err_t performRequest(esp_http_client_handle_t client) {
+  // Once perform is entered, a write may have reached the server even if the
+  // transport later fails. Never offer automatic low-memory recovery then.
+  g_operationPerformed = true;
+  g_preflightRejected = false;
+  const esp_err_t err = esp_http_client_perform(client);
+  KOReaderSyncClient::lastHttpCode = esp_http_client_get_status_code(client);
+  KOReaderSyncClient::lastEspError = err;
+  KOReaderSyncClient::lastTlsError = 0;
+  KOReaderSyncClient::lastTlsCode = 0;
+  KOReaderSyncClient::lastTlsFlags = 0;
+  if (err != ESP_OK && g_requestUsesTls) {
+    KOReaderSyncClient::lastTlsError = esp_http_client_get_and_clear_last_tls_error(
+        client, &KOReaderSyncClient::lastTlsCode, &KOReaderSyncClient::lastTlsFlags);
+    LOG_ERR("KOSync", "%s %s: err=%s http=%d tls=0x%x code=%d cert_flags=0x%x", KOReaderSyncClient::lastOperation,
+            g_requestEndpoint, esp_err_to_name(err), KOReaderSyncClient::lastHttpCode, KOReaderSyncClient::lastTlsError,
+            KOReaderSyncClient::lastTlsCode, KOReaderSyncClient::lastTlsFlags);
+  }
+  return err;
+}
+
 std::string trimTrailingSlashes(std::string url) {
   while (!url.empty() && url.back() == '/') {
     url.pop_back();
@@ -136,17 +186,6 @@ std::string trimTrailingSlashes(std::string url) {
 }
 
 std::string configuredBaseUrl() { return trimTrailingSlashes(KOREADER_STORE.getBaseUrl()); }
-
-bool configuredEndpointUsesTls() {
-  const std::string& customUrl = KOREADER_STORE.getServerUrl();
-  if (customUrl.empty()) {
-    return true;
-  }
-  if (customUrl.find("://") == std::string::npos) {
-    return false;
-  }
-  return urlUsesTls(customUrl);
-}
 
 std::string rootBaseUrl() {
   std::string root = configuredBaseUrl();
@@ -270,7 +309,7 @@ esp_err_t httpEventHandler(esp_http_client_event_t* evt) {
 // Refuse to attempt a TLS handshake when fragmentation makes it doomed.
 // Total free heap misleads because fragmentation can leave no block big enough.
 bool checkHeapForTls() {
-  if (!configuredEndpointUsesTls()) {
+  if (!g_requestUsesTls) {
     return true;
   }
 
@@ -287,6 +326,7 @@ bool checkHeapForTls() {
     LOG_ERR("KOSync", "Insufficient contiguous heap for TLS: %u available, %u required",
             KOReaderSyncClient::lastContigHeapAtFailure, requiredContig);
     KOReaderSyncClient::lastEspError = ESP_ERR_NO_MEM;
+    g_preflightRejected = true;
     return false;
   }
   return true;
@@ -298,7 +338,7 @@ void refreshHeapSnapshot() {
 }
 
 void logTlsAttemptPlan(const char* operation, int attempt) {
-  const bool usesTls = configuredEndpointUsesTls();
+  const bool usesTls = g_requestUsesTls;
   const bool isUpload = (operation && strcmp(operation, "update progress") == 0);
   const bool hasReusableSession = g_keepSessionOpen && g_sessionClient != nullptr;
   unsigned requiredContig = 0;
@@ -389,23 +429,21 @@ void KOReaderSyncClient::endPersistentSession() {
 }
 
 KOReaderSyncClient::Error KOReaderSyncClient::registerUser() {
-  if (!hasCredentials()) return NO_CREDENTIALS;
-
+  if (!hasCredentials()) {
+    beginRequest("register", KOREADER_STORE.getBaseUrl());
+    return NO_CREDENTIALS;
+  }
   return registerUser(KOREADER_STORE.getUsername(), KOREADER_STORE.getMd5Password(), KOREADER_STORE.getBaseUrl());
 }
 
 KOReaderSyncClient::Error KOReaderSyncClient::registerUser(const std::string& username, const std::string& md5Password,
                                                            const std::string& baseUrl) {
+  beginRequest("register", baseUrl);
   if (username.empty() || md5Password.empty()) return NO_CREDENTIALS;
-
-  beginRequest("register");
-  if (urlUsesTls(baseUrl) && lastContigHeapAtFailure < MIN_CONTIG_HEAP_FOR_TLS) {
-    lastEspError = ESP_ERR_NO_MEM;
-    return NETWORK_ERROR;
-  }
+  if (!checkHeapForTls()) return NETWORK_ERROR;
 
   std::string url = trimTrailingSlashes(baseUrl) + "/users/create/";
-  LOG_INF("KOSync", "Registering user: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
+  LOG_INF("KOSync", "Registering user: %s (heap: %u, contig: %u)", g_requestEndpoint, lastHeapAtFailure,
           lastContigHeapAtFailure);
 
   JsonDocument doc;
@@ -438,15 +476,13 @@ KOReaderSyncClient::Error KOReaderSyncClient::registerUser(const std::string& us
   esp_http_client_set_header(client, "Content-Type", "application/json");
   esp_http_client_set_post_field(client, body.c_str(), body.length());
 
-  esp_err_t err = esp_http_client_perform(client);
-  const int httpCode = esp_http_client_get_status_code(client);
-  lastHttpCode = httpCode;
-  lastEspError = err;
+  esp_err_t err = performRequest(client);
+  const int httpCode = lastHttpCode;
   esp_http_client_cleanup(client);
 
   LOG_DBG("KOSync", "Register response: %d (err: %s)", httpCode, esp_err_to_name(err));
 
-  if (err != ESP_OK) return NETWORK_ERROR;
+  if (err != ESP_OK || httpCode <= 0) return NETWORK_ERROR;
   if (httpCode >= 300 && httpCode < 400) return REDIRECT_ERROR;
 
   if (httpCode == 201) {
@@ -468,9 +504,8 @@ KOReaderSyncClient::Error KOReaderSyncClient::registerUser(const std::string& us
 }
 
 KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
+  beginRequest("auth", configuredBaseUrl());
   if (!hasCredentials()) return NO_CREDENTIALS;
-
-  beginRequest("auth");
 
   ResponseBuffer buf;
   ResponseBuffer* activeBuf = effectiveResponseBuffer(&buf);
@@ -484,7 +519,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
     esp_err_t err = ESP_FAIL;
     int httpCode = 0;
 
-    LOG_DBG("KOSync", "Authenticating: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
+    LOG_DBG("KOSync", "Authenticating: %s (heap: %u, contig: %u)", g_requestEndpoint, lastHeapAtFailure,
             lastContigHeapAtFailure);
 
     for (int attempt = 1; attempt <= 3; attempt++) {
@@ -500,15 +535,14 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
       }
 
       logWifiSnapshot("WiFi before auth");
-      err = esp_http_client_perform(client);
-      httpCode = esp_http_client_get_status_code(client);
-      lastHttpCode = httpCode;
-      lastEspError = err;
+      err = performRequest(client);
+      httpCode = lastHttpCode;
       if (!g_keepSessionOpen) {
         esp_http_client_cleanup(client);
       }
 
-      LOG_DBG("KOSync", "Auth %s -> %d (err: %s) [attempt %d]", url.c_str(), httpCode, esp_err_to_name(err), attempt);
+      LOG_DBG("KOSync", "Auth %s -> %d (err: %s) [attempt %d]", g_requestEndpoint, httpCode, esp_err_to_name(err),
+              attempt);
       if (err == ESP_OK && (httpCode < 200 || httpCode >= 300)) {
         rememberResponsePreview(activeBuf->data);
       }
@@ -522,7 +556,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
       delay(400 * attempt);
     }
 
-    if (err != ESP_OK) {
+    if (err != ESP_OK || httpCode <= 0) {
       if (hasFallback) {
         continue;
       }
@@ -564,9 +598,8 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
 
 KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& documentHash,
                                                           KOReaderProgress& outProgress) {
+  beginRequest("get progress", configuredBaseUrl());
   if (!hasCredentials()) return NO_CREDENTIALS;
-
-  beginRequest("get progress");
   if (!checkHeapForTls()) return NETWORK_ERROR;
 
   ResponseBuffer buf;
@@ -581,7 +614,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
     esp_err_t err = ESP_FAIL;
     int httpCode = 0;
 
-    LOG_DBG("KOSync", "Getting progress: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
+    LOG_DBG("KOSync", "Getting progress: %s (heap: %u, contig: %u)", g_requestEndpoint, lastHeapAtFailure,
             lastContigHeapAtFailure);
 
     for (int attempt = 1; attempt <= 3; attempt++) {
@@ -598,15 +631,14 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       }
 
       logWifiSnapshot("WiFi before getProgress");
-      err = esp_http_client_perform(client);
-      httpCode = esp_http_client_get_status_code(client);
-      lastHttpCode = httpCode;
-      lastEspError = err;
+      err = performRequest(client);
+      httpCode = lastHttpCode;
       if (!g_keepSessionOpen) {
         esp_http_client_cleanup(client);
       }
 
-      LOG_DBG("KOSync", "GET %s -> %d (err: %s) [attempt %d]", url.c_str(), httpCode, esp_err_to_name(err), attempt);
+      LOG_DBG("KOSync", "GET %s -> %d (err: %s) [attempt %d]", g_requestEndpoint, httpCode, esp_err_to_name(err),
+              attempt);
       if (err == ESP_OK && (httpCode < 200 || httpCode >= 300)) {
         rememberResponsePreview(activeBuf->data);
       }
@@ -620,7 +652,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       delay(400 * attempt);
     }
 
-    if (err != ESP_OK) {
+    if (err != ESP_OK || httpCode <= 0) {
       if (hasFallback) {
         continue;
       }
@@ -715,9 +747,8 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
 }
 
 KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgress& progress) {
+  beginRequest("update progress", configuredBaseUrl());
   if (!hasCredentials()) return NO_CREDENTIALS;
-
-  beginRequest("update progress");
   if (!checkHeapForTls()) return NETWORK_ERROR;
 
   JsonDocument doc;
@@ -780,7 +811,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
     esp_err_t err = ESP_FAIL;
     int httpCode = 0;
 
-    LOG_DBG("KOSync", "Updating progress: %s (heap: %u, contig: %u)", url.c_str(), lastHeapAtFailure,
+    LOG_DBG("KOSync", "Updating progress: %s (heap: %u, contig: %u)", g_requestEndpoint, lastHeapAtFailure,
             lastContigHeapAtFailure);
 
     for (int attempt = 1; attempt <= 3; attempt++) {
@@ -800,15 +831,14 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
       esp_http_client_set_post_field(client, body.c_str(), body.length());
 
       logWifiSnapshot("WiFi before updateProgress");
-      err = esp_http_client_perform(client);
-      httpCode = esp_http_client_get_status_code(client);
-      lastHttpCode = httpCode;
-      lastEspError = err;
+      err = performRequest(client);
+      httpCode = lastHttpCode;
       if (!g_keepSessionOpen) {
         esp_http_client_cleanup(client);
       }
 
-      LOG_DBG("KOSync", "PUT %s -> %d (err: %s) [attempt %d]", url.c_str(), httpCode, esp_err_to_name(err), attempt);
+      LOG_DBG("KOSync", "PUT %s -> %d (err: %s) [attempt %d]", g_requestEndpoint, httpCode, esp_err_to_name(err),
+              attempt);
       if (err == ESP_OK && (httpCode < 200 || httpCode >= 300)) {
         rememberResponsePreview(activeBuf->data);
       }
@@ -822,7 +852,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
       delay(400 * attempt);
     }
 
-    if (err != ESP_OK) {
+    if (err != ESP_OK || httpCode <= 0) {
       if (hasFallback) {
         continue;
       }
@@ -865,26 +895,29 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
 
 bool KOReaderSyncClient::usesKosyncSubdirectory() { return g_lastResolvedProfile == EndpointProfile::CWA_KOSYNC; }
 
+bool KOReaderSyncClient::canRecoverFromLowMemory() { return g_preflightRejected && !g_operationPerformed; }
+
 const char* KOReaderSyncClient::lastFailureDetail() {
   const bool isUpload = (lastOperation && strcmp(lastOperation, "update progress") == 0);
   const bool hasReusableSession = g_keepSessionOpen && g_sessionClient != nullptr;
   const unsigned requiredContig =
       (isUpload && hasReusableSession) ? MIN_CONTIG_HEAP_FOR_TLS_UPLOAD : MIN_CONTIG_HEAP_FOR_TLS;
 
-  if (lastEspError == ESP_ERR_NO_MEM && lastHttpCode == 0) {
-    snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf),
-             "%s: low memory (%u free, %u contig, need %u). Reboot device.", lastOperation, lastHeapAtFailure,
-             lastContigHeapAtFailure, requiredContig);
+  if (g_preflightRejected) {
+    snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf), "%s: low memory (%u free, %u contig, need %u); %.60s",
+             lastOperation, lastHeapAtFailure, lastContigHeapAtFailure, requiredContig, g_requestEndpoint);
     return g_failureDetailBuf;
   }
-  if (lastHttpCode == 0 && lastEspError != 0) {
-    if (lastEspError == ESP_ERR_HTTP_CONNECT && KOREADER_STORE.getBaseUrl().rfind("https", 0) == 0) {
-      snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf),
-               "%s: connect failed — check network, DNS, certs, or TLS 1.2 compat (heap %u/%u contig)", lastOperation,
-               lastHeapAtFailure, lastContigHeapAtFailure);
+  if (lastEspError != ESP_OK || (g_operationPerformed && lastHttpCode <= 0)) {
+    char response[24] = "HTTP=n/a";
+    if (lastHttpCode > 0) snprintf(response, sizeof(response), "HTTP=%d", lastHttpCode);
+    const char* error = esp_err_to_name(lastEspError);
+    if (lastTlsError || lastTlsCode || lastTlsFlags) {
+      snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf), "%s: %s; TLS 0x%x/%d flags 0x%x; %s; %.48s",
+               lastOperation, error, lastTlsError, lastTlsCode, lastTlsFlags, response, g_requestEndpoint);
     } else {
-      snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf), "%s: %s (heap %u/%u contig)", lastOperation,
-               esp_err_to_name(lastEspError), lastHeapAtFailure, lastContigHeapAtFailure);
+      snprintf(g_failureDetailBuf, sizeof(g_failureDetailBuf), "%s: %s; %s; %.56s (heap %u/%u contig)", lastOperation,
+               error, response, g_requestEndpoint, lastHeapAtFailure, lastContigHeapAtFailure);
     }
     return g_failureDetailBuf;
   }
@@ -893,7 +926,7 @@ const char* KOReaderSyncClient::lastFailureDetail() {
              "%s: expected JSON but received HTML (captive portal or proxy?)", lastOperation);
     return g_failureDetailBuf;
   }
-  if (lastHttpCode != 0) {
+  if (lastHttpCode > 0) {
     if (lastHttpCode == 404 && lastOperation && strcmp(lastOperation, "update progress") == 0) {
       std::string lowerPreview = g_lastResponsePreview;
       std::transform(lowerPreview.begin(), lowerPreview.end(), lowerPreview.begin(),

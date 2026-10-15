@@ -1,0 +1,145 @@
+#pragma once
+#include <ArduinoJson.h>
+#include <KOReaderSyncClient.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <limits>
+#include <string>
+#include <utility>
+#include <vector>
+
+using esp_err_t = int;
+constexpr esp_err_t ESP_OK = 0, ESP_FAIL = -1, ESP_ERR_NO_MEM = 0x101;
+constexpr esp_err_t ESP_ERR_HTTP_CONNECT = 0x7002, ESP_ERR_HTTP_EAGAIN = 0x7007;
+constexpr esp_err_t ESP_ERR_TIMEOUT = 0x107;
+constexpr unsigned MALLOC_CAP_8BIT = 1, MALLOC_CAP_DEFAULT = 2;
+inline unsigned freeHeap = 90000, contiguousHeap = 60000;
+struct FakeEsp { unsigned getFreeHeap() const { return freeHeap; } };
+inline FakeEsp ESP;
+inline unsigned heap_caps_get_largest_free_block(unsigned) { return contiguousHeap; }
+inline void delay(unsigned) {}
+inline const char* esp_err_to_name(esp_err_t error) {
+  switch (error) {
+    case ESP_OK: return "ESP_OK";
+    case ESP_ERR_NO_MEM: return "ESP_ERR_NO_MEM";
+    case ESP_ERR_HTTP_CONNECT: return "ESP_ERR_HTTP_CONNECT";
+    case ESP_ERR_HTTP_EAGAIN: return "ESP_ERR_HTTP_EAGAIN";
+    case ESP_ERR_TIMEOUT: return "ESP_ERR_TIMEOUT";
+    default: return "ESP_FAIL";
+  }
+}
+inline std::vector<std::string> logs;
+inline void logMessage(const char* format, ...) {
+  char buffer[1024];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  va_end(args);
+  logs.emplace_back(buffer);
+}
+#define LOG_INF(tag, ...) logMessage(__VA_ARGS__)
+#define LOG_DBG(tag, ...) logMessage(__VA_ARGS__)
+#define LOG_ERR(tag, ...) logMessage(__VA_ARGS__)
+using wl_status_t = int;
+struct FakeWifi {
+  struct Address { std::string toString() const { return "127.0.0.1"; } };
+  wl_status_t status() const { return 3; }
+  int32_t RSSI() const { return -40; }
+  Address localIP() const { return {}; }
+};
+inline FakeWifi WiFi;
+struct FakeCredentialStore {
+  std::string username = "reader", password = "password", baseUrl = "https://active.example";
+  bool hasCredentials() const { return !username.empty() && !password.empty(); }
+  const std::string& getUsername() const { return username; }
+  const std::string& getPassword() const { return password; }
+  std::string getMd5Password() const { return password.empty() ? "empty-password-hash" : "password-hash"; }
+  std::string getBaseUrl() const { return baseUrl; }
+  const std::string& getServerUrl() const { return baseUrl; }
+  bool supportsRichProgress() const { return false; }
+  bool supportsExtendedMetadata() const { return false; }
+};
+inline FakeCredentialStore KOREADER_STORE;
+
+enum esp_http_client_method_t { HTTP_METHOD_GET, HTTP_METHOD_POST, HTTP_METHOD_PUT };
+enum { HTTP_EVENT_ON_DATA, HTTP_EVENT_REDIRECT };
+constexpr int HTTP_AUTH_TYPE_BASIC = 1;
+struct esp_http_client_event_t { int event_id; void* user_data; char* data; int data_len; };
+inline esp_err_t esp_crt_bundle_attach(void*) { return ESP_OK; }
+struct esp_http_client_config_t {
+  const char* url = nullptr;
+  esp_err_t (*event_handler)(esp_http_client_event_t*) = nullptr;
+  void* user_data = nullptr;
+  esp_http_client_method_t method = HTTP_METHOD_GET;
+  int timeout_ms = 0, buffer_size = 0, buffer_size_tx = 0;
+  esp_err_t (*crt_bundle_attach)(void*) = nullptr;
+  bool keep_alive_enable = false;
+  int max_redirection_count = 0;
+  const char* username = nullptr;
+  const char* password = nullptr;
+  int auth_type = 0;
+};
+struct FakeReply {
+  esp_err_t error = ESP_OK;
+  int status = 200, tlsError = 0, tlsCode = 0, tlsFlags = 0;
+  std::string body = "{}";
+  unsigned heapAfterPerform = std::numeric_limits<unsigned>::max();
+};
+struct FakeClient {
+  esp_http_client_config_t config;
+  std::string url;
+  FakeReply reply;
+};
+using esp_http_client_handle_t = FakeClient*;
+inline FakeReply reply;
+inline bool failInit = false;
+inline unsigned performedRequests = 0, initializedClients = 0, cleanedClients = 0, tlsQueries = 0;
+inline std::vector<std::string> requestUrls, transportEvents;
+inline std::vector<esp_http_client_config_t> initializedConfigs;
+inline esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t* config) {
+  ++initializedClients;
+  initializedConfigs.push_back(*config);
+  if (failInit) return nullptr;
+  return new FakeClient{*config, config->url, {}};
+}
+inline esp_err_t esp_http_client_set_url(FakeClient* client, const char* url) { client->url = url; return ESP_OK; }
+inline esp_err_t esp_http_client_set_method(FakeClient*, esp_http_client_method_t) { return ESP_OK; }
+inline esp_err_t esp_http_client_set_header(FakeClient*, const char*, const char*) { return ESP_OK; }
+inline esp_err_t esp_http_client_set_post_field(FakeClient*, const char*, size_t) { return ESP_OK; }
+inline esp_err_t esp_http_client_perform(FakeClient* client) {
+  ++performedRequests;
+  requestUrls.push_back(client->url);
+  transportEvents.emplace_back("perform");
+  client->reply = reply;
+  if (!reply.body.empty()) {
+    esp_http_client_event_t event{HTTP_EVENT_ON_DATA, client->config.user_data, reply.body.data(),
+                                  static_cast<int>(reply.body.size())};
+    client->config.event_handler(&event);
+  }
+  if (reply.heapAfterPerform != std::numeric_limits<unsigned>::max()) contiguousHeap = reply.heapAfterPerform;
+  return reply.error;
+}
+inline int esp_http_client_get_status_code(FakeClient* client) { return client->reply.status; }
+inline esp_err_t esp_http_client_get_and_clear_last_tls_error(FakeClient* client, int* code, int* flags) {
+  ++tlsQueries;
+  transportEvents.emplace_back("tls");
+  *code = client->reply.tlsCode;
+  *flags = client->reply.tlsFlags;
+  const int result = client->reply.tlsError;
+  client->reply.tlsCode = client->reply.tlsFlags = client->reply.tlsError = 0;
+  return result;
+}
+inline esp_err_t esp_http_client_cleanup(FakeClient* client) {
+  ++cleanedClients;
+  transportEvents.emplace_back("cleanup");
+  delete client;
+  return ESP_OK;
+}
+
+@CLIENT_SOURCE@

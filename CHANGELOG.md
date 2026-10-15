@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.6.5.3 - Highlights navigation and KOReader recovery (2026-10-15)
+
+- Improve large Highlights lists (#227) with a bounded label window and
+  batched SD-font glyph loading, including a per-row fallback for dense CJK
+  text. Keep the selected row visible when scrolling across supported themes.
+- Preserve short button presses across slow rendering: sample held time with
+  the input event and prevent release edges from becoming page jumps. Keep
+  intentional hold-to-page navigation.
+- Capture KOReader ESP/TLS failure details before connection cleanup and
+  distinguish a missing HTTP response from an actual HTTP status (#221).
+  Show the attempted server origin without credentials or URL query data.
+- Recover once from a rejected TLS memory preflight for KOReader registration,
+  authentication and manual sync (#222). Restart directly into the saved
+  operation without loading reader fonts first, validate the profile identity,
+  and preserve the pending book position. Do not enter a restart loop or
+  replay registration after a request whose result is uncertain. Automatic
+  sync does not use this restart path.
+- Restore the configured SD reader font after a recovery boot. Keep TLS
+  certificate verification and the existing contiguous-memory guard.
+- Show the effective server URL in KOReader settings and profile editing;
+  correct the guide's default to `https://sync.koreader.rocks:443` without
+  changing existing profiles or the firmware default.
+- Pass all 719 native tests and simulator cases for 256 highlights, effective
+  URLs, profile selection, loopback requests and recovery guards, including
+  17 KOReader settings/network checks.
+  Physical X3/X4 TLS and restart validation remains pending. The separate
+  older-highlight error in #227 still needs reproduction details; no fix is
+  claimed for it. See [results and limits](agent-docs/issues-221-222-227-2026-10.md).
+
+## 1.6.5.2 - Reader wake and flashcard persistence (2026-10-15)
+
+- Fix waking from a book into its folder or Home by applying pending reader
+  transitions before dispatching input (#225). Manual sleep and Quick Resume
+  after inactivity return to the book.
+- Resume flashcard reviews at the same card, side and scroll position,
+  preserving the pending queue and session counts. Save ratings on sleep and
+  Home; reject incomplete progress writes and invalid or stale resume snapshots.
+- Recover reusable font caches before abandoning an EPUB chapter under memory
+  pressure. This mitigates a demonstrated failure path related to #223; the
+  reported book still needs confirmation.
+- Pass 664 native tests and six simulator sleep/wake scenarios covering EPUB,
+  TXT and flashcards. Physical X3/X4 validation remains pending. No OTA or SD
+  compatibility fix is claimed for #224 or #226. Partition tables and update
+  paths are unchanged; X4 Pro distribution remains withdrawn.
+
 ## 1.6.5.1 - CrossPoint integration and navigation fixes (2026-10-08)
 
 - Integrate upstream `develop` through `28971493` (GitHub head checked on
@@ -143,6 +188,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.5.3` | - Improve large Highlights lists with bounded label caching and batched SD-font glyph loading; preserve short presses across slow rendering and keep hold-to-page navigation (#227).<br>- Report actual KOReader ESP/TLS failures and the attempted server origin instead of misleading HTTP -1 responses (#221).<br>- Retry registration, authentication or manual sync once through a fresh boot only when the TLS memory check rejects the operation before any request is sent. Preserve saved profile identity, book position and reader font; keep certificate verification and prevent restart loops or replay after an uncertain registration result (#222).<br>- Show the effective KOReader server URL and correct the documented default without changing saved profiles.<br>- Pass all 719 native tests, 256-highlight simulator lists and 17 KOReader simulator checks. Physical X3/X4 TLS/restart confirmation and the separate older-highlight error remain pending. |
 | `1.6.5.2` | - Fix waking from a book into its folder or Home by applying pending reader transitions before dispatching input (#225). Manual sleep and Quick Resume after inactivity return to the book.<br>- Resume flashcard reviews at the same card, side and scroll position, preserving the pending queue and session counts. Save ratings on sleep and Home; reject incomplete progress writes and invalid or stale resume snapshots.<br>- Recover reusable font caches before abandoning an EPUB chapter under memory pressure. This mitigates a demonstrated failure path related to #223; the reported book still needs confirmation.<br>- Pass 664 native tests and six simulator sleep/wake scenarios covering EPUB, TXT and flashcards. Physical X3/X4 validation remains pending.<br>- No OTA or SD compatibility fix is claimed for #224 or #226. Partition tables and update paths are unchanged; X4 Pro distribution remains withdrawn. |
 | `1.6.5.1` | - Integrate CrossPoint develop through `28971493` with FreeInk SDK `9729236c`, retaining CPR-vCodex statistics, Sync Day, achievements, favorites, flashcards, dictionaries, bookmarks/highlights, themes and reader settings.<br>- Add upstream library indexing, SD plugins and web/event APIs, TTF fonts, protected-content support and layout improvements.<br>- Fix mismatched selections in Apps, Sync Day and other lists, make Plugins selectable, and scroll oversized popups instead of clipping their contents.<br>- Make one Back press return one step in nested screens; preserve Apps context and selection. Keep intentional network cleanup restarts and reader memory-release paths.<br>- Correct reader setting labels, refresh choices, SD font discovery and previews, render synchronization and Spanish text. Quick settings and the preview editor remain separate.<br>- Preserve the fork's OTA repository, certificate-verified manifest, SHA-256/chip/board checks, inactive-slot writes and partition tables. All 644 native tests pass, including 81 OTA cases; simulator coverage includes 29 Back-navigation scenarios.<br>- Scope LTO to application objects so clean custom ESP-IDF builds remain reproducible.<br>- Hardware validation is limited: a development candidate booted twice on one original X4 after USB installation. End-to-end OTA for this release and physical X3 OTA/SD/recovery remain unverified. Early boot confirmation limits automatic rollback; no brick-free guarantee is made.<br>- Publish only the ESP32-C3 image for original X4/X3. X4 Pro distribution remains withdrawn. Do not install this BIN on X4 Classic/X4C (ESP32-S3). Existing settings and reading data are retained; no factory reset is required. |
 | `1.6.0.38` | - Fix .37's update-check failure caused by insufficient RAM during HTTPS certificate signature verification on X4.<br>- Adapt CrossInk's fresh network boot to CPR-vCodex: Settings briefly shows Loading, then enters Update without retaining the Settings screen or SD reader fonts.<br>- Keep the fork's settings, languages, repository, manifest, C3 binary naming, certificate verification and SHA-256 validation.<br>- Reproduced the original failure and verified the corrected query, complete download, OTA installation and reboot on a USB-recoverable X4; the flashed image matches the public BIN. X3 hardware validation remains pending; see the stability audit.<br>- Devices whose installed OTA client cannot connect need this release through SD Card Firmware Update or a supported USB flash. Preserve settings and reading data. X4 Pro distribution remains withdrawn.<br>- Restore EPUB image grayscale with text anti-aliasing off (#215), without clearing existing caches or settings.<br>- Fix progressive JPEG decoding with separate component scans and chroma Huffman tables (Crosspoint #2925); retain existing memory guards.<br>- All 274 native tests pass, including five real-decoder JPEG cases. Simulator regressions cover image grayscale and existing caches. The development build booted twice and confirmed its OTA slot on X4; physical EPUB rendering and X3 validation remain pending. |
