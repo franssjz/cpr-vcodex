@@ -100,7 +100,12 @@ struct MappedInputManager {
   unsigned long getHeldTime() const { return heldTime; }
 };
 struct ActivityResult { bool isCancelled = false; };
-struct BookmarkResult { int spineIndex, pageNumber; bool hasVisibleTextOffset; uint32_t visibleTextOffset; };
+struct BookmarkResult {
+  int spineIndex, pageNumber;
+  bool hasVisibleTextOffset;
+  uint32_t visibleTextOffset;
+  int bookmarkIndex = -1;
+};
 struct ConfirmationActivity {
   ConfirmationActivity(GfxRenderer&, MappedInputManager&, const char*, const std::string&) {}
 };

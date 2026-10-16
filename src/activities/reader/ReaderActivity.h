@@ -24,6 +24,7 @@ class ReaderActivity final : public Activity {
     uint32_t page = 0;
     bool hasVisibleTextOffset = false;
     uint32_t visibleTextOffset = 0;
+    int bookmarkIndex = -1;
   };
 
  private:

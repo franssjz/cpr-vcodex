@@ -131,7 +131,7 @@ void BookmarksActivity::activateIndex(const int index) {
   app.clearTapFlash();
   const auto& bookmark = bookmarks[index];
   setResult(BookmarkResult{static_cast<int>(bookmark.spineIndex), bookmark.pageNumber, bookmark.hasVisibleTextOffset,
-                           bookmark.visibleTextOffset});
+                           bookmark.visibleTextOffset, index});
   finish();
 }
 
@@ -180,20 +180,19 @@ void BookmarksActivity::confirmDeleteBookmark(const int index) {
           // The interaction table still indexes the pre-removal rows; stop
           // routing touches against it until the next render republishes.
           closeRouting();
-          bookmarks.erase(std::remove_if(bookmarks.begin(), bookmarks.end(),
-                                         [&](const BookmarkStore::Bookmark& current) {
-                                           return current.isTextHighlight == bookmark.isTextHighlight &&
-                                                  current.spineIndex == bookmark.spineIndex &&
-                                                  current.pageNumber == bookmark.pageNumber &&
-                                                  current.endPageNumber == bookmark.endPageNumber &&
-                                                  current.startWordIndex == bookmark.startWordIndex &&
-                                                  current.endWordIndex == bookmark.endWordIndex &&
-                                                  current.snippet == bookmark.snippet &&
-                                                  current.hasVisibleTextOffset == bookmark.hasVisibleTextOffset &&
-                                                  (!current.hasVisibleTextOffset ||
-                                                   current.visibleTextOffset == bookmark.visibleTextOffset);
-                                         }),
-                          bookmarks.end());
+          // Match the store's single-item removal so legacy duplicates keep
+          // the same indices here and when the reader reloads the bookmarks.
+          const auto removed =
+              std::find_if(bookmarks.begin(), bookmarks.end(), [&](const BookmarkStore::Bookmark& current) {
+                return current.isTextHighlight == bookmark.isTextHighlight &&
+                       current.spineIndex == bookmark.spineIndex && current.pageNumber == bookmark.pageNumber &&
+                       current.endPageNumber == bookmark.endPageNumber &&
+                       current.startWordIndex == bookmark.startWordIndex &&
+                       current.endWordIndex == bookmark.endWordIndex && current.snippet == bookmark.snippet &&
+                       current.hasVisibleTextOffset == bookmark.hasVisibleTextOffset &&
+                       (!current.hasVisibleTextOffset || current.visibleTextOffset == bookmark.visibleTextOffset);
+              });
+          if (removed != bookmarks.end()) bookmarks.erase(removed);
 
           if (bookmarks.empty()) {
             finishCancelled();

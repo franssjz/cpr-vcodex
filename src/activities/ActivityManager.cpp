@@ -382,10 +382,12 @@ void ActivityManager::goToKOReaderSync() {
 }
 
 void ActivityManager::goToEpubBookmark(std::string path, const int spineIndex, const uint32_t page,
-                                       const bool hasVisibleTextOffset, const uint32_t visibleTextOffset) {
-  replaceActivity(std::make_unique<ReaderActivity>(
-      renderer, mappedInput, std::move(path),
-      ReaderActivity::EpubBookmarkLaunch{true, spineIndex, page, hasVisibleTextOffset, visibleTextOffset}));
+                                       const bool hasVisibleTextOffset, const uint32_t visibleTextOffset,
+                                       const int bookmarkIndex) {
+  replaceActivity(
+      std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path),
+                                       ReaderActivity::EpubBookmarkLaunch{true, spineIndex, page, hasVisibleTextOffset,
+                                                                          visibleTextOffset, bookmarkIndex}));
 }
 
 void ActivityManager::goToPlugins(bool showOpds) {

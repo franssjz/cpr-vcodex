@@ -193,7 +193,7 @@ void BookmarksAppActivity::openBook(const int index) {
         if (!result.isCancelled) {
           const auto& bookmark = std::get<BookmarkResult>(result.data);
           activityManager.goToEpubBookmark(path, bookmark.spineIndex, bookmark.page, bookmark.hasVisibleTextOffset,
-                                           bookmark.visibleTextOffset);
+                                           bookmark.visibleTextOffset, bookmark.bookmarkIndex);
           return;
         }
         closeRouting();

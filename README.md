@@ -58,14 +58,31 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | All 719 native tests pass, including highlight navigation, KOReader diagnostics, one-time recovery and font restoration. Simulator checks cover lists with 256 highlights and 17 KOReader settings/network cases. Physical validation of 1.6.5.3, real-device TLS recovery, end-to-end OTA and X3 validation remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
+| Release validation | All 735 native tests and nine simulator scenarios for older and newly created highlights pass. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, validation against the original #227 EPUB and bookmarks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## What's new in 1.6.5.3
+## What's new in 1.6.5.4
+
+- Opening an older EPUB highlight now looks for its saved text near the old
+  position, fixing demonstrated cases that jumped to the wrong page or shaded
+  unrelated words. This works from both Highlights lists and supports legacy
+  Korean/CJK spacing and text crossing one page boundary.
+- Recovery requires a unique complete match within three pages of the resolved
+  page hint. Missing or ambiguous matches no longer fall back to stale word
+  indices. The original `bookmarks.bin` records remain unchanged.
+- Newly selected highlights retain their exact range in the current layout,
+  including repeated text and selections longer than the saved snippet.
+
+These changes address the legacy-highlight behavior shown in
+[#227](https://github.com/franssjz/cpr-vcodex/issues/227). The synthetic
+regressions pass; the reporter's exact EPUB and `bookmarks.bin` and physical
+X3/X4 checks are still needed to confirm the original case.
+
+## Previous release: 1.6.5.3
 
 - Large Highlights lists scroll more efficiently, including Korean text using
   SD-card fonts. Short presses stay single steps even when rendering is slow;
@@ -84,10 +101,10 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 These changes address the demonstrated failure paths in
 [#221](https://github.com/franssjz/cpr-vcodex/issues/221),
 [#222](https://github.com/franssjz/cpr-vcodex/issues/222) and
-[#227](https://github.com/franssjz/cpr-vcodex/issues/227). The separate error
-reported for older highlights still needs reproduction details. Real-device
-KOReader recovery, locked-X3 OTA compatibility and the reported SD-card
-mounting failure remain unconfirmed.
+[#227](https://github.com/franssjz/cpr-vcodex/issues/227). The separate
+legacy-highlight follow-up is covered by the 1.6.5.4 changes above. Real-device
+KOReader recovery, locked-X3 OTA compatibility and the reported SD-card mounting
+failure remain unconfirmed.
 
 > [!IMPORTANT]
 > Use only the shared ESP32-C3 BIN for the original X4 or X3. Do not use it on
@@ -570,10 +587,15 @@ Supported flow:
 - reopen a book at the saved page and delete individual entries or all highlights for one book
 
 Existing `bookmarks.bin` files remain readable. They are upgraded in place only when
-the user next changes the book's Highlights, and all old bookmarks become page-mark
+the user next changes the book's Highlights. Legacy page bookmarks remain page-mark
 entries rather than being discarded. Format v5 adds a visible Unicode-codepoint anchor
-to new page marks and text highlights, so reopening them remains tied to the same content
-after changing font size, margins, line spacing, or orientation.
+for the saved page start, which serves as a position hint after layout changes.
+
+Opening a text highlight searches for its complete saved text within three pages of
+that hint, including text that now crosses one page boundary. Legacy Korean/CJK token
+spacing is supported. Recovery keeps the original records unchanged and requires a
+unique match; missing or ambiguous text remains in the list without shading unrelated
+words. Large layout changes or incomplete saved text may still prevent recovery.
 
 Highlights also recognize words split by a layout-inserted hyphen and adjacent ellipsis/NBSP fragments after reflow. A hyphen authored in the EPUB remains part of the text and is never silently discarded by matching.
 

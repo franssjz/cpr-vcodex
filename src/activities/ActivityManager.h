@@ -96,7 +96,7 @@ class ActivityManager {
   void goToBrowser();
   void goToKOReaderSync();
   void goToEpubBookmark(std::string path, int spineIndex, uint32_t page, bool hasVisibleTextOffset = false,
-                        uint32_t visibleTextOffset = 0);
+                        uint32_t visibleTextOffset = 0, int bookmarkIndex = -1);
   void goToPlugins(bool showOpds);
   void goToReader(std::string path, bool allowFastInitialRefresh = false);
   void goToSleep(bool fromTimeout = false);

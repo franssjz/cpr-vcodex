@@ -131,7 +131,7 @@ void ReaderActivity::onGoToEpubReader(std::unique_ptr<Epub> epub, const bool all
       initialBookmark.enabled && initialBookmark.hasVisibleTextOffset
           ? std::optional<uint32_t>(initialBookmark.visibleTextOffset)
           : std::nullopt,
-      allowFastRefresh);
+      allowFastRefresh, initialBookmark.enabled ? initialBookmark.bookmarkIndex : -1);
   if (!reader) {
     LOG_ERR("READER", "OOM: EPUB reader activity");
     goToLibrary(epubPath);

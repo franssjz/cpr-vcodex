@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.5.4 - Legacy highlight recovery (2026-10-16)
+
+- Recover older EPUB highlights whose saved page or word positions no longer
+  match the layout (#227). Opening a highlight from either the reader or global
+  Highlights list searches for its complete saved text within three pages of
+  the current page hint, including a phrase crossing one page boundary.
+- Match legacy Korean/CJK token spacing and layout-inserted hyphens while
+  preserving Latin word boundaries and literal saved hyphens. Require a unique
+  match; missing, partial or ambiguous matches no longer shade unrelated words
+  using stale indices. Keep original `bookmarks.bin` records unchanged.
+- Preserve the exact range of newly selected highlights in the current layout,
+  including repeated text and snippets too long to store in full. Keep recovery
+  memory bounded and nearby-page reads out of normal highlight painting.
+- Pass all 735 native tests and nine simulator scenarios, covering old v4/v5
+  records, wrong pages and indices, ambiguous/missing text, cross-page phrases,
+  both Highlights entry points and fresh repeated-text selections. ESP32-C3
+  development and release builds pass the firmware budget gate. Physical X3/X4
+  checks and validation against the reporter's original EPUB and `bookmarks.bin`
+  remain pending. See [results and limits](agent-docs/issues-221-222-227-2026-10.md).
+
 ## 1.6.5.3 - Highlights navigation and KOReader recovery (2026-10-15)
 
 - Improve large Highlights lists (#227) with a bounded label window and
@@ -188,6 +208,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.5.4` | - Recover older EPUB highlights from their complete saved text when selecting a highlight from either Highlights list, searching within three pages of the resolved page hint and allowing one page boundary (#227).<br>- Support legacy Korean/CJK spacing and layout-inserted hyphens while preserving Latin word boundaries and literal saved hyphens. Require a unique complete match; never shade unrelated words using stale indices. Keep original bookmarks.bin records unchanged.<br>- Preserve exact fresh-selection ranges in the current layout, including repeated text and truncated snippets, with bounded recovery memory and no nearby-page reads during painting.<br>- Pass all 735 native tests and nine simulator scenarios. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 checks and validation against the reporter's original EPUB and bookmarks.bin remain pending. |
 | `1.6.5.3` | - Improve large Highlights lists with bounded label caching and batched SD-font glyph loading; preserve short presses across slow rendering and keep hold-to-page navigation (#227).<br>- Report actual KOReader ESP/TLS failures and the attempted server origin instead of misleading HTTP -1 responses (#221).<br>- Retry registration, authentication or manual sync once through a fresh boot only when the TLS memory check rejects the operation before any request is sent. Preserve saved profile identity, book position and reader font; keep certificate verification and prevent restart loops or replay after an uncertain registration result (#222).<br>- Show the effective KOReader server URL and correct the documented default without changing saved profiles.<br>- Pass all 719 native tests, 256-highlight simulator lists and 17 KOReader simulator checks. Physical X3/X4 TLS/restart confirmation and the separate older-highlight error remain pending. |
 | `1.6.5.2` | - Fix waking from a book into its folder or Home by applying pending reader transitions before dispatching input (#225). Manual sleep and Quick Resume after inactivity return to the book.<br>- Resume flashcard reviews at the same card, side and scroll position, preserving the pending queue and session counts. Save ratings on sleep and Home; reject incomplete progress writes and invalid or stale resume snapshots.<br>- Recover reusable font caches before abandoning an EPUB chapter under memory pressure. This mitigates a demonstrated failure path related to #223; the reported book still needs confirmation.<br>- Pass 664 native tests and six simulator sleep/wake scenarios covering EPUB, TXT and flashcards. Physical X3/X4 validation remains pending.<br>- No OTA or SD compatibility fix is claimed for #224 or #226. Partition tables and update paths are unchanged; X4 Pro distribution remains withdrawn. |
 | `1.6.5.1` | - Integrate CrossPoint develop through `28971493` with FreeInk SDK `9729236c`, retaining CPR-vCodex statistics, Sync Day, achievements, favorites, flashcards, dictionaries, bookmarks/highlights, themes and reader settings.<br>- Add upstream library indexing, SD plugins and web/event APIs, TTF fonts, protected-content support and layout improvements.<br>- Fix mismatched selections in Apps, Sync Day and other lists, make Plugins selectable, and scroll oversized popups instead of clipping their contents.<br>- Make one Back press return one step in nested screens; preserve Apps context and selection. Keep intentional network cleanup restarts and reader memory-release paths.<br>- Correct reader setting labels, refresh choices, SD font discovery and previews, render synchronization and Spanish text. Quick settings and the preview editor remain separate.<br>- Preserve the fork's OTA repository, certificate-verified manifest, SHA-256/chip/board checks, inactive-slot writes and partition tables. All 644 native tests pass, including 81 OTA cases; simulator coverage includes 29 Back-navigation scenarios.<br>- Scope LTO to application objects so clean custom ESP-IDF builds remain reproducible.<br>- Hardware validation is limited: a development candidate booted twice on one original X4 after USB installation. End-to-end OTA for this release and physical X3 OTA/SD/recovery remain unverified. Early boot confirmation limits automatic rollback; no brick-free guarantee is made.<br>- Publish only the ESP32-C3 image for original X4/X3. X4 Pro distribution remains withdrawn. Do not install this BIN on X4 Classic/X4C (ESP32-S3). Existing settings and reading data are retained; no factory reset is required. |

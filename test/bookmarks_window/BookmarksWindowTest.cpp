@@ -175,12 +175,14 @@ TEST(BookmarksWindow, WrapToLastRowStartsPrewarmAtViewportAndPreservesActions) {
   EXPECT_EQ(event.value, 255);
   h.activity.activateIndex(event.value);
   EXPECT_EQ(h.activity.bookmarkResult.pageNumber, 255);
+  EXPECT_EQ(h.activity.bookmarkResult.bookmarkIndex, 255);
   EXPECT_EQ(h.activity.bookmarkResult.visibleTextOffset, 25509u);
   h.activity.finished = false;
   h.input.confirmReleased = true;
   EXPECT_TRUE(h.activity.handleButtons());
   EXPECT_TRUE(h.activity.finished);
   EXPECT_EQ(h.activity.bookmarkResult.pageNumber, 255);
+  EXPECT_EQ(h.activity.bookmarkResult.bookmarkIndex, 255);
   ASSERT_FALSE(h.renderer.individualPrewarms.empty());
   EXPECT_EQ(h.renderer.individualPrewarms.back(), batch.labels.back());
 }
@@ -295,6 +297,7 @@ TEST(BookmarksWindow, ConfirmedDeletionInvalidatesRowsEvenWhenViewportStaysPut) 
   EXPECT_EQ(h.activity.bookmarks[0].pageNumber, 1);
   h.activity.activateIndex(h.tapRow(0).value);
   EXPECT_EQ(h.activity.bookmarkResult.pageNumber, 1);
+  EXPECT_EQ(h.activity.bookmarkResult.bookmarkIndex, 0);
   EXPECT_EQ(h.activity.bookmarkResult.visibleTextOffset, 109u);
 }
 
@@ -310,6 +313,24 @@ TEST(BookmarksWindow, DeletingLastRowClampsSelectionAndRebuildsTail) {
   EXPECT_EQ(h.target.highlightedRow, 254);
   EXPECT_EQ(h.tapRow(254).value, 254);
   EXPECT_EQ(h.activity.rowWindowCount, 255 - h.activity.rowWindowStart);
+}
+
+TEST(BookmarksWindow, DeletingLegacyDuplicatePreservesRemainingStoreIndices) {
+  Harness h(4);
+  h.activity.bookmarks[2] = h.activity.bookmarks[0];
+  h.draw();
+  h.activity.confirmDeleteBookmark(2);
+  ASSERT_TRUE(h.activity.confirmation);
+  h.activity.confirmation(ActivityResult{});
+  ASSERT_EQ(h.activity.listCount(), 3);
+  // BookmarkStore removes the first equal record, leaving pages 1, 0, 3.
+  EXPECT_EQ(h.activity.bookmarks[0].pageNumber, 1);
+  EXPECT_EQ(h.activity.bookmarks[1].pageNumber, 0);
+  EXPECT_EQ(h.activity.bookmarks[2].pageNumber, 3);
+  h.draw();
+  h.activity.activateIndex(h.tapRow(2).value);
+  EXPECT_EQ(h.activity.bookmarkResult.bookmarkIndex, 2);
+  EXPECT_EQ(h.activity.bookmarkResult.pageNumber, 3);
 }
 
 TEST(BookmarksWindow, CancelledDeletionRetainsCacheAndEmptyListDoesNotPrewarm) {
