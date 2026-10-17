@@ -58,14 +58,31 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | All 735 native tests and nine simulator scenarios for older and newly created highlights pass. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, validation against the original #227 EPUB and bookmarks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
+| Release validation | The #227 follow-up passes 28/28 cold highlight activations and 28/28 direct reader resumes with the reporter's EPUB, font and bookmarks, plus 14 synthetic scenarios and 40 focused native tests. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## What's new in 1.6.5.4
+## Prepared for 1.6.5.5
+
+- Recover highlights on the first opening of a chapter when pagination has not
+  yet reached the complete search window. Give the active paginator one bounded
+  extension before checking the saved text.
+- Restore verified highlight shading when resuming a book, even when an older
+  page-start anchor points to a neighboring page. Keep the current reading position.
+- Preserve the original `bookmarks.bin` records. Recovery still requires a unique
+  complete match near the saved anchor; a full recovery cache cannot fall back
+  to shading an unverified occurrence.
+
+The reporter's EPUB, exact font and all 28 saved highlights from
+[#227](https://github.com/franssjz/cpr-vcodex/issues/227) pass opening and resume
+checks in the simulator. The 14 synthetic regression scenarios also pass.
+Existing highlights do not need to be deleted or recreated. Physical X3/X4
+timing and memory validation remains pending.
+
+## Previous release: 1.6.5.4
 
 - Opening an older EPUB highlight now looks for its saved text near the old
   position, fixing demonstrated cases that jumped to the wrong page or shaded
@@ -77,10 +94,10 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 - Newly selected highlights retain their exact range in the current layout,
   including repeated text and selections longer than the saved snippet.
 
-These changes address the legacy-highlight behavior shown in
-[#227](https://github.com/franssjz/cpr-vcodex/issues/227). The synthetic
-regressions pass; the reporter's exact EPUB and `bookmarks.bin` and physical
-X3/X4 checks are still needed to confirm the original case.
+These changes introduced the legacy-highlight recovery for
+[#227](https://github.com/franssjz/cpr-vcodex/issues/227). Subsequent validation
+with the supplied files found the cold-opening and resume cases addressed by
+the 1.6.5.5 follow-up above.
 
 ## Previous release: 1.6.5.3
 
@@ -102,7 +119,7 @@ These changes address the demonstrated failure paths in
 [#221](https://github.com/franssjz/cpr-vcodex/issues/221),
 [#222](https://github.com/franssjz/cpr-vcodex/issues/222) and
 [#227](https://github.com/franssjz/cpr-vcodex/issues/227). The separate
-legacy-highlight follow-up is covered by the 1.6.5.4 changes above. Real-device
+legacy-highlight follow-up is covered by the 1.6.5.4 and 1.6.5.5 changes above. Real-device
 KOReader recovery, locked-X3 OTA compatibility and the reported SD-card mounting
 failure remain unconfirmed.
 

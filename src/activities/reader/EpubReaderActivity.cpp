@@ -2344,7 +2344,13 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     section->currentPage = section->pageCount - 1;
   }
   applyDeferredReposition();
-  resolvePendingHighlight();
+  bool allowHighlightBuild = true;
+  if (!resolvePendingHighlight(allowHighlightBuild)) {
+    section.reset();
+    renderSectionLoadFailure();
+    automaticPageTurnActive = false;
+    return;
+  }
 
   renderer.clearScreen();
 
@@ -2373,6 +2379,12 @@ void EpubReaderActivity::render(RenderLock&& lock) {
 
   {
     auto loadedPage = section->loadPage(section->currentPage);
+    if (loadedPage && !resolveVisibleHighlights(loadedPage, allowHighlightBuild)) {
+      section.reset();
+      renderSectionLoadFailure();
+      automaticPageTurnActive = false;
+      return;
+    }
     if (!loadedPage) {
       LOG_ERR("ERS", "Failed to load page from SD - clearing section cache");
       automaticPageTurnActive = false;
@@ -2495,50 +2507,179 @@ bool EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageC
 void EpubReaderActivity::clearHighlightResolutions() {
   for (auto& entry : resolvedHighlights) entry = {};
   nextHighlightResolution = 0;
+  lastHighlightRecoveryPage = -1;
 }
 
-void EpubReaderActivity::resolvePendingHighlight() {
+bool EpubReaderActivity::resolvePendingHighlight(bool& allowBuild) {
   const int index = std::exchange(pendingHighlightIndex, -1);
+  return resolveHighlight(index, section ? section->currentPage : 0, true, allowBuild);
+}
+
+bool EpubReaderActivity::resolveVisibleHighlights(std::unique_ptr<Page>& page, bool& allowBuild) {
+  if (!section || bookmarkStore.isEmpty() || section->currentPage == lastHighlightRecoveryPage) return true;
+  const int currentPage = section->currentPage;
+  if (currentPage < 0 || currentPage >= section->pageCount) return true;
+  lastHighlightRecoveryPage = currentPage;
+
+  // Reopening a book loses the RAM resolutions. Prepare complete phrases on
+  // this page once per page change, before painting, without navigating away.
+  // Shortlist from text before looking up offsets, so unrelated records cause
+  // no SD reads. Fresh trusted selections and failed/ambiguous checks stay cached.
+  struct Candidate {
+    int index;
+    int hint;
+  };
+  Candidate candidates[HIGHLIGHT_RESOLUTION_CACHE_SIZE];
+  size_t candidateCount = 0;
+  uint8_t protectedSlots = 0;
   const auto& bookmarks = bookmarkStore.getAll();
-  if (!section || index < 0 || static_cast<size_t>(index) >= bookmarks.size() || section->pageCount == 0) return;
+  {
+    HighlightPageWords words(*page);
+    for (size_t slot = 0; slot < HIGHLIGHT_RESOLUTION_CACHE_SIZE; ++slot) {
+      const auto& entry = resolvedHighlights[slot];
+      if (entry.bookmarkIndex < 0 || static_cast<size_t>(entry.bookmarkIndex) >= bookmarks.size()) continue;
+      bool protect = entry.matched && currentPage >= entry.firstPage && currentPage <= entry.lastPage;
+      if (!entry.matched) {
+        const auto& highlight = bookmarks[entry.bookmarkIndex];
+        protect = HighlightTextMatcher::findUnique(highlight.snippet.c_str(), words.size(), [&](const size_t word) {
+                    return words.word(word);
+                  }).found;
+      }
+      if (protect) protectedSlots |= 1U << slot;
+    }
+    const uint8_t allSlots = (1U << HIGHLIGHT_RESOLUTION_CACHE_SIZE) - 1U;
+    if (protectedSlots == allSlots) return true;
+    for (size_t index = 0; index < bookmarks.size(); ++index) {
+      const auto& highlight = bookmarks[index];
+      if (!highlight.isTextHighlight || highlight.spineIndex != currentSpineIndex || highlight.snippet.empty())
+        continue;
+      bool cached = false;
+      for (const auto& entry : resolvedHighlights) {
+        if (entry.bookmarkIndex == static_cast<int>(index)) cached = true;
+      }
+      if (cached) continue;
+      const auto match = HighlightTextMatcher::findUnique(highlight.snippet.c_str(), words.size(),
+                                                          [&](const size_t word) { return words.word(word); });
+      if (!match.found) continue;
+      int hint = highlight.pageNumber;
+      if (highlight.hasVisibleTextOffset) {
+        const auto anchoredPage = section->getPageForVisibleTextOffset(highlight.visibleTextOffset);
+        hint = anchoredPage ? static_cast<int>(*anchoredPage) : -1;
+      } else if (hint >= section->pageCount && (section->isPartial() || section->isBuilding())) {
+        continue;
+      }
+      if (hint >= 0 && (currentPage < hint - HIGHLIGHT_SEARCH_RADIUS || currentPage > hint + HIGHLIGHT_SEARCH_RADIUS))
+        continue;
+      if (candidateCount < HIGHLIGHT_RESOLUTION_CACHE_SIZE) {
+        candidates[candidateCount++] = {static_cast<int>(index), hint};
+      } else if (hint >= 0) {
+        // A known nearby anchor takes priority over unlocated repeated phrases.
+        for (auto& candidate : candidates) {
+          if (candidate.hint >= 0) continue;
+          candidate = {static_cast<int>(index), hint};
+          break;
+        }
+      }
+    }
+  }
+  if (candidateCount == 0) return true;
+  // Release the render Page: full-window checks retain at most two Pages.
+  // Pages without candidates reuse their loaded content without extra SD reads.
+  page.reset();
+  invalidateCurrentOverlayPageCache();
+  for (size_t candidate = 0; candidate < candidateCount; ++candidate) {
+    const auto& highlight = bookmarks[candidates[candidate].index];
+    int hint = candidates[candidate].hint;
+    if (hint < 0) {
+      // A partial LUT cannot yet locate an offset inside its final page. One
+      // bounded build chunk supplies the next boundary and the search margin.
+      if (!extendHighlightBuild(HIGHLIGHT_SEARCH_RADIUS + 1, allowBuild)) return false;
+      const auto anchoredPage = section->getPageForVisibleTextOffset(highlight.visibleTextOffset);
+      if (!anchoredPage) continue;
+      hint = *anchoredPage;
+    }
+    if (currentPage < hint - HIGHLIGHT_SEARCH_RADIUS || currentPage > hint + HIGHLIGHT_SEARCH_RADIUS) continue;
+    if (!resolveHighlight(candidates[candidate].index, hint, false, allowBuild, &protectedSlots)) return false;
+  }
+  page = section->loadPage(currentPage);
+  return true;
+}
+
+bool EpubReaderActivity::extendHighlightBuild(const int pages, bool& allowBuild) {
+  if (!allowBuild || !section->isBuilding()) return true;
+  allowBuild = false;
+  discardOverlayPage();
+  bool built = false;
+  {
+    GfxRenderer::FrameBufferLoan loan(renderer);
+    built = section->buildSomeMore(pages);
+  }
+  resetTaskWatchdogIfSubscribed();
+  releaseReaderSdFontCachesForLowMemory(renderer, "ERS", "highlight recovery window");
+  if (!built) LOG_ERR("ERS", "Failed while extending highlight recovery window");
+  return built;
+}
+
+bool EpubReaderActivity::resolveHighlight(const int index, const int pageHint, const bool navigate, bool& allowBuild,
+                                          uint8_t* protectedSlots) {
+  const auto& bookmarks = bookmarkStore.getAll();
+  if (!section || index < 0 || static_cast<size_t>(index) >= bookmarks.size() || section->pageCount == 0) return true;
   const auto& highlight = bookmarks[index];
-  if (!highlight.isTextHighlight || highlight.spineIndex != currentSpineIndex || highlight.snippet.empty()) return;
+  if (!highlight.isTextHighlight || highlight.spineIndex != currentSpineIndex || highlight.snippet.empty()) return true;
 
   ResolvedHighlight* existing = nullptr;
   for (auto& entry : resolvedHighlights) {
     if (entry.bookmarkIndex != index) continue;
     if (entry.matched) {
-      section->currentPage = entry.firstPage;
-      nextPageNumber = entry.firstPage;
-      invalidateCurrentOverlayPageCache();
-      return;
+      if (navigate) {
+        section->currentPage = entry.firstPage;
+        nextPageNumber = entry.firstPage;
+        invalidateCurrentOverlayPageCache();
+      }
+      return true;
     }
     existing = &entry;
     break;
   }
 
-  auto& result = existing ? *existing : resolvedHighlights[nextHighlightResolution];
-  if (!existing) nextHighlightResolution = (nextHighlightResolution + 1) % HIGHLIGHT_RESOLUTION_CACHE_SIZE;
+  if (!existing) {
+    for (size_t offset = 0; offset < HIGHLIGHT_RESOLUTION_CACHE_SIZE; ++offset) {
+      const size_t slot = (nextHighlightResolution + offset) % HIGHLIGHT_RESOLUTION_CACHE_SIZE;
+      if (protectedSlots && (*protectedSlots & (1U << slot))) continue;
+      existing = &resolvedHighlights[slot];
+      nextHighlightResolution = (slot + 1) % HIGHLIGHT_RESOLUTION_CACHE_SIZE;
+      break;
+    }
+    if (!existing) return true;  // Preserve verified shading already on this page.
+  }
+  if (protectedSlots) *protectedSlots |= 1U << (existing - resolvedHighlights);
+  auto& result = *existing;
   result = {};
   result.bookmarkIndex = index;
 
   // The stored offset is the old PAGE start, only a hint for the phrase.
-  // Keep recovery bounded and on activation, never scan SD pages in a paint pass.
-  constexpr int SEARCH_RADIUS = 3;
-  const int hint = std::max(0, std::min(section->currentPage, static_cast<int>(section->pageCount) - 1));
-  const int first = std::max(0, hint - SEARCH_RADIUS);
-  const int wantedLast = std::min(hint + SEARCH_RADIUS, static_cast<int>(UINT16_MAX) - 1);
+  // Keep recovery bounded and before painting, never scan in a highlight paint pass.
+  const int hint = std::max(0, std::min(pageHint, static_cast<int>(section->pageCount) - 1));
+  const int first = std::max(0, hint - HIGHLIGHT_SEARCH_RADIUS);
+  const int wantedLast = std::min(hint + HIGHLIGHT_SEARCH_RADIUS, static_cast<int>(UINT16_MAX) - 1);
   const int continuation = std::min(wantedLast + 1, static_cast<int>(UINT16_MAX) - 1);
   invalidateCurrentOverlayPageCache();
   discardOverlayPage();
 
-  // A partial cache's pageCount is a watermark, not the end of the chapter.
-  // Replaying its builder can start at page zero even with a large watermark.
-  // Let normal background pagination advance; reopening the highlight retries.
-  // Never accept apparent uniqueness from an incomplete search window.
+  // A cold open may stop building as soon as the old page hint is available.
+  // Give its active builder one bounded chunk to cover the recovery window.
+  // This requests at most HIGHLIGHT_SEARCH_RADIUS + 1 pages; the parser can finish its
+  // current input chunk. Never start or loop a builder here: a loaded partial
+  // cache may require replay from page zero before its watermark can advance.
+  if (section->pageCount <= continuation && !extendHighlightBuild(continuation + 1 - section->pageCount, allowBuild))
+    return false;
+
+  // A partial cache's pageCount is a watermark, not the chapter end. If the
+  // bounded chunk could not cover the window, normal background work continues
+  // and reopening retries. Never accept uniqueness from an incomplete window.
   if (section->pageCount <= continuation && (section->isPartial() || section->isBuilding())) {
     LOG_DBG("ERS", "Highlight %d recovery deferred: incomplete page window", index);
-    return;
+    return true;
   }
 
   const int last = std::min(wantedLast, static_cast<int>(section->pageCount) - 1);
@@ -2547,12 +2688,12 @@ void EpubReaderActivity::resolvePendingHighlight() {
   for (int pageNumber = first; pageNumber <= last; ++pageNumber) {
     if (!current) {
       LOG_ERR("ERS", "Highlight %d recovery stopped: unreadable page %d", index, pageNumber);
-      return;
+      return true;
     }
     auto next = pageNumber + 1 < section->pageCount ? section->loadPage(pageNumber + 1) : nullptr;
     if (pageNumber + 1 < section->pageCount && !next) {
       LOG_ERR("ERS", "Highlight %d recovery stopped: unreadable continuation", index);
-      return;
+      return true;
     }
     HighlightPageWords words(*current, next.get());
     const auto match = HighlightTextMatcher::findUnique(
@@ -2560,7 +2701,7 @@ void EpubReaderActivity::resolvePendingHighlight() {
         words.firstPageSize());
     if (match.ambiguous || (match.found && found.matched)) {
       LOG_DBG("ERS", "Highlight %d recovery ambiguous near page %d; keeping original record", index, hint);
-      return;
+      return true;
     }
     if (match.found) {
       found.bookmarkIndex = index;
@@ -2575,14 +2716,17 @@ void EpubReaderActivity::resolvePendingHighlight() {
   }
   if (!found.matched) {
     LOG_DBG("ERS", "Highlight %d text not found near page %d; keeping original record", index, hint);
-    return;
+    return true;
   }
 
   result = found;
-  section->currentPage = found.firstPage;
-  nextPageNumber = found.firstPage;
+  if (navigate) {
+    section->currentPage = found.firstPage;
+    nextPageNumber = found.firstPage;
+  }
   LOG_DBG("ERS", "Highlight %d resolved: page %u -> %d (end %d); original record preserved", index,
           highlight.pageNumber, found.firstPage, found.lastPage);
+  return true;
 }
 
 void EpubReaderActivity::drawTextHighlights(const Page& page, const int orientedMarginTop,
@@ -2619,17 +2763,9 @@ void EpubReaderActivity::drawTextHighlights(const Page& page, const int oriented
       bestEnd = currentPage == resolved->lastPage ? resolved->lastWord : wordCount - 1;
       if (bestStart >= wordCount || bestEnd >= wordCount) continue;
     } else {
-      if (highlight.hasVisibleTextOffset) {
-        const auto anchoredPage = section->getPageForVisibleTextOffset(highlight.visibleTextOffset);
-        if (!anchoredPage || currentPage != static_cast<int>(*anchoredPage)) continue;
-      } else if (currentPage != highlight.pageNumber) {
-        continue;
-      }
-      const auto match = HighlightTextMatcher::findUnique(highlight.snippet.c_str(), wordCount,
-                                                          [&](const size_t word) { return words.word(word); });
-      if (!match.found || match.ambiguous) continue;
-      bestStart = match.start;
-      bestEnd = match.end;
+      // A full passive cache or incomplete window must not fall back to a
+      // locally unique phrase that may be ambiguous on a nearby page.
+      continue;
     }
     if (bestStart == wordCount) continue;
 

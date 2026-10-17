@@ -1,7 +1,8 @@
 """Legacy Korean highlight navigation and paint regression on the X4 simulator.
 
 Uses normal reader/global Highlights navigation, a generated EPUB, legacy v4/v5
-bookmarks.bin records, and a fresh UI selection. No firmware patch is needed.
+bookmarks.bin records, a cold chapter cache, and a fresh UI selection. No firmware
+patch is needed.
 The section cache is read only to discover the fixture's actual rendered pages
 and word ranges. Screenshots are compared with a clean page and a correctly
 indexed modern-text reference, so a successful jump alone cannot pass.
@@ -201,10 +202,22 @@ def reference(program, base, root, name, meta, page, record=None):
 
 
 def run_case(program, base, root, name, meta, saved, snippet, expected_page, expected_pixels,
-             global_route=False, visible_offset=None, continuation=None):
+             global_route=False, visible_offset=None, continuation=None, cold_cache=False):
     original_record = bookmark_bytes(saved, snippet, visible_offset=visible_offset,
                                      end_page=saved + 1 if continuation else saved)
     sd = copy_case(base, root, name, meta, 0, original_record, reader=not global_route)
+    if cold_cache:
+        assert global_route, 'Cold recovery must start through global Highlights before opening the reader'
+        # Remove only the copied synthetic chapter cache inside this new case's
+        # SD. Book metadata stays available to Home/Apps/Highlights, but opening
+        # the selection must paginate the chapter from scratch.
+        assert root.resolve() in sd.resolve().parents
+        cached_sections = list((sd / '.crosspoint').glob('**/sections/0.bin*'))
+        assert cached_sections, 'The prepared fixture must contain a chapter cache to remove'
+        for cached in cached_sections:
+            assert sd.resolve() in cached.resolve().parents and cached.is_file() and not cached.is_symlink()
+            cached.unlink()
+        assert not list((sd / '.crosspoint').glob('**/sections/0.bin*'))
     if global_route:
         # Put Highlights first in Apps, and leave Apps as the Home shortcut.
         settings_path = sd / '.crosspoint/settings.json'
@@ -248,6 +261,7 @@ def run_case(program, base, root, name, meta, saved, snippet, expected_page, exp
     if final_record != original_record:
         failures.append('original bookmarks.bin was rewritten')
     report = {'case': name, 'saved_page': saved, 'landing_page': landing_page, 'expected_landing_page': expected_page,
+              'cold_cache': cold_cache,
               'continuation_page': actual_page if continuation else None,
               'expected_continuation_page': final_expected_page if continuation else None,
               'bookmarks_sha256': hashlib.sha256(final_record).hexdigest(),
@@ -256,6 +270,73 @@ def run_case(program, base, root, name, meta, saved, snippet, expected_page, exp
     (sd / 'result.json').write_text(json.dumps(report, indent=2))
     print(json.dumps(report), flush=True)
     return report
+
+
+def resume_case(program, base, root, name, meta, page, record, expected_pixels):
+    sd = copy_case(base, root, name, meta, page, record)
+    # Boot straight into the reader. No Highlights activation may establish a
+    # trusted range before the screenshot: this exercises passive recovery.
+    log = boot(program, sd, 'resume', [(8000, 'QUIT')], [(6500, 'resumed')])
+    actual_page = struct.unpack_from('<HH', (sd / meta['bookdata'] / 'epub_progress.bin').read_bytes())[1]
+    saved_pages = [int(value) for value in re.findall(r'Progress saved: Chapter \d+, Page (\d+)', log)]
+    actual_pixels = pixels(sd / 'resumed.bmp')
+    final_record = (sd / meta['bookdata'] / 'bookmarks.bin').read_bytes()
+    failures = []
+    if 'Entering activity: EpubReader' not in log or 'Entering activity: Bookmarks' in log:
+        failures.append('Resume did not open the reader directly without Highlights activation')
+    if actual_page != page or any(value != page for value in saved_pages):
+        failures.append(f'Passive recovery changed reading position: final={actual_page}, saved={saved_pages}')
+    if actual_pixels != expected_pixels:
+        failures.append('resumed reader pixels differ from the expected highlighted or clean reference')
+    if final_record != record:
+        failures.append('original bookmarks.bin was rewritten')
+    report = {'case': name, 'resume_page': page, 'actual_page': actual_page,
+              'bookmarks_unchanged': final_record == record,
+              'bookmarks_sha256': hashlib.sha256(final_record).hexdigest(),
+              'screenshot_sha256': hashlib.sha256(actual_pixels).hexdigest(), 'failures': failures}
+    (sd / 'result.json').write_text(json.dumps(report, indent=2))
+    print(json.dumps(report), flush=True)
+    return report
+
+
+def passive_resume_cases(program, base, root, meta, painted_target):
+    page = meta['target_page']
+    stale = bookmark_bytes(page + 1, ' '.join(TARGET.replace(' ', '')),
+                           visible_offset=meta['page_offsets'][page + 1])
+    recovered = resume_case(program, base, root, 'resume-stale-v5-anchor', meta, page, stale, painted_target)
+    # Earlier records whose text is visible but whose anchors are far away must
+    # not occupy every bounded recovery slot and hide a later nearby record.
+    distant_page = meta['pages'] - 1
+    assert distant_page - page > 3 and meta['target_start'] >= 7
+    distant = [bookmark_bytes(distant_page,
+                               ' '.join(meta['page_words'][page][meta['target_start'] - extra:meta['target_end'] + 1]),
+                               visible_offset=meta['page_offsets'][distant_page]) for extra in range(8)]
+    records = distant + [stale]
+    combined = struct.pack('<BI', 5, len(records)) + b''.join(record[5:] for record in records)
+    shortlisted = resume_case(program, base, root, 'resume-nearby-after-distant-anchors', meta,
+                              page, combined, painted_target)
+    # The final generated page contains one trailing phrase. It occurs only
+    # once on this page, but also on other pages in the saved hint's ±3 window.
+    # A page-local matcher would paint it; passive recovery must reject it.
+    ambiguous_page = meta['pages'] - 1
+    words = meta['page_words'][ambiguous_page]
+    snippet = ' '.join(words)
+    assert len(snippet.encode()) <= 512 and spans(words, snippet) == [(0, len(words) - 1)]
+    other_matches = [p for p in range(max(0, ambiguous_page - 3), ambiguous_page)
+                     if spans(meta['page_words'][p], snippet)]
+    assert other_matches, 'Passive ambiguity fixture needs a unique local phrase repeated on a nearby page'
+    clean = reference(program, base, root, 'resume-ambiguous-clean', meta, ambiguous_page)
+    ambiguous = bookmark_bytes(ambiguous_page, snippet, 0, len(words) - 1,
+                               visible_offset=meta['page_offsets'][ambiguous_page])
+    rejected = resume_case(program, base, root, 'resume-locally-unique-but-ambiguous', meta,
+                           ambiguous_page, ambiguous, clean)
+    # The file format permits duplicate records. Eight rejected resolutions
+    # fill the bounded cache; the ninth must not bypass full-window validation
+    # through a page-local paint fallback just because it has no cache entry.
+    repeated = struct.pack('<BI', 5, 9) + ambiguous[5:] * 9
+    overflow_rejected = resume_case(program, base, root, 'resume-ambiguous-after-full-cache', meta,
+                                    ambiguous_page, repeated, clean)
+    return [recovered, shortlisted, rejected, overflow_rejected]
 
 
 def fresh_selection(program, base, root, meta):
@@ -334,7 +415,10 @@ def main():
     parser.add_argument('--output-parent', type=Path, default=Path(tempfile.gettempdir()))
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--base', type=Path, help='Reuse a prepared root from --prepare-only')
-    parser.add_argument('--fresh-only', action='store_true', help='Run only the UI-created repeated selection case')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--fresh-only', action='store_true', help='Run only the UI-created repeated selection case')
+    mode.add_argument('--cold-only', action='store_true', help='Run only global Highlights with a cold chapter cache')
+    mode.add_argument('--resume-only', action='store_true', help='Run only direct reader resume recovery and ambiguity cases')
     args = parser.parse_args()
     program = args.program.resolve()
     root = Path(tempfile.mkdtemp(prefix='highlights-legacy-', dir=args.output_parent)).resolve()
@@ -358,9 +442,28 @@ def main():
     clean_target = reference(program, base, root, 'clean-target', meta, page)
     painted = reference(program, base, root, 'painted-target', meta, page, modern)
     assert painted != clean_target, 'The valid reference highlight was not visibly painted'
-    clean_other = reference(program, base, root, 'clean-other', meta, page + 1)
+    if args.resume_only:
+        results = passive_resume_cases(program, base, root, meta, painted)
+        (root / 'result.json').write_text(json.dumps(results, indent=2))
+        assert all(not result['failures'] for result in results), 'Passive resume regression failed; see result.json'
+        print('PASS: direct reader resume recovers unique highlights and rejects nearby ambiguity without navigating', flush=True)
+        return
     syllables = ' '.join(TARGET.replace(' ', ''))
-    results = [
+    # At the supplied font size this phrase is on page 4, with a saved hint of 5.
+    # Cold opening initially builds eight pages: the recovery window also needs
+    # candidate page 8 and continuation page 9 before it can prove uniqueness.
+    # The first activation must extend pagination and paint the exact range.
+    assert page == 4 and meta['pages'] > 9, 'Cold regression requires its target just before the initial cache watermark'
+    cold_result = run_case(program, base, root, 'global-cold-syllables-shifted', meta, page + 1,
+                           syllables, page, painted, global_route=True, cold_cache=True)
+    if args.cold_only:
+        (root / 'result.json').write_text(json.dumps([cold_result], indent=2))
+        assert not cold_result['failures'], 'Cold highlight regression failed; see result.json'
+        print('PASS: first global Highlights activation recovers and paints with a cold chapter cache', flush=True)
+        return
+    clean_other = reference(program, base, root, 'clean-other', meta, page + 1)
+    results = passive_resume_cases(program, base, root, meta, painted) + [
+        cold_result,
         run_case(program, base, root, 'syllables-shifted-forward', meta, page + 1, syllables, page, painted),
         run_case(program, base, root, 'words-shifted-backward', meta, page - 1, TARGET, page, painted),
         run_case(program, base, root, 'v5-stale-page-anchor', meta, page + 1, syllables, page, painted,

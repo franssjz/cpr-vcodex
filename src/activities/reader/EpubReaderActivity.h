@@ -50,8 +50,11 @@ class EpubReaderActivity final : public Activity {
     bool matched = false;
   };
   static constexpr size_t HIGHLIGHT_RESOLUTION_CACHE_SIZE = 8;
+  static_assert(HIGHLIGHT_RESOLUTION_CACHE_SIZE <= 8);
+  static constexpr int HIGHLIGHT_SEARCH_RADIUS = 3;
   ResolvedHighlight resolvedHighlights[HIGHLIGHT_RESOLUTION_CACHE_SIZE]{};
   size_t nextHighlightResolution = 0;
+  int lastHighlightRecoveryPage = -1;
   int pagesUntilFullRefresh = 0;
   int cachedSpineIndex = 0;
   int cachedChapterTotalPageCount = 0;
@@ -217,7 +220,10 @@ class EpubReaderActivity final : public Activity {
                       int orientedMarginBottom, int orientedMarginLeft);
   void drawTextHighlights(const Page& page, int orientedMarginTop, int orientedMarginLeft) const;
   void clearHighlightResolutions();
-  void resolvePendingHighlight();
+  bool resolvePendingHighlight(bool& allowBuild);
+  bool resolveVisibleHighlights(std::unique_ptr<Page>& page, bool& allowBuild);
+  bool extendHighlightBuild(int pages, bool& allowBuild);
+  bool resolveHighlight(int index, int pageHint, bool navigate, bool& allowBuild, uint8_t* protectedSlots = nullptr);
   void renderStatusBar() const;
   void renderSectionLoadFailure();
   void renderEndOfBook();

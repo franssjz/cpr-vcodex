@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.5.5 - Highlight opening and resume fixes (2026-10-17)
+
+- Fix highlight activation stopping at an old page hint while a chapter is
+  still being paginated (#227). Give the active paginator one bounded extension
+  so recovery can verify the complete nearby search window on the first opening.
+- Restore verified highlight shading when resuming a page whose saved anchor
+  now points to an earlier page. Preserve the reading position and original
+  `bookmarks.bin`; existing highlights do not need to be recreated.
+- Keep recovery bounded to two loaded pages and eight cached resolutions.
+  Protect current-page ranges and leave ambiguous or unverified text unshaded,
+  including when the recovery cache is full.
+- Verify all 28 supplied highlights on first opening and direct resume with
+  the reporter's EPUB, font and original bookmark records: 56 exact-image checks,
+  14 synthetic simulator scenarios and 40 focused native tests pass. ESP32-C3
+  development and release builds pass the firmware budget gate. Physical X3/X4
+  validation remains pending. See [results and limits](agent-docs/issues-221-222-227-2026-10.md).
+
 ## 1.6.5.4 - Legacy highlight recovery (2026-10-16)
 
 - Recover older EPUB highlights whose saved page or word positions no longer
@@ -208,6 +225,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.5.5` | - Fix highlight activation stopping at an old page hint while chapter pagination is incomplete (#227), using one bounded extension of the active paginator to verify the nearby recovery window.<br>- Restore verified shading when resuming a page whose saved anchor now points to an earlier page. Preserve the reading position and original bookmarks.bin; existing highlights do not need to be recreated.<br>- Keep recovery memory bounded, protect current-page ranges, and leave ambiguous or unverified text unshaded even when the recovery cache is full.<br>- Pass 28 first-opening and 28 direct-resume checks with the reporter's EPUB, font and original bookmark records, plus 14 synthetic simulator scenarios and 40 focused native tests. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 validation remains pending. |
 | `1.6.5.4` | - Recover older EPUB highlights from their complete saved text when selecting a highlight from either Highlights list, searching within three pages of the resolved page hint and allowing one page boundary (#227).<br>- Support legacy Korean/CJK spacing and layout-inserted hyphens while preserving Latin word boundaries and literal saved hyphens. Require a unique complete match; never shade unrelated words using stale indices. Keep original bookmarks.bin records unchanged.<br>- Preserve exact fresh-selection ranges in the current layout, including repeated text and truncated snippets, with bounded recovery memory and no nearby-page reads during painting.<br>- Pass all 735 native tests and nine simulator scenarios. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 checks and validation against the reporter's original EPUB and bookmarks.bin remain pending. |
 | `1.6.5.3` | - Improve large Highlights lists with bounded label caching and batched SD-font glyph loading; preserve short presses across slow rendering and keep hold-to-page navigation (#227).<br>- Report actual KOReader ESP/TLS failures and the attempted server origin instead of misleading HTTP -1 responses (#221).<br>- Retry registration, authentication or manual sync once through a fresh boot only when the TLS memory check rejects the operation before any request is sent. Preserve saved profile identity, book position and reader font; keep certificate verification and prevent restart loops or replay after an uncertain registration result (#222).<br>- Show the effective KOReader server URL and correct the documented default without changing saved profiles.<br>- Pass all 719 native tests, 256-highlight simulator lists and 17 KOReader simulator checks. Physical X3/X4 TLS/restart confirmation and the separate older-highlight error remain pending. |
 | `1.6.5.2` | - Fix waking from a book into its folder or Home by applying pending reader transitions before dispatching input (#225). Manual sleep and Quick Resume after inactivity return to the book.<br>- Resume flashcard reviews at the same card, side and scroll position, preserving the pending queue and session counts. Save ratings on sleep and Home; reject incomplete progress writes and invalid or stale resume snapshots.<br>- Recover reusable font caches before abandoning an EPUB chapter under memory pressure. This mitigates a demonstrated failure path related to #223; the reported book still needs confirmation.<br>- Pass 664 native tests and six simulator sleep/wake scenarios covering EPUB, TXT and flashcards. Physical X3/X4 validation remains pending.<br>- No OTA or SD compatibility fix is claimed for #224 or #226. Partition tables and update paths are unchanged; X4 Pro distribution remains withdrawn. |
