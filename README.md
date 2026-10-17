@@ -52,20 +52,20 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 |---|---|
 | Project | `CPR-vCodex` |
 | Device | `Xteink X4` original (ESP32-C3, personally tested); `Xteink X3` UC8253/UC8279d runtime support, with physical validation of this integration pending. **Not for X4 Classic/X4C (ESP32-S3). X4 Pro firmware distribution remains withdrawn.** |
-| Current release (CPR-vCodex) build | [`1.6.5.4-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.5.4-cpr-vcodex) |
+| Current release (CPR-vCodex) build | [`1.6.5.5-cpr-vcodex`](https://github.com/franssjz/cpr-vcodex/releases/tag/1.6.5.5-cpr-vcodex) |
 | Release hardware stack | `freeink-sdk` [`9729236c`](https://github.com/Free-Ink/freeink-sdk/commit/9729236ce7b730b81b8fcceec4aa77051b6dfae3), with runtime X3/X4 panel detection. |
 | Latest SD font package | [`sd-fonts-m1-b4`](https://github.com/franssjz/cpr-vcodex/releases/tag/sd-fonts-m1-b4) |
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | The #227 follow-up passes 28/28 cold highlight activations and 28/28 direct reader resumes with the reporter's EPUB, font and bookmarks, plus 14 synthetic scenarios and 40 focused native tests. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
+| Release validation | All 735 native tests pass in CI. The #227 follow-up passes 28/28 cold highlight activations and 28/28 direct reader resumes with the reporter's EPUB, font and bookmarks, plus 14 synthetic scenarios. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## Prepared for 1.6.5.5
+## What's new in 1.6.5.5
 
 - Recover highlights on the first opening of a chapter when pagination has not
   yet reached the complete search window. Give the active paginator one bounded
@@ -734,7 +734,7 @@ Important artifacts include:
 
 ### Recovering Reading Stats after 1.5.0.1 or 1.5.0.2
 
-Update to `1.6.5.4-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
+Update to `1.6.5.5-cpr-vcodex` before resetting or deleting any data. In most cases the existing `/.crosspoint/reading_stats.json` will load automatically after the update because the affected releases rejected the file without overwriting it.
 
 If the displayed totals are still incomplete or incorrect, open `Settings > Apps > Reading Stats > Import Reading Stats` and select the newest suitable dated backup under `/exports/stats_backup_YYYY-MM-DD`. Those weekly backups appear directly in the import list and do not need to be renamed. If the only copy is on a computer, place it on the SD card as exactly `/exports/stats_exported` (without a `.json` extension), then import it. Try older dated backups newest-first if necessary, and preserve a copy of the SD card before cleaning or resetting statistics.
 
@@ -747,7 +747,7 @@ Each packaged dev build now keeps the base firmware line and the local flash ide
 Practical values to look at:
 
 - base firmware line: `CPR-vCodex 1.6.5` (CrossPoint develop integration)
-- current release build style: `1.6.5.4-cpr-vcodex`
+- current release build style: `1.6.5.5-cpr-vcodex`
 - packaged artifact style: `artifacts/<version>-cpr-vcodex.bin`
 
 The incremental `.bNNNN` suffix exists specifically to help distinguish newer flashes from older ones on real hardware.
@@ -830,10 +830,10 @@ Release publishing:
 - before tagging, run:
 
 ```powershell
-python scripts/pre_release_check.py --tag 1.6.5.4-cpr-vcodex
+python scripts/pre_release_check.py --tag 1.6.5.5-cpr-vcodex
 ```
 
-- push a stable tag named like `1.6.5.4-cpr-vcodex`
+- push a stable tag named like `1.6.5.5-cpr-vcodex`
 - `pre_release_check.py` dry-runs `gh_release`, checks it against the 6,553,600
   byte X4 OTA slot, validates the artifact pair, and rejects any X4 Pro entry
   or stale X4 Pro browser binary
