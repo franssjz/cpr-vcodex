@@ -424,11 +424,16 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   const DownloadError result = runGetSecure(url, username, password, sink, downgradeRedirectsToHttp);
   // Close before any remove() on the same path; DESTRUCTOR_CLOSES_FILE would
   // otherwise close only after the remove.
-  file.close();
+  const bool fileClosed = file.close();
 
   if (result != OK) {
     Storage.remove(destPath.c_str());
     return result;
+  }
+  if (!fileClosed) {
+    LOG_ERR("HTTP", "Failed to flush downloaded file");
+    Storage.remove(destPath.c_str());
+    return FILE_ERROR;
   }
   if (sink.downloaded == 0) {
     LOG_ERR("HTTP", "no data received");

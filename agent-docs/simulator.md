@@ -193,6 +193,35 @@ or remove their restart/recovery policy. Opening a book still replaces the
 navigation stack to release browser memory. Remove the fixture and rebuild
 before normal simulator checks; it must never enter a device firmware build.
 
+## OPDS feed loading and recovery
+
+In an **isolated X4 simulator copy only**, apply
+`test/simulator/opds_feed_loading_fixture.patch` and rebuild. The patch opens
+the real OPDS activity on an already-connected simulated Wi-Fi session and
+captures its completed Loading framebuffer before each fetch. Scheduled SDL
+screenshots alone cannot observe this phase because the main loop is blocked
+during synchronous HTTP.
+
+```bash
+git apply --check test/simulator/opds_feed_loading_fixture.patch
+git apply test/simulator/opds_feed_loading_fixture.patch
+pio run -e simulator
+python3 test/simulator/opds_feed_loading.py .pio/build/simulator/program
+git apply -R test/simulator/opds_feed_loading_fixture.patch
+pio run -e simulator
+```
+
+Use the configured isolated environment name in both build and binary paths
+(`simulator_sync` in the recorded WSL workspace). `--output-parent` retains
+artifacts in a chosen directory; `--theme` selects Classic or Lyra variants.
+The Python harness creates a disposable SD and loopback HTTP server, then
+checks six real requests in one session: root, small shelf, root, malformed
+shelf, root, small shelf. It compares Loading frames and restored catalog
+pixels, rejects restarts, and verifies stale and completed temp-feed cleanup.
+This covers rendering/lock ordering and navigation recovery, not device heap,
+TLS, physical SD errors, or the reporter's server. Remove both fixture hooks
+and rebuild before normal simulator use; never apply them to device builds.
+
 ## Reader settings regression
 
 `python3 test/simulator/reader_settings.py /absolute/path/to/program` uses a

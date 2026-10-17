@@ -1,0 +1,38 @@
+#pragma once
+#include <Logging.h>
+
+#include "DownloadTestState.h"
+#include "network/HttpDownloader.h"
+
+@SINK_DEFINITION@
+
+// Transport stand-in delivers real file-write callbacks, including short writes.
+// The production downloadToFile method below owns file cleanup and error mapping.
+inline HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::string& username,
+                                                const std::string& password, Sink& sink, bool downgrade) {
+  ++downloadTest.transfers;
+  downloadTest.url = url;
+  downloadTest.username = username;
+  downloadTest.password = password;
+  downloadTest.cancelFlag = sink.cancelFlag;
+  downloadTest.headers = *sink.headers;
+  downloadTest.downgrade = downgrade;
+  for (const auto& chunk : downloadTest.chunks) sink.total += chunk.size();
+  auto result = static_cast<HttpDownloader::DownloadError>(downloadTest.result);
+  for (const auto& chunk : downloadTest.chunks) {
+    if (sink.cancelFlag && *sink.cancelFlag) {
+      result = HttpDownloader::ABORTED;
+      break;
+    }
+    if (!sink.write(reinterpret_cast<const uint8_t*>(chunk.data()), chunk.size())) {
+      result = HttpDownloader::FILE_ERROR;
+      break;
+    }
+    sink.downloaded += chunk.size();
+    if (sink.progress) sink.progress(sink.downloaded, sink.total);
+  }
+  downloadTest.events.emplace_back("http-end");
+  return result;
+}
+
+@DOWNLOAD_METHOD@

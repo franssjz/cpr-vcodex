@@ -20,7 +20,8 @@ OpdsParser::OpdsParser() {
   parser = XML_ParserCreate(nullptr);
   if (!parser) {
     errorOccured = true;
-    LOG_DBG("OPDS", "Couldn't allocate memory for parser");
+    memoryErrorOccurred = true;
+    LOG_ERR("OPDS", "Couldn't allocate XML parser (code %d)", static_cast<int>(XML_ERROR_NO_MEMORY));
     return;
   }
   entries.reserve(ENTRY_STORAGE_CAPACITY);
@@ -45,7 +46,11 @@ size_t OpdsParser::write(const uint8_t* xmlData, const size_t length) {
     void* const buf = XML_GetBuffer(parser, toRead);
     if (!buf) {
       errorOccured = true;
-      LOG_DBG("OPDS", "Couldn't allocate memory for buffer");
+      const XML_Error errorCode = XML_GetErrorCode(parser);
+      memoryErrorOccurred = errorCode == XML_ERROR_NO_MEMORY;
+      LOG_ERR("OPDS", "XML buffer error at line %lu: %s (code %d)",
+              static_cast<unsigned long>(XML_GetCurrentLineNumber(parser)), XML_ErrorString(errorCode),
+              static_cast<int>(errorCode));
       destroyXmlParser(parser);
       return length;
     }
@@ -54,8 +59,11 @@ size_t OpdsParser::write(const uint8_t* xmlData, const size_t length) {
 
     if (XML_ParseBuffer(parser, static_cast<int>(toRead), 0) == XML_STATUS_ERROR) {
       errorOccured = true;
-      LOG_DBG("OPDS", "Parse error at line %lu: %s", XML_GetCurrentLineNumber(parser),
-              XML_ErrorString(XML_GetErrorCode(parser)));
+      const XML_Error errorCode = XML_GetErrorCode(parser);
+      memoryErrorOccurred = errorCode == XML_ERROR_NO_MEMORY;
+      LOG_ERR("OPDS", "Parse error at line %lu: %s (code %d)",
+              static_cast<unsigned long>(XML_GetCurrentLineNumber(parser)), XML_ErrorString(errorCode),
+              static_cast<int>(errorCode));
       destroyXmlParser(parser);
       return length;
     }
@@ -69,6 +77,11 @@ void OpdsParser::flush() {
   if (errorOccured || !parser) return;
   if (XML_Parse(parser, "", 0, XML_TRUE) != XML_STATUS_OK) {
     errorOccured = true;
+    const XML_Error errorCode = XML_GetErrorCode(parser);
+    memoryErrorOccurred = errorCode == XML_ERROR_NO_MEMORY;
+    LOG_ERR("OPDS", "Final parse error at line %lu: %s (code %d)",
+            static_cast<unsigned long>(XML_GetCurrentLineNumber(parser)), XML_ErrorString(errorCode),
+            static_cast<int>(errorCode));
     destroyXmlParser(parser);
   }
 }

@@ -58,14 +58,29 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | All 735 native tests pass in CI. The #227 follow-up passes 28/28 cold highlight activations and 28/28 direct reader resumes with the reporter's EPUB, font and bookmarks, plus 14 synthetic scenarios. Earlier coverage includes lists with 256 highlights and 17 KOReader settings/network cases. Physical X3/X4 checks, real-device TLS recovery and end-to-end OTA remain pending. [Results and limits](agent-docs/issues-221-222-227-2026-10.md). |
+| Release validation | All 785 native tests pass, including 50 new OPDS loading, parser-memory and SD-write cases. The simulator opens a valid shelf, handles a failed shelf and reopens the valid shelf without restarting. Previous highlight and KOReader regression coverage is retained. Physical X3/X4 checks, the reporter's Grimmory catalog, real-device TLS recovery and end-to-end OTA remain pending. [OPDS results and limits](agent-docs/issue-228-opds-memory.md) · [Earlier validation](agent-docs/issues-221-222-227-2026-10.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## What's new in 1.6.5.5
+## What's new in 1.6.5.6
+
+- Reduce memory pressure when opening OPDS catalogs by downloading the feed to
+  a temporary SD file and closing the network connection before processing it.
+  This adapts the SD approach proposed in CrossInk for constrained readers.
+- Release reader-font caches and previous catalog data before loading another
+  feed. Clean up failed loads so the next attempt starts with fresh data.
+- Detect SD write failures even when they occur while closing the file, and
+  distinguish parser memory errors from invalid catalog data.
+
+These changes target the Grimmory loading and recovery problem reported in
+[#228](https://github.com/franssjz/cpr-vcodex/issues/228). The automated tests and
+simulator recovery checks pass; confirmation with the reporter's X3 and
+Grimmory shelves remains pending. Catalog browsing now needs a writable SD card.
+
+## Previous release: 1.6.5.5
 
 - Recover highlights on the first opening of a chapter when pagination has not
   yet reached the complete search window. Give the active paginator one bounded

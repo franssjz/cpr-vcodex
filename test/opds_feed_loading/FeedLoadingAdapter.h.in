@@ -1,0 +1,209 @@
+#pragma once
+#include <Memory.h>
+#include <OpdsParser.h>
+#include <Logging.h>
+
+#include <algorithm>
+#include <cstring>
+#include <functional>
+#include <utility>
+
+#include "TestState.h"
+#include "util/UrlUtils.h"
+
+// Only board, network, storage and rendering boundaries are stand-ins. The
+// activity methods below and the parser/URL implementations are production code.
+enum class StrId {
+  STR_NO_SERVER_URL,
+  STR_FETCH_FEED_FAILED,
+  STR_MEMORY_ERROR,
+  STR_PARSE_FEED_FAILED,
+  STR_PREV_PAGE,
+  STR_NEXT_PAGE,
+  STR_NO_ENTRIES,
+  STR_LOADING,
+};
+using enum StrId;
+inline const char* tr(StrId id) {
+  switch (id) {
+    case STR_NO_SERVER_URL: return "No server URL";
+    case STR_FETCH_FEED_FAILED: return "Failed to fetch feed";
+    case STR_MEMORY_ERROR: return "Memory error";
+    case STR_PARSE_FEED_FAILED: return "Failed to parse feed";
+    case STR_PREV_PAGE: return "Previous page";
+    case STR_NEXT_PAGE: return "Next page";
+    case STR_NO_ENTRIES: return "No entries";
+    case STR_LOADING: return "Loading";
+  }
+  return "";
+}
+
+class HalFile {
+ public:
+  std::string path;
+  size_t offset = 0;
+  bool open = false;
+  ~HalFile() { if (open) close(); }
+  explicit operator bool() const { return open; }
+  uint64_t fileSize64() const {
+    return feedTest.reportedSize >= 0 ? static_cast<uint64_t>(feedTest.reportedSize) : feedTest.files.at(path).size();
+  }
+  int read(void* buffer, size_t requested) {
+    ++feedTest.readCalls;
+    feedTest.largestReadRequest = std::max(feedTest.largestReadRequest, requested);
+    if (feedTest.readCalls == feedTest.readFailureAt) return feedTest.readFailureResult;
+    const auto& data = feedTest.files.at(path);
+    const size_t count = std::min({requested, data.size() - offset, feedTest.maxRead});
+    std::memcpy(buffer, data.data() + offset, count);
+    offset += count;
+    return static_cast<int>(count);
+  }
+  bool close() {
+    if (open) {
+      --feedTest.openReaders;
+      feedTest.events.emplace_back("file-close");
+      open = false;
+    }
+    return true;
+  }
+};
+
+struct FakeStorage {
+  bool exists(const char* path) const { return feedTest.files.contains(path); }
+  bool remove(const char* path) const {
+    feedTest.events.emplace_back("file-remove");
+    feedTest.removeWithOpenFile |= feedTest.openReaders != 0;
+    if (!feedTest.removeOk) return false;
+    return feedTest.files.erase(path) != 0;
+  }
+  bool ensureDirectoryExists(const char*) const { return feedTest.directoryOk; }
+  bool openFileForRead(const char*, const char* path, HalFile& file) const {
+    if (!feedTest.openOk || !exists(path)) return false;
+    file.path = path;
+    file.open = true;
+    ++feedTest.openReaders;
+    feedTest.events.emplace_back("file-open");
+    return true;
+  }
+};
+inline FakeStorage Storage;
+
+struct FakeEsp {
+  uint32_t getFreeHeap() const { return feedTest.freeHeap; }
+  uint32_t getMaxAllocHeap() const { return feedTest.maxAlloc; }
+};
+inline FakeEsp ESP;
+
+struct FontCacheManager {
+  void releaseSdFontCaches() {
+    feedTest.events.emplace_back("font-cache-release");
+    feedTest.unlockedCacheRelease |= feedTest.renderLockDepth == 0;
+    if (feedTest.heapAfterFontRelease) feedTest.freeHeap = feedTest.heapAfterFontRelease;
+  }
+};
+struct GfxRenderer {
+  FontCacheManager cache;
+  FontCacheManager* getFontCacheManager() { return &cache; }
+};
+struct FakeSdFonts {
+  void releaseForNetwork(GfxRenderer&) {
+    feedTest.events.emplace_back("sd-font-release");
+    feedTest.unlockedCacheRelease |= feedTest.renderLockDepth == 0;
+  }
+};
+inline FakeSdFonts sdFontSystem;
+
+struct HttpDownloader {
+  enum DownloadError { OK = 0, HTTP_ERROR, FILE_ERROR, ABORTED, UNAUTHORIZED };
+  static constexpr uint32_t MIN_TLS_FREE_HEAP = 40000;
+  static constexpr uint32_t MIN_TLS_MAX_ALLOC = 20000;
+  using ProgressCallback = std::function<void(size_t, size_t)>;
+  static DownloadError downloadToFile(const std::string& url, const std::string& destination,
+                                     ProgressCallback, const bool*, const std::string& username,
+                                     const std::string& password) {
+    ++feedTest.downloadCalls;
+    feedTest.events.emplace_back("http-start");
+    feedTest.httpActive = true;
+    feedTest.parserDuringHttp |= feedTest.liveParsers != 0;
+    feedTest.staleEntriesAtDownload |= feedTest.catalogEntries != 0 || feedTest.catalogCapacity != 0;
+    feedTest.requestedUrl = url;
+    feedTest.username = username;
+    feedTest.password = password;
+    feedTest.destination = destination;
+    // A failed transfer can leave a partial file: the activity must remove it.
+    feedTest.files[destination] = feedTest.response;
+    feedTest.httpActive = false;
+    feedTest.events.emplace_back("http-end");
+    return static_cast<DownloadError>(feedTest.downloadResult);
+  }
+};
+
+namespace fui {
+struct ListItem {
+  const char* label = nullptr;
+  const char* subtitle = nullptr;
+  const char* value = nullptr;
+  int16_t actionValue = 0;
+};
+}
+struct OpdsServer {
+  std::string name;
+  std::string url;
+  std::string username;
+  std::string password;
+};
+class OpdsBookBrowserActivity {
+ public:
+  enum class State { LOADING, BROWSING, ERROR };
+  struct Navigation {
+    int selected = 0;
+    void reset() { selected = 0; }
+  } nav;
+  GfxRenderer renderer;
+  OpdsServer server{"Test", "https://library.example/opds", "reader", "secret"};
+  State state = State::LOADING;
+  std::vector<OpdsEntry> entries;
+  std::vector<fui::ListItem> rowItems;
+  std::string currentPath;
+  std::string searchTemplate;
+  std::string errorMessage;
+  std::string statusMessage;
+  bool prevRowPresent = false;
+  bool nextRowPresent = false;
+  void fetchFeed(const std::string& path);
+  void startBrowse();
+  void rebuildRowItems();
+  void releaseEntries();
+  void closeRouting() {
+    feedTest.events.emplace_back("routing-close");
+    feedTest.unlockedCatalogRelease |= feedTest.renderLockDepth == 0;
+  }
+  void requestUpdate() { feedTest.events.emplace_back("render-request"); }
+  void requestUpdateAndWait() {
+    feedTest.events.emplace_back("render-wait");
+    feedTest.waitWithRenderLock |= feedTest.renderLockDepth != 0;
+    feedTest.catalogEntries = entries.size();
+    feedTest.catalogCapacity = entries.capacity() + rowItems.capacity();
+  }
+  void fail(StrId message) {
+    state = State::ERROR;
+    errorMessage = tr(message);
+    requestUpdate();
+  }
+};
+struct RenderLock {
+  explicit RenderLock(OpdsBookBrowserActivity&) { ++feedTest.renderLockDepth; }
+  ~RenderLock() { --feedTest.renderLockDepth; }
+};
+inline void resetTaskWatchdogIfSubscribed() { ++feedTest.watchdogResets; }
+inline void delay(unsigned long) { ++feedTest.yields; }
+
+template <typename T>
+std::unique_ptr<T> testMakeUniqueNoThrow(size_t count) {
+  if (feedTest.failBufferAllocation) return nullptr;
+  return makeUniqueNoThrow<T>(count);
+}
+#define makeUniqueNoThrow testMakeUniqueNoThrow
+@FEED_METHODS@
+@BROWSE_METHODS@
+#undef makeUniqueNoThrow

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.5.6 - OPDS catalog memory and recovery fixes (2026-10-17)
+
+- Reduce OPDS catalog memory pressure (#228) by downloading each feed to a
+  temporary SD file, closing HTTP/TLS, and only then parsing it. Adapt the
+  approach from [CrossInk `6a45458f`](https://github.com/uxjulia/CrossInk/commit/6a45458f11504434d32e595b20de479432eeafd5).
+- Release reader-font caches before fetching, clear the previous catalog on
+  every retry, and clean up temporary files and partial entries on failure.
+  Report Expat allocation failures as memory errors instead of malformed feeds.
+- Treat a failed final SD flush as a download error and remove the incomplete
+  file before it can be parsed or opened.
+- Pass all 785 native tests, including 50 new feed-loading, parser-recovery and
+  file-download cases. Verify a valid catalog still opens after a failed feed
+  in the simulator without restarting. ESP32-C3 development and release builds
+  pass the firmware budget gate. Physical X3 confirmation with the reporter's
+  Grimmory library remains pending. See [results and limits](agent-docs/issue-228-opds-memory.md).
+
 ## 1.6.5.5 - Highlight opening and resume fixes (2026-10-17)
 
 - Fix highlight activation stopping at an old page hint while a chapter is
@@ -225,6 +241,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.5.6` | - Reduce OPDS catalog memory pressure by saving each feed temporarily to SD and closing HTTP/TLS before parsing it (#228), adapting CrossInk's phase-separation approach.<br>- Release reader-font caches before fetching, clear the old catalog on every retry, and remove temporary files and partial entries after failures. Report parser allocation failures as memory errors.<br>- Detect failed final SD flushes and remove incomplete downloads before they can be parsed or opened.<br>- Pass all 785 native tests, including 50 new feed-loading, parser-recovery and file-download cases, and verify valid-catalog recovery after a failed feed in the simulator without restarting. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3 confirmation with the reporter's Grimmory library remains pending. |
 | `1.6.5.5` | - Fix highlight activation stopping at an old page hint while chapter pagination is incomplete (#227), using one bounded extension of the active paginator to verify the nearby recovery window.<br>- Restore verified shading when resuming a page whose saved anchor now points to an earlier page. Preserve the reading position and original bookmarks.bin; existing highlights do not need to be recreated.<br>- Keep recovery memory bounded, protect current-page ranges, and leave ambiguous or unverified text unshaded even when the recovery cache is full.<br>- Pass 28 first-opening and 28 direct-resume checks with the reporter's EPUB, font and original bookmark records, plus 14 synthetic simulator scenarios and 40 focused native tests. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 validation remains pending. |
 | `1.6.5.4` | - Recover older EPUB highlights from their complete saved text when selecting a highlight from either Highlights list, searching within three pages of the resolved page hint and allowing one page boundary (#227).<br>- Support legacy Korean/CJK spacing and layout-inserted hyphens while preserving Latin word boundaries and literal saved hyphens. Require a unique complete match; never shade unrelated words using stale indices. Keep original bookmarks.bin records unchanged.<br>- Preserve exact fresh-selection ranges in the current layout, including repeated text and truncated snippets, with bounded recovery memory and no nearby-page reads during painting.<br>- Pass all 735 native tests and nine simulator scenarios. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 checks and validation against the reporter's original EPUB and bookmarks.bin remain pending. |
 | `1.6.5.3` | - Improve large Highlights lists with bounded label caching and batched SD-font glyph loading; preserve short presses across slow rendering and keep hold-to-page navigation (#227).<br>- Report actual KOReader ESP/TLS failures and the attempted server origin instead of misleading HTTP -1 responses (#221).<br>- Retry registration, authentication or manual sync once through a fresh boot only when the TLS memory check rejects the operation before any request is sent. Preserve saved profile identity, book position and reader font; keep certificate verification and prevent restart loops or replay after an uncertain registration result (#222).<br>- Show the effective KOReader server URL and correct the documented default without changing saved profiles.<br>- Pass all 719 native tests, 256-highlight simulator lists and 17 KOReader simulator checks. Physical X3/X4 TLS/restart confirmation and the separate older-highlight error remain pending. |

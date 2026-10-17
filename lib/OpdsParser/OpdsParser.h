@@ -61,6 +61,7 @@ class OpdsParser final : public Print {
   void flush() override;
 
   bool error() const;
+  bool memoryError() const { return memoryErrorOccurred; }
   bool truncated() const { return feedTruncated; }
 
   operator bool() { return !error(); }
@@ -111,5 +112,6 @@ class OpdsParser final : public Print {
   bool collectCurrentEntry = false;
 
   bool errorOccured = false;
+  bool memoryErrorOccurred = false;
   bool feedTruncated = false;
 };

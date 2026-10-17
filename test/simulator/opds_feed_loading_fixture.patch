@@ -1,0 +1,42 @@
+diff --git a/src/main.cpp b/src/main.cpp
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -36,6 +36,7 @@
+ #include "FlashcardsStore.h"
+ #include "KOReaderCredentialStore.h"
+ #include "MappedInputManager.h"
++#include "../test/simulator/OpdsFeedLoadingFixture.h"
+ #include "OpdsServerStore.h"
+ #include "ReadingStatsStore.h"
+ #include "RecentBooksStore.h"
+@@ -1035,6 +1036,12 @@
+ }
+ 
+ void loop() {
++  static bool opdsFeedFixtureStarted = false;
++  if (!opdsFeedFixtureStarted && std::getenv("CPR_OPDS_FEED_URL")) {
++    opdsFeedFixtureStarted = true;
++    startOpdsFeedLoadingFixture(renderer, mappedInputManager);
++  }
++
+   static unsigned long maxLoopDuration = 0;
+   const unsigned long loopStartTime = millis();
+ #ifdef ENABLE_SERIAL_LOG
+diff --git a/src/activities/browser/OpdsBookBrowserActivity.cpp b/src/activities/browser/OpdsBookBrowserActivity.cpp
+--- a/src/activities/browser/OpdsBookBrowserActivity.cpp
++++ b/src/activities/browser/OpdsBookBrowserActivity.cpp
+@@ -1,5 +1,6 @@
+ #include "OpdsBookBrowserActivity.h"
+ 
++#include "../../../test/simulator/OpdsFeedLoadingFixture.h"
+ #include <Arduino.h>
+ #include <FontCacheManager.h>
+ #include <GfxRenderer.h>
+@@ -102,6 +103,7 @@
+   // Loading has finished rendering. Keep font/cache and SD access away from
+   // the renderer until the new catalog (or error) is ready.
+   RenderLock lock(*this);
++  captureOpdsFeedLoadingFixture(renderer);
+   if (server.url.empty()) {
+     fail(StrId::STR_NO_SERVER_URL);
+     return;
