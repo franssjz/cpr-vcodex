@@ -9,6 +9,9 @@ if(NOT STABLE_PAGES_JSON_INCLUDE)
   FetchContent_MakeAvailable(stable_pages_arduinojson)
   set(STABLE_PAGES_JSON_INCLUDE ${stable_pages_arduinojson_SOURCE_DIR}/src)
 endif()
+# Epub.h exposes reference-page types, so parser suites that include Epub.h
+# also need the real ArduinoJson headers. Share them through the test interface.
+target_include_directories(crosspoint_test_common INTERFACE ${STABLE_PAGES_JSON_INCLUDE})
 add_executable(StablePageNumbersTest StablePageNumbersTest.cpp
   ${REPO_ROOT}/lib/Epub/Epub/StablePageNumbers.cpp)
 target_include_directories(StablePageNumbersTest PRIVATE ${STABLE_PAGES_JSON_INCLUDE} ${REPO_ROOT}/lib/Epub/Epub)
