@@ -3,11 +3,11 @@ find_path(KOREADER_JSON_INCLUDE ArduinoJson.h
   HINTS ${REPO_ROOT}/.pio/libdeps/default/ArduinoJson/src
         ${REPO_ROOT}/.pio/libdeps/gh_release/ArduinoJson/src)
 if(NOT KOREADER_JSON_INCLUDE)
-  FetchContent_Declare(koreader_arduinojson
+  FetchContent_Declare(native_arduinojson
     GIT_REPOSITORY https://github.com/bblanchon/ArduinoJson.git
     GIT_TAG v7.4.2)
-  FetchContent_MakeAvailable(koreader_arduinojson)
-  set(KOREADER_JSON_INCLUDE ${koreader_arduinojson_SOURCE_DIR}/src)
+  FetchContent_MakeAvailable(native_arduinojson)
+  set(KOREADER_JSON_INCLUDE ${native_arduinojson_SOURCE_DIR}/src)
 endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   ${REPO_ROOT}/lib/KOReaderSync/KOReaderSyncClient.cpp)

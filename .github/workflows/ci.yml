@@ -61,7 +61,8 @@ jobs:
           git diff --exit-code || (echo "Please run 'bin/clang-format-fix' to fix formatting issues" && exit 1)
 
   cppcheck:
-    runs-on: ubuntu-latest
+    # PlatformIO cppcheck needs libpcre3, which Ubuntu 26.04 no longer packages.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:

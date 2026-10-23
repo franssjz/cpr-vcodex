@@ -3,11 +3,11 @@ find_path(STABLE_PAGES_JSON_INCLUDE ArduinoJson.h
         ${REPO_ROOT}/.pio/libdeps/gh_release/ArduinoJson/src)
 if(NOT STABLE_PAGES_JSON_INCLUDE)
   include(FetchContent)
-  FetchContent_Declare(stable_pages_arduinojson
+  FetchContent_Declare(native_arduinojson
     GIT_REPOSITORY https://github.com/bblanchon/ArduinoJson.git
     GIT_TAG v7.4.2)
-  FetchContent_MakeAvailable(stable_pages_arduinojson)
-  set(STABLE_PAGES_JSON_INCLUDE ${stable_pages_arduinojson_SOURCE_DIR}/src)
+  FetchContent_MakeAvailable(native_arduinojson)
+  set(STABLE_PAGES_JSON_INCLUDE ${native_arduinojson_SOURCE_DIR}/src)
 endif()
 # Epub.h exposes reference-page types, so parser suites that include Epub.h
 # also need the real ArduinoJson headers. Share them through the test interface.
