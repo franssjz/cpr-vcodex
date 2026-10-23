@@ -1,6 +1,7 @@
 name: CI (build)
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths-ignore:
