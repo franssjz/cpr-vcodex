@@ -15,7 +15,9 @@
 #include "CrossPointState.h"
 #include "HapticFeedback.h"
 #include "OpdsServerStore.h"
+#include "ReadingStatsStore.h"
 #include "apps/AppsActivity.h"
+#include "apps/ReadingStatsActivity.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
@@ -336,6 +338,22 @@ void ActivityManager::goToUsbDrive() {
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goToApps() { replaceActivity(std::make_unique<AppsActivity>(renderer, mappedInput)); }
+
+void ActivityManager::openReadingStatsShortcut() {
+  if (!currentActivity || pendingAction != PendingAction::None || requiresExclusiveStorageLoop()) return;
+  // Repeated holds must not grow the stack, including from a statistics detail.
+  if (currentActivity->name == "ReadingStats" ||
+      std::any_of(stackActivities.begin(), stackActivities.end(),
+                  [](const auto& activity) { return activity->name == "ReadingStats"; }))
+    return;
+  auto stats = makeUniqueNoThrow<ReadingStatsActivity>(renderer, mappedInput);
+  if (!stats) return;
+  const bool fromReader = currentActivity->isReaderActivity();
+  if (fromReader) READING_STATS.pauseSession();
+  currentActivity->startActivityForResult(std::move(stats), [fromReader](const ActivityResult&) {
+    if (fromReader) READING_STATS.resumeSession();
+  });
+}
 
 void ActivityManager::goToFileBrowser(std::string path) {
   replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(path)));

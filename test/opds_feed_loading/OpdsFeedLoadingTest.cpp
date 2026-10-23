@@ -122,6 +122,16 @@ TEST_F(OpdsFeedLoading, PlainHttpDoesNotRequireTheTlsHeapFloor) {
   expectClean();
 }
 
+TEST_F(OpdsFeedLoading, HttpsAtBothTlsHeapLimitsCanLoad) {
+  feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP;
+  feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC;
+  activity.startBrowse();
+  EXPECT_EQ(activity.state, OpdsBookBrowserActivity::State::BROWSING);
+  EXPECT_EQ(feedTest.downloadCalls, 1);
+  expectClean();
+}
+
+#if OPDS_EXPECT_TLS_FLOOR
 class OpdsFeedLoadingHeapFloor : public OpdsFeedLoading, public ::testing::WithParamInterface<bool> {};
 TEST_P(OpdsFeedLoadingHeapFloor, RejectsInsufficientHeapWithoutStartingHttpOrParser) {
   if (GetParam())
@@ -135,6 +145,51 @@ TEST_P(OpdsFeedLoadingHeapFloor, RejectsInsufficientHeapWithoutStartingHttpOrPar
   EXPECT_EQ(feedTest.parserCreations, 0);
 }
 INSTANTIATE_TEST_SUITE_P(HeapLimits, OpdsFeedLoadingHeapFloor, ::testing::Bool());
+#else
+class OpdsFeedLoadingC3LowHeap : public OpdsFeedLoading, public ::testing::WithParamInterface<int> {};
+TEST_P(OpdsFeedLoadingC3LowHeap, HttpsBelowWolfSslLimitsStillAttemptsTransportAndCanLoad) {
+  if (GetParam() & 1) feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP - 1;
+  if (GetParam() & 2) feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC - 1;
+  feedTest.files[feedTempPath] = "stale contents";
+
+  activity.startBrowse();
+
+  ASSERT_EQ(activity.state, OpdsBookBrowserActivity::State::BROWSING);
+  ASSERT_EQ(activity.entries.size(), 1u);
+  EXPECT_EQ(activity.entries.front().title, "Book 0");
+  EXPECT_EQ(feedTest.downloadCalls, 1);
+  EXPECT_EQ(feedTest.parserCreations, 1);
+  EXPECT_EQ(feedTest.requestedUrl, "https://library.example/opds");
+  EXPECT_LT(eventIndex("http-end"), eventIndex("parser-create"));
+  expectClean();
+}
+INSTANTIATE_TEST_SUITE_P(C3HeapLimits, OpdsFeedLoadingC3LowHeap, ::testing::Values(1, 2, 3));
+
+TEST_F(OpdsFeedLoading, TransportFailureBelowWolfSslLimitsCleansUpAndCanRetryAtTheSameHeap) {
+  feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP - 1;
+  feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC - 1;
+  feedTest.downloadResult = HttpDownloader::HTTP_ERROR;
+  feedTest.files[feedTempPath] = "stale contents";
+
+  activity.startBrowse();
+
+  expectFailure(STR_FETCH_FEED_FAILED);
+  EXPECT_EQ(feedTest.downloadCalls, 1);
+  EXPECT_EQ(feedTest.parserCreations, 0);
+  EXPECT_LT(eventIndex("file-remove"), eventIndex("http-start"));
+
+  feedTest.downloadResult = HttpDownloader::OK;
+  activity.startBrowse();
+
+  EXPECT_EQ(activity.state, OpdsBookBrowserActivity::State::BROWSING);
+  EXPECT_EQ(activity.entries.size(), 1u);
+  EXPECT_EQ(feedTest.downloadCalls, 2);
+  EXPECT_EQ(feedTest.parserCreations, 1);
+  EXPECT_EQ(feedTest.freeHeap, HttpDownloader::MIN_TLS_FREE_HEAP - 1);
+  EXPECT_EQ(feedTest.maxAlloc, HttpDownloader::MIN_TLS_MAX_ALLOC - 1);
+  expectClean();
+}
+#endif
 
 TEST_F(OpdsFeedLoading, MissingServerUrlDoesNotStartTransfer) {
   activity.server.url.clear();
@@ -244,16 +299,26 @@ TEST_F(OpdsFeedLoading, ValidEmptyFeedUsesNoEntriesMessage) {
 }
 
 TEST_F(OpdsFeedLoading, BufferAllocationFailureUsesMemoryMessageAndCleansFile) {
+#if !OPDS_EXPECT_TLS_FLOOR
+  feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP - 1;
+  feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC - 1;
+#endif
   feedTest.failBufferAllocation = true;
   activity.startBrowse();
   expectFailure(STR_MEMORY_ERROR);
+  EXPECT_EQ(feedTest.downloadCalls, 1);
   EXPECT_EQ(feedTest.parserCreations, 0);
 }
 
 TEST_F(OpdsFeedLoading, ParserAllocationFailureUsesMemoryMessageAndCleansFile) {
+#if !OPDS_EXPECT_TLS_FLOOR
+  feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP - 1;
+  feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC - 1;
+#endif
   feedTest.failParserCreation = true;
   activity.startBrowse();
   expectFailure(STR_MEMORY_ERROR);
+  EXPECT_EQ(feedTest.downloadCalls, 1);
   EXPECT_EQ(feedTest.parserCreations, 1);
   EXPECT_EQ(feedTest.readCalls, 0);
 }
@@ -277,6 +342,10 @@ TEST_F(OpdsFeedLoading, GoodBadGoodFeedSequenceRecoversWithoutRestart) {
 }
 
 TEST_F(OpdsFeedLoading, RetryAfterParserAllocationFailureRecovers) {
+#if !OPDS_EXPECT_TLS_FLOOR
+  feedTest.freeHeap = HttpDownloader::MIN_TLS_FREE_HEAP - 1;
+  feedTest.maxAlloc = HttpDownloader::MIN_TLS_MAX_ALLOC - 1;
+#endif
   feedTest.failParserCreation = true;
   activity.startBrowse();
   expectFailure(STR_MEMORY_ERROR);

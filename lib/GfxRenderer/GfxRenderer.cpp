@@ -640,6 +640,10 @@ void GfxRenderer::drawGlyphBitmap(const uint8_t* bitmap, const int width, const 
                                    : mode == GRAYSCALE_MSB ? glyphBitmap::Plane::GrayMSB
                                                            : glyphBitmap::Plane::GrayLSB;
   const bool inkState = (darkMode && mode == BW) ? !state : state;
+  if (_stripMsbBuf) {
+    glyphBitmap::drawGrayscale(bitmap, width, height, twoBit, inkState, target, _stripMsbBuf, clip, textDarkness);
+    return;
+  }
   glyphBitmap::draw(bitmap, width, height, twoBit, plane, inkState, target, clip, textDarkness);
 }
 
@@ -677,8 +681,10 @@ void GfxRenderer::drawPixelRaw(const int x, const int y, const bool state) const
 
   if (state) {
     target[byteIndex] &= ~(1 << bitPosition);  // Clear bit
+    if (_stripMsbBuf) _stripMsbBuf[byteIndex] &= ~(1 << bitPosition);
   } else {
     target[byteIndex] |= 1 << bitPosition;  // Set bit
+    if (_stripMsbBuf) _stripMsbBuf[byteIndex] |= 1 << bitPosition;
   }
 }
 
@@ -1117,7 +1123,6 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
   int physicalY1 = std::max(cornerAY, cornerBY);
   if (physicalX0 < 0 || physicalX1 >= panelWidth || physicalY0 < 0 || physicalY1 >= panelHeight) return;
 
-  uint8_t* target = getWriteTarget();
   const int originY = getWriteOriginY();
   const int writeRows = getWriteRows();
   physicalY0 = std::max(physicalY0, originY);
@@ -1131,117 +1136,121 @@ void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const 
   const uint32_t panelStride = panelWidthBytes;
   const bool invertForDarkMode = darkMode && renderMode == BW;
 
-  if constexpr (color == Color::Black || color == Color::White) {
-    const bool fillBlack = invertForDarkMode ? color == Color::White : color == Color::Black;
-    const uint8_t fillByte = fillBlack ? 0x00u : 0xFFu;
-    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
-      uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
-      if (byteStart == byteEnd) {
-        const uint8_t mask = headMask & tailMask;
-        if (fillBlack) {
-          row[byteStart] &= static_cast<uint8_t>(~mask);
+  const auto fillTarget = [&](uint8_t* target) {
+    if constexpr (color == Color::Black || color == Color::White) {
+      const bool fillBlack = invertForDarkMode ? color == Color::White : color == Color::Black;
+      const uint8_t fillByte = fillBlack ? 0x00u : 0xFFu;
+      for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+        uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
+        if (byteStart == byteEnd) {
+          const uint8_t mask = headMask & tailMask;
+          if (fillBlack) {
+            row[byteStart] &= static_cast<uint8_t>(~mask);
+          } else {
+            row[byteStart] |= mask;
+          }
+        } else if (fillBlack) {
+          row[byteStart] &= static_cast<uint8_t>(~headMask);
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] &= static_cast<uint8_t>(~tailMask);
         } else {
-          row[byteStart] |= mask;
+          row[byteStart] |= headMask;
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] |= tailMask;
         }
-      } else if (fillBlack) {
-        row[byteStart] &= static_cast<uint8_t>(~headMask);
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
-        }
-        row[byteEnd] &= static_cast<uint8_t>(~tailMask);
-      } else {
-        row[byteStart] |= headMask;
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
-        }
-        row[byteEnd] |= tailMask;
       }
-    }
-  } else {
-    static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+    } else {
+      static constexpr uint8_t BAYER_4X4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
-    int logicalDeltaXPerPhysicalX = 0;
-    int logicalDeltaYPerPhysicalX = 0;
-    switch (orientation) {
-      case Portrait:
-        logicalDeltaXPerPhysicalX = 0;
-        logicalDeltaYPerPhysicalX = 1;
-        break;
-      case PortraitInverted:
-        logicalDeltaXPerPhysicalX = 0;
-        logicalDeltaYPerPhysicalX = -1;
-        break;
-      case LandscapeClockwise:
-        logicalDeltaXPerPhysicalX = -1;
-        logicalDeltaYPerPhysicalX = 0;
-        break;
-      case LandscapeCounterClockwise:
-        logicalDeltaXPerPhysicalX = 1;
-        logicalDeltaYPerPhysicalX = 0;
-        break;
-    }
-
-    uint8_t blackMasks[4] = {};
-    for (int parityIndex = 0; parityIndex < 4; ++parityIndex) {
-      const int samplePhysicalY = physicalY0 + parityIndex;
-      int logicalXBase = 0;
-      int logicalYBase = 0;
+      int logicalDeltaXPerPhysicalX = 0;
+      int logicalDeltaYPerPhysicalX = 0;
       switch (orientation) {
         case Portrait:
-          logicalXBase = panelHeight - 1 - samplePhysicalY;
-          logicalYBase = byteStart * 8;
+          logicalDeltaXPerPhysicalX = 0;
+          logicalDeltaYPerPhysicalX = 1;
           break;
         case PortraitInverted:
-          logicalXBase = samplePhysicalY;
-          logicalYBase = panelWidth - 1 - byteStart * 8;
+          logicalDeltaXPerPhysicalX = 0;
+          logicalDeltaYPerPhysicalX = -1;
           break;
         case LandscapeClockwise:
-          logicalXBase = panelWidth - 1 - byteStart * 8;
-          logicalYBase = panelHeight - 1 - samplePhysicalY;
+          logicalDeltaXPerPhysicalX = -1;
+          logicalDeltaYPerPhysicalX = 0;
           break;
         case LandscapeCounterClockwise:
-          logicalXBase = byteStart * 8;
-          logicalYBase = samplePhysicalY;
+          logicalDeltaXPerPhysicalX = 1;
+          logicalDeltaYPerPhysicalX = 0;
           break;
       }
 
-      uint8_t mask = 0;
-      for (int bit = 0; bit < 8; ++bit) {
-        const int logicalX = logicalXBase + bit * logicalDeltaXPerPhysicalX;
-        const int logicalY = logicalYBase + bit * logicalDeltaYPerPhysicalX;
-        bool isBlack = false;
-        if constexpr (color == Color::LightGray) {
-          isBlack = ((logicalX & 1) == 0) && ((logicalY & 1) == 0);
-        } else if constexpr (color == Color::DarkGray) {
-          isBlack = (((logicalX + logicalY) & 1) == 0);
-        } else {
-          isBlack = BAYER_4X4[logicalY & 3][logicalX & 3] < static_cast<uint8_t>(color);
+      uint8_t blackMasks[4] = {};
+      for (int parityIndex = 0; parityIndex < 4; ++parityIndex) {
+        const int samplePhysicalY = physicalY0 + parityIndex;
+        int logicalXBase = 0;
+        int logicalYBase = 0;
+        switch (orientation) {
+          case Portrait:
+            logicalXBase = panelHeight - 1 - samplePhysicalY;
+            logicalYBase = byteStart * 8;
+            break;
+          case PortraitInverted:
+            logicalXBase = samplePhysicalY;
+            logicalYBase = panelWidth - 1 - byteStart * 8;
+            break;
+          case LandscapeClockwise:
+            logicalXBase = panelWidth - 1 - byteStart * 8;
+            logicalYBase = panelHeight - 1 - samplePhysicalY;
+            break;
+          case LandscapeCounterClockwise:
+            logicalXBase = byteStart * 8;
+            logicalYBase = samplePhysicalY;
+            break;
         }
-        if (invertForDarkMode) {
-          isBlack = !isBlack;
-        }
-        if (isBlack) {
-          mask |= static_cast<uint8_t>(1u << (7 - bit));
-        }
-      }
-      blackMasks[samplePhysicalY & 3] = mask;
-    }
 
-    for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
-      const uint8_t whiteMask = static_cast<uint8_t>(~blackMasks[physicalY & 3]);
-      uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
-      if (byteStart == byteEnd) {
-        const uint8_t rectMask = headMask & tailMask;
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
-      } else {
-        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
-        if (byteEnd > byteStart + 1) {
-          memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+        uint8_t mask = 0;
+        for (int bit = 0; bit < 8; ++bit) {
+          const int logicalX = logicalXBase + bit * logicalDeltaXPerPhysicalX;
+          const int logicalY = logicalYBase + bit * logicalDeltaYPerPhysicalX;
+          bool isBlack = false;
+          if constexpr (color == Color::LightGray) {
+            isBlack = ((logicalX & 1) == 0) && ((logicalY & 1) == 0);
+          } else if constexpr (color == Color::DarkGray) {
+            isBlack = (((logicalX + logicalY) & 1) == 0);
+          } else {
+            isBlack = BAYER_4X4[logicalY & 3][logicalX & 3] < static_cast<uint8_t>(color);
+          }
+          if (invertForDarkMode) {
+            isBlack = !isBlack;
+          }
+          if (isBlack) {
+            mask |= static_cast<uint8_t>(1u << (7 - bit));
+          }
         }
-        row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
+        blackMasks[samplePhysicalY & 3] = mask;
+      }
+
+      for (int physicalY = physicalY0; physicalY <= physicalY1; ++physicalY) {
+        const uint8_t whiteMask = static_cast<uint8_t>(~blackMasks[physicalY & 3]);
+        uint8_t* row = target + static_cast<uint32_t>(physicalY - originY) * panelStride;
+        if (byteStart == byteEnd) {
+          const uint8_t rectMask = headMask & tailMask;
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
+        } else {
+          row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
+        }
       }
     }
-  }
+  };
+  fillTarget(getWriteTarget());
+  if (_stripMsbBuf) fillTarget(_stripMsbBuf);
 }
 
 template void GfxRenderer::fillRectImpl<Color::Black>(int, int, int, int) const;
@@ -1805,6 +1814,7 @@ void GfxRenderer::clearScreen(const uint8_t color) const {
   if (_stripActive) {
     // Clear only the active band's scratch, not the shared framebuffer.
     memset(_stripBuf, effectiveColor, static_cast<size_t>(panelWidthBytes) * _stripRows);
+    if (_stripMsbBuf) memset(_stripMsbBuf, effectiveColor, static_cast<size_t>(panelWidthBytes) * _stripRows);
     return;
   }
   display.clearScreen(effectiveColor);
@@ -1816,14 +1826,22 @@ void GfxRenderer::beginStripTarget(uint8_t* scratch, int stripY0, int stripRows)
   // the downstream uint16_t cast in writeGrayscalePlaneStrip.
   assert(scratch != nullptr && stripRows > 0 && stripY0 >= 0 && stripY0 <= static_cast<int>(panelHeight) - stripRows);
   _stripBuf = scratch;
+  _stripMsbBuf = nullptr;
   _stripY0 = stripY0;
   _stripRows = stripRows;
   _stripActive = true;
 }
 
+void GfxRenderer::beginTextGrayscaleStripTargets(uint8_t* lsb, uint8_t* msb, int stripY0, int stripRows) const {
+  assert(msb != nullptr && msb != lsb && renderMode == GRAYSCALE_LSB && !grayPlanesAreAbsolute());
+  beginStripTarget(lsb, stripY0, stripRows);
+  _stripMsbBuf = msb;
+}
+
 void GfxRenderer::endStripTarget() const {
   _stripActive = false;
   _stripBuf = nullptr;
+  _stripMsbBuf = nullptr;
   _stripY0 = 0;
   _stripRows = 0;
 }

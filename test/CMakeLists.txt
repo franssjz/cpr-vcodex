@@ -86,6 +86,7 @@ add_subdirectory(page_link)
 # Fork (CPR-vCodex) suites
 add_subdirectory(reader_position)
 add_subdirectory(reader_regressions)
+add_subdirectory(stable_page_numbers)
 add_subdirectory(language_settings)
 add_subdirectory(ota_update)
 add_subdirectory(jpegdec)

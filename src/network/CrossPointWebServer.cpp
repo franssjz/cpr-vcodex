@@ -336,6 +336,7 @@ constexpr StrId OPT_LONG_PRESS_MENU[] = {StrId::STR_KOSYNC, StrId::STR_DISABLED,
                                          StrId::STR_DICTIONARY, StrId::STR_READER_MENU};
 constexpr StrId OPT_LONG_PRESS_BEHAVIOR[] = {StrId::STR_LONG_PRESS_BEHAVIOR_OFF, StrId::STR_LONG_PRESS_BEHAVIOR_SKIP,
                                              StrId::STR_LONG_PRESS_BEHAVIOR_ORIENTATION};
+constexpr StrId OPT_LONG_PWR[] = {StrId::STR_SLEEP, StrId::STR_READING_STATS};
 constexpr StrId OPT_SHORT_PWR[] = {StrId::STR_IGNORE,
                                    StrId::STR_SLEEP,
                                    StrId::STR_PAGE_TURN,
@@ -461,6 +462,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
                StrId::STR_CAT_CONTROLS),
     WEB_ENUM(StrId::STR_LONG_PRESS_BEHAVIOR, longPressButtonBehavior, OPT_LONG_PRESS_BEHAVIOR,
              "longPressButtonBehavior", StrId::STR_CAT_CONTROLS),
+    WEB_ENUM(StrId::STR_LONG_PWR_BTN, longPwrBtn, OPT_LONG_PWR, "longPwrBtn", StrId::STR_CAT_CONTROLS),
     WEB_ENUM(StrId::STR_SHORT_PWR_BTN, shortPwrBtn, OPT_SHORT_PWR, "shortPwrBtn", StrId::STR_CAT_CONTROLS),
     WEB_ENUM(StrId::STR_TILT_PAGE_TURN, tiltPageTurn, OPT_TILT_PAGE_TURN, "tiltPageTurn", StrId::STR_CAT_CONTROLS),
 
@@ -530,6 +532,7 @@ constexpr WebSettingDef WEB_SETTINGS[] = {
     WEB_ENUM(StrId::STR_OPDS_FILENAME_FORMAT, opdsFilenameFormat, OPT_OPDS_FILENAME_FORMAT, "opdsFilenameFormat",
              StrId::STR_KOREADER_SYNC),
 
+    WEB_TOGGLE(StrId::STR_STABLE_PAGE_NUMBERS, stablePageNumbers, "stablePageNumbers", StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_TOGGLE(StrId::STR_CHAPTER_PAGE_COUNT, statusBarChapterPageCount, "statusBarChapterPageCount",
                StrId::STR_CUSTOMISE_STATUS_BAR),
     WEB_TOGGLE(StrId::STR_BOOK_PROGRESS_PERCENTAGE, statusBarBookProgressPercentage, "statusBarBookProgressPercentage",

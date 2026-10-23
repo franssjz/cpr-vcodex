@@ -389,6 +389,7 @@ void EpubReaderActivity::onEnter() {
   appliedOrientation = SETTINGS.orientation;
 
   epub->setupCacheDir();
+  if (SETTINGS.stablePageNumbers) epub->loadStablePageNumbers();
   applyPendingSyncSession();
   stableBookId = BookIdentity::resolveStableBookId(epub->getPath());
   bookmarkStore.load(epub->getCachePath(), stableBookId);
@@ -1469,6 +1470,10 @@ EpubReaderActivity::ReaderSettingsSnapshot EpubReaderActivity::captureReaderSett
 }
 
 void EpubReaderActivity::applyReaderSettingsChanges(const ReaderSettingsSnapshot& before) {
+  if (epub && SETTINGS.stablePageNumbers) {
+    RenderLock lock(*this);
+    epub->loadStablePageNumbers();
+  }
   const bool fontChanged = before.fontFamily != SETTINGS.fontFamily || before.fontPointSize != SETTINGS.fontPointSize ||
                            before.sdFontFamilyName != SETTINGS.sdFontFamilyName;
   const bool bionicNormalLayoutChanged = (before.bionicReading == CrossPointSettings::BIONIC_READING_NORMAL) !=
@@ -2911,6 +2916,16 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
     const int gh = renderer.getDisplayHeight();
     const int gwBytes = renderer.getDisplayWidthBytes();
     const size_t planeBytes = static_cast<size_t>(gwBytes) * gh;
+    // A4 also redraws status-bar bitmaps in this pass; raw image writers only
+    // support a single target. Keep those pages on the existing path as well.
+    const bool dualTextPlanes = needsTextGrayscale && !pageHasImages && !BoardConfig::isEegoA4() &&
+                                grayscale.encoding == HalDisplay::GrayscaleEncoding::OverlayMasks;
+    const auto renderTextStrip = [&](uint8_t* lsb, uint8_t* msb, int y, int rows) {
+      renderer.beginTextGrayscaleStripTargets(lsb, msb, y, rows);
+      renderer.clearScreen(0x00);
+      renderGrayscalePass();
+      renderer.endStripTarget();
+    };
 
     auto renderPlaneToBuffer = [&](const bool lsbPlane, uint8_t* buf) {
       renderer.setRenderMode(lsbPlane ? GfxRenderer::GRAYSCALE_LSB : GfxRenderer::GRAYSCALE_MSB);
@@ -2925,6 +2940,8 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
 
     constexpr size_t PLANE_BUF_HEADROOM = 60000;
     constexpr size_t PLANE_BUF_MAX_ALLOC_RESERVE = 16 * 1024;
+    const auto grayFreeHeap = ESP.getFreeHeap();
+    const auto grayMaxAlloc = ESP.getMaxAllocHeap();
     const auto planeBufFits = [planeBytes] {
       return ESP.getFreeHeap() >= planeBytes + PLANE_BUF_HEADROOM &&
              ESP.getMaxAllocHeap() >= planeBytes + PLANE_BUF_MAX_ALLOC_RESERVE;
@@ -2933,8 +2950,17 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
     auto msbPlaneBuf = (lsbPlaneBuf && planeBufFits()) ? makeUniqueNoThrow<uint8_t[]>(planeBytes) : nullptr;
 
     if (lsbPlaneBuf) {
-      renderPlaneToBuffer(true, lsbPlaneBuf.get());
-      if (msbPlaneBuf) renderPlaneToBuffer(false, msbPlaneBuf.get());
+      if (dualTextPlanes && msbPlaneBuf) {
+        renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
+        for (int y = 0; y < gh; y += STRIP_ROWS) {
+          const int rows = std::min(STRIP_ROWS, gh - y);
+          const size_t offset = static_cast<size_t>(y) * gwBytes;
+          renderTextStrip(lsbPlaneBuf.get() + offset, msbPlaneBuf.get() + offset, y, rows);
+        }
+      } else {
+        renderPlaneToBuffer(true, lsbPlaneBuf.get());
+        if (msbPlaneBuf) renderPlaneToBuffer(false, msbPlaneBuf.get());
+      }
       const auto tGrayRender = millis();
 
       renderer.waitRefreshComplete();
@@ -2958,12 +2984,24 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
 
       LOG_DBG("ERS",
               "Page render (tiled async): prewarm=%lums bw_render=%lums display=%lums gray_render=%lums "
-              "wait=%lums gray_write=%lums gray_display=%lums cleanup=%lums total=%lums (planes buffered: %d)",
+              "wait=%lums gray_write=%lums gray_display=%lums cleanup=%lums total=%lums "
+              "(planes buffered: %d) dual=%d heap=%u max_alloc=%u",
               tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tGrayRender - tDisplay, tWait - tGrayRender,
-              tGrayWrite - tWait, tGrayDisplay - tGrayWrite, tEnd - tGrayDisplay, tEnd - t0, msbPlaneBuf ? 2 : 1);
+              tGrayWrite - tWait, tGrayDisplay - tGrayWrite, tEnd - tGrayDisplay, tEnd - t0, msbPlaneBuf ? 2 : 1,
+              dualTextPlanes && msbPlaneBuf ? 1 : 0, grayFreeHeap, grayMaxAlloc);
     } else {
-      auto scratch = makeUniqueNoThrow<uint8_t[]>(static_cast<size_t>(gwBytes) * STRIP_ROWS);
+      const size_t stripBytes = static_cast<size_t>(gwBytes) * STRIP_ROWS;
+      auto scratch = makeUniqueNoThrow<uint8_t[]>(stripBytes);
+      // Optional once-per-page scratch, never per strip/glyph. Leave room for
+      // font decoding, including a contiguous block; memory pressure keeps
+      // the original two-pass path.
+      constexpr size_t TEXT_STRIP_HEADROOM = 16 * 1024;
+      auto msbScratch = (scratch && dualTextPlanes && ESP.getFreeHeap() >= stripBytes + TEXT_STRIP_HEADROOM &&
+                         ESP.getMaxAllocHeap() >= stripBytes + TEXT_STRIP_HEADROOM)
+                            ? makeUniqueNoThrow<uint8_t[]>(stripBytes)
+                            : nullptr;
       renderer.waitRefreshComplete();
+      const auto tGrayStart = millis();
       if (!scratch) {
         LOG_ERR("ERS", "OOM: grayscale strip scratch (%d bytes); skipping AA this page", gwBytes * STRIP_ROWS);
         if (overlapRefresh || combinedGrayscaleBase) {
@@ -2979,16 +3017,21 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
         renderer.setRenderMode(GfxRenderer::GRAYSCALE_LSB);
         for (int y = 0; y < gh; y += STRIP_ROWS) {
           const int rows = (gh - y < STRIP_ROWS) ? (gh - y) : STRIP_ROWS;
-          renderer.beginStripTarget(scratch.get(), y, rows);
-          renderer.clearScreen(0x00);
-          renderGrayscalePass();
-          renderer.endStripTarget();
+          if (msbScratch) {
+            renderTextStrip(scratch.get(), msbScratch.get(), y, rows);
+          } else {
+            renderer.beginStripTarget(scratch.get(), y, rows);
+            renderer.clearScreen(0x00);
+            renderGrayscalePass();
+            renderer.endStripTarget();
+          }
           renderer.writeGrayscalePlaneStrip(true, scratch.get(), y, rows);
+          if (msbScratch) renderer.writeGrayscalePlaneStrip(false, msbScratch.get(), y, rows);
         }
         const auto tGrayLsb = millis();
 
         renderer.setRenderMode(GfxRenderer::GRAYSCALE_MSB);
-        for (int y = 0; y < gh; y += STRIP_ROWS) {
+        for (int y = 0; !msbScratch && y < gh; y += STRIP_ROWS) {
           const int rows = (gh - y < STRIP_ROWS) ? (gh - y) : STRIP_ROWS;
           renderer.beginStripTarget(scratch.get(), y, rows);
           renderer.clearScreen(0x00);
@@ -3007,10 +3050,12 @@ void EpubReaderActivity::renderContents(std::shared_ptr<Page> page, const int or
 
         const auto tEnd = millis();
         LOG_DBG("ERS",
-                "Page render (tiled): prewarm=%lums bw_render=%lums display=%lums gray_lsb=%lums "
-                "gray_msb=%lums gray_display=%lums cleanup=%lums total=%lums",
-                tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tGrayLsb - tDisplay, tGrayMsb - tGrayLsb,
-                tGrayDisplay - tGrayMsb, tCleanup - tGrayDisplay, tEnd - t0);
+                "Page render (tiled): prewarm=%lums bw_render=%lums display=%lums wait_alloc=%lums "
+                "gray_render_upload=%lums gray_lsb_or_dual=%lums gray_msb=%lums gray_display=%lums "
+                "cleanup=%lums total=%lums dual=%d heap=%u max_alloc=%u",
+                tPrewarm - t0, tBwRender - tPrewarm, tDisplay - tBwRender, tGrayStart - tDisplay, tGrayMsb - tGrayStart,
+                tGrayLsb - tGrayStart, tGrayMsb - tGrayLsb, tGrayDisplay - tGrayMsb, tCleanup - tGrayDisplay, tEnd - t0,
+                msbScratch ? 1 : 0, grayFreeHeap, grayMaxAlloc);
       }
     }
   } else {
@@ -3092,8 +3137,14 @@ void EpubReaderActivity::renderStatusBar() const {
     title = epub->getTitle();
   }
 
+  uint32_t referencePage = 0;
+  uint32_t referenceCount = 0;
+  if (SETTINGS.stablePageNumbers && pageCount > 0) {
+    epub->resolveReferencePage(currentSpineIndex, static_cast<float>(section->currentPage) / pageCount, referencePage,
+                               referenceCount);
+  }
   GUI.drawStatusBar(renderer, bookProgress, currentPage, pageCount, title, 0, textYOffset, true, currentPageBookmarked,
-                    section->isBuilding());
+                    section->isBuilding() || section->isPartial(), referencePage, referenceCount);
 }
 
 void EpubReaderActivity::renderSectionLoadFailure() {

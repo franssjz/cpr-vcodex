@@ -28,6 +28,7 @@ Some of the main additions include:
 
 - full reading analytics: reading stats, heatmaps, day detail, reading profile, session history, goals, streaks, and achievements
 - Sync Day support for reliable offline day-based statistics on hardware without a trustworthy sleep RTC
+- optional fixed EPUB reference-page totals from CrossInk/Inky metadata and a configurable hold-Power shortcut to Reading Stats
 - per-book statistics tools, including reading-time correction, start-date editing, and per-book stats reset
 - StarDict dictionary support from the SD card, with selectable monolingual and translation dictionaries, per-language folders, reader word lookup, suggestions, and lookup history
 - offline Flashcards with CSV decks, multiple study modes, recents, stats, and session summaries
@@ -58,14 +59,34 @@ The philosophy of this fork is simple: keep the firmware fast, stable, and focus
 | Changelog | [CHANGELOG.md](./CHANGELOG.md) |
 | Current release sync | CrossPoint Reader `develop` [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), checked on 2026-10-07; preserves the fork's statistics, Sync Day, highlights, dictionaries, flashcards, themes and release tooling. |
 | Current work | Validate real OTA/SD updates, panel variants, sleep/wake and recovery on X3/X4. [Audit and validation status](agent-docs/stability-audit-2026-09.md). |
-| Release validation | All 785 native tests pass, including 50 new OPDS loading, parser-memory and SD-write cases. The simulator opens a valid shelf, handles a failed shelf and reopens the valid shelf without restarting. Previous highlight and KOReader regression coverage is retained. Physical X3/X4 checks, the reporter's Grimmory catalog, real-device TLS recovery and end-to-end OTA remain pending. [OPDS results and limits](agent-docs/issue-228-opds-memory.md) · [Earlier validation](agent-docs/issues-221-222-227-2026-10.md). |
+| Release validation | Native regression tests and simulator checks cover reference-page metadata, the statistics shortcut, reading-time accounting, antialiasing composition and OPDS recovery. Physical X3/X4 timings, panel appearance, buttons, the reporter's Grimmory catalog and end-to-end OTA/SD checks remain pending. [Reference pages](agent-docs/issue-207-stable-page-numbers.md) · [OPDS](agent-docs/issue-228-opds-memory.md) · [Antialiasing](agent-docs/issue-229-text-antialiasing.md). |
 | Base firmware line | CPR-vCodex `1.6.5`, incorporating upstream `develop` through [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b). |
 | Latest references reviewed | CrossPoint [`aa994cf7`](https://github.com/crosspoint-reader/crosspoint-reader/commit/aa994cf7bf8fb3fd0e08c7c264ae1802c818ab86), its allocation checks in [`3555ff55`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3555ff5569754933be2e0839a583748b42dbe941), and CrossInk [`7a092e88`](https://github.com/uxjulia/CrossInk/commit/7a092e8822c9c90e8beecacd317acc13d3e24dfb). Selected changes and exclusions are recorded in the stability audit. |
 | Latest official commit incorporated | [`28971493`](https://github.com/crosspoint-reader/crosspoint-reader/commit/28971493dcc2b32804601785a31960a740351f2b), with FreeInk SDK `9729236c`. See [integration decisions](agent-docs/upstream-sync.md). |
 | Intentional upstream exclusions | Additional upstream device/theme variants remain outside the supported CPR-vCodex release targets unless explicitly documented. |
 | Firmware targets | `default`/`gh_release` build the ESP32-C3 binary shared by X4 and X3 (runtime panel detection). Tags publish only `<tag>.bin`; X4 Pro release assets, OTA entries, and browser flashing are blocked. |
 
-## What's new in 1.6.5.6
+## What's new in 1.6.5.7
+
+- **Stable Page Numbers (EPUB)**: enable this in Settings > Reader > Customise
+  Status Bar for EPUBs prepared with CrossInk/Inky `META-INF/x-locations.json`.
+  The whole-book reference total stays fixed across font and layout changes;
+  the current reference page is approximate. Books without usable metadata
+  keep chapter pages. The option defaults off and does not generate metadata.
+- **Hold Power for Reading Stats**: select Reading Stats under Settings >
+  Controls > Long Power Button Press. Back returns to your book, and time
+  spent viewing statistics does not count as reading time. Sleep stays the default.
+- **Text antialiasing** shares the work for both gray masks when memory permits,
+  with a low-memory fallback. Panel waveforms and image grayscale are preserved.
+  Actual X3/X4 page-turn improvements still need physical measurement.
+- **OPDS follow-up** removes a memory check introduced in 1.6.5.6 that could
+  reject X3/X4 HTTPS catalogs before trying the connection. SD staging and
+  error recovery remain in place. The reporter's Grimmory setup still needs
+  confirmation on X3.
+
+See the [changelog](CHANGELOG.md) for validation details and remaining limits.
+
+## Previous release: 1.6.5.6
 
 - Reduce memory pressure when opening OPDS catalogs by downloading the feed to
   a temporary SD file and closing the network connection before processing it.

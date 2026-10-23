@@ -1227,7 +1227,7 @@ void ReadingStatsStore::beginSession(const std::string& path, const std::string&
 }
 
 void ReadingStatsStore::noteActivity() {
-  if (!activeSession.active || activeSession.bookIndex >= books.size()) {
+  if (!activeSession.active || activeSession.paused || activeSession.bookIndex >= books.size()) {
     return;
   }
 
@@ -1264,10 +1264,17 @@ void ReadingStatsStore::tickActiveSession() {
   noteActivity();
 }
 
+void ReadingStatsStore::pauseSession() {
+  if (!activeSession.active) return;
+  noteActivity();
+  activeSession.paused = true;
+}
+
 void ReadingStatsStore::resumeSession() {
   if (!activeSession.active) {
     return;
   }
+  activeSession.paused = false;
   activeSession.lastInteractionMs = millis();
 }
 

@@ -1050,7 +1050,8 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 
 void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                               const int pageCount, std::string title, const int paddingBottom, const int textYOffset,
-                              const bool fillMargin, const bool isPageBookmarked, const bool pageCountEstimated) const {
+                              const bool fillMargin, const bool isPageBookmarked, const bool pageCountEstimated,
+                              const uint32_t referencePage, const uint32_t referencePageCount) const {
   auto metrics = UITheme::getInstance().getMetrics();
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
   renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
@@ -1072,14 +1073,17 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
     char progressStr[32];
 
     // Draw the estimate marker separately so it can use the next UI font size.
-    const bool showEstimate = pageCountEstimated && sb.showChapterPageCount;
+    const bool stable = SETTINGS.stablePageNumbers && referencePageCount > 0;
+    const int displayPage = stable ? static_cast<int>(referencePage) : currentPage;
+    const int displayCount = stable ? static_cast<int>(referencePageCount) : pageCount;
+    const bool showEstimate = pageCountEstimated && sb.showChapterPageCount && !stable;
 
     if (sb.showBookProgressPercent && sb.showChapterPageCount) {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d  %.0f%%", currentPage, pageCount, bookProgress);
+      snprintf(progressStr, sizeof(progressStr), "%d/%d  %.0f%%", displayPage, displayCount, bookProgress);
     } else if (sb.showBookProgressPercent) {
       snprintf(progressStr, sizeof(progressStr), "%.0f%%", bookProgress);
     } else {
-      snprintf(progressStr, sizeof(progressStr), "%d/%d", currentPage, pageCount);
+      snprintf(progressStr, sizeof(progressStr), "%d/%d", displayPage, displayCount);
     }
 
     int progressTextWidth = renderer.getTextWidth(SMALL_FONT_ID, progressStr);

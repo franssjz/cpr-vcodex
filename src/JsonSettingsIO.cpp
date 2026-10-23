@@ -653,6 +653,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
       if (needsResave) *needsResave = true;
     }
   }
+  loadEnum("longPwrBtn", s.longPwrBtn, CrossPointSettings::LONG_PWRBTN_COUNT);
   loadEnum("tiltPageTurn", s.tiltPageTurn, CrossPointSettings::TILT_PAGE_TURN_COUNT);
   // Auto-sleep: minutes since the upstream merge; older files hold the SLEEP_TIMEOUT enum.
   if (!doc["sleepTimeoutMinutes"].isNull()) {
@@ -696,6 +697,7 @@ bool loadSettingsDirect(CrossPointSettings& s, const JsonDocument& doc, bool* ne
     s.opdsPassword[sizeof(s.opdsPassword) - 1] = '\0';
   }
 
+  loadToggle("stablePageNumbers", s.stablePageNumbers);
   loadToggle("statusBarChapterPageCount", s.statusBarChapterPageCount);
   loadToggle("statusBarBookProgressPercentage", s.statusBarBookProgressPercentage);
   loadEnum("statusBarProgressBar", s.statusBarProgressBar, CrossPointSettings::STATUS_BAR_PROGRESS_BAR_COUNT);
@@ -1121,6 +1123,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["longPressChapterSkip"] = s.longPressButtonBehavior == CrossPointSettings::LONG_PRESS_CHAPTER_SKIP;
   doc["longPressMenuFunction"] = s.longPressMenuFunction;
   doc["shortPwrBtn"] = s.shortPwrBtn;
+  doc["longPwrBtn"] = s.longPwrBtn;
   doc["pwrBtnFootnoteBack"] = s.pwrBtnFootnoteBack;
   doc["backShortToFileBrowser"] = s.backShortToFileBrowser;
   doc["tiltPageTurn"] = s.tiltPageTurn;
@@ -1160,6 +1163,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["koSyncAutoPushOnClose"] = s.koSyncAutoPushOnClose;
 
   doc["statusBarChapterPageCount"] = s.statusBarChapterPageCount;
+  doc["stablePageNumbers"] = s.stablePageNumbers;
   doc["statusBarBookProgressPercentage"] = s.statusBarBookProgressPercentage;
   doc["statusBarProgressBar"] = s.statusBarProgressBar;
   doc["statusBarProgressBarThickness"] = s.statusBarProgressBarThickness;

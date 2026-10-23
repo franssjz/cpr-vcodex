@@ -90,6 +90,7 @@ class ActivityManager {
   void goToUsbDrive();
   void goToSettings();
   void goToApps();
+  void openReadingStatsShortcut();
   void goToFileBrowser(std::string path = {});
   void goToLibrary();
   void goToRecentBooks();

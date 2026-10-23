@@ -316,6 +316,8 @@ std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry) {
                           buildLongPressMenuValues(), "longPressMenuFunction", StrId::STR_CAT_CONTROLS),
         SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn, std::move(shortPwrBtnValues),
                           "shortPwrBtn", StrId::STR_CAT_CONTROLS),
+        SettingInfo::Enum(StrId::STR_LONG_PWR_BTN, &CrossPointSettings::longPwrBtn,
+                          {StrId::STR_SLEEP, StrId::STR_READING_STATS}, "longPwrBtn", StrId::STR_CAT_CONTROLS),
         SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS),
         SettingInfo::Toggle(StrId::STR_BACK_SHORT_TO_FILE_BROWSER, &CrossPointSettings::backShortToFileBrowser,
@@ -489,6 +491,8 @@ std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* registry) {
                           StrId::STR_KOREADER_SYNC),
 
         // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
+        SettingInfo::Toggle(StrId::STR_STABLE_PAGE_NUMBERS, &CrossPointSettings::stablePageNumbers, "stablePageNumbers",
+                            StrId::STR_CUSTOMISE_STATUS_BAR),
         SettingInfo::Toggle(StrId::STR_CHAPTER_PAGE_COUNT, &CrossPointSettings::statusBarChapterPageCount,
                             "statusBarChapterPageCount", StrId::STR_CUSTOMISE_STATUS_BAR),
         SettingInfo::Toggle(StrId::STR_BOOK_PROGRESS_PERCENTAGE, &CrossPointSettings::statusBarBookProgressPercentage,

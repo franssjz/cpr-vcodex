@@ -24,6 +24,42 @@ Epub::Epub(std::string filepath, const std::string& cacheDir) : filepath(std::mo
   cachePath = cacheDir + "/epub_" + std::to_string(std::hash<std::string>{}(this->filepath));
 }
 
+void Epub::loadStablePageNumbers() {
+  if (stablePagesLoadAttempted || Txt::isTxtOrMd(filepath)) return;
+  // This is optional metadata. Leave room for both JSON and the compact ranges,
+  // plus the reader's next allocations; low memory falls back to chapter pages.
+  if (!MemoryBudget::hasHeap(MemoryBudget::snapshot(), StablePageNumbers::JSON_BUDGET + 32 * 1024, 12 * 1024)) {
+    LOG_DBG("EBP", "Skipping reference pages: low heap");
+    return;
+  }
+  stablePagesLoadAttempted = true;
+  constexpr const char* manifest = "META-INF/x-locations.json";
+  size_t size = 0;
+  if (!getItemSize(manifest, &size) || !size || size > StablePageNumbers::MAX_MANIFEST_BYTES ||
+      getSpineItemsCount() <= 0 || getSpineItemsCount() > static_cast<int>(StablePageNumbers::MAX_SPINES))
+    return;
+  const std::string tmp = cachePath + "/reference-pages.tmp";
+  if (!extractItemToFile(manifest, tmp)) return;
+  HalFile file;
+  if (!Storage.openFileForRead("EBP", tmp.c_str(), file)) {
+    Storage.remove(tmp.c_str());
+    return;
+  }
+  StablePageJsonAllocator allocator;
+  JsonDocument doc(&allocator);
+  JsonDocument filter;
+  StablePageNumbers::configureFilter(filter);
+  const auto error =
+      deserializeJson(doc, file, DeserializationOption::Filter(filter), DeserializationOption::NestingLimit(16));
+  file.close();
+  Storage.remove(tmp.c_str());
+  if (error || !stablePages.load(doc.as<JsonVariantConst>(), getSpineItemsCount())) {
+    LOG_DBG("EBP", "Ignoring invalid or oversized reference page metadata");
+  } else {
+    LOG_DBG("EBP", "Loaded stable reference pages");
+  }
+}
+
 bool Epub::findContentOpfFile(std::string* contentOpfFile, ZipFile* sharedZip) const {
   const auto containerPath = "META-INF/container.xml";
   size_t containerSize;

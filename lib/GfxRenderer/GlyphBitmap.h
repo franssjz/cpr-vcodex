@@ -99,8 +99,9 @@ __attribute__((always_inline)) inline
 //   both grays, LSB paints dark gray only. 1bpp glyphs paint ink with state on
 //   every plane.
 // Clipping happens before pixel decoding, so fully hidden glyphs cost nothing.
-inline void draw(const uint8_t* bitmap, int width, int height, bool twoBit, Plane plane, bool state,
-                 const Target& target, Clip clip, uint8_t textDarkness = 0) {
+template <bool dualPlane>
+inline void drawImpl(const uint8_t* bitmap, int width, int height, bool twoBit, Plane plane, bool state,
+                     const Target& target, Clip clip, uint8_t textDarkness, uint8_t* msbBuffer) {
   // Bit n of levels set means source value n is painted.
   uint8_t levels = 0x02;
   bool clearBits = state;
@@ -110,6 +111,11 @@ inline void draw(const uint8_t* bitmap, int width, int height, bool twoBit, Plan
     if (plane == Plane::GrayLSB && textDarkness >= 2) levels = 0x06;
     if (plane != Plane::BW) clearBits = false;
   }
+  const uint8_t msbLevels = twoBit ? (textDarkness == 1 ? 0x02 : 0x06) : 0x02;
+  const auto paintPixel = [&](int destination, uint8_t ink) {
+    paint(target.buffer, destination, ink, levels, clearBits);
+    if constexpr (dualPlane) paint(msbBuffer, destination, ink, msbLevels, clearBits);
+  };
 
   // Intersect with the glyph bounds, then with the panel width and the
   // buffered row band.
@@ -135,17 +141,17 @@ inline void draw(const uint8_t* bitmap, int width, int height, bool twoBit, Plan
     if (twoBit) {
       // Rows are bit-contiguous, not byte-padded. Align after any clipped prefix.
       while (remaining && (source & 3)) {
-        paint(target.buffer, destination, (bitmap[source >> 2] >> (6 - (source & 3) * 2)) & 3, levels, clearBits);
+        paintPixel(destination, (bitmap[source >> 2] >> (6 - (source & 3) * 2)) & 3);
         ++source;
         destination += stepX;
         --remaining;
       }
       while (remaining >= 4) {
         const uint8_t packed = bitmap[source >> 2];
-        paint(target.buffer, destination, packed >> 6, levels, clearBits);
-        paint(target.buffer, destination + stepX, (packed >> 4) & 3, levels, clearBits);
-        paint(target.buffer, destination + 2 * stepX, (packed >> 2) & 3, levels, clearBits);
-        paint(target.buffer, destination + 3 * stepX, packed & 3, levels, clearBits);
+        paintPixel(destination, packed >> 6);
+        paintPixel(destination + stepX, (packed >> 4) & 3);
+        paintPixel(destination + 2 * stepX, (packed >> 2) & 3);
+        paintPixel(destination + 3 * stepX, packed & 3);
         source += 4;
         destination += 4 * stepX;
         remaining -= 4;
@@ -155,11 +161,23 @@ inline void draw(const uint8_t* bitmap, int width, int height, bool twoBit, Plan
     while (remaining--) {
       const uint8_t ink = twoBit ? ((bitmap[source >> 2] >> (6 - (source & 3) * 2)) & 3)
                                  : ((bitmap[source >> 3] >> (7 - (source & 7))) & 1);
-      paint(target.buffer, destination, ink, levels, clearBits);
+      paintPixel(destination, ink);
       ++source;
       destination += stepX;
     }
   }
+}
+
+inline void draw(const uint8_t* bitmap, int width, int height, bool twoBit, Plane plane, bool state,
+                 const Target& target, Clip clip, uint8_t textDarkness = 0) {
+  drawImpl<false>(bitmap, width, height, twoBit, plane, state, target, clip, textDarkness, nullptr);
+}
+
+// Overlay text only: decode once into two buffers with identical geometry.
+// One-bit ink retains the existing state/polarity on both planes.
+inline void drawGrayscale(const uint8_t* bitmap, int width, int height, bool twoBit, bool state,
+                          const Target& lsbTarget, uint8_t* msbBuffer, Clip clip, uint8_t textDarkness = 0) {
+  drawImpl<true>(bitmap, width, height, twoBit, Plane::GrayLSB, state, lsbTarget, clip, textDarkness, msbBuffer);
 }
 
 }  // namespace glyphBitmap

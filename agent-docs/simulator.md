@@ -114,6 +114,19 @@ grays. The script reports its artifact directory; `--output-parent` can place
 it under the gitignored `artifacts/`. It uses only the Python standard library.
 This checks composition, not physical panel tones or refresh waveforms.
 
+## Text grayscale plane regression
+
+Run `python3 test/simulator/text_grayscale_planes.py /absolute/path/to/program`
+with the X4 simulator (`--output-parent` is supported). Eleven boots compare
+dual-plane text strips with the low-heap two-pass fallback in all four
+orientations. The 33 captures exercise forward/back turns, darkness levels,
+bionic text, decorations, scaled glyphs, highlighted text and fragmented heap.
+The fallback uses the first run's pagination cache so the parser's low-memory
+guard does not block rendering.
+Logs must confirm the selected path; all corresponding screenshots must match.
+This checks composition and path selection, not actual allocation failures,
+device timing or physical panel stability. See `issue-229-text-antialiasing.md`.
+
 ## Popup scrolling regression
 
 `python3 test/simulator/popup_scroll.py /absolute/path/to/program` navigates
@@ -248,6 +261,17 @@ simulator binary lost header/preview pixels; rebuilding the same sources
 with `pio run -e <env> -t clean` and a fresh `PLATFORMIO_BUILD_CACHE_DIR`
 restored them. The harness now rejects a blank header or sample separately,
 so equality between two empty preview crops cannot count as success.
+
+## Stable page numbers and statistics shortcut
+
+`python3 test/simulator/stable_pages_power_stats.py /absolute/path/to/program`
+uses the normal X4 binary and disposable SD cards. Fourteen boots cover fixed
+EPUB reference totals at two font sizes, metadata fallback and low heap,
+long-power statistics, repeated holds, return to the same page, short-power
+page/sleep behavior, sleep from statistics, default hold-to-sleep, and saving
+both options through the device settings. `--only-settings` runs just that
+settings workflow. Pixel and saved-time assertions check the result; screenshots/logs remain under `--output-parent`. This does not
+validate physical buttons, wake timing or X4 Pro double-clicks.
 
 ## When the simulator stops compiling
 

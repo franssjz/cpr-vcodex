@@ -1024,3 +1024,6 @@ STR_THIS_MONTH: "This Month"
 STR_SESSIONS_10M_PLUS: "10m+ sessions"
 STR_CALIBRE_WEB_URL: "OPDS URL"
 STR_DELETE_CONFIRM: "Delete this server?"
+
+STR_LONG_PWR_BTN: "Long Power Button Press"
+STR_STABLE_PAGE_NUMBERS: "Stable Page Numbers (EPUB)"

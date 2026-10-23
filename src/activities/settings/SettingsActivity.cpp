@@ -287,6 +287,8 @@ std::vector<SettingInfo> buildControlsSettings() {
   v.push_back(SettingInfo::Enum(StrId::STR_LONG_PRESS_MENU, &CrossPointSettings::longPressMenuFunction,
                                 buildLongPressMenuValues()));
   v.push_back(SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn, buildShortPwrBtnValues()));
+  v.push_back(SettingInfo::Enum(StrId::STR_LONG_PWR_BTN, &CrossPointSettings::longPwrBtn,
+                                {StrId::STR_SLEEP, StrId::STR_READING_STATS}));
   if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES) {
     v.push_back(SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack));
   }

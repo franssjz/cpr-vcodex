@@ -17,17 +17,27 @@ extract_opds_methods("void OpdsBookBrowserActivity::startBrowse()" "void OpdsBoo
   BROWSE_METHODS)
 configure_file(FeedLoadingAdapter.h.in FeedLoadingAdapter.h @ONLY)
 
-add_executable(OpdsFeedLoadingTest OpdsFeedLoadingTest.cpp InstrumentedParser.cpp ${REPO_ROOT}/src/util/UrlUtils.cpp)
-target_include_directories(OpdsFeedLoadingTest PRIVATE
-  ${CMAKE_CURRENT_BINARY_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/stubs
-  ${REPO_ROOT}/src
-  ${REPO_ROOT}/lib/OpdsParser
-  ${REPO_ROOT}/lib/XmlParserUtils
-)
-target_link_libraries(OpdsFeedLoadingTest PRIVATE crosspoint_test_common GTest::gtest_main EXPAT::EXPAT)
-gtest_discover_tests(OpdsFeedLoadingTest)
+function(add_opds_feed_loading_test target prefix expect_tls_floor)
+  add_executable(${target} OpdsFeedLoadingTest.cpp InstrumentedParser.cpp ${REPO_ROOT}/src/util/UrlUtils.cpp)
+  target_include_directories(${target} PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/stubs
+    ${REPO_ROOT}/src
+    ${REPO_ROOT}/lib/OpdsParser
+    ${REPO_ROOT}/lib/XmlParserUtils
+  )
+  target_compile_definitions(${target} PRIVATE OPDS_EXPECT_TLS_FLOOR=${expect_tls_floor} ${ARGN})
+  target_link_libraries(${target} PRIVATE crosspoint_test_common GTest::gtest_main EXPAT::EXPAT)
+  gtest_discover_tests(${target} TEST_PREFIX "${prefix}.")
+endfunction()
+
+# C3 builds define wolfSSL for other SDK clients but use esp_http_client here.
+# Keep expectations explicit so the tests do not repeat the production predicate.
+add_opds_feed_loading_test(OpdsFeedLoadingTest C3 0 FREEINK_DEVICE_X3 FREEINK_DEVICE_X4 FREEINK_NET_WOLFSSL)
+add_opds_feed_loading_test(OpdsFeedLoadingX3Test X3 0 FREEINK_DEVICE_X3 FREEINK_NET_WOLFSSL)
+add_opds_feed_loading_test(OpdsFeedLoadingX4Test X4 0 FREEINK_DEVICE_X4 FREEINK_NET_WOLFSSL)
+add_opds_feed_loading_test(OpdsFeedLoadingWolfSslTest WolfSsl 1 FREEINK_NET_WOLFSSL)
 
 set(downloader_source ${REPO_ROOT}/src/network/HttpDownloader.cpp)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${downloader_source})

@@ -131,12 +131,18 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
     fail(StrId::STR_FETCH_FEED_FAILED);
     return;
   }
+  // Match HttpDownloader's backend selection: C3 builds include wolfSSL for
+  // plugins, but feeds use esp_http_client. These wolfSSL download floors are
+  // not calibrated for C3 feeds; let their checked allocations/transfers fail
+  // through the existing error and cleanup paths instead.
+#if defined(FREEINK_NET_WOLFSSL) && !defined(FREEINK_DEVICE_X4) && !defined(FREEINK_DEVICE_X3)
   if (url.rfind("https://", 0) == 0 && (ESP.getFreeHeap() < HttpDownloader::MIN_TLS_FREE_HEAP ||
                                         ESP.getMaxAllocHeap() < HttpDownloader::MIN_TLS_MAX_ALLOC)) {
     LOG_ERR("OPDS", "Low heap for feed (%u free, %u max block)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     fail(StrId::STR_MEMORY_ERROR);
     return;
   }
+#endif
   const auto download =
       HttpDownloader::downloadToFile(url, FEED_TMP_PATH, nullptr, nullptr, server.username, server.password);
   if (download != HttpDownloader::OK) {

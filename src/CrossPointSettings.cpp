@@ -356,7 +356,7 @@ unsigned long CrossPointSettings::getSleepTimeoutMs() const {
 
 CrossPointSettings::StatusBarSpec CrossPointSettings::statusBarSpec() const {
   StatusBarSpec spec;
-  spec.showChapterPageCount = statusBarChapterPageCount != 0;
+  spec.showChapterPageCount = statusBarChapterPageCount != 0 || stablePageNumbers != 0;
   spec.showBookProgressPercent = statusBarBookProgressPercentage != 0;
   spec.titleMode = statusBarTitle;
   spec.showBattery = statusBarBattery != 0;

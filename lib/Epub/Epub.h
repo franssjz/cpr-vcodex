@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Epub/BookMetadataCache.h"
+#include "Epub/StablePageNumbers.h"
 #include "Epub/css/CssParser.h"
 
 class ZipFile;
@@ -45,6 +46,8 @@ class Epub {
   std::unique_ptr<freeink::content::ContentDecryptor> decryptor;
   // User-presentable reason the encrypted-entry accessor could not be opened.
   std::string protectionError;
+  StablePageNumbers stablePages;
+  bool stablePagesLoadAttempted = false;
 
   bool findContentOpfFile(std::string* contentOpfFile, ZipFile* sharedZip = nullptr) const;
   bool parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, bool writeSpineEntries = true,
@@ -100,6 +103,10 @@ class Epub {
   int getSpineIndexForTextReference() const;
 
   size_t getBookSize() const;
+  void loadStablePageNumbers();
+  bool resolveReferencePage(int spineIndex, float progress, uint32_t& page, uint32_t& count) const {
+    return stablePages.resolve(spineIndex, progress, page, count);
+  }
   float calculateProgress(int currentSpineIndex, float currentSpineRead) const;
   CssParser* getCssParser() const { return cssParser.get(); }
   int resolveHrefToSpineIndex(const std::string& href) const;

@@ -33,9 +33,9 @@ The adapted flow:
    performing the memory-sensitive transfer and parse. Reading restores the
    configured font through the existing font-system reload path.
 3. Download to `/.crosspoint/opds-feed.tmp` through the existing verified C3
-   HTTP/TLS path. Check the TLS memory floor for HTTPS feeds and reject failure
-   to remove an old temporary file. The shared file downloader now checks the
-   final SD close/flush result: if it fails after a successful transfer, remove
+   HTTP/TLS path. Check the TLS memory floor for wolfSSL HTTPS feeds and reject
+   failure to remove an old temporary file. The shared file downloader checks
+   the final SD close/flush result: if it fails after a successful transfer, remove
    the destination and return `FILE_ERROR`. Earlier HTTP errors keep precedence.
 4. Only after the downloader has returned and destroyed HTTP/TLS, create Expat
    and read the file in 1,024-byte blocks. Check the file's expected length and
@@ -89,3 +89,49 @@ case is reproducible using `test/simulator/opds_feed_loading.py` and its isolate
 fixture patch (see `agent-docs/simulator.md`). Physical X3 confirmation with the
 reporter's Grimmory shelf remains necessary to establish that the change resolves
 their exact report.
+
+## Follow-up: C3 HTTPS preflight (2026-10-18)
+
+The [reporter's first test of `1.6.5.6`](https://github.com/franssjz/cpr-vcodex/issues/228#issuecomment-6242304252)
+failed on the initial OPDS screen, which previously opened. The comment does
+not include the exact error message, so it does not establish whether the new
+memory preflight, SD staging, transport or XML parsing produced that failure.
+
+The new feed preflight used the existing 40,000-byte free-heap and 20,000-byte
+largest-block floors from wolfSSL downloads. On X3/X4, `FREEINK_NET_WOLFSSL`
+is also defined for plugins, but `HttpDownloader` uses verified
+`esp_http_client`/mbedTLS. Those floors were not calibrated for this C3 feed
+path and could reject a request before attempting the connection.
+
+The follow-up restricts the feed preflight to the same build condition that
+selects the wolfSSL downloader. C3 feeds retain font/cache reclamation and SD staging,
+then let the existing HTTP allocation and transfer checks determine whether
+the request succeeds, as they did before `1.6.5.6`. Real download, buffer and
+parser failures still return through the existing cleanup/error paths. This
+does not lower the thresholds used by wolfSSL or change book/OTA downloads.
+
+This correction removes a newly introduced rejection condition; it does not
+establish that TLS will succeed with every low-memory state, or that the
+reporter's original Grimmory problem is resolved. Physical X3 confirmation
+remains necessary.
+
+Follow-up validation:
+
+- Four C3 regression cases failed against the original guard before the fix:
+  HTTPS below either/both thresholds and a failed transfer followed by retry.
+  After the fix, the full native MSVC suite passed **888/888** cases.
+- The feed-loading tests compile the production methods with the shipped
+  combined X3/X4 flags, each device flag separately, and the active wolfSSL
+  backend. They cover successful C3 requests below the wolfSSL thresholds,
+  transfer failure/retry at unchanged heap readings, real parser/buffer
+  allocation failures, and retained wolfSSL HTTPS rejection. Transport, heap
+  readings and SD boundaries are mocked; the parser/Expat code is real.
+- C3 `default` and `gh_release` builds passed. The production-profile dry run
+  uses the next local candidate number (`1.6.5.7`), without advancing the
+  release counter or publishing it. Its BIN is **6,287,216 B**, below the
+  **6,553,600 B** X4 slot; linked flash is **6,272,995 B** (95.72%), below
+  the 97.5% budget. Static RAM remains **62,072 B**. Development BIN:
+  **6,365,760 B**. Formatting and `git diff --check` passed.
+- Logs are retained in `artifacts/issue-228/heap-gate/`: `red-c3.log`,
+  `green-build.log`, `green-opds.log`, `full-native.log`, `default-build.log`,
+  `gh-release-build.log` and `firmware-budget.json`.

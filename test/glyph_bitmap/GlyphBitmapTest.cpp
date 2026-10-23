@@ -142,3 +142,59 @@ TEST(GlyphBitmap, PreservesForkDarknessLevelsAndNightInk) {
     }
   }
 }
+
+TEST(GlyphBitmap, DualPlanesMatchIndependentPassesAcrossDarknessClippingAndRotations) {
+  for (int orientation = 0; orientation < 4; ++orientation) {
+    for (const auto [dxX, dxY, dyX, dyY] : AXES) {
+      for (bool twoBit : {false, true}) {
+        for (bool state : {false, true}) {
+          for (uint8_t darkness : {0, 1, 2, 3}) {
+            for (int width : {0, 1, 3, 7, 16, 31}) {
+              constexpr int height = 13;
+              std::vector<uint8_t> bitmap((width * height * (twoBit ? 2 : 1) + 7) / 8);
+              for (size_t i = 0; i < bitmap.size(); ++i) bitmap[i] = static_cast<uint8_t>(i * 73 + 0x1b);
+              for (const auto [x, y] :
+                   {std::pair{-5, -3}, std::pair{0, 0}, std::pair{9, 11}, std::pair{29, 31}, std::pair{100, 100}}) {
+                for (const auto [origin, rows] :
+                     {std::pair{0, 32}, std::pair{0, 7}, std::pair{7, 11}, std::pair{28, 4}}) {
+                  for (Rect rect : {Rect{-20, -20, 60, 60}, Rect{2, 3, 18, 20}}) {
+                    SCOPED_TRACE(::testing::Message()
+                                 << orientation << ',' << dxX << ',' << twoBit << ',' << state << ',' << int(darkness)
+                                 << " width=" << width << " at=" << x << ',' << y << " band=" << origin << ',' << rows);
+                    const auto [px, py] = physical(orientation, x, y);
+                    const auto [xx, xy] = physical(orientation, x + dxX, y + dxY);
+                    const auto [yx, yy] = physical(orientation, x + dyX, y + dyY);
+                    glyphBitmap::Clip clip{0, 0, width, height};
+                    glyphBitmap::clipToRect({x, y, dxX, dxY, dyX, dyY}, rect.left, rect.top, rect.right, rect.bottom,
+                                            clip);
+                    std::array<std::vector<uint8_t>, 2> expected;
+                    for (int p = 0; p < 2; ++p) {
+                      expected[p].resize(rows * STRIDE + 32);
+                      for (size_t i = 0; i < expected[p].size(); ++i)
+                        expected[p][i] = static_cast<uint8_t>(i * 53 + 0xa5 + p * 37);
+                    }
+                    auto actual = expected;
+                    glyphBitmap::Target target{actual[0].data() + 16,
+                                               PANEL_WIDTH,
+                                               STRIDE,
+                                               origin,
+                                               rows,
+                                               {px, py, xx - px, xy - py, yx - px, yy - py}};
+                    glyphBitmap::drawGrayscale(bitmap.data(), width, height, twoBit, state, target,
+                                               actual[1].data() + 16, clip, darkness);
+                    for (int p = 0; p < 2; ++p) {
+                      target.buffer = expected[p].data() + 16;
+                      glyphBitmap::draw(bitmap.data(), width, height, twoBit, p ? Plane::GrayMSB : Plane::GrayLSB,
+                                        state, target, clip, darkness);
+                      EXPECT_EQ(expected[p], actual[p]);  // Includes guards and distinct background pixels.
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -317,7 +317,8 @@ class BaseTheme {
   virtual void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                              const int pageCount, std::string title, const int paddingBottom = 0,
                              const int textYOffset = 0, const bool fillMargin = true,
-                             const bool isPageBookmarked = false, const bool pageCountEstimated = false) const;
+                             const bool isPageBookmarked = false, const bool pageCountEstimated = false,
+                             const uint32_t referencePage = 0, const uint32_t referencePageCount = 0) const;
   virtual void drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label) const;
   virtual void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth, bool cursorMode = false,
                              int contentStartX = 0, int contentWidth = 0) const;

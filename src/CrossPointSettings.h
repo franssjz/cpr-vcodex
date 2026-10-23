@@ -374,6 +374,7 @@ class CrossPointSettings {
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
+  uint8_t stablePageNumbers = 0;
   uint8_t statusBarBookProgressPercentage = 1;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
@@ -414,6 +415,8 @@ class CrossPointSettings {
   uint8_t textDarkness = TEXT_DARKNESS_NORMAL;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
+  enum LONG_PWRBTN { LONG_PWR_SLEEP = 0, LONG_PWR_READING_STATS = 1, LONG_PWRBTN_COUNT };
+  uint8_t longPwrBtn = LONG_PWR_SLEEP;
   // Tilt-based page turning (X3 only, requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
   // X4 Pro: double-click power toggles the frontlight. Disabling frees the
@@ -633,7 +636,7 @@ class CrossPointSettings {
   void* sdFontResolverCtx = nullptr;
 
   uint16_t getPowerButtonDuration() const {
-    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? 10 : 400;
+    return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP && longPwrBtn == LONG_PWR_SLEEP) ? 10 : 400;
   }
   int getReaderFontId() const;
 

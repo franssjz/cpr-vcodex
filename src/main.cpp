@@ -1120,6 +1120,14 @@ void loop() {
     return;
   }
 
+  // A shortcut fires once per physical hold. Consume its release globally,
+  // before double-click tracking or any configured short-power action.
+  static bool powerShortcutHeld = false;
+  if (powerShortcutHeld) {
+    if (!gpio.isPressed(HalGPIO::BTN_POWER)) powerShortcutHeld = false;
+    return;
+  }
+
   static bool screenshotButtonsReleased = true;
   static bool screenshotComboActive = false;
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.isPressed(HalGPIO::BTN_DOWN)) {
@@ -1151,6 +1159,10 @@ void loop() {
   }
 
   const bool x4ProDoubleClickPwrLight = BoardConfig::isX4Pro() && SETTINGS.doubleClickPwrLight;
+  const bool powerStatsShortcut = SETTINGS.longPwrBtn == CrossPointSettings::LONG_PWR_READING_STATS;
+  if (powerStatsShortcut && gpio.isPressed(HalGPIO::BTN_POWER) &&
+      gpio.getPowerButtonHeldTime() > X4PRO_POWER_CLICK_MAX_HOLD_MS)
+    lastX4ProPowerClickAt = 0;
 
 #if FREEINK_CAP_TOUCH
   // A single X4 Pro power click becomes Confirm only after the frontlight
@@ -1205,14 +1217,32 @@ void loop() {
                                         gpio.getPowerButtonHeldTime() <= X4PRO_POWER_CLICK_MAX_HOLD_MS;
 
   if (!x4ProAwaitingClickWindow && powerReleasedSinceWake && millis() >= allowSleepAt &&
-      gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getPowerButtonHeldTime() > SETTINGS.getPowerButtonDuration()) {
+      (gpio.isPressed(HalGPIO::BTN_POWER) || (powerStatsShortcut && gpio.wasReleased(HalGPIO::BTN_POWER))) &&
+      gpio.getPowerButtonHeldTime() > SETTINGS.getPowerButtonDuration()) {
     // If the screenshot combination is potentially being pressed, don't sleep
     if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
+      return;
+    }
+    if (powerStatsShortcut) {
+      powerShortcutHeld = gpio.isPressed(HalGPIO::BTN_POWER);
+      lastX4ProPowerClickAt = 0;
+      LOG_DBG("MAIN", "Power hold: reading statistics");
+      activityManager.openReadingStatsShortcut();
+      activityManager.loop();
       return;
     }
     LOG_DBG("MAIN", "Power button held %lums, sleeping", gpio.getPowerButtonHeldTime());
     enterDeepSleep();
     // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+    return;
+  }
+
+  // With a custom hold action, short-click Sleep waits for release so the hold
+  // can reach its threshold. X4 Pro clicks still use the double-click window.
+  if (powerStatsShortcut && SETTINGS.shortPwrBtn == CrossPointSettings::SLEEP && powerReleasedSinceWake &&
+      millis() >= allowSleepAt && gpio.wasReleased(HalGPIO::BTN_POWER) &&
+      (!x4ProDoubleClickPwrLight || gpio.getPowerButtonHeldTime() > X4PRO_POWER_CLICK_MAX_HOLD_MS)) {
+    enterDeepSleep();
     return;
   }
 

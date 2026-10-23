@@ -95,6 +95,7 @@ class GfxRenderer {
   // the BW framebuffer (no storeBwBuffer). Mutable because the render path is
   // const. See beginStripTarget()/endStripTarget().
   mutable uint8_t* _stripBuf = nullptr;
+  mutable uint8_t* _stripMsbBuf = nullptr;  // Optional second plane for overlay text only
   mutable int _stripY0 = 0;
   mutable int _stripRows = 0;
   mutable bool _stripActive = false;
@@ -275,6 +276,9 @@ class GfxRenderer {
   // after the orientation rotate, so it is orientation-agnostic. Used to render
   // grayscale planes band-by-band without a full second buffer.
   void beginStripTarget(uint8_t* scratch, int stripY0, int stripRows) const;
+  // Requires GRAYSCALE_LSB and overlay encoding. Glyphs decode into both
+  // planes; monochrome primitives paint both. Image/raw writers are unsupported.
+  void beginTextGrayscaleStripTargets(uint8_t* lsb, uint8_t* msb, int stripY0, int stripRows) const;
   void endStripTarget() const;
 
   // Band culling for tiled grayscale. Takes a glyph bounding box in logical

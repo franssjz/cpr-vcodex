@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.6.5.7 - Reference pages, statistics shortcut and reader fixes (2026-10-23)
+
+- Add optional **Stable Page Numbers (EPUB)** under Reader > Customise Status
+  Bar (#207). EPUBs prepared with CrossInk/Inky `META-INF/x-locations.json`
+  use a fixed whole-book reference-page total across layout changes. The
+  current reference page is estimated from chapter progress; these are not
+  publisher pages or physical page turns. Missing, invalid or memory-constrained
+  metadata falls back to chapter pages. Metadata generation is not included.
+- Add Controls > **Long Power Button Press** > **Reading Stats** (#207).
+  Hold Power to view statistics and the daily goal, then Back to resume.
+  Exclude time spent on statistics from the reader session. Sleep remains
+  the default; preserve short-click actions and consume the hold's release.
+- Reduce duplicate text antialiasing work (#229): produce both gray masks
+  in one traversal per strip when memory permits, with the existing two-pass
+  fallback under memory pressure. Preserve panel waveforms and image grayscale.
+  True grayscale still needs multiple display phases; no hardware speedup or
+  resolution of the reported two-second X3 delay is claimed yet.
+- Correct the OPDS HTTPS memory preflight introduced in 1.6.5.6 (#228).
+  X3/X4 feeds use esp_http_client, so they no longer apply the unrelated
+  wolfSSL download thresholds before trying a connection. Keep SD staging,
+  cache reclamation, checked transfers, parsing and failure cleanup.
+- Validate reference metadata with nine native tests and fourteen simulator
+  scenarios; verify antialiasing masks with 30,720 comparisons and 21 simulator
+  boots including image regressions. C3 OPDS regression cases cover low-heap
+  requests and retry while retaining the wolfSSL backend guard. Development
+  and release builds pass the existing 97.5% flash budget.
+- Physical X3/X4 timing, panel appearance, buttons and OTA/SD validation, plus
+  the reporter's Grimmory catalog, remain pending. See the results and limits
+  for [#207](agent-docs/issue-207-stable-page-numbers.md),
+  [#228](agent-docs/issue-228-opds-memory.md) and
+  [#229](agent-docs/issue-229-text-antialiasing.md).
+  The release remains one shared ESP32-C3 X4/X3 binary; X4 Pro distribution
+  stays withdrawn. Existing books, settings and reading history are preserved.
+
 ## 1.6.5.6 - OPDS catalog memory and recovery fixes (2026-10-17)
 
 - Reduce OPDS catalog memory pressure (#228) by downloading each feed to a
@@ -241,6 +275,7 @@ This changelog starts at `1.2.0.24`, the point where CPR-vCodex began tracking r
 >
 | Version | Changes |
 |---|---|
+| `1.6.5.7` | - Add optional Stable Page Numbers (EPUB) using CrossInk/Inky x-locations metadata: a fixed whole-book reference total with an approximate current page and safe chapter-page fallback (#207). Enable under Reader > Customise Status Bar; metadata generation is not included.<br>- Add Controls > Long Power Button Press > Reading Stats. Back resumes the book; statistics visits do not count as reading time. Sleep remains the default (#207).<br>- Generate both text antialiasing masks in one strip traversal when memory permits, retaining the two-pass fallback and existing panel waveforms/image grayscale (#229). Hardware speed improvements remain unmeasured.<br>- Correct the OPDS HTTPS preflight introduced in 1.6.5.6: X3/X4 feeds no longer use unrelated wolfSSL thresholds before attempting esp_http_client connections. Retain SD staging and failure cleanup (#228).<br>- Native and simulator regressions pass, including nine reference-page tests, fourteen reference-page/button scenarios, 30,720 glyph-mask comparisons and 21 grayscale simulator boots. Both C3 builds pass the 97.5% flash budget. Physical X3/X4 timing, appearance, buttons, OTA/SD and the reporter's Grimmory catalog remain pending. One shared ESP32-C3 binary for X4/X3; no X4 Pro assets. |
 | `1.6.5.6` | - Reduce OPDS catalog memory pressure by saving each feed temporarily to SD and closing HTTP/TLS before parsing it (#228), adapting CrossInk's phase-separation approach.<br>- Release reader-font caches before fetching, clear the old catalog on every retry, and remove temporary files and partial entries after failures. Report parser allocation failures as memory errors.<br>- Detect failed final SD flushes and remove incomplete downloads before they can be parsed or opened.<br>- Pass all 785 native tests, including 50 new feed-loading, parser-recovery and file-download cases, and verify valid-catalog recovery after a failed feed in the simulator without restarting. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3 confirmation with the reporter's Grimmory library remains pending. |
 | `1.6.5.5` | - Fix highlight activation stopping at an old page hint while chapter pagination is incomplete (#227), using one bounded extension of the active paginator to verify the nearby recovery window.<br>- Restore verified shading when resuming a page whose saved anchor now points to an earlier page. Preserve the reading position and original bookmarks.bin; existing highlights do not need to be recreated.<br>- Keep recovery memory bounded, protect current-page ranges, and leave ambiguous or unverified text unshaded even when the recovery cache is full.<br>- Pass 28 first-opening and 28 direct-resume checks with the reporter's EPUB, font and original bookmark records, plus 14 synthetic simulator scenarios and 40 focused native tests. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 validation remains pending. |
 | `1.6.5.4` | - Recover older EPUB highlights from their complete saved text when selecting a highlight from either Highlights list, searching within three pages of the resolved page hint and allowing one page boundary (#227).<br>- Support legacy Korean/CJK spacing and layout-inserted hyphens while preserving Latin word boundaries and literal saved hyphens. Require a unique complete match; never shade unrelated words using stale indices. Keep original bookmarks.bin records unchanged.<br>- Preserve exact fresh-selection ranges in the current layout, including repeated text and truncated snippets, with bounded recovery memory and no nearby-page reads during painting.<br>- Pass all 735 native tests and nine simulator scenarios. ESP32-C3 development and release builds pass the firmware budget gate. Physical X3/X4 checks and validation against the reporter's original EPUB and bookmarks.bin remain pending. |

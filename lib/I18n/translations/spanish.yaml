@@ -1025,3 +1025,6 @@ STR_NO_PROFILES: "Sin perfiles configurados"
 STR_DELETE_PROFILE: "Eliminar perfil"
 STR_SET_ACTIVE_PROFILE: "Activar perfil"
 STR_ACTIVE_PROFILE_TAG: "Activo"
+
+STR_LONG_PWR_BTN: "Pulsación larga de encendido"
+STR_STABLE_PAGE_NUMBERS: "Páginas estables (EPUB)"
